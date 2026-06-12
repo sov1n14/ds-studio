@@ -8,6 +8,7 @@
  *   D. applyTextareaCleanup — conditional textarea rewrite (returns boolean)
  *   E. waitForNewTextarea — MutationObserver-based new-textarea detection
  *   F. handleEditButtonClick — delegated click handler (regression + integration)
+ *   G. scroll-into-position — EDIT_SCROLL_GAP_PX, computeScrollDelta, applyEditScrollPosition
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -33,12 +34,15 @@ const {
     applyTextareaCleanup,
     waitForNewTextarea,
     handleEditButtonClick,
+    applyEditScrollPosition,
+    computeScrollDelta,
     EDIT_BUTTON_CLASS,
     REMOVE_MAX_HEIGHT_SELECTOR,
     DYNAMIC_MAX_HEIGHT_SELECTOR,
     HEIGHT_SOURCE_SELECTOR_A,
     HEIGHT_SOURCE_SELECTOR_B,
     MAX_HEIGHT_OFFSET_PX,
+    EDIT_SCROLL_GAP_PX,
     USER_INPUT_REGEX,
     DETECTION_TIMEOUT_MS,
     VALUE_WAIT_TIMEOUT_MS,
@@ -859,5 +863,285 @@ describe('F. handleEditButtonClick', () => {
         await new Promise(r => setTimeout(r, 0));
 
         expect(editTextarea.value).toBe('plain user message without wrapper');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Group G: scroll-into-position
+//   EDIT_SCROLL_GAP_PX constant, computeScrollDelta pure function,
+//   and applyEditScrollPosition DOM function.
+// ---------------------------------------------------------------------------
+
+describe('G. scroll-into-position', () => {
+    // -------------------------------------------------------------------------
+    // G1: EDIT_SCROLL_GAP_PX constant
+    // -------------------------------------------------------------------------
+
+    it('G1: EDIT_SCROLL_GAP_PX is 16', () => {
+        expect(EDIT_SCROLL_GAP_PX).toBe(16);
+    });
+
+    // -------------------------------------------------------------------------
+    // G2–G6: computeScrollDelta — pure arithmetic
+    // -------------------------------------------------------------------------
+
+    it('G2: positive delta — edit box below target position (scroll down)', () => {
+        // editBoxTop=200, headerBottom=100, gap=16 → target=116, delta=84 (scroll down)
+        expect(computeScrollDelta(200, 100, 16)).toBe(84);
+    });
+
+    it('G3: negative delta — edit box above target position (scroll up)', () => {
+        // editBoxTop=50, headerBottom=100, gap=16 → target=116, delta=-66 (scroll up)
+        expect(computeScrollDelta(50, 100, 16)).toBe(-66);
+    });
+
+    it('G4: zero delta — edit box is already perfectly aligned', () => {
+        // editBoxTop=116, headerBottom=100, gap=16 → target=116, delta=0
+        expect(computeScrollDelta(116, 100, 16)).toBe(0);
+    });
+
+    it('G5: fractional pixel values produce fractional result without rounding', () => {
+        // editBoxTop=100.5, headerBottom=80.5, gap=16 → target=96.5, delta=4
+        expect(computeScrollDelta(100.5, 80.5, 16)).toBeCloseTo(4, 5);
+    });
+
+    it('G6: gap parameter is respected — different gap values yield different deltas', () => {
+        // With gap=16: 200 - (100 + 16) = 84
+        expect(computeScrollDelta(200, 100, 16)).toBe(84);
+        // With gap=32: 200 - (100 + 32) = 68
+        expect(computeScrollDelta(200, 100, 32)).toBe(68);
+        // With gap=0: 200 - (100 + 0) = 100
+        expect(computeScrollDelta(200, 100, 0)).toBe(100);
+    });
+
+    // -------------------------------------------------------------------------
+    // G7–G14: applyEditScrollPosition — DOM behaviour
+    //
+    // Selector map:
+    //   edit box        → .cc852ac5
+    //   header          → ._2be88ba
+    //   virtual list    → .ds-virtual-list-items._6f2c522  (also just ._6f2c522)
+    //
+    // Geometry is mocked via per-element getBoundingClientRect overrides,
+    // exactly as Group C does for source elements.
+    // -------------------------------------------------------------------------
+
+    let originalGetBCR;
+
+    beforeEach(() => {
+        originalGetBCR = Element.prototype.getBoundingClientRect;
+    });
+
+    afterEach(() => {
+        Element.prototype.getBoundingClientRect = originalGetBCR;
+        // Clean up any elements appended directly to body
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+        vi.restoreAllMocks();
+    });
+
+    /**
+     * Build a minimal DOM with edit box, header, and a scroll container.
+     *
+     * @param {object} opts
+     * @param {number} opts.editBoxTop        – mocked getBoundingClientRect().top for edit box
+     * @param {number} opts.headerBottom      – mocked getBoundingClientRect().bottom for header
+     * @param {number} opts.initialScrollTop  – starting scrollTop of the container
+     * @param {boolean} [opts.containerScrollable=true] – whether the ._6f2c522 element itself is scrollable
+     * @returns {{ editBox, header, listEl, container }}
+     */
+    function buildScrollDOM({
+        editBoxTop,
+        headerBottom,
+        initialScrollTop = 0,
+        containerScrollable = true,
+    }) {
+        // Header (._2be88ba) — placed directly on body so document.querySelector finds it
+        const header = document.createElement('div');
+        header.className = '_2be88ba';
+        header.getBoundingClientRect = () => ({ bottom: headerBottom, top: 0, height: headerBottom });
+        document.body.appendChild(header);
+
+        // Scroll container — either ._6f2c522 itself or an ancestor wrapper
+        const listEl = document.createElement('div');
+        listEl.className = 'ds-virtual-list-items _6f2c522';
+
+        // Mock scrollHeight/clientHeight to control scrollability
+        Object.defineProperty(listEl, 'scrollHeight', {
+            get: () => containerScrollable ? 2000 : 100,
+            configurable: true,
+        });
+        Object.defineProperty(listEl, 'clientHeight', {
+            get: () => 100,
+            configurable: true,
+        });
+        listEl.scrollTop = initialScrollTop;
+
+        // Edit box (.cc852ac5) — child of the list element
+        const editBox = document.createElement('div');
+        editBox.className = 'cc852ac5';
+        editBox.getBoundingClientRect = () => ({ top: editBoxTop, bottom: editBoxTop + 50, height: 50 });
+        listEl.appendChild(editBox);
+
+        document.body.appendChild(listEl);
+
+        return { editBox, header, listEl };
+    }
+
+    it('G7: scrollTop is incremented by the correct computed delta', () => {
+        // editBoxTop=200, headerBottom=100, gap=16 → delta=84
+        const { listEl } = buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 300 });
+
+        applyEditScrollPosition(document);
+
+        expect(listEl.scrollTop).toBe(300 + 84);
+    });
+
+    it('G8: negative delta scrolls the container upward (scrollTop decreases)', () => {
+        // editBoxTop=50, headerBottom=100, gap=16 → delta=-66
+        const { listEl } = buildScrollDOM({ editBoxTop: 50, headerBottom: 100, initialScrollTop: 200 });
+
+        applyEditScrollPosition(document);
+
+        expect(listEl.scrollTop).toBe(200 + (-66));
+    });
+
+    it('G9: zero delta leaves scrollTop unchanged', () => {
+        // editBoxTop=116, headerBottom=100, gap=16 → delta=0
+        const { listEl } = buildScrollDOM({ editBoxTop: 116, headerBottom: 100, initialScrollTop: 500 });
+
+        applyEditScrollPosition(document);
+
+        expect(listEl.scrollTop).toBe(500);
+    });
+
+    it('G10: scrollable-ancestor detection — when ._6f2c522 is not scrollable, walks up to scrollable ancestor', () => {
+        // Header
+        const header = document.createElement('div');
+        header.className = '_2be88ba';
+        header.getBoundingClientRect = () => ({ bottom: 100, top: 0, height: 100 });
+        document.body.appendChild(header);
+
+        // Ancestor wrapper — scrollable
+        const ancestor = document.createElement('div');
+        Object.defineProperty(ancestor, 'scrollHeight', { get: () => 2000, configurable: true });
+        Object.defineProperty(ancestor, 'clientHeight', { get: () => 100, configurable: true });
+        ancestor.scrollTop = 400;
+
+        // ._6f2c522 — NOT scrollable (scrollHeight === clientHeight)
+        const listEl = document.createElement('div');
+        listEl.className = 'ds-virtual-list-items _6f2c522';
+        Object.defineProperty(listEl, 'scrollHeight', { get: () => 100, configurable: true });
+        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
+        listEl.scrollTop = 0;
+
+        // Edit box
+        const editBox = document.createElement('div');
+        editBox.className = 'cc852ac5';
+        editBox.getBoundingClientRect = () => ({ top: 200, bottom: 250, height: 50 });
+
+        listEl.appendChild(editBox);
+        ancestor.appendChild(listEl);
+        document.body.appendChild(ancestor);
+
+        applyEditScrollPosition(document);
+
+        // delta = 200 - (100 + 16) = 84; ancestor.scrollTop should increase by 84
+        expect(ancestor.scrollTop).toBe(400 + 84);
+        // ._6f2c522's own scrollTop must be untouched
+        expect(listEl.scrollTop).toBe(0);
+    });
+
+    it('G11: fallback to ._6f2c522 itself when no ancestor is scrollable', () => {
+        // Header
+        const header = document.createElement('div');
+        header.className = '_2be88ba';
+        header.getBoundingClientRect = () => ({ bottom: 100, top: 0, height: 100 });
+        document.body.appendChild(header);
+
+        // ._6f2c522 — NOT scrollable; no scrollable ancestor exists
+        const listEl = document.createElement('div');
+        listEl.className = 'ds-virtual-list-items _6f2c522';
+        Object.defineProperty(listEl, 'scrollHeight', { get: () => 100, configurable: true });
+        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
+        listEl.scrollTop = 50;
+
+        // Edit box
+        const editBox = document.createElement('div');
+        editBox.className = 'cc852ac5';
+        editBox.getBoundingClientRect = () => ({ top: 200, bottom: 250, height: 50 });
+        listEl.appendChild(editBox);
+
+        document.body.appendChild(listEl);
+
+        // Should fall back to listEl and still apply delta without throwing
+        expect(() => applyEditScrollPosition(document)).not.toThrow();
+        // delta = 84; fallback element's scrollTop is updated
+        expect(listEl.scrollTop).toBe(50 + 84);
+    });
+
+    it('G12: guard — missing .cc852ac5 edit box is a no-op (no throw, no scrollTop change)', () => {
+        // Header present, list with NO edit box
+        const header = document.createElement('div');
+        header.className = '_2be88ba';
+        header.getBoundingClientRect = () => ({ bottom: 100 });
+        document.body.appendChild(header);
+
+        const listEl = document.createElement('div');
+        listEl.className = 'ds-virtual-list-items _6f2c522';
+        Object.defineProperty(listEl, 'scrollHeight', { get: () => 2000, configurable: true });
+        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
+        listEl.scrollTop = 300;
+        document.body.appendChild(listEl);
+
+        expect(() => applyEditScrollPosition(document)).not.toThrow();
+        expect(listEl.scrollTop).toBe(300);
+    });
+
+    it('G13: guard — missing ._2be88ba header is a no-op (no throw, no scrollTop change)', () => {
+        // List with edit box but NO header
+        const listEl = document.createElement('div');
+        listEl.className = 'ds-virtual-list-items _6f2c522';
+        Object.defineProperty(listEl, 'scrollHeight', { get: () => 2000, configurable: true });
+        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
+        listEl.scrollTop = 200;
+
+        const editBox = document.createElement('div');
+        editBox.className = 'cc852ac5';
+        editBox.getBoundingClientRect = () => ({ top: 150 });
+        listEl.appendChild(editBox);
+        document.body.appendChild(listEl);
+
+        expect(() => applyEditScrollPosition(document)).not.toThrow();
+        expect(listEl.scrollTop).toBe(200);
+    });
+
+    it('G14: guard — missing ._6f2c522 scroll container element is a no-op (no throw)', () => {
+        // Header and edit box present but NO ._6f2c522 in DOM
+        const header = document.createElement('div');
+        header.className = '_2be88ba';
+        header.getBoundingClientRect = () => ({ bottom: 100 });
+        document.body.appendChild(header);
+
+        const editBox = document.createElement('div');
+        editBox.className = 'cc852ac5';
+        editBox.getBoundingClientRect = () => ({ top: 200 });
+        document.body.appendChild(editBox);
+
+        expect(() => applyEditScrollPosition(document)).not.toThrow();
+    });
+
+    it('G15: searchRoot null falls back to document without throwing', () => {
+        // Minimal DOM so the function can actually execute
+        buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 0 });
+
+        expect(() => applyEditScrollPosition(null)).not.toThrow();
+    });
+
+    it('G16: searchRoot undefined falls back to document without throwing', () => {
+        buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 0 });
+
+        expect(() => applyEditScrollPosition(undefined)).not.toThrow();
     });
 });

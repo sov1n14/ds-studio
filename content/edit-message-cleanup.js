@@ -37,6 +37,9 @@ const HEIGHT_SOURCE_SELECTOR_B = '._871cbca';
 /** 動態 max-height 公式中扣除的固定偏移量（px） */
 const MAX_HEIGHT_OFFSET_PX = 32;
 
+/** 捲動後編輯框頂端與固定 header 底端的視覺間距（px） */
+const EDIT_SCROLL_GAP_PX = 16;
+
 /** 偵測編輯 textarea 的等待上限時間（毫秒） */
 const DETECTION_TIMEOUT_MS = 2000;
 
@@ -78,6 +81,23 @@ function extractUserInput(text) {
  */
 function computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB) {
     return windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX;
+}
+
+/**
+ * 計算需要增加到捲動容器 scrollTop 的像素量，
+ * 使編輯框頂端落在 header 底端以下 gap px 處。
+ * 純計算函式，不存取 DOM。
+ *
+ * 公式：editBoxTop - (headerBottom + gap)
+ * 正值 → 向下捲動；負值 → 向上捲動。
+ *
+ * @param {number} editBoxTop   - 編輯框的 getBoundingClientRect().top
+ * @param {number} headerBottom - 固定 header 的 getBoundingClientRect().bottom
+ * @param {number} gap          - 期望的視覺間距（px）
+ * @returns {number} 應加到 scrollTop 的有號像素量
+ */
+function computeScrollDelta(editBoxTop, headerBottom, gap) {
+    return editBoxTop - (headerBottom + gap);
 }
 
 /**
@@ -147,6 +167,59 @@ function applyTextareaCleanup(textarea) {
     textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
     return true;
+}
+
+/**
+ * 從指定元素向上（含自身）尋找第一個真正可捲動的祖先元素。
+ * 判斷條件：scrollHeight > clientHeight。
+ *
+ * @param {Element} el - 起始元素
+ * @returns {Element|null} 找到的可捲動元素；若無則回傳 null
+ */
+function findScrollableAncestor(el) {
+    // Guard：非 Element 直接返回
+    if (!(el instanceof Element)) return null;
+
+    let current = el;
+    while (current) {
+        if (current.scrollHeight > current.clientHeight) return current;
+        current = current.parentElement;
+    }
+    return null;
+}
+
+/**
+ * 捲動訊息列表容器，使編輯框頂端視覺上位於固定 header 底端下方 EDIT_SCROLL_GAP_PX px 處。
+ * 在編輯 UI 開啟時執行一次；不監聽 resize / scroll 事件。
+ *
+ * 若編輯框、header 或捲動容器任一不存在，則靜默 no-op 不拋出例外。
+ *
+ * @param {Document|Element} [root=document] - 搜尋起點
+ */
+function applyEditScrollPosition(root) {
+    // Guard：若未傳入則使用 document
+    const searchRoot = root != null ? root : document;
+
+    // 取得編輯框元素（使用既有的 REMOVE_MAX_HEIGHT_SELECTOR 常數）
+    const editBox = searchRoot.querySelector(REMOVE_MAX_HEIGHT_SELECTOR);
+    if (!editBox) return;
+
+    // 取得固定 header 元素
+    const header = document.querySelector(HEIGHT_SOURCE_SELECTOR_A);
+    if (!header) return;
+
+    // 找到 ._6f2c522 容器，再向上尋找真正可捲動的祖先
+    const listItems = document.querySelector('._6f2c522');
+    if (!listItems) return;
+
+    const scrollContainer = findScrollableAncestor(listItems) || listItems;
+
+    // 即時讀取幾何資訊，計算需調整的捲動量
+    const editBoxTop = editBox.getBoundingClientRect().top;
+    const headerBottom = header.getBoundingClientRect().bottom;
+    const delta = computeScrollDelta(editBoxTop, headerBottom, EDIT_SCROLL_GAP_PX);
+
+    scrollContainer.scrollTop += delta;
 }
 
 // ─────────────────────────────────────────────
@@ -279,6 +352,11 @@ function handleEditButtonClick(e) {
 
         // 對 textarea 執行條件式內容清理
         applyTextareaCleanup(editTextarea);
+
+        // 等瀏覽器套用 max-height／版面變更後，再捲動至正確位置
+        requestAnimationFrame(() => {
+            applyEditScrollPosition(document);
+        });
     });
 }
 
@@ -304,8 +382,11 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         extractUserInput,
         computeDynamicMaxHeight,
+        computeScrollDelta,
         applyMaxHeightAdjustments,
         applyTextareaCleanup,
+        findScrollableAncestor,
+        applyEditScrollPosition,
         waitForNewTextarea,
         handleEditButtonClick,
         EDIT_BUTTON_CLASS,
@@ -314,6 +395,7 @@ if (typeof module !== 'undefined' && module.exports) {
         HEIGHT_SOURCE_SELECTOR_A,
         HEIGHT_SOURCE_SELECTOR_B,
         MAX_HEIGHT_OFFSET_PX,
+        EDIT_SCROLL_GAP_PX,
         USER_INPUT_REGEX,
         DETECTION_TIMEOUT_MS,
         VALUE_WAIT_TIMEOUT_MS,

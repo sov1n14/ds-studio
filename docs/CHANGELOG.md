@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [3.4.0](changelog/v3.md#340---2026-06-13) | 點擊編輯後自動捲動，使編輯框視覺對齊固定 header 下方 16px |
 | [3.3.0](changelog/v3.md#330---2026-06-13) | 編輯區 max-height 改為 `.cc852ac5` 移除、`._646a522` 動態計算；移除診斷日誌 |
 | [3.2.3](changelog/v3.md#323---2026-06-13) | 修正編輯清理誤抓主輸入框；改為偵測點擊後新出現的編輯框 |
 | [3.2.2](changelog/v3.md#322---2026-06-13) | 編輯清理診斷版（新增 `[DV:EditCleanup]` 日誌） |
