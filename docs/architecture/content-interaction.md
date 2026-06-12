@@ -70,16 +70,19 @@ The combobox follows ARIA authoring practices:
 - **Delegated listener**: A single document-level `click` handler (`handleEditButtonClick`) registered idempotently via a `window` guard flag.
 - **Edit-button resolution**: `e.target.closest('.d4910adc')` — the obfuscated edit-button class (`EDIT_BUTTON_CLASS`). Non-matching clicks return early (guard clause).
 
-### max-height Removal
+### Asynchronous Textarea Detection (`waitForNewTextarea`)
 
-On every edit-button click (unconditionally — independent of any text match), `removeMaxHeightConstraints(root = document)` sets inline `style.maxHeight = 'none'` on every `.cc852ac5` and `._646a522` element (`MAX_HEIGHT_SELECTORS`) so the edit area expands. The override is not restored when editing ends. Because these elements render asynchronously with the edit UI, removal is applied within the async-detection step.
+The edit textarea renders AFTER the click, so it must be detected asynchronously. A naive "walk up to the nearest ancestor that contains a textarea" approach is wrong: at click time the only textarea on the page is the main bottom composer, and the broad virtual-list ancestor contains it — so that strategy resolves synchronously to the WRONG (empty) textarea and never waits for the real edit box. Detection is therefore snapshot-based and class-independent:
 
-### Asynchronous Textarea Detection
+- `handleEditButtonClick` snapshots the textareas already present at click time: `new Set(document.querySelectorAll('textarea'))`.
+- **`waitForNewTextarea(preExisting, onFound)`**: watches `document.body` via `MutationObserver` (`childList: true, subtree: true`) and picks the first textarea NOT in the snapshot — that is definitively the edit textarea. Fires `onFound` at most once, then disconnects. Hard timeout `DETECTION_TIMEOUT_MS` (2000ms). If the found textarea's `value` is still empty at discovery (React not yet populated), a secondary watch on that specific textarea waits up to `VALUE_WAIT_TIMEOUT_MS` (800ms) for the value to populate. All per-click state (resolved flag, timeout id, observer) is closure-local — no module-level mutable state.
 
-The edit textarea renders after the click, so it is detected asynchronously:
+### max-height Adjustments (`applyMaxHeightAdjustments` + `computeDynamicMaxHeight`)
 
-- **`findMessageContainer(editButton)`**: Walks up from the edit button to the first ancestor element that contains a `<textarea>`.
-- **`waitForTextareaInContainer(container, onFound)`**: If a textarea already exists in the container, calls `onFound` synchronously; otherwise watches via `MutationObserver` (`childList: true, subtree: true`) and auto-disconnects after a 2000ms hard timeout (`DETECTION_TIMEOUT_MS`). Fires `onFound` at most once. Per-click `isResolved` / `timeoutId` state is kept local to the handler closure — no module-level mutable state.
+Applied once at the detection moment (`onFound`), when the edit UI is mounted and the target elements exist:
+
+- **`.cc852ac5`** (`REMOVE_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight = 'none'` on every matched element — always runs.
+- **`._646a522`** (`DYNAMIC_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight` set to a dynamic value computed at that moment via the pure `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX` (offset = 32px). Heights are read in real time: `window.innerHeight`, and `getBoundingClientRect().height` of the first `._2be88ba` (`HEIGHT_SOURCE_SELECTOR_A`) and first `._871cbca` (`HEIGHT_SOURCE_SELECTOR_B`). **Missing-source rule**: if either source element is absent from the DOM, the `._646a522` adjustment is skipped entirely (left untouched) — the `.cc852ac5` removal still runs. Computed once; no resize listener. Overrides are not restored when editing ends.
 
 ### Wrapper Extraction (`extractUserInput` + `applyTextareaCleanup`)
 
@@ -88,7 +91,7 @@ The edit textarea renders after the click, so it is detected asynchronously:
 
 ### Test Interface
 
-Exports via `module.exports` (Node-env guard): `extractUserInput`, `removeMaxHeightConstraints`, `applyTextareaCleanup`, `findMessageContainer`, `waitForTextareaInContainer`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_CLASS`, `MAX_HEIGHT_SELECTORS`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`.
+Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynamicMaxHeight`, `applyMaxHeightAdjustments`, `applyTextareaCleanup`, `waitForNewTextarea`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_CLASS`, `REMOVE_MAX_HEIGHT_SELECTOR`, `DYNAMIC_MAX_HEIGHT_SELECTOR`, `HEIGHT_SOURCE_SELECTOR_A`, `HEIGHT_SOURCE_SELECTOR_B`, `MAX_HEIGHT_OFFSET_PX`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`, `VALUE_WAIT_TIMEOUT_MS`.
 
 ## PreventAutoScroll Module
 

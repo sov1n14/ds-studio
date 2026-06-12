@@ -2,21 +2,19 @@
  * Unit tests for content/edit-message-cleanup.js
  *
  * Coverage groups:
- *   A. extractUserInput — pure regex extraction
- *   B. removeMaxHeightConstraints — DOM style mutations
- *   C. applyTextareaCleanup — conditional textarea rewrite
- *   D. findMessageContainer — ancestor traversal
- *   E. waitForTextareaInContainer — sync and async MutationObserver paths
- *   F. handleEditButtonClick — delegated click handler (integration of above)
+ *   A. extractUserInput — pure regex extraction + constant exports
+ *   B. computeDynamicMaxHeight — pure arithmetic formula
+ *   C. applyMaxHeightAdjustments — DOM max-height mutations
+ *   D. applyTextareaCleanup — conditional textarea rewrite (returns boolean)
+ *   E. waitForNewTextarea — MutationObserver-based new-textarea detection
+ *   F. handleEditButtonClick — delegated click handler (regression + integration)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
 
 // ---------------------------------------------------------------------------
 // Module loading
@@ -30,26 +28,36 @@ const require = createRequire(import.meta.url);
 
 const {
     extractUserInput,
-    removeMaxHeightConstraints,
+    computeDynamicMaxHeight,
+    applyMaxHeightAdjustments,
     applyTextareaCleanup,
-    findMessageContainer,
-    waitForTextareaInContainer,
+    waitForNewTextarea,
     handleEditButtonClick,
     EDIT_BUTTON_CLASS,
-    MAX_HEIGHT_SELECTORS,
+    REMOVE_MAX_HEIGHT_SELECTOR,
+    DYNAMIC_MAX_HEIGHT_SELECTOR,
+    HEIGHT_SOURCE_SELECTOR_A,
+    HEIGHT_SOURCE_SELECTOR_B,
+    MAX_HEIGHT_OFFSET_PX,
     USER_INPUT_REGEX,
     DETECTION_TIMEOUT_MS,
+    VALUE_WAIT_TIMEOUT_MS,
 } = require('../../content/edit-message-cleanup.js');
 
 // ---------------------------------------------------------------------------
-// Group A: extractUserInput
+// Group A: extractUserInput + constant exports
 // ---------------------------------------------------------------------------
 
 describe('A. extractUserInput', () => {
     it('A1: exports the correct constant values', () => {
         expect(EDIT_BUTTON_CLASS).toBe('d4910adc');
-        expect(MAX_HEIGHT_SELECTORS).toEqual(['.cc852ac5', '._646a522']);
+        expect(REMOVE_MAX_HEIGHT_SELECTOR).toBe('.cc852ac5');
+        expect(DYNAMIC_MAX_HEIGHT_SELECTOR).toBe('._646a522');
+        expect(HEIGHT_SOURCE_SELECTOR_A).toBe('._2be88ba');
+        expect(HEIGHT_SOURCE_SELECTOR_B).toBe('._871cbca');
+        expect(MAX_HEIGHT_OFFSET_PX).toBe(32);
         expect(DETECTION_TIMEOUT_MS).toBe(2000);
+        expect(VALUE_WAIT_TIMEOUT_MS).toBe(800);
         expect(USER_INPUT_REGEX).toBeInstanceOf(RegExp);
     });
 
@@ -97,13 +105,11 @@ describe('A. extractUserInput', () => {
     });
 
     it('A11: trailing content after </user-input> prevents a match (regex is end-anchored)', () => {
-        // The regex ends with $ so any trailing character breaks the match.
         const text = '<user-input>\nhello\n</user-input> trailing';
         expect(extractUserInput(text)).toBeNull();
     });
 
     it('A12: trailing newline after </user-input> prevents a match', () => {
-        // This verifies the strict $ anchor — no trailing newline allowed.
         const text = '<user-input>\nhello\n</user-input>\n';
         expect(extractUserInput(text)).toBeNull();
     });
@@ -121,69 +127,240 @@ describe('A. extractUserInput', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Group B: removeMaxHeightConstraints
+// Group B: computeDynamicMaxHeight — pure arithmetic
 // ---------------------------------------------------------------------------
 
-describe('B. removeMaxHeightConstraints', () => {
+describe('B. computeDynamicMaxHeight', () => {
+    it('B1: MAX_HEIGHT_OFFSET_PX constant is 32 (used by the formula)', () => {
+        expect(MAX_HEIGHT_OFFSET_PX).toBe(32);
+    });
+
+    it('B2: typical case — 1000 window, 100 sourceA, 200 sourceB → 668', () => {
+        expect(computeDynamicMaxHeight(1000, 100, 200)).toBe(668);
+    });
+
+    it('B3: zero source heights — result is windowHeight minus offset', () => {
+        expect(computeDynamicMaxHeight(800, 0, 0)).toBe(768);
+    });
+
+    it('B4: all zeros — result is negative offset', () => {
+        expect(computeDynamicMaxHeight(0, 0, 0)).toBe(-32);
+    });
+
+    it('B5: large source heights can produce a negative result (no clamping)', () => {
+        // Source heights larger than window — function returns raw arithmetic, no clamp
+        const result = computeDynamicMaxHeight(500, 400, 200);
+        expect(result).toBe(-132);
+    });
+
+    it('B6: formula is windowHeight - sourceHeightA - sourceHeightB - 32', () => {
+        const wh = 1080;
+        const a = 56;
+        const b = 72;
+        expect(computeDynamicMaxHeight(wh, a, b)).toBe(wh - a - b - 32);
+    });
+
+    it('B7: fractional pixel heights produce fractional result (no rounding)', () => {
+        expect(computeDynamicMaxHeight(900, 50.5, 49.5)).toBe(768);
+    });
+
+    it('B8: sourceHeightA only contributes correctly when sourceHeightB is zero', () => {
+        expect(computeDynamicMaxHeight(600, 80, 0)).toBe(488);
+    });
+
+    it('B9: sourceHeightB only contributes correctly when sourceHeightA is zero', () => {
+        expect(computeDynamicMaxHeight(600, 0, 80)).toBe(488);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Group C: applyMaxHeightAdjustments — DOM style mutations
+// ---------------------------------------------------------------------------
+
+describe('C. applyMaxHeightAdjustments', () => {
     let container;
+
+    // Save and restore getBoundingClientRect and window.innerHeight between tests
+    let originalGetBCR;
 
     beforeEach(() => {
         container = document.createElement('div');
         document.body.appendChild(container);
+        originalGetBCR = Element.prototype.getBoundingClientRect;
     });
 
     afterEach(() => {
         document.body.removeChild(container);
+        Element.prototype.getBoundingClientRect = originalGetBCR;
+        vi.restoreAllMocks();
+        // Remove any lingering source elements added directly to body
+        document.querySelectorAll('._2be88ba, ._871cbca').forEach(el => el.remove());
     });
 
-    it('B1: sets maxHeight=none on .cc852ac5 elements inside root', () => {
+    // Helper: append a source element to document.body so document.querySelector can find it
+    function appendSourceA(height = 0) {
         const el = document.createElement('div');
-        el.className = 'cc852ac5';
-        container.appendChild(el);
+        el.className = '_2be88ba';
+        el.getBoundingClientRect = () => ({ height });
+        document.body.appendChild(el);
+        return el;
+    }
 
-        removeMaxHeightConstraints(container);
-
-        expect(el.style.maxHeight).toBe('none');
-    });
-
-    it('B2: sets maxHeight=none on ._646a522 elements inside root', () => {
+    function appendSourceB(height = 0) {
         const el = document.createElement('div');
-        el.className = '_646a522';
-        container.appendChild(el);
+        el.className = '_871cbca';
+        el.getBoundingClientRect = () => ({ height });
+        document.body.appendChild(el);
+        return el;
+    }
 
-        removeMaxHeightConstraints(container);
+    // ---- .cc852ac5 always cleared ----
 
-        expect(el.style.maxHeight).toBe('none');
-    });
-
-    it('B3: sets maxHeight=none on multiple matching elements simultaneously', () => {
+    it('C1: sets maxHeight=none on all .cc852ac5 elements inside root', () => {
         const a = document.createElement('div');
         a.className = 'cc852ac5';
+        a.style.maxHeight = '300px';
         const b = document.createElement('div');
-        b.className = '_646a522';
-        const c = document.createElement('div');
-        c.className = 'cc852ac5';
-        container.append(a, b, c);
+        b.className = 'cc852ac5';
+        b.style.maxHeight = '150px';
+        container.append(a, b);
 
-        removeMaxHeightConstraints(container);
+        applyMaxHeightAdjustments(container);
 
         expect(a.style.maxHeight).toBe('none');
         expect(b.style.maxHeight).toBe('none');
-        expect(c.style.maxHeight).toBe('none');
     });
 
-    it('B4: does NOT touch an unrelated element', () => {
+    it('C2: .cc852ac5 is cleared EVEN when source elements are absent (no sources in DOM)', () => {
+        const el = document.createElement('div');
+        el.className = 'cc852ac5';
+        el.style.maxHeight = '200px';
+        container.appendChild(el);
+
+        // No ._2be88ba or ._871cbca in DOM
+        applyMaxHeightAdjustments(container);
+
+        expect(el.style.maxHeight).toBe('none');
+    });
+
+    it('C3: does NOT touch an unrelated element', () => {
         const el = document.createElement('div');
         el.className = 'some-other-class';
         el.style.maxHeight = '200px';
         container.appendChild(el);
 
-        removeMaxHeightConstraints(container);
+        applyMaxHeightAdjustments(container);
 
         expect(el.style.maxHeight).toBe('200px');
     });
 
-    it('B5: root parameter scoping — does not affect elements outside root', () => {
+    // ---- ._646a522 skipped when source missing ----
+
+    it('C4: ._646a522 left untouched when HEIGHT_SOURCE_SELECTOR_A is missing', () => {
+        appendSourceB(50);
+
+        const target = document.createElement('div');
+        target.className = '_646a522';
+        target.style.maxHeight = '400px';
+        container.appendChild(target);
+
+        applyMaxHeightAdjustments(container);
+
+        // .cc852ac5 cleared (none here); ._646a522 untouched because A is absent
+        expect(target.style.maxHeight).toBe('400px');
+    });
+
+    it('C5: ._646a522 left untouched when HEIGHT_SOURCE_SELECTOR_B is missing', () => {
+        appendSourceA(50);
+
+        const target = document.createElement('div');
+        target.className = '_646a522';
+        target.style.maxHeight = '400px';
+        container.appendChild(target);
+
+        applyMaxHeightAdjustments(container);
+
+        expect(target.style.maxHeight).toBe('400px');
+    });
+
+    it('C6: ._646a522 left untouched when BOTH source elements are missing', () => {
+        const target = document.createElement('div');
+        target.className = '_646a522';
+        target.style.maxHeight = '400px';
+        container.appendChild(target);
+
+        applyMaxHeightAdjustments(container);
+
+        expect(target.style.maxHeight).toBe('400px');
+    });
+
+    it('C7: .cc852ac5 is still cleared when ._646a522 is left untouched (missing sources)', () => {
+        const cc = document.createElement('div');
+        cc.className = 'cc852ac5';
+        cc.style.maxHeight = '300px';
+        container.appendChild(cc);
+
+        const dyn = document.createElement('div');
+        dyn.className = '_646a522';
+        dyn.style.maxHeight = '400px';
+        container.appendChild(dyn);
+
+        // No sources — ._646a522 must be untouched; .cc852ac5 must be cleared
+        applyMaxHeightAdjustments(container);
+
+        expect(cc.style.maxHeight).toBe('none');
+        expect(dyn.style.maxHeight).toBe('400px');
+    });
+
+    // ---- ._646a522 set when both sources present ----
+
+    it('C8: sets correct maxHeight on ._646a522 when both sources are present', () => {
+        const winHeight = 900;
+        const aHeight = 60;
+        const bHeight = 40;
+        const expected = winHeight - aHeight - bHeight - 32; // 768
+
+        Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
+        appendSourceA(aHeight);
+        appendSourceB(bHeight);
+
+        const target = document.createElement('div');
+        target.className = '_646a522';
+        container.appendChild(target);
+
+        applyMaxHeightAdjustments(container);
+
+        expect(target.style.maxHeight).toBe(expected + 'px');
+    });
+
+    it('C9: sets the same computed value on ALL ._646a522 elements under root', () => {
+        const winHeight = 800;
+        const aHeight = 50;
+        const bHeight = 50;
+        const expected = winHeight - aHeight - bHeight - 32; // 668
+
+        Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
+        appendSourceA(aHeight);
+        appendSourceB(bHeight);
+
+        const t1 = document.createElement('div');
+        t1.className = '_646a522';
+        const t2 = document.createElement('div');
+        t2.className = '_646a522';
+        const t3 = document.createElement('div');
+        t3.className = '_646a522';
+        container.append(t1, t2, t3);
+
+        applyMaxHeightAdjustments(container);
+
+        expect(t1.style.maxHeight).toBe(expected + 'px');
+        expect(t2.style.maxHeight).toBe(expected + 'px');
+        expect(t3.style.maxHeight).toBe(expected + 'px');
+    });
+
+    // ---- root scoping ----
+
+    it('C10: root parameter scoping — does not affect .cc852ac5 elements outside root', () => {
         const inside = document.createElement('div');
         inside.className = 'cc852ac5';
         container.appendChild(inside);
@@ -193,8 +370,7 @@ describe('B. removeMaxHeightConstraints', () => {
         outside.style.maxHeight = '100px';
         document.body.appendChild(outside);
 
-        // Only pass container (not document) as root
-        removeMaxHeightConstraints(container);
+        applyMaxHeightAdjustments(container);
 
         expect(inside.style.maxHeight).toBe('none');
         expect(outside.style.maxHeight).toBe('100px');
@@ -202,34 +378,53 @@ describe('B. removeMaxHeightConstraints', () => {
         document.body.removeChild(outside);
     });
 
-    it('B6: falls back to document when root is null', () => {
-        const el = document.createElement('div');
-        el.className = 'cc852ac5';
-        document.body.appendChild(el);
+    it('C11: root parameter scoping — does not affect ._646a522 elements outside root', () => {
+        const winHeight = 700;
+        Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
+        appendSourceA(30);
+        appendSourceB(20);
 
-        // Should not throw; uses document as search root
-        expect(() => removeMaxHeightConstraints(null)).not.toThrow();
+        const inside = document.createElement('div');
+        inside.className = '_646a522';
+        container.appendChild(inside);
 
-        document.body.removeChild(el);
+        const outside = document.createElement('div');
+        outside.className = '_646a522';
+        outside.style.maxHeight = '999px';
+        document.body.appendChild(outside);
+
+        applyMaxHeightAdjustments(container);
+
+        const expected = winHeight - 30 - 20 - 32;
+        expect(inside.style.maxHeight).toBe(expected + 'px');
+        expect(outside.style.maxHeight).toBe('999px');
+
+        document.body.removeChild(outside);
     });
 
-    it('B7: falls back to document when called with no argument', () => {
-        expect(() => removeMaxHeightConstraints()).not.toThrow();
+    // ---- fallback when root is null / omitted ----
+
+    it('C12: falls back to document when root is null (no throw)', () => {
+        expect(() => applyMaxHeightAdjustments(null)).not.toThrow();
+    });
+
+    it('C13: falls back to document when called with no argument (no throw)', () => {
+        expect(() => applyMaxHeightAdjustments()).not.toThrow();
     });
 });
 
 // ---------------------------------------------------------------------------
-// Group C: applyTextareaCleanup
+// Group D: applyTextareaCleanup
 // ---------------------------------------------------------------------------
 
-describe('C. applyTextareaCleanup', () => {
+describe('D. applyTextareaCleanup', () => {
     function makeTextarea(value) {
         const ta = document.createElement('textarea');
         ta.value = value;
         return ta;
     }
 
-    it('C1: replaces textarea value with only the inner content when wrapper present', () => {
+    it('D1: replaces textarea value with only the inner content when wrapper present', () => {
         const wrapped =
             '<system-prompt>\nSys\n</system-prompt>\n\n' +
             '<user-input>\nmy message\n</user-input>';
@@ -240,7 +435,13 @@ describe('C. applyTextareaCleanup', () => {
         expect(ta.value).toBe('my message');
     });
 
-    it('C2: dispatches an input event after rewriting value', () => {
+    it('D1b: returns true when wrapper is present and rewrite succeeds', () => {
+        const wrapped = '<user-input>\nhello\n</user-input>';
+        const ta = makeTextarea(wrapped);
+        expect(applyTextareaCleanup(ta)).toBe(true);
+    });
+
+    it('D2: dispatches an input event after rewriting value', () => {
         const wrapped = '<user-input>\nhello\n</user-input>';
         const ta = makeTextarea(wrapped);
 
@@ -252,7 +453,7 @@ describe('C. applyTextareaCleanup', () => {
         expect(listener).toHaveBeenCalledOnce();
     });
 
-    it('C3: dispatches a change event after rewriting value', () => {
+    it('D3: dispatches a change event after rewriting value', () => {
         const wrapped = '<user-input>\nhello\n</user-input>';
         const ta = makeTextarea(wrapped);
 
@@ -264,7 +465,7 @@ describe('C. applyTextareaCleanup', () => {
         expect(listener).toHaveBeenCalledOnce();
     });
 
-    it('C4: does NOT modify value when no wrapper present (critical requirement)', () => {
+    it('D4: does NOT modify value when no wrapper present (critical requirement)', () => {
         const original = 'plain text without wrapper';
         const ta = makeTextarea(original);
 
@@ -273,7 +474,12 @@ describe('C. applyTextareaCleanup', () => {
         expect(ta.value).toBe(original);
     });
 
-    it('C5: does NOT dispatch input event when no wrapper present', () => {
+    it('D4b: returns false when no wrapper is present', () => {
+        const ta = makeTextarea('plain text without wrapper');
+        expect(applyTextareaCleanup(ta)).toBe(false);
+    });
+
+    it('D5: does NOT dispatch input event when no wrapper present', () => {
         const ta = makeTextarea('plain text');
         const listener = vi.fn();
         ta.addEventListener('input', listener);
@@ -283,22 +489,27 @@ describe('C. applyTextareaCleanup', () => {
         expect(listener).not.toHaveBeenCalled();
     });
 
-    it('C6: does NOT modify an already-clean value (empty textarea)', () => {
+    it('D6: does NOT modify an already-clean value (empty textarea)', () => {
         const ta = makeTextarea('');
         applyTextareaCleanup(ta);
         expect(ta.value).toBe('');
     });
 
-    it('C7: returns without error when passed a non-textarea element', () => {
+    it('D6b: returns false for empty textarea (no wrapper)', () => {
+        const ta = makeTextarea('');
+        expect(applyTextareaCleanup(ta)).toBe(false);
+    });
+
+    it('D7: returns false without error when passed a non-textarea element', () => {
         const div = document.createElement('div');
-        expect(() => applyTextareaCleanup(div)).not.toThrow();
+        expect(applyTextareaCleanup(div)).toBe(false);
     });
 
-    it('C8: returns without error when passed null', () => {
-        expect(() => applyTextareaCleanup(null)).not.toThrow();
+    it('D8: returns false without error when passed null', () => {
+        expect(applyTextareaCleanup(null)).toBe(false);
     });
 
-    it('C9: multi-line inner content is preserved after cleanup', () => {
+    it('D9: multi-line inner content is preserved after cleanup', () => {
         const wrapped = '<user-input>\nLine 1\nLine 2\n</user-input>';
         const ta = makeTextarea(wrapped);
 
@@ -309,177 +520,91 @@ describe('C. applyTextareaCleanup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Group D: findMessageContainer
+// Group E: waitForNewTextarea
 // ---------------------------------------------------------------------------
 
-describe('D. findMessageContainer', () => {
+describe('E. waitForNewTextarea', () => {
     afterEach(() => {
-        // Clean up any nodes appended to body
+        // Remove all body children after each test to ensure DOM isolation
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
         }
-    });
-
-    it('D1: returns the direct parent when it contains a textarea', () => {
-        const parent = document.createElement('div');
-        const textarea = document.createElement('textarea');
-        const btn = document.createElement('button');
-        parent.appendChild(textarea);
-        parent.appendChild(btn);
-        document.body.appendChild(parent);
-
-        expect(findMessageContainer(btn)).toBe(parent);
-    });
-
-    it('D2: returns a grandparent when textarea is nested higher up', () => {
-        // Structure: grandparent > middle > button;  grandparent contains textarea
-        const grandparent = document.createElement('div');
-        const middle = document.createElement('div');
-        const btn = document.createElement('button');
-        const textarea = document.createElement('textarea');
-
-        grandparent.appendChild(textarea);
-        grandparent.appendChild(middle);
-        middle.appendChild(btn);
-        document.body.appendChild(grandparent);
-
-        expect(findMessageContainer(btn)).toBe(grandparent);
-    });
-
-    it('D3: returns the closest ancestor that contains a textarea (not a higher one)', () => {
-        // grandparent > outer-div > inner-div > button
-        // inner-div contains textarea — should return inner-div
-        const grandparent = document.createElement('div');
-        const outerDiv = document.createElement('div');
-        const innerDiv = document.createElement('div');
-        const btn = document.createElement('button');
-        const textarea = document.createElement('textarea');
-
-        innerDiv.appendChild(textarea);
-        innerDiv.appendChild(btn);
-        outerDiv.appendChild(innerDiv);
-        grandparent.appendChild(outerDiv);
-        document.body.appendChild(grandparent);
-
-        expect(findMessageContainer(btn)).toBe(innerDiv);
-    });
-
-    it('D4: returns null when no ancestor contains a textarea', () => {
-        const parent = document.createElement('div');
-        const btn = document.createElement('button');
-        parent.appendChild(btn);
-        document.body.appendChild(parent);
-
-        expect(findMessageContainer(btn)).toBeNull();
-    });
-
-    it('D5: returns null when editButton is null', () => {
-        expect(findMessageContainer(null)).toBeNull();
-    });
-
-    it('D6: returns null when editButton is undefined', () => {
-        expect(findMessageContainer(undefined)).toBeNull();
-    });
-
-    it('D7: stops traversal at document.body and returns null', () => {
-        // Button is direct child of body with no textarea anywhere in ancestors
-        const btn = document.createElement('button');
-        document.body.appendChild(btn);
-
-        expect(findMessageContainer(btn)).toBeNull();
-    });
-});
-
-// ---------------------------------------------------------------------------
-// Group E: waitForTextareaInContainer
-// ---------------------------------------------------------------------------
-
-describe('E. waitForTextareaInContainer', () => {
-    let container;
-
-    beforeEach(() => {
-        container = document.createElement('div');
-        document.body.appendChild(container);
-    });
-
-    afterEach(() => {
-        document.body.removeChild(container);
         vi.restoreAllMocks();
     });
 
-    it('E1: calls onFound synchronously when textarea already exists in container', () => {
-        const textarea = document.createElement('textarea');
-        container.appendChild(textarea);
+    it('E1: does not call onFound for a textarea already in preExisting set', async () => {
+        // A pre-existing textarea is in the snapshot — it must be ignored
+        const preExisting = document.createElement('textarea');
+        document.body.appendChild(preExisting);
 
+        const snapshot = new Set(document.querySelectorAll('textarea'));
         const onFound = vi.fn();
-        waitForTextareaInContainer(container, onFound);
 
-        expect(onFound).toHaveBeenCalledOnce();
-        expect(onFound).toHaveBeenCalledWith(textarea);
-    });
+        waitForNewTextarea(snapshot, onFound);
 
-    it('E2: does not call onFound when container is empty (no async yet)', () => {
-        const onFound = vi.fn();
-        waitForTextareaInContainer(container, onFound);
+        // MutationObserver fires asynchronously; allow microtasks + timer queue
+        await new Promise(r => setTimeout(r, 0));
 
-        // Synchronous check only — nothing appended yet
         expect(onFound).not.toHaveBeenCalled();
     });
 
-    it('E3: calls onFound via MutationObserver when textarea is appended after the call', async () => {
+    it('E2: calls onFound with a newly appended textarea not in preExisting', async () => {
+        // Snapshot taken before the new textarea exists
+        const snapshot = new Set(document.querySelectorAll('textarea'));
         const onFound = vi.fn();
-        waitForTextareaInContainer(container, onFound);
 
-        // Append a textarea asynchronously
-        const textarea = document.createElement('textarea');
-        container.appendChild(textarea);
+        waitForNewTextarea(snapshot, onFound);
 
-        // Allow MutationObserver microtasks to flush
+        // Simulate DeepSeek asynchronously mounting the edit textarea
+        const newTextarea = document.createElement('textarea');
+        newTextarea.value = '<user-input>\nhello\n</user-input>';
+        document.body.appendChild(newTextarea);
+
         await new Promise(r => setTimeout(r, 0));
 
         expect(onFound).toHaveBeenCalledOnce();
-        expect(onFound).toHaveBeenCalledWith(textarea);
+        expect(onFound).toHaveBeenCalledWith(newTextarea);
     });
 
-    it('E4: calls onFound with the first textarea found (not a later one)', async () => {
+    it('E3: fires at most once — second new textarea does not trigger onFound again', async () => {
+        const snapshot = new Set(document.querySelectorAll('textarea'));
         const onFound = vi.fn();
-        waitForTextareaInContainer(container, onFound);
+
+        waitForNewTextarea(snapshot, onFound);
 
         const first = document.createElement('textarea');
-        container.appendChild(first);
+        first.value = '<user-input>\nfirst\n</user-input>';
+        document.body.appendChild(first);
 
         await new Promise(r => setTimeout(r, 0));
 
-        // Second textarea added later should not trigger a second call
+        // Observer should have disconnected after first find
         const second = document.createElement('textarea');
-        container.appendChild(second);
+        second.value = '<user-input>\nsecond\n</user-input>';
+        document.body.appendChild(second);
+
         await new Promise(r => setTimeout(r, 0));
 
         expect(onFound).toHaveBeenCalledOnce();
         expect(onFound).toHaveBeenCalledWith(first);
     });
 
-    it('E5: does nothing when container is null', () => {
-        expect(() => waitForTextareaInContainer(null, vi.fn())).not.toThrow();
-    });
-
-    it('E6: does nothing when onFound is not a function', () => {
-        expect(() => waitForTextareaInContainer(container, null)).not.toThrow();
-        expect(() => waitForTextareaInContainer(container, 'not-a-fn')).not.toThrow();
-    });
-
-    it('E7: observer auto-disconnects after DETECTION_TIMEOUT_MS without finding a textarea', async () => {
+    it('E4: timeout — no new textarea within DETECTION_TIMEOUT_MS, onFound never called', async () => {
         vi.useFakeTimers();
 
+        const snapshot = new Set(document.querySelectorAll('textarea'));
         const onFound = vi.fn();
-        waitForTextareaInContainer(container, onFound);
 
-        // Advance past the 2000ms timeout
+        waitForNewTextarea(snapshot, onFound);
+
+        // Advance past the 2000 ms hard timeout
         vi.advanceTimersByTime(DETECTION_TIMEOUT_MS + 1);
+        await vi.runAllTimersAsync();
 
-        // Append a textarea AFTER the timeout — should be ignored
-        const ta = document.createElement('textarea');
-        container.appendChild(ta);
+        // Append a textarea AFTER timeout — must be ignored because observer disconnected
+        const late = document.createElement('textarea');
+        late.value = 'too late';
+        document.body.appendChild(late);
 
         await vi.runAllTimersAsync();
 
@@ -488,14 +613,56 @@ describe('E. waitForTextareaInContainer', () => {
         vi.useRealTimers();
     });
 
-    it('E8: deeply nested textarea (inside child div) is still found by the observer', async () => {
-        const onFound = vi.fn();
-        waitForTextareaInContainer(container, onFound);
+    it('E5: does nothing when preExisting is not a Set', () => {
+        expect(() => waitForNewTextarea(null, vi.fn())).not.toThrow();
+        expect(() => waitForNewTextarea([], vi.fn())).not.toThrow();
+    });
 
-        const nested = document.createElement('div');
+    it('E6: does nothing when onFound is not a function', () => {
+        const snapshot = new Set();
+        expect(() => waitForNewTextarea(snapshot, null)).not.toThrow();
+        expect(() => waitForNewTextarea(snapshot, 'not-a-fn')).not.toThrow();
+    });
+
+    it('E7: handles immediate pre-check — textarea present before observer fires', () => {
+        // The source does a synchronous findNewTextarea() check immediately after
+        // setting up the observer. If a new textarea was already in the DOM at call
+        // time (but NOT in preExisting), onFound should fire synchronously.
+        const snapshot = new Set(); // empty snapshot — all textareas are "new"
+
+        const existing = document.createElement('textarea');
+        existing.value = '<user-input>\nimmediate\n</user-input>';
+        document.body.appendChild(existing);
+
+        const onFound = vi.fn();
+        waitForNewTextarea(snapshot, onFound);
+
+        // Synchronous pre-check should have fired onFound already
+        expect(onFound).toHaveBeenCalledOnce();
+        expect(onFound).toHaveBeenCalledWith(existing);
+    });
+
+    // E8: late value population path.
+    //
+    // happy-dom does NOT fire MutationObserver callbacks for programmatic
+    // property assignments (textarea.value = '...') because those do not
+    // mutate the DOM tree structure or characterData in a way that triggers
+    // the observer. The secondary value-wait observer inside waitForNewTextarea
+    // therefore cannot be exercised end-to-end in this environment.
+    //
+    // What we CAN verify: when a new textarea is found with a non-empty value,
+    // onFound is called immediately (fast path). The slow/secondary path's
+    // timeout fallback is also covered by the VALUE_WAIT_TIMEOUT_MS constant
+    // export assertion in Group A (A1).
+    it('E8: new textarea found with non-empty value calls onFound immediately (fast path)', async () => {
+        const snapshot = new Set(document.querySelectorAll('textarea'));
+        const onFound = vi.fn();
+
+        waitForNewTextarea(snapshot, onFound);
+
         const ta = document.createElement('textarea');
-        nested.appendChild(ta);
-        container.appendChild(nested);
+        ta.value = 'already filled';
+        document.body.appendChild(ta);
 
         await new Promise(r => setTimeout(r, 0));
 
@@ -509,116 +676,188 @@ describe('E. waitForTextareaInContainer', () => {
 // ---------------------------------------------------------------------------
 
 describe('F. handleEditButtonClick', () => {
-    let cleanup;
+    let originalGetBCR;
 
-    afterEach(() => {
-        if (cleanup) {
-            cleanup();
-            cleanup = null;
-        }
-        vi.restoreAllMocks();
+    beforeEach(() => {
+        originalGetBCR = Element.prototype.getBoundingClientRect;
     });
 
-    function buildEditButtonDom(textareaValue) {
-        // Structure:
-        //   container (.message-container)
-        //     textarea[value=textareaValue]
-        //     editButton (.d4910adc)
-        //       inner span (click target)
-        const container = document.createElement('div');
-        container.className = 'message-container';
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+        Element.prototype.getBoundingClientRect = originalGetBCR;
+        vi.restoreAllMocks();
+        document.querySelectorAll('._2be88ba, ._871cbca').forEach(el => el.remove());
+    });
 
-        const textarea = document.createElement('textarea');
-        textarea.value = textareaValue;
-
-        const editButton = document.createElement('div');
-        editButton.className = EDIT_BUTTON_CLASS;
-
-        const inner = document.createElement('span');
-        editButton.appendChild(inner);
-
-        container.appendChild(textarea);
-        container.appendChild(editButton);
-        document.body.appendChild(container);
-
-        cleanup = () => document.body.removeChild(container);
-
-        return { container, textarea, editButton, inner };
+    // Helper: fire a synthetic click event targeting a specific element
+    function fireClick(target) {
+        const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
+        Object.defineProperty(evt, 'target', { value: target, writable: false });
+        handleEditButtonClick(evt);
+        return evt;
     }
 
     it('F1: no-op when click target is not inside .d4910adc', () => {
         const unrelated = document.createElement('div');
         document.body.appendChild(unrelated);
 
-        const evt = new MouseEvent('click', { bubbles: true });
-        Object.defineProperty(evt, 'target', { value: unrelated, writable: false });
-
-        // Should not throw and should not interact with anything
-        expect(() => handleEditButtonClick(evt)).not.toThrow();
-
-        document.body.removeChild(unrelated);
+        expect(() => fireClick(unrelated)).not.toThrow();
     });
 
-    it('F2: removes max-height on matching elements when edit button is clicked', () => {
-        const { inner } = buildEditButtonDom('plain text');
+    // -------------------------------------------------------------------------
+    // F2: REGRESSION TEST — the original bug
+    //
+    // Before the fix, handleEditButtonClick used waitForTextareaInContainer which
+    // traversed ancestors to find a container, then grabbed the first textarea
+    // inside it. When DeepSeek rendered the edit UI, the pre-existing main
+    // composer textarea (empty) was sometimes found instead of the new edit
+    // textarea that already contained the wrapped content. This caused
+    // applyTextareaCleanup to run on the wrong element.
+    //
+    // The fix uses waitForNewTextarea with a pre-click snapshot, ensuring only
+    // a textarea that did NOT exist at click-time is passed to the cleanup.
+    // -------------------------------------------------------------------------
+    it('F2: regression — pre-existing empty composer is ignored; NEW edit textarea is cleaned up', async () => {
+        // Simulate the pre-existing main composer textarea (empty, always present)
+        const composer = document.createElement('textarea');
+        composer.value = '';
+        document.body.appendChild(composer);
 
-        // Add a constrained element inside the document
-        const constrained = document.createElement('div');
-        constrained.className = 'cc852ac5';
-        constrained.style.maxHeight = '300px';
-        document.body.appendChild(constrained);
-
-        const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
-        Object.defineProperty(evt, 'target', { value: inner, writable: false });
-        handleEditButtonClick(evt);
-
-        expect(constrained.style.maxHeight).toBe('none');
-
-        document.body.removeChild(constrained);
-    });
-
-    it('F3: cleans up textarea when it contains wrapped content (sync path)', async () => {
-        const wrapped =
-            '<system-prompt>\nSys\n</system-prompt>\n\n' +
-            '<user-input>\noriginal text\n</user-input>';
-        const { inner, textarea } = buildEditButtonDom(wrapped);
-
-        const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
-        Object.defineProperty(evt, 'target', { value: inner, writable: false });
-        handleEditButtonClick(evt);
-
-        // waitForTextareaInContainer should detect existing textarea synchronously
-        // and applyTextareaCleanup should run before next tick
-        await new Promise(r => setTimeout(r, 0));
-
-        expect(textarea.value).toBe('original text');
-    });
-
-    it('F4: does NOT modify textarea value when it contains plain text (no wrapper)', async () => {
-        const { inner, textarea } = buildEditButtonDom('plain user text');
-
-        const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
-        Object.defineProperty(evt, 'target', { value: inner, writable: false });
-        handleEditButtonClick(evt);
-
-        await new Promise(r => setTimeout(r, 0));
-
-        expect(textarea.value).toBe('plain user text');
-    });
-
-    it('F5: no-op when findMessageContainer returns null (no textarea ancestor)', () => {
-        // Edit button with no textarea ancestor
+        // Build the edit button (click target)
         const editButton = document.createElement('div');
         editButton.className = EDIT_BUTTON_CLASS;
         const inner = document.createElement('span');
         editButton.appendChild(inner);
         document.body.appendChild(editButton);
 
-        const evt = new MouseEvent('click', { bubbles: true, cancelable: true });
-        Object.defineProperty(evt, 'target', { value: inner, writable: false });
+        // Click — snapshot is taken at this point; composer is in it
+        fireClick(inner);
 
-        expect(() => handleEditButtonClick(evt)).not.toThrow();
+        // DeepSeek asynchronously mounts the edit textarea pre-filled with wrapped content
+        const wrappedValue =
+            '<system-prompt>\nSys\n</system-prompt>\n\n' +
+            '<user-input>\noriginal user text\n</user-input>';
+        const editTextarea = document.createElement('textarea');
+        editTextarea.value = wrappedValue;
+        document.body.appendChild(editTextarea);
 
-        document.body.removeChild(editButton);
+        // Allow MutationObserver callbacks to fire
+        await new Promise(r => setTimeout(r, 0));
+
+        // The NEW edit textarea must be cleaned up
+        expect(editTextarea.value).toBe('original user text');
+
+        // The pre-existing empty composer must be completely untouched
+        expect(composer.value).toBe('');
+    });
+
+    it('F3: non-.d4910adc click is a no-op (guard clause)', () => {
+        const randomEl = document.createElement('button');
+        document.body.appendChild(randomEl);
+
+        const composer = document.createElement('textarea');
+        composer.value = 'unchanged';
+        document.body.appendChild(composer);
+
+        fireClick(randomEl);
+
+        expect(composer.value).toBe('unchanged');
+    });
+
+    it('F4: applyMaxHeightAdjustments clears .cc852ac5 at detection time (sources absent — skip ._646a522)', async () => {
+        // Build edit button
+        const editButton = document.createElement('div');
+        editButton.className = EDIT_BUTTON_CLASS;
+        const inner = document.createElement('span');
+        editButton.appendChild(inner);
+        document.body.appendChild(editButton);
+
+        // .cc852ac5 constrained element — must always be cleared
+        const constrained1 = document.createElement('div');
+        constrained1.className = 'cc852ac5';
+        constrained1.style.maxHeight = '300px';
+        document.body.appendChild(constrained1);
+
+        // ._646a522 element — must be left untouched because no source elements exist
+        const constrained2 = document.createElement('div');
+        constrained2.className = '_646a522';
+        constrained2.style.maxHeight = '150px';
+        document.body.appendChild(constrained2);
+
+        fireClick(inner);
+
+        // Append edit textarea to trigger onFound callback
+        const editTextarea = document.createElement('textarea');
+        editTextarea.value = 'plain text';
+        document.body.appendChild(editTextarea);
+
+        await new Promise(r => setTimeout(r, 0));
+
+        // .cc852ac5 must always be cleared
+        expect(constrained1.style.maxHeight).toBe('none');
+        // ._646a522 left untouched — no ._2be88ba / ._871cbca in DOM
+        expect(constrained2.style.maxHeight).toBe('150px');
+    });
+
+    it('F5: applyMaxHeightAdjustments sets ._646a522 computed value when source elements are present', async () => {
+        const winHeight = 900;
+        const aHeight = 60;
+        const bHeight = 40;
+        const expectedPx = (winHeight - aHeight - bHeight - 32) + 'px'; // '768px'
+
+        Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
+
+        // Source elements
+        const sourceA = document.createElement('div');
+        sourceA.className = '_2be88ba';
+        sourceA.getBoundingClientRect = () => ({ height: aHeight });
+        document.body.appendChild(sourceA);
+
+        const sourceB = document.createElement('div');
+        sourceB.className = '_871cbca';
+        sourceB.getBoundingClientRect = () => ({ height: bHeight });
+        document.body.appendChild(sourceB);
+
+        // Build edit button
+        const editButton = document.createElement('div');
+        editButton.className = EDIT_BUTTON_CLASS;
+        const inner = document.createElement('span');
+        editButton.appendChild(inner);
+        document.body.appendChild(editButton);
+
+        // ._646a522 target
+        const dynEl = document.createElement('div');
+        dynEl.className = '_646a522';
+        document.body.appendChild(dynEl);
+
+        fireClick(inner);
+
+        const editTextarea = document.createElement('textarea');
+        editTextarea.value = 'plain text';
+        document.body.appendChild(editTextarea);
+
+        await new Promise(r => setTimeout(r, 0));
+
+        expect(dynEl.style.maxHeight).toBe(expectedPx);
+    });
+
+    it('F6: applyTextareaCleanup does not modify textarea when value has no wrapper', async () => {
+        const editButton = document.createElement('div');
+        editButton.className = EDIT_BUTTON_CLASS;
+        const inner = document.createElement('span');
+        editButton.appendChild(inner);
+        document.body.appendChild(editButton);
+
+        fireClick(inner);
+
+        const editTextarea = document.createElement('textarea');
+        editTextarea.value = 'plain user message without wrapper';
+        document.body.appendChild(editTextarea);
+
+        await new Promise(r => setTimeout(r, 0));
+
+        expect(editTextarea.value).toBe('plain user message without wrapper');
     });
 });

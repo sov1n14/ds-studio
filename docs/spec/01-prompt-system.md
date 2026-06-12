@@ -41,8 +41,10 @@
 
 - **目的**：使用者送出的訊息會被注入邏輯（§2）包裹為 `<system-prompt>...</system-prompt>` 與 `<user-input>\n...\n</user-input>` 結構。當使用者點擊 DeepSeek 的編輯按鈕重新編輯該訊息時，編輯框會載入**完整的包裹內容**。此功能負責解除包裹，使使用者僅編輯自己的原始文字。（實作於 `content/edit-message-cleanup.js`，v3.2.1）
 - **觸發**：文件層級委派的 `click` 監聽器，透過 `e.target.closest('.d4910adc')` 辨識編輯按鈕（混淆類別 `d4910adc`）。非編輯按鈕的點擊直接忽略。
-- **展開編輯區**：點擊編輯按鈕後，無條件移除所有 `.cc852ac5` 與 `._646a522` 元素的 `max-height`（以 inline style 設為 `none`），讓編輯區得以展開。此覆寫在離開編輯狀態後不還原。
-- **非同步偵測**：編輯框 textarea 於點擊後才渲染，故以 `MutationObserver` 觀察訊息容器等待其出現（已存在時走同步路徑），硬性逾時 2000ms 後自動停止觀察。
+- **非同步偵測（快照式）**：編輯框 textarea 於點擊後才渲染。點擊當下唯一的 textarea 是頁面底部主輸入框，故不可用「往上找含 textarea 的祖先」策略（會誤抓主輸入框）。改為：點擊當下先以 `new Set(document.querySelectorAll('textarea'))` 建立快照，再以 `MutationObserver` 觀察 `document.body`，挑出**不在快照內的新 textarea**即為編輯框。硬性逾時 2000ms；若新 textarea 的 value 尚未填入，另以最多 800ms 的次級觀察等待其填值。
+- **展開編輯區（max-height 調整）**：偵測到編輯框當下計算並套用一次（不隨視窗縮放重算、離開編輯後不還原）：
+  - `.cc852ac5`：移除 `max-height`（inline style 設為 `none`），所有匹配元素皆套用。
+  - `._646a522`：將 `max-height` 設為 `(window.innerHeight − _2be88ba 高度 − _871cbca 高度 − 32)px`。三項高度於當下即時取得（`window.innerHeight` 與兩來源元素的 `getBoundingClientRect().height`）。**缺元素規則**：若 `_2be88ba` 或 `_871cbca` 任一不存在，則跳過 `._646a522` 的設定（保持原狀）；`.cc852ac5` 的移除不受影響。
 - **解除包裹條件**：偵測到 textarea 後，若其內容符合 `/<user-input>\n([\s\S]*)\n<\/user-input>$/`，則僅保留 `<user-input>` 內的原文（透過 native value setter + `input`/`change` 事件寫回，與注入採用相同的 React-aware 寫入技術）。
 - **保護條件**：若編輯框內容**找不到** `<user-input>...</user-input>` 結構（例如未經注入的純文字訊息），則完全不更動編輯框內容，亦不觸發任何事件。
 - **再次送出**：清理後僅保留原文；使用者修改後點擊編輯送出按鈕時，注入邏輯（§2）會依當前設定重新包裹，行為與一般送出一致。
