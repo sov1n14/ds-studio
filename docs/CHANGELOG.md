@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [3.2.1](changelog/v3.md#321---2026-06-13) | 編輯訊息時自動移除注入包裹、只保留 `<user-input>` 原文並展開編輯區 |
 | [3.2.0](changelog/v3.md#320---2026-06-09) | 新增行動裝置側邊欄向右滑動手勢（中央 80% 觸發區域） |
 | [3.1.3](changelog/v3.md#313---2026-06-08) | 清空全擴充功能除錯日誌與死碼 |
 | [3.1.2](changelog/v3.md#312---2026-06-08) | GoToTop SPA 路由切換後立即重試注入修正 |

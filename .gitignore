@@ -14,5 +14,4 @@ pack-for-chrome.*
 playwright-report/
 playwright/.cache/
 test-results/
-to-fix/
-to-implement/
+to-do/

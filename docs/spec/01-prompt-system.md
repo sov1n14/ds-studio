@@ -37,6 +37,16 @@
   - 使用者輸入為空（僅含空白字元）。
   - 文字輸入區已含有先前注入的前綴（開頭為 `<system-prompt>` 或 `<user-input>`）。
 
+## 3. 編輯訊息清理（解除包裹）
+
+- **目的**：使用者送出的訊息會被注入邏輯（§2）包裹為 `<system-prompt>...</system-prompt>` 與 `<user-input>\n...\n</user-input>` 結構。當使用者點擊 DeepSeek 的編輯按鈕重新編輯該訊息時，編輯框會載入**完整的包裹內容**。此功能負責解除包裹，使使用者僅編輯自己的原始文字。（實作於 `content/edit-message-cleanup.js`，v3.2.1）
+- **觸發**：文件層級委派的 `click` 監聽器，透過 `e.target.closest('.d4910adc')` 辨識編輯按鈕（混淆類別 `d4910adc`）。非編輯按鈕的點擊直接忽略。
+- **展開編輯區**：點擊編輯按鈕後，無條件移除所有 `.cc852ac5` 與 `._646a522` 元素的 `max-height`（以 inline style 設為 `none`），讓編輯區得以展開。此覆寫在離開編輯狀態後不還原。
+- **非同步偵測**：編輯框 textarea 於點擊後才渲染，故以 `MutationObserver` 觀察訊息容器等待其出現（已存在時走同步路徑），硬性逾時 2000ms 後自動停止觀察。
+- **解除包裹條件**：偵測到 textarea 後，若其內容符合 `/<user-input>\n([\s\S]*)\n<\/user-input>$/`，則僅保留 `<user-input>` 內的原文（透過 native value setter + `input`/`change` 事件寫回，與注入採用相同的 React-aware 寫入技術）。
+- **保護條件**：若編輯框內容**找不到** `<user-input>...</user-input>` 結構（例如未經注入的純文字訊息），則完全不更動編輯框內容，亦不觸發任何事件。
+- **再次送出**：清理後僅保留原文；使用者修改後點擊編輯送出按鈕時，注入邏輯（§2）會依當前設定重新包裹，行為與一般送出一致。
+
 ## 4. UUID 對話綁定提示詞組
 
 - **UUID 提取**：Content Script 從 URL 路徑（`/a/chat/s/{uuid}`）透過 `extractUuidFromUrl()` 提取對話 UUID。新對話（無 UUID）的 UUID 為 `null`。

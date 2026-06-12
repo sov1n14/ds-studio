@@ -61,6 +61,35 @@ The combobox follows ARIA authoring practices:
 - Action buttons (edit, delete) have `aria-label` attributes.
 - The drag handle has `aria-hidden="true"` since drag is an enhancement not available to all input modalities.
 
+## Edit Message Cleanup Module
+
+`content/edit-message-cleanup.js` strips the injected prompt wrapper from DeepSeek's edit textarea so the user edits only their original message. It complements the prompt-injection flow in `content-script.js` (`injectPrefix`): injection wraps the outgoing message, this module unwraps it on re-edit.
+
+### Trigger and Scope
+
+- **Delegated listener**: A single document-level `click` handler (`handleEditButtonClick`) registered idempotently via a `window` guard flag.
+- **Edit-button resolution**: `e.target.closest('.d4910adc')` — the obfuscated edit-button class (`EDIT_BUTTON_CLASS`). Non-matching clicks return early (guard clause).
+
+### max-height Removal
+
+On every edit-button click (unconditionally — independent of any text match), `removeMaxHeightConstraints(root = document)` sets inline `style.maxHeight = 'none'` on every `.cc852ac5` and `._646a522` element (`MAX_HEIGHT_SELECTORS`) so the edit area expands. The override is not restored when editing ends. Because these elements render asynchronously with the edit UI, removal is applied within the async-detection step.
+
+### Asynchronous Textarea Detection
+
+The edit textarea renders after the click, so it is detected asynchronously:
+
+- **`findMessageContainer(editButton)`**: Walks up from the edit button to the first ancestor element that contains a `<textarea>`.
+- **`waitForTextareaInContainer(container, onFound)`**: If a textarea already exists in the container, calls `onFound` synchronously; otherwise watches via `MutationObserver` (`childList: true, subtree: true`) and auto-disconnects after a 2000ms hard timeout (`DETECTION_TIMEOUT_MS`). Fires `onFound` at most once. Per-click `isResolved` / `timeoutId` state is kept local to the handler closure — no module-level mutable state.
+
+### Wrapper Extraction (`extractUserInput` + `applyTextareaCleanup`)
+
+- **`extractUserInput(text)`**: Returns the inner content if `text` matches `/<user-input>\n([\s\S]*)\n<\/user-input>$/` (the same end-anchored regex shape as `content-script.js`), else `null`. Non-string input → `null`. The `$` anchor means trailing content after `</user-input>` does not match.
+- **`applyTextareaCleanup(textarea)`**: Calls `extractUserInput(textarea.value)`. On a match, rewrites the value to ONLY the inner content using `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` followed by `input`/`change` event dispatch (same React-aware write as `quote-reply.js` / `content-script.js`). When there is **no** `<user-input>` wrapper, the textarea is left completely untouched and no event is dispatched (explicit requirement — plain messages are never cleared).
+
+### Test Interface
+
+Exports via `module.exports` (Node-env guard): `extractUserInput`, `removeMaxHeightConstraints`, `applyTextareaCleanup`, `findMessageContainer`, `waitForTextareaInContainer`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_CLASS`, `MAX_HEIGHT_SELECTORS`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`.
+
 ## PreventAutoScroll Module
 
 The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's automatic scroll-to-latest behavior during controlled operations like Markdown export.
