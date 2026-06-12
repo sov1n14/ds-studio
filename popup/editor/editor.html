@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提示詞編輯器</title>
+    <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+    <div class="editor-layout">
+        <header class="editor-header">
+            <h1 id="editorTitle">提示詞編輯器</h1>
+            <span id="editorSaveStatus" class="save-status save-status--hidden">已儲存</span>
+        </header>
+        <main class="editor-body">
+            <textarea id="editorTextarea" class="editor-textarea"></textarea>
+        </main>
+    </div>
+
+    <script src="../../utils/storage-manager.js"></script>
+    <script src="../../utils/messaging.js"></script>
+    <script src="editor.js"></script>
+</body>
+</html>

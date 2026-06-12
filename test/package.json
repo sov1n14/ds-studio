@@ -1,0 +1,18 @@
+{
+  "name": "ds-studio-test",
+  "private": true,
+  "type": "module",
+  "description": "Test harness for DS studio Chrome extension.",
+  "scripts": {
+    "test": "npm run test:unit",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
+    "happy-dom": "^16.0.0",
+    "jest-chrome": "^0.8.0"
+  }
+}

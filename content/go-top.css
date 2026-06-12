@@ -1,0 +1,114 @@
+/* GoToTop 浮動按鈕 — 注入版樣式 */
+
+/*
+ * 基礎樣式：所有注入路徑共用的外觀屬性。
+ * 定位由各 modifier class（--solo、--stacked）負責，此處不設定。
+ */
+.dsw-gotop {
+  /* 外觀由 ds-* class（網站元件樣式表）提供；此處僅補充行為性宣告。
+   * 禁止在此設定 background、color、border、display、align-items、
+   * justify-content —— 否則會以相同特異性蓋過網站的 ds-floating-button 樣式。
+   */
+  cursor: pointer;
+  /* pointer-events 在 aria-disabled 時由下方規則關閉 */
+  pointer-events: auto;
+  /* 若 ds-* class 本身未宣告 transition，保留此淡入淡出效果；
+   * 若 ds-* class 已宣告 transition 則此行被覆蓋，不影響正確性。 */
+  transition: opacity 0.2s ease;
+}
+
+/*
+ * Stacked 路徑：原生按鈕存在時，GoTop 以絕對定位疊放於其上方 8px。
+ * margin-bottom 由 JS（_applyStackedOffset）動態覆蓋為精確計算值；
+ * 此處的 62px 為靜態降級值（native 20px offset + 34px height + 8px gap）。
+ */
+.dsw-gotop.dsw-gotop--stacked {
+  position: absolute;
+  bottom: 100%;
+  right: 12px;
+  margin-bottom: 62px;
+}
+
+.dsw-gotop:focus-visible {
+  outline: 2px solid #4d6bfe;
+  outline-offset: 2px;
+}
+
+.dsw-gotop[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/*
+ * Solo 路徑：原生按鈕尚未渲染時，複製網站 ._0706cde 的絕對定位規則
+ *（margin-bottom:20px; position:absolute; bottom:100%; right:12px）。
+ * 外觀（圓形、尺寸）由按鈕攜帶的 ds-* class 及 NATIVE_BTN_INLINE_STYLE 負責，
+ * 此處僅提供定位，不重複設定外觀屬性（避免與 ds-* class 衝突）。
+ */
+.dsw-gotop.dsw-gotop--solo {
+  position: absolute;
+  bottom: 100%;
+  right: 12px;
+  margin-bottom: 20px;
+}
+
+/* ─── 擷取進度 Toast（harvest.js 使用，class 前綴 dss-harvest- 避免汙染宿主頁面） ─── */
+/*
+ * 設計決策：使用非阻擋式浮動 Toast 取代全螢幕遮罩，
+ * 讓使用者在擷取過程中可繼續與頁面互動（含傳送新訊息）。
+ * pointer-events: none 確保 Toast 不攔截任何點擊或鍵盤事件。
+ */
+
+.dss-harvest-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10001;
+  /* 不攔截任何使用者互動：點擊、拖曳、鍵盤等皆穿透 */
+  pointer-events: none;
+  background: rgba(30, 30, 30, 0.88);
+  color: #f5f5f5;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: sans-serif;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  max-width: 280px;
+  /* 預設隱藏，由 JS 控制顯示 */
+  display: none;
+}
+
+.dss-harvest-toast__text {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 擷取階段警示行：視覺加強，但仍在 pointer-events:none 容器內不攔截互動 */
+.dss-harvest-toast__warn {
+  margin: 6px 0 0;
+  line-height: 1.5;
+  font-size: 12px;
+  color: #ffd166;
+  font-weight: 600;
+}
+
+/* ─── 匯出中的載入遮罩（go-top.js 使用，保留舊有 id 選擇器） ─── */
+
+/* 匯出中的載入遮罩 */
+#dss-export-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#dss-export-overlay .dss-export-overlay-text {
+  background: #fff;
+  color: #333;
+  padding: 20px 32px;
+  border-radius: 8px;
+  font-size: 14px;
+}

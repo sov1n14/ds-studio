@@ -1,0 +1,18 @@
+.restored-badge {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #a07a00;
+}
+html[data-theme="dark"] .restored-badge {
+    color: #ffd54f;
+    background: rgba(255, 214, 0, 0.08);
+    border-color: rgba(255, 214, 0, 0.25);
+}
+.dss-censored-hidden {
+    display: none !important;
+}
