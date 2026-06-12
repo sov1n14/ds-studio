@@ -84,6 +84,14 @@ Applied once at the detection moment (`onFound`), when the edit UI is mounted an
 - **`.cc852ac5`** (`REMOVE_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight = 'none'` on every matched element — always runs.
 - **`._646a522`** (`DYNAMIC_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight` set to a dynamic value computed at that moment via the pure `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX` (offset = 32px). Heights are read in real time: `window.innerHeight`, and `getBoundingClientRect().height` of the first `._2be88ba` (`HEIGHT_SOURCE_SELECTOR_A`) and first `._871cbca` (`HEIGHT_SOURCE_SELECTOR_B`). **Missing-source rule**: if either source element is absent from the DOM, the `._646a522` adjustment is skipped entirely (left untouched) — the `.cc852ac5` removal still runs. Computed once; no resize listener. Overrides are not restored when editing ends.
 
+### Scroll-into-position (`applyEditScrollPosition` + `computeScrollDelta` + `findScrollableAncestor`)
+
+After the max-height adjustment and wrapper cleanup, the edit box is scrolled so it visually sits `EDIT_SCROLL_GAP_PX` (16px) below the fixed header `._2be88ba`. Because `.cc852ac5` lives inside a scrollable container while `._2be88ba` is fixed (different z-layers), the alignment is achieved purely by adjusting the container's `scrollTop` — not by repositioning the element. Run once inside a `requestAnimationFrame` (after `applyMaxHeightAdjustments` + `applyTextareaCleanup`) so the post-cleanup layout is measured.
+
+- **`computeScrollDelta(editBoxTop, headerBottom, gap)`** (pure): returns `editBoxTop − (headerBottom + gap)` — the signed pixel amount to ADD to the scroller's `scrollTop` (positive scrolls down, negative scrolls up).
+- **`findScrollableAncestor(el)`**: walks up from `el` (inclusive) and returns the nearest node whose `scrollHeight > clientHeight`, else `null`.
+- **`applyEditScrollPosition(root)`** (root defaults to `document`, falls back to `document` when null): finds `.cc852ac5` (edit box) and `._2be88ba` (header), starts from `.ds-virtual-list-items._6f2c522` and resolves the real scroller via `findScrollableAncestor` (fallback to `._6f2c522` itself), reads `getBoundingClientRect()` geometry in real time, then `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`. **Guard rule**: if the edit box, header, or scroll container is missing, it is a no-op (no throw). One-time adjustment; no resize/scroll listener.
+
 ### Wrapper Extraction (`extractUserInput` + `applyTextareaCleanup`)
 
 - **`extractUserInput(text)`**: Returns the inner content if `text` matches `/<user-input>\n([\s\S]*)\n<\/user-input>$/` (the same end-anchored regex shape as `content-script.js`), else `null`. Non-string input → `null`. The `$` anchor means trailing content after `</user-input>` does not match.
@@ -91,7 +99,7 @@ Applied once at the detection moment (`onFound`), when the edit UI is mounted an
 
 ### Test Interface
 
-Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynamicMaxHeight`, `applyMaxHeightAdjustments`, `applyTextareaCleanup`, `waitForNewTextarea`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_CLASS`, `REMOVE_MAX_HEIGHT_SELECTOR`, `DYNAMIC_MAX_HEIGHT_SELECTOR`, `HEIGHT_SOURCE_SELECTOR_A`, `HEIGHT_SOURCE_SELECTOR_B`, `MAX_HEIGHT_OFFSET_PX`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`, `VALUE_WAIT_TIMEOUT_MS`.
+Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynamicMaxHeight`, `applyMaxHeightAdjustments`, `computeScrollDelta`, `findScrollableAncestor`, `applyEditScrollPosition`, `applyTextareaCleanup`, `waitForNewTextarea`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_CLASS`, `REMOVE_MAX_HEIGHT_SELECTOR`, `DYNAMIC_MAX_HEIGHT_SELECTOR`, `HEIGHT_SOURCE_SELECTOR_A`, `HEIGHT_SOURCE_SELECTOR_B`, `MAX_HEIGHT_OFFSET_PX`, `EDIT_SCROLL_GAP_PX`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`, `VALUE_WAIT_TIMEOUT_MS`.
 
 ## PreventAutoScroll Module
 
