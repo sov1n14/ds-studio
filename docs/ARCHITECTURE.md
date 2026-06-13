@@ -10,7 +10,13 @@ ds-studio/
 ├── content/                 ─  Content scripts & web-accessible resources
 │   ├── content-script.js    ─  Entry: event interception, init, prefix injection (v4.0.0 split)
 │   ├── content-script.export.js   ─  Markdown export pipeline (HTML→MD, download)
-│   ├── content-script.overlay.js  ─  PresetOverlay UI (createPresetOverlay ctx factory)
+│   ├── content-script.overlay.js  ─  PresetOverlay UI (createPresetOverlay ctx factory) (legacy, replaced by the five overlay modules below since v4.2.0)
+│   ├── preset-overlay.controller.js ─  PresetOverlay lifecycle, mount/unmount, observer setup, settle loop
+│   ├── preset-overlay.resolvers.js  ─  Semantic DOM resolvers for title & new-chat button
+│   ├── preset-overlay.styles.js     ─  Overlay CSS inject/remove
+│   ├── preset-dropdown.component.js ─  Custom `<select>`-like dropdown component
+│   ├── preset-dropdown.position.js  ─  Pure computePlacement(input) — no DOM access
+│   ├── preset-settle.scheduler.js   ─  Bounded settle retry loop (mobile position race condition)
 │   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
@@ -85,6 +91,23 @@ The `isEnabled` key acts as a master switch for all extension features:
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
 - **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true.
+
+### Overlay Settlement Mechanism (v4.2.2)
+
+On mobile viewports (< 768 px), the preset-overlay dropdown is positioned in "gap mode" — centered between the chat title and the new-chat/share buttons. However, these buttons are rendered asynchronously by DeepSeek's framework during page load: their `getBoundingClientRect().left` starts at ~160 px (before sibling elements finish layout) and shifts right to ~189 px once settled. Since the button's border-box width (84 px) never changes, neither `ResizeObserver` (watching the container) nor `MutationObserver` fires when the button moves — the button's *position* changes without its *size* changing.
+
+**Solution — bounded settle loop**: The `preset-settle.scheduler.js` module implements a generic settlement detection loop:
+
+```
+per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) → stop | schedule next
+```
+
+- **Triggered once at mount time** in `preset-overlay.controller.js` (`startSettle('initial-settle')`), called from `mountTo()` after all observers are set up.
+- **Convergence**: When the measured metric stays within `epsilon` (0.5 px) for `stableK` (3) consecutive frames, the loop stops with reason `'converged'`.
+- **Safety valve**: A `maxFrames` (30) hard limit prevents infinite loops. Stops with `'maxFrames'`.
+- **Detach detection**: If `measure()` returns `null` after having returned a non-null value, the target element was removed mid-settle — stops with `'detached'`.
+- **Cancellation**: `unmount()` calls `cancel()` on the handle; the `_cancelled` guard prevents any already-scheduled frames from executing.
+- **Design**: Pure control logic — no DOM access. All interaction is injected via callbacks (`measure`, `apply`, `schedule`), keeping the module testable with a controlled frame queue.
 
 ### Data Flow
 

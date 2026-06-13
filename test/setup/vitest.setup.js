@@ -22,6 +22,7 @@ import '../../content/preset-dropdown.position.js';
 import '../../content/preset-dropdown.component.js';
 import '../../content/preset-overlay.styles.js';
 import '../../content/preset-overlay.resolvers.js';
+import '../../content/preset-settle.scheduler.js';
 import '../../content/preset-overlay.controller.js';
 import '../../content/content-script.export.js';
 

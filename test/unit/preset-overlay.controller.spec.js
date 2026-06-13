@@ -119,3 +119,64 @@ describe('onSelectChange — reposition regression', () => {
         expect(updateOrder).toEqual(['update', 'reposition']);
     });
 });
+
+// ── rAF synchroniser ─────────────────────────────────────────────────────────
+
+/**
+ * Stub requestAnimationFrame globally to execute synchronously.
+ * Returns a restore function.
+ */
+function makeRafSync() {
+    const original = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+    return () => { globalThis.requestAnimationFrame = original; };
+}
+
+// ── Group B: settlement loop integration ─────────────────────────────────
+
+describe('settle loop integration', () => {
+    let overlay, ctx, target, restoreRaf;
+
+    beforeEach(() => {
+        spyStorageManager();
+        ctx     = makeCtx();
+        overlay = createPresetOverlay(ctx);
+        // Spy on reposition BEFORE mountTo so settle frame calls are captured.
+        overlay.reposition = vi.fn();
+        // Make rAF synchronous so the settle loop runs to completion during mountTo.
+        restoreRaf = makeRafSync();
+    });
+
+    afterEach(() => {
+        teardownOverlay(overlay, target);
+        restoreStorageManager();
+        if (restoreRaf) restoreRaf();
+    });
+
+    it('mountTo triggers settle loop that calls reposition with settle:frame-N reasons', () => {
+        target = document.createElement('div');
+        document.body.appendChild(target);
+
+        overlay.mountTo(target);
+
+        // The settle loop runs synchronously (rAF stubbed).
+        // With no button element inside the target, resolveNewChatButtonEl
+        // returns null, so measure() returns null every frame.  Since
+        // prevMetric stays null (it's only set when measure returns non-null),
+        // the loop keeps waiting and increments frame each time until
+        // maxFrames=30 is reached: 30 calls to apply -> reposition.
+        expect(overlay.reposition).toHaveBeenCalled();
+        expect(overlay.reposition).toHaveBeenNthCalledWith(1, 'settle:frame-0');
+    });
+
+    it('unmount does not crash after settle loop', () => {
+        target = document.createElement('div');
+        document.body.appendChild(target);
+
+        overlay.mountTo(target);
+        // After the synchronous settle loop completes, unmount should
+        // cleanly tear down without throwing.
+        expect(() => overlay.unmount()).not.toThrow();
+        expect(overlay.wrapperEl).toBeNull();
+    });
+});

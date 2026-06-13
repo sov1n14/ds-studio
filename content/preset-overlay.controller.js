@@ -36,6 +36,7 @@
     var createPresetDropdown = __dropdownModule.createPresetDropdown;
     var resolveTitleEl         = __resolversModule.resolveTitleEl;
     var resolveNewChatButtonEl = __resolversModule.resolveNewChatButtonEl;
+    var runSettle = root.__DS_PresetSettle ? root.__DS_PresetSettle.runSettle : null;
 
     // ── Selector 常數（TARGET_SELECTOR 保留於 controller，供 findAndMount 使用） ──
 
@@ -85,6 +86,7 @@
             _rafPending:        false,  // rAF 節流旗標（ResizeObserver 用）
             _windowResizeHandler: null, // window resize 監聽器參照（teardown 用）
             _resizeRafPending:  false,  // window resize rAF 節流旗標
+            _settle:            null,   // settlement loop controller { cancel }
 
             // ── DOM 建構 ─────────────────────────────────────────────────────
 
@@ -115,6 +117,7 @@
                 targetEl.appendChild(this.wrapperEl);
                 this.setupResizeObserver();
                 this.setupWindowResizeListener();
+                this.startSettle('initial-settle');
             },
 
             /**
@@ -137,6 +140,7 @@
                     this._windowResizeHandler = null;
                 }
                 this._resizeRafPending = false;
+                if (this._settle) { this._settle.cancel(); this._settle = null; }
                 this.targetEl = null;
             },
 
@@ -248,6 +252,34 @@
                     this.wrapperEl.style.width       = placement.width + 'px';
                     this.wrapperEl.style.transform   = 'translateY(-50%)';
                 });
+            },
+
+            // ── Settlement 自動穩定 ──────────────────────────────────────────
+
+            /**
+             * 啟動 settlement loop：持續量測 new-chat 按鈕位置直到穩定，
+             * 最後一次 apply reposition 確保 dropdown 定位精準。
+             * @param {string} reason 觸發原因，僅供日誌識別
+             */
+            startSettle: function startSettle(reason) {
+                if (!runSettle) return;                      // scheduler not available
+                if (this._settle) return;                    // already running — early return
+                var self = this;
+                var opts = {
+                    measure: function () {
+                        var result = resolveNewChatButtonEl(self.targetEl);
+                        return result && result.el ? result.el.getBoundingClientRect().left : null;
+                    },
+                    apply: function (r) { self.reposition(r); },
+                    schedule: scheduleFrame,
+                    maxFrames: 30,
+                    stableK: 3,
+                    epsilon: 0.5,
+                    onLog: function (phase, detail) {
+                        console.log('[DSS-DIAG] ' + phase, JSON.stringify(detail));
+                    }
+                };
+                this._settle = runSettle(opts);
             },
 
             // ── 選項變更處理 ─────────────────────────────────────────────────
