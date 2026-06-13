@@ -13,7 +13,7 @@ beforeAll(() => {
     eval(code);
 
     // Extract Modal object from popup.js for modal-integration tests
-    const popupCode = readFileSync(resolve(__dirname, '../../popup/popup.js'), 'utf-8');
+    const popupCode = readFileSync(resolve(__dirname, '../../popup/popup.modal.js'), 'utf-8');
     const match = popupCode.match(/const Modal = \{[\s\S]*?\n\};/);
     if (!match) {
         throw new Error('Could not extract Modal object from popup.js');

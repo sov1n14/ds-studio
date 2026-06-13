@@ -158,18 +158,27 @@ Note: `custom-select.js` contains its own private copies of `_fuzzyMatch()` and 
 In `popup.html`, the script tags appear in this order:
 
 ```html
+<script src="../utils/storage-manager.chunking.js"></script>
+<script src="../utils/storage-manager.lock.js"></script>
+<script src="../utils/storage-manager.sync.js"></script>
+<script src="../utils/storage-manager.presets.js"></script>
 <script src="../utils/storage-manager.js"></script>
 <script src="../utils/messaging.js"></script>
 <script src="custom-select.js"></script>
+<script src="popup.modal.js"></script>
+<script src="popup.preset-manager.js"></script>
+<script src="popup.backup-manager.js"></script>
 <script src="popup.js"></script>
 ```
 
-- `storage-manager.js` must load first because both custom-select.js users and popup.js depend on it at runtime.
+- The four `storage-manager.*.js` bundles load first; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split).
+- `storage-manager.js` (entry) loads next and runs `Object.assign(StorageManager, ...)` to merge the bundles before exposing `window.StorageManager`. Both custom-select.js users and popup.js depend on it at runtime.
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js for the `ACTIVE_PRESET_CHANGED` broadcast).
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
-- `popup.js` loads last, calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
+- `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
+- `popup.js` (entry) loads last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 
-The editor window (`popup/editor/editor.html`) loads `../../utils/storage-manager.js`, `../../utils/messaging.js`, then `editor.js` — all classic scripts, no inline JS (MV3 CSP-safe). `popup-utils.js` is an ES module (top-level `export`) and is deliberately NOT loaded as a classic script anywhere; `editor.js` carries its own local `debounce` copy for this reason.
+The editor window (`popup/editor/editor.html`) loads the four `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, then `editor.js` — all classic scripts, no inline JS (MV3 CSP-safe). `popup-utils.js` is an ES module (top-level `export`) and is deliberately NOT loaded as a classic script anywhere; `editor.js` carries its own local `debounce` copy for this reason.
 
 ### Data Flow Integration
 

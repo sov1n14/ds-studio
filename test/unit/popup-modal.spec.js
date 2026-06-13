@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 let Modal;
 
 beforeAll(() => {
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.js'), 'utf-8');
+    const code = readFileSync(resolve(__dirname, '../../popup/popup.modal.js'), 'utf-8');
     // Extract the Modal object definition from the top of popup.js (lines 1-149).
     // Modal is a top-level const, not inside DOMContentLoaded.
     const match = code.match(/const Modal = \{[\s\S]*?\n\};/);

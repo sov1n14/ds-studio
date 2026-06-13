@@ -1,8 +1,11 @@
-﻿/**
- * DS studio v2.4.1 — Content Script
- * Intercepts chat submissions and injects the preset prompt prefix.
+/**
+ * DS studio v4.0.0 — Content Script
+ * 攔截聊天送出事件，注入預設提示前綴。
+ * 匯出管線（Markdown 相關函式）由 content-script.export.js 提供，
+ * 透過 __DS_ContentExport 全域命名空間於此處綁定。
  */
 
+// 模組層級狀態變數
 let isEnabled = false;
 let promptPrefix = '';
 let globalDefaultPrompt = '';
@@ -15,146 +18,38 @@ let pendingPresetId = null;
 let awaitingNewChatUuid = false;
 let awaitingNewChatUuidTimer = null;
 
-function injectOverlayStyles() {
-    if (document.getElementById('dss-overlay-style')) return;
-    const style = document.createElement('style');
-    style.id = 'dss-overlay-style';
-    style.textContent = `
-        ._2be88ba:not(._1551317) { position: relative !important; }
-        #dss-preset-overlay {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1000; pointer-events: auto;
-        }
-        #dss-preset-select {
-            height: 30px; padding: 5px 6px;
-            border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
-            font-size: 13px; font-family: inherit;
-            background-color: rgba(0,0,0,0.45); color: #fff;
-            cursor: pointer; max-width: 200px; min-width: 80px;
-        }
-        #dss-preset-select:focus {
-            outline: none; border-color: #4d6bfe;
-            box-shadow: 0 0 0 2px rgba(77,107,254,0.3);
-        }
-    `;
-    document.head.appendChild(style);
-}
+// 綁定 Export 模組（瀏覽器：由 content-script.export.js 在前載入；Node.js 測試：直接 require）
+var __DSExport = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_ContentExport ||
+    (typeof require !== 'undefined' ? require('./content-script.export.js') : {});
+var parseHtmlToMarkdown          = __DSExport.parseHtmlToMarkdown;
+var convertMessageNodeToMarkdown = __DSExport.convertMessageNodeToMarkdown;
+var exportConversationToMarkdown = __DSExport.exportConversationToMarkdown;
+var _buildMarkdownHeader         = __DSExport._buildMarkdownHeader;
+var downloadMarkdown             = __DSExport.downloadMarkdown;
+var formatSystemTime             = __DSExport.formatSystemTime;
 
-function removeOverlayStyles() {
-    const style = document.getElementById('dss-overlay-style');
-    style?.remove();
-}
+// ── PresetOverlay factory（由 content-script.overlay.js 在前載入） ────────────
+// 取得 factory 參照並以 ctx 物件實例化，ctx 的 getter/setter 直接讀寫本模組的
+// let 變數，確保 __setState/__getState 的異動對 overlay 即時可見，反之亦然。
+var __overlayFactory = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_PresetOverlay ||
+    (typeof require !== 'undefined' ? require('./content-script.overlay.js') : {});
+const PresetOverlay = __overlayFactory.createPresetOverlay({
+    getIsEnabled:              () => isEnabled,
+    getCurrentChatUuid:        () => currentChatUuid,
+    setCurrentChatUuid:        (v) => { currentChatUuid = v; },
+    getChatPresetMap:          () => chatPresetMap,
+    setChatPresetMap:          (v) => { chatPresetMap = v; },
+    setPendingPresetId:        (v) => { pendingPresetId = v; },
+    updatePromptPrefixFromBinding: (...a) => updatePromptPrefixFromBinding(...a),
+    isExtensionContextValid:   () => isExtensionContextValid(),
+});
+// 樣式工具函式由 overlay 模組提供（避免重複定義）
+var injectOverlayStyles = __overlayFactory.injectOverlayStyles;
+var removeOverlayStyles = __overlayFactory.removeOverlayStyles;
 
-const PresetOverlay = {
-    TARGET_SELECTOR: '._2be88ba',
-    selectEl: null, wrapperEl: null, targetEl: null,
-    domObserver: null, _debounceTimer: null,
-
-    buildDOM() {
-        const wrapper = document.createElement('div');
-        wrapper.id = 'dss-preset-overlay';
-        const sel = document.createElement('select');
-        sel.id = 'dss-preset-select';
-        wrapper.appendChild(sel);
-        sel.addEventListener('change', (e) => {
-            e.stopPropagation();
-            this.onSelectChange(sel.value);
-        });
-        return wrapper;
-    },
-
-    mountTo(targetEl) {
-        this.unmount();
-        this.wrapperEl = this.buildDOM();
-        this.selectEl = this.wrapperEl.querySelector('select');
-        this.targetEl = targetEl;
-        targetEl.appendChild(this.wrapperEl);
-    },
-
-    unmount() {
-        this.wrapperEl?.remove();
-        this.selectEl = null; this.wrapperEl = null; this.targetEl = null;
-    },
-
-    render(presets, activeId) {
-        if (!this.selectEl) return;
-        this.selectEl.innerHTML = '';
-        const empty = document.createElement('option');
-        empty.value = ''; empty.textContent = '';
-        this.selectEl.appendChild(empty);
-        (presets || []).forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id; opt.textContent = p.name;
-            this.selectEl.appendChild(opt);
-        });
-        this.selectEl.value = activeId || '';
-    },
-
-    findAndMount() {
-        const found = document.querySelector(this.TARGET_SELECTOR);
-        if (!found) return;
-        if (this.targetEl === found) return;
-        this.mountTo(found);
-        this.setVisible(isEnabled);
-        StorageManager.getSettings().then(s => {
-            const activeId = currentChatUuid ? (chatPresetMap[currentChatUuid] || '') : '';
-            this.render(s.promptPresets, activeId);
-        });
-    },
-
-    setupDomObserver() {
-        if (this.domObserver) return;
-        this.domObserver = new MutationObserver(() => {
-            if (!isExtensionContextValid()) {
-                this.domObserver.disconnect(); this.domObserver = null; return;
-            }
-            clearTimeout(this._debounceTimer);
-            this._debounceTimer = setTimeout(() => this.findAndMount(), 150);
-        });
-        this.domObserver.observe(document.body, { childList: true, subtree: true });
-    },
-
-    onSelectChange(newId) {
-        if (currentChatUuid && newId !== '') {
-            chatPresetMap[currentChatUuid] = newId;
-            StorageManager.bindChatToPreset(currentChatUuid, newId).then(() =>
-                StorageManager.getChatPresetMap().then(m => { chatPresetMap = m; })
-            );
-        } else if (currentChatUuid && newId === '') {
-            delete chatPresetMap[currentChatUuid];
-            StorageManager.unbindChat(currentChatUuid).then(() =>
-                StorageManager.getChatPresetMap().then(m => { chatPresetMap = m; })
-            );
-        } else {
-            pendingPresetId = newId || null;
-        }
-        StorageManager.saveActivePresetId(newId);
-        updatePromptPrefixFromBinding();
-    },
-
-    setVisible(enabled) {
-        if (this.wrapperEl) {
-            this.wrapperEl.style.display = enabled ? '' : 'none';
-        }
-    },
-
-    updateActiveId(id) {
-        if (this.selectEl) this.selectEl.value = id || '';
-    },
-
-    start(presets, activeId, enable) {
-        injectOverlayStyles();
-        this.setupDomObserver();
-        this.findAndMount();
-        this.render(presets, activeId);
-        if (enable !== undefined) this.setVisible(enable);
-    }
-};
-
-// Load initial settings and listen for changes
+// 設定初始化
 async function initSettings() {
-    // StorageManager is injected before this script in manifest.json
+    // StorageManager 由 manifest.json 在本腳本之前注入
     const settings = await StorageManager.getSettings();
     isEnabled = settings.isEnabled;
     globalDefaultPrompt = settings.globalDefaultPrompt ?? '';
@@ -167,10 +62,10 @@ async function initSettings() {
     // valid selectEl to write into when resolving bound-preset lookups.
     PresetOverlay.start(settings.promptPresets, settings.activePresetId ?? '', settings.isEnabled);
 
-    // Handle initial chat (may auto-select a bound preset)
+    // 處理初始對話（可能自動選取已綁定的 preset）
     await handleChatChange();
 
-    // Set up SPA navigation detection
+    // 設定 SPA 導航偵測
     setupNavigationDetection();
 
     chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -232,17 +127,13 @@ async function initSettings() {
     });
 }
 
+// URL / Chat 工具函式
 function extractUuidFromUrl() {
     const match = window.location.pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
     return match ? match[1] : null;
 }
 
-/**
- * 標記使用者剛在新對話頁面嘗試送出訊息。
- * 僅在「真的觸發訊息送出」時才允許後續的 auto-bind，
- * 避免從新對話頁手動切到既有對話被誤綁。
- * 5 秒未發生 URL 變化會自動清掉，避免送訊息失敗後污染下次導航。
- */
+// 標記使用者在新對話頁面送出訊息，允許後續 auto-bind；5 秒後自動清除。
 function markChatCreationAttempt() {
     if (currentChatUuid !== null) return;
     awaitingNewChatUuid = true;
@@ -252,11 +143,7 @@ function markChatCreationAttempt() {
     }, 5000);
 }
 
-/**
- * Recalculates promptPrefix based on the current chat's UUID binding.
- * If the current chat has a bound preset, uses that preset's content.
- * Otherwise clears promptPrefix.
- */
+// 根據當前聊天 UUID 綁定重新計算 promptPrefix；無綁定則清空。
 async function updatePromptPrefixFromBinding() {
     let presetId = null;
     if (currentChatUuid && chatPresetMap[currentChatUuid]) {
@@ -290,22 +177,22 @@ async function handleChatChange() {
 
     if (newUuid === currentChatUuid) return;
 
-    // Track whether we're coming from a no-UUID state (new chat just got its UUID)
+    // 追蹤是否從無 UUID 狀態進入（新對話剛取得 UUID）
     const hadNoUuid = currentChatUuid === null;
     currentChatUuid = newUuid;
 
-    // Reload chatPresetMap from chunked storage
+    // 從分塊儲存重新載入 chatPresetMap
     chatPresetMap = await StorageManager.getChatPresetMap();
 
     if (chatPresetMap[newUuid]) {
-        // Verify the bound preset still exists
+        // 確認已綁定的 preset 仍然存在
         const settings = await StorageManager.getSettings();
         const presets = settings.promptPresets;
         if (presets.some(p => p.id === chatPresetMap[newUuid])) {
             await StorageManager.saveActivePresetId(chatPresetMap[newUuid]);
             promptPrefix = await StorageManager.getActivePromptContent();
         } else {
-            // Stale binding — clean up via transactional API
+            // 綁定已失效 — 透過交易式 API 清除
             chatPresetMap = await StorageManager.mutateChatPresetMap(map => {
                 delete map[newUuid];
             });
@@ -336,6 +223,7 @@ async function handleChatChange() {
     PresetOverlay.updateActiveId(overlayResolvedId);
 }
 
+// Extension 狀態檢查
 function isExtensionContextValid() {
     try {
         chrome.runtime.id;
@@ -345,11 +233,11 @@ function isExtensionContextValid() {
     }
 }
 
+// SPA 導航偵測
 function setupNavigationDetection() {
     let lastPath = window.location.pathname;
 
-    // SPA navigation usually involves DOM changes.
-    // We observe the body for changes and check if the URL has changed.
+    // SPA 導航通常伴隨 DOM 變化；觀察 body 並比對 URL 是否改變
     const navObserver = new MutationObserver(() => {
         if (!isExtensionContextValid()) {
             navObserver.disconnect();
@@ -363,7 +251,7 @@ function setupNavigationDetection() {
 
     navObserver.observe(document.body, { childList: true, subtree: true });
 
-    // Handle back/forward navigation
+    // 處理上一頁/下一頁導航
     window.addEventListener('popstate', () => {
         if (!isExtensionContextValid()) return;
         if (window.location.pathname !== lastPath) {
@@ -373,17 +261,7 @@ function setupNavigationDetection() {
     });
 }
 
-function formatSystemTime(date = new Date()) {
-    // 取得本地系統時間，格式為 yyyy/mm/dd hh:mm:ss（24小時制、零補位）
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
-}
-
+// 前綴組裝與注入
 function buildInjectionPrefix() {
     const parts = [];
     if (isGlobalPromptEnabled && globalDefaultPrompt) parts.push(globalDefaultPrompt);
@@ -394,9 +272,9 @@ function buildInjectionPrefix() {
 }
 
 /**
- * Injects the combined prompt prefix into the textarea and triggers React state updates.
+ * 將組合後的提示前綴注入 textarea，並觸發 React 狀態更新。
  * @param {HTMLTextAreaElement} textarea
- * @returns {boolean} True if injection happened, false otherwise
+ * @returns {boolean} 注入成功回傳 true，否則 false
  */
 function injectPrefix(textarea) {
     if (!isEnabled) return false;
@@ -409,22 +287,21 @@ function injectPrefix(textarea) {
 
     if (currentVal.trim() === '') return false;
 
-    let newVal;
+    // formatSystemTime 由 __DS_ContentExport 提供（不讀取模組層級狀態）
     const systemTimePrefix = showSystemTime ? `Current Time: ${formatSystemTime()}\n\n` : '';
-    
+
+    let newVal;
     if (injectionPrefix) {
         newVal = `${systemTimePrefix}${injectionPrefix}\n\n<user-input>\n${currentVal}\n</user-input>`;
     } else {
         newVal = `${systemTimePrefix}<user-input>\n${currentVal}\n</user-input>`;
     }
 
-    const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
     nativeTextAreaValueSetter.call(textarea, newVal);
 
-    // Trigger 'input' event for React 16+
+    // 觸發 React 16+ 的 input 事件
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
-
-    // Trigger 'change' event for extra safety
     textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
     return true;
@@ -432,34 +309,27 @@ function injectPrefix(textarea) {
 
 /**
  * 偵測目前是否為行動裝置或行動裝置模擬器。
- * 涵蓋實體裝置（觸控點數）與 Chrome DevTools 行動裝置模擬（User-Agent 字串）。
  */
 function isMobileDevice() {
     return navigator.maxTouchPoints > 0 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 }
 
-/**
- * Handle keydown events to intercept "Enter" (without shift)
- */
+// 鍵盤事件攔截（Enter 送出）
 document.addEventListener('keydown', (e) => {
-    // Only intercept Enter key without Shift
+    // 僅攔截不含 Shift 的 Enter 鍵
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         if (isInjecting) return;
         if (isMobileDevice()) return;
 
         const activeElement = document.activeElement;
-        
-        // Verify it's a textarea
+
         if (activeElement && activeElement.tagName === 'TEXTAREA') {
             if (activeElement.value.trim() !== '') markChatCreationAttempt();
-            // Try injecting
             if (injectPrefix(activeElement)) {
-                // Prevent the original event from sending the message too early
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-                
-                // Dispatch a new simulated Enter keypress after React commits
+
                 requestAnimationFrame(() => {
                     isInjecting = true;
                     const enterEvent = new KeyboardEvent('keydown', {
@@ -479,9 +349,7 @@ document.addEventListener('keydown', (e) => {
     }
 }, { capture: true });
 
-/**
- * Handle mouse/pointer events to intercept clicking the send button
- */
+// 滑鼠/指標事件攔截（點擊送出按鈕）
 ['pointerdown', 'mousedown', 'click'].forEach(eventType => {
     document.addEventListener(eventType, (e) => {
         if (isInjecting) return;
@@ -534,14 +402,14 @@ document.addEventListener('keydown', (e) => {
     }, { capture: true });
 });
 
-// Initialize on load
+// 初始化
 initSettings().catch(e => {
     if (e?.message?.includes('Extension context invalidated')) return;
 });
 
-// Listen for messages from popup
+// Popup 訊息監聽
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "EXPORT_MARKDOWN") {
+    if (request.action === 'EXPORT_MARKDOWN') {
         (async () => {
             await exportConversationToMarkdown(
                 request.includeThinking,
@@ -550,319 +418,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })().catch(e => {
             if (e?.message?.includes('Extension context invalidated')) return;
         });
-    } else if (request.action === "ACTIVE_PRESET_CHANGED") {
+    } else if (request.action === 'ACTIVE_PRESET_CHANGED') {
         pendingPresetId = request.presetId || null;
         updatePromptPrefixFromBinding();
         PresetOverlay.updateActiveId(request.presetId || '');
-    } else if (request.action === "GET_PENDING_PRESET") {
+    } else if (request.action === 'GET_PENDING_PRESET') {
         sendResponse({ pendingPresetId });
     }
 });
 
-/**
- * 將單一訊息節點（.ds-message）轉換為 Markdown 字串。
- * 此函式為純查詢，不修改 DOM，不持有模組層級狀態。
- * @param {Element} msg - .ds-message 節點（可為克隆節點）
- * @param {boolean} includeThinking - 是否包含思考過程
- * @param {boolean} includeReferences - 是否包含引用連結
- * @returns {string} 該訊息的 Markdown 字串（含尾端分隔線）
- */
-function convertMessageNodeToMarkdown(msg, includeThinking, includeReferences) {
-    // Guard: 空節點直接略過
-    if (!msg) return '';
-
-    let result = '';
-
-    // AI 回覆：含 .ds-markdown 容器
-    const markdownContainer = msg.querySelector('.ds-markdown');
-
-    if (markdownContainer) {
-        result += '## DeepSeek\n\n';
-
-        // 思考過程區塊
-        const firstThinkBlock = msg.querySelector('.ds-think-content');
-        const thinkContainer = firstThinkBlock ? firstThinkBlock.parentNode : null;
-
-        if (thinkContainer && includeThinking) {
-            result += '> **Thinking Process:**\n';
-            for (const child of thinkContainer.children) {
-                if (child.classList.contains('ds-think-content')) {
-                    const mdBlock = child.querySelector('.ds-markdown');
-                    if (mdBlock) {
-                        const text = parseHtmlToMarkdown(mdBlock, { forceReferences: true });
-                        const quoted = text.split('\n').map(line => `> ${line}`).join('\n');
-                        result += quoted + '\n';
-                    }
-                } else if (child.querySelector('._08cbf39')) {
-                    const span = child.querySelector('._08cbf39');
-                    result += `> ${span.textContent.trim()}\n`;
-                } else if (child.querySelector('._442c8e7')) {
-                    const labelDiv = child.querySelector('._442c8e7');
-                    const links = child.querySelectorAll('a._04ab7b1');
-                    let line = `> ${labelDiv.textContent.trim()}`;
-                    links.forEach(link => {
-                        line += ` [${link.textContent.trim()}](${link.href})`;
-                    });
-                    result += line + '\n';
-                }
-            }
-            result += '\n';
-        }
-
-        // 主回覆：最後一個位於思考容器之外的 .ds-markdown
-        const allMarkdownBlocks = Array.from(msg.querySelectorAll('.ds-markdown'));
-        const mainResponseItems = thinkContainer
-            ? allMarkdownBlocks.filter(block => !thinkContainer.contains(block))
-            : allMarkdownBlocks;
-        const mainResponse = mainResponseItems[mainResponseItems.length - 1];
-
-        if (mainResponse) {
-            result += parseHtmlToMarkdown(mainResponse, { forceReferences: includeReferences }) + '\n\n';
-        }
-    } else {
-        // 使用者訊息
-        const userContentWrapper = msg.querySelector('.fbb737a4') || msg.firstElementChild;
-        let text = userContentWrapper ? userContentWrapper.innerText : msg.innerText;
-        text = (text || '').trim();
-        if (text) {
-            result += '## User\n\n';
-            result += text + '\n\n';
-        }
-    }
-
-    result += '---\n\n';
-    return result;
-}
-
-/**
- * 利用 Harvest 模組擷取完整對話，並匯出為 Markdown 檔案。
- * 若擷取未完整（超時），仍匯出已取得部分，並附加警告頁尾。
- * @param {boolean} includeThinking - 是否包含思考過程
- * @param {boolean} includeReferences - 是否包含引用連結
- * @returns {Promise<void>}
- */
-async function exportConversationToMarkdown(includeThinking = true, includeReferences = true) {
-    // 取得 Harvest 模組（由 harvest.js 掛載在 window.DSstudio.Harvest）
-    const Harvest = window.DSstudio?.Harvest;
-    if (!Harvest) {
-        // Harvest 模組不存在（舊版相容回退：直接擷取目前可見訊息）
-        const messages = document.querySelectorAll('.ds-virtual-list-visible-items .ds-message');
-        if (!messages || messages.length === 0) {
-            alert('找不到對話紀錄。請確認您正在 DeepSeek 聊天頁面中。');
-            return;
-        }
-        let markdownContent = _buildMarkdownHeader();
-        messages.forEach(msg => {
-            markdownContent += convertMessageNodeToMarkdown(msg, includeThinking, includeReferences);
-        });
-        downloadMarkdown(markdownContent);
-        return;
-    }
-
-    // 執行完整擷取（遮罩由 Harvest 內部管理）
-    const harvestResult = await Harvest.harvestAllMessages();
-
-    // Guard: 完全沒有訊息
-    if (!harvestResult.items || harvestResult.items.length === 0) {
-        alert('找不到對話紀錄。請確認您正在 DeepSeek 聊天頁面中。');
-        return;
-    }
-
-    // 組裝 Markdown
-    let markdownContent = _buildMarkdownHeader();
-
-    harvestResult.items.forEach(msg => {
-        markdownContent += convertMessageNodeToMarkdown(msg, includeThinking, includeReferences);
-    });
-
-    // 若擷取不完整，附加警告頁尾
-    if (!harvestResult.isComplete) {
-        markdownContent += '\n> ⚠️ Export may be incomplete: scroll-harvest timed out before reaching the end.\n';
-    }
-
-    downloadMarkdown(markdownContent);
-}
-
-/**
- * 建立 Markdown 匯出的標頭字串。
- * @returns {string}
- */
-function _buildMarkdownHeader() {
-    const exportedAt = new Date().toLocaleString();
-    return `# DeepSeek Chat Export\n\n> Exported at: ${exportedAt}\n\n---\n\n`;
-}
-
-/**
- * Parses an HTML element recursively into a formatted Markdown string.
- * @param {Element} node - The root element to parse
- * @param {Object} options - Parsing options
- * @param {boolean} options.forceReferences - Whether to extract citation reference links
- * @returns {string} - The resulting markdown string
- */
-function parseHtmlToMarkdown(node, options = { forceReferences: true }) {
-    let result = '';
-
-    const blockElements = new Set(['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'TABLE', 'TR']);
-    const isBlock = (el) => el && el.tagName && blockElements.has(el.tagName);
-
-    function walk(n, parentTagName = null) {
-        let text = '';
-        if (n.nodeType === Node.TEXT_NODE) {
-            // Remove redundant spaces but keep single spaces
-            const content = n.textContent.replace(/\s+/g, ' ');
-            // Only return if it's not just a single space between blocks
-            if (content.trim() !== '' || content === ' ') {
-                text += content;
-            }
-        } else if (n.nodeType === Node.ELEMENT_NODE) {
-            const tagName = n.tagName;
-            
-            // Handle specific element types
-            if (tagName === 'BR') {
-                text += '\n';
-            } else if (tagName === 'STRONG' || tagName === 'B') {
-                const inner = parseChildren(n, tagName).trim();
-                if (inner) text += `**${inner}**`;
-            } else if (tagName === 'EM' || tagName === 'I') {
-                const inner = parseChildren(n, tagName).trim();
-                if (inner) text += `*${inner}*`;
-            } else if (tagName === 'CODE') {
-                if (parentTagName !== 'PRE') {
-                    text += `\`${n.textContent}\``;
-                } else {
-                    text += n.textContent; // Handled by PRE
-                }
-            } else if (tagName === 'A') {
-                const citeSpan = n.querySelector('.ds-markdown-cite');
-                if (citeSpan) {
-                    if (options.forceReferences) {
-                        // It's a reference citation like [1]
-                        let citeNumber = citeSpan.textContent.replace(/[^0-9]/g, '');
-                        if (!citeNumber) {
-                           // Try to find the absolute positioned span for the number
-                           const numSpan = Array.from(citeSpan.querySelectorAll('span')).find(s => s.style.position === 'absolute');
-                           if (numSpan) citeNumber = numSpan.textContent.trim();
-                        }
-                        if (citeNumber) {
-                            text += ` [[link-${citeNumber}]](${n.href})`;
-                        }
-                    }
-                    // If options.forceReferences is false, ignore this node entirely.
-                } else {
-                    const inner = parseChildren(n, tagName);
-                    text += `[${inner}](${n.href})`;
-                }
-            } else if (tagName === 'BLOCKQUOTE') {
-                const inner = parseChildren(n, tagName);
-                const quoted = inner.trim().split('\n').map(line => `> ${line}`).join('\n');
-                text += `\n\n${quoted}\n\n`;
-            } else if (tagName === 'UL') {
-                const items = Array.from(n.children).filter(child => child.tagName === 'LI');
-                let ulText = '\n';
-                items.forEach(li => {
-                    ulText += `- ${parseChildren(li, tagName).trim()}\n`;
-                });
-                text += `${ulText}\n`;
-            } else if (tagName === 'OL') {
-                const items = Array.from(n.children).filter(child => child.tagName === 'LI');
-                let olText = '\n';
-                items.forEach((li, idx) => {
-                    olText += `${idx + 1}. ${parseChildren(li, tagName).trim()}\n`;
-                });
-                text += `${olText}\n`;
-            } else if (tagName === 'PRE') {
-                const codeLang = n.getAttribute('class')?.replace('language-', '') || '';
-                text += `\n\n\`\`\`${codeLang}\n${n.textContent}\n\`\`\`\n\n`;
-            } else if (/^H[1-6]$/.test(tagName)) {
-                const level = parseInt(tagName[1]);
-                const prefix = '#'.repeat(level);
-                const inner = parseChildren(n, tagName).trim();
-                if (inner) {
-                    text += `\n\n${prefix} ${inner}\n\n`;
-                }
-            } else if (tagName === 'TABLE') {
-                const rows = Array.from(n.querySelectorAll('tr'));
-                if (rows.length > 0) {
-                    let tableText = '\n\n';
-                    rows.forEach((row, rowIdx) => {
-                        const cells = Array.from(row.children).filter(c => c.tagName === 'TH' || c.tagName === 'TD');
-                        const cellContents = cells.map(c => parseChildren(c, 'TABLE').trim().replace(/\n/g, ' '));
-                        tableText += '| ' + cellContents.join(' | ') + ' |\n';
-                        if (rowIdx === 0) {
-                            tableText += '|' + cells.map(() => '-').join('|') + '|\n';
-                        }
-                    });
-                    tableText += '\n';
-                    text += tableText;
-                }
-            } else if (tagName === 'P' || tagName === 'DIV') {
-                // Handle code blocks: extract span content from <pre>
-                if (tagName === 'DIV' && n.classList && Array.from(n.classList).some(c => c.includes('md-code-block'))) {
-                    const pre = n.querySelector('pre');
-                    if (pre) {
-                        const codeLang = pre.getAttribute('class')?.replace('language-', '') || '';
-                        const spans = pre.querySelectorAll('span');
-                        const codeContent = Array.from(spans).map(s => s.textContent).join('');
-                        text += `\n\n\`\`\`${codeLang}\n${codeContent}\n\`\`\`\n\n`;
-                    } else {
-                        const inner = parseChildren(n, tagName).trim();
-                        if (inner) text += `\n${inner}\n`;
-                    }
-                } else {
-                    const inner = parseChildren(n, tagName).trim();
-                    if (inner) {
-                        text += `\n${inner}\n`;
-                    }
-                }
-            } else {
-                // For other tags, just parse children
-                text += parseChildren(n, tagName);
-            }
-        }
-        return text;
-    }
-
-    function parseChildren(parentNode, parentTagName) {
-        let childText = '';
-        for (const child of parentNode.childNodes) {
-            childText += walk(child, parentTagName);
-        }
-        return childText;
-    }
-
-    result = parseChildren(node, null);
-
-    // Cleanup redundant newlines
-    result = result.replace(/\n{3,}/g, '\n\n').trim();
-    return result;
-}
-
-/**
- * Triggers the download of the markdown content
- */
-function downloadMarkdown(content) {
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    
-    // Generate filename with timestamp
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const timestamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-    
-    a.download = `deepseek-chat-${timestamp}.md`;
-    document.body.appendChild(a);
-    a.click();
-    
-    // Cleanup
-    setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 100);
-}
-
-// === Test export (no-op in browser) ===
+// Test export（瀏覽器中為 no-op）
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         extractUuidFromUrl,
@@ -879,15 +444,10 @@ if (typeof module !== 'undefined' && module.exports) {
         PresetOverlay,
         __resetState: () => {
             clearTimeout(awaitingNewChatUuidTimer);
-            isEnabled = false;
-            promptPrefix = '';
-            globalDefaultPrompt = '';
-            isGlobalPromptEnabled = true;
-            showSystemTime = false;
-            currentChatUuid = null;
-            chatPresetMap = {};
-            pendingPresetId = null;
-            awaitingNewChatUuid = false;
+            isEnabled = false; promptPrefix = ''; globalDefaultPrompt = '';
+            isGlobalPromptEnabled = true; showSystemTime = false;
+            currentChatUuid = null; chatPresetMap = {};
+            pendingPresetId = null; awaitingNewChatUuid = false;
         },
         __setState: (s) => {
             if ('isEnabled' in s) isEnabled = s.isEnabled;
@@ -898,8 +458,7 @@ if (typeof module !== 'undefined' && module.exports) {
             if ('currentChatUuid' in s) currentChatUuid = s.currentChatUuid;
             if ('chatPresetMap' in s) chatPresetMap = s.chatPresetMap;
             if ('pendingPresetId' in s) pendingPresetId = s.pendingPresetId;
-            if ('awaitingNewChatUuid' in s) awaitingNewChatUuid = s.awaitingNewChatUuid;
-        },
+            if ('awaitingNewChatUuid' in s) awaitingNewChatUuid = s.awaitingNewChatUuid; },
         __getState: () => ({
             isEnabled,
             promptPrefix,
