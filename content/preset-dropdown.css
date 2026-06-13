@@ -17,10 +17,11 @@
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  /* 預設寬度由內容決定，controller 以 inline style 覆寫；
+  /* 填滿父容器（#dss-preset-overlay）的 inline width，跟隨 controller 收縮/擴張；
+     max-width: 100% 確保 padding 不溢出父容器邊界；
      不設 min-width，允許 <768px 間隙分支收縮至任意寬度直至隱藏閾值 */
-  width: max-content;
-  max-width: 200px;
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   /* 重設瀏覽器預設 button 樣式，避免平台差異 */
   -webkit-appearance: none;

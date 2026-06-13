@@ -49,8 +49,9 @@
         // ── 分支一：>= 768px → 容器置中 ────────────────────────────────────
         if (windowWidth >= 768) {
             // 自然寬度受 maxWidth 上限約束；無最小寬度限制
-            var desktopWidth = Math.min(naturalWidth, maxWidth);
-            var desktopLeft  = (containerRect.width - desktopWidth) / 2;
+            // Math.round 消除子像素抖動，確保相同輸入產生完全相同的整數結果（冪等性）
+            var desktopWidth = Math.round(Math.min(naturalWidth, maxWidth));
+            var desktopLeft  = Math.round(Math.max(0, (containerRect.width - desktopWidth) / 2));
 
             console.log('[DSS-DIAG] computePlacement', {
                 windowWidth: windowWidth,
@@ -60,12 +61,12 @@
                 availableGap: null,
                 naturalWidth: naturalWidth,
                 finalWidth: desktopWidth,
-                left: Math.max(0, desktopLeft)
+                left: desktopLeft
             });
 
             return {
                 mode:   'center',
-                left:   Math.max(0, desktopLeft),
+                left:   desktopLeft,
                 width:  desktopWidth,
                 hidden: false
             };
@@ -75,8 +76,8 @@
 
         // 缺少 titleRect 或 buttonRect 時退回容器置中（避免崩潰）
         if (!titleRect || !buttonRect) {
-            var fallbackWidth = Math.min(naturalWidth, maxWidth);
-            var fallbackLeft  = (containerRect.width - fallbackWidth) / 2;
+            var fallbackWidth = Math.round(Math.min(naturalWidth, maxWidth));
+            var fallbackLeft  = Math.round(Math.max(0, (containerRect.width - fallbackWidth) / 2));
 
             console.log('[DSS-DIAG] computePlacement', {
                 windowWidth: windowWidth,
@@ -86,12 +87,12 @@
                 availableGap: null,
                 naturalWidth: naturalWidth,
                 finalWidth: fallbackWidth,
-                left: Math.max(0, fallbackLeft)
+                left: fallbackLeft
             });
 
             return {
                 mode:   'center',
-                left:   Math.max(0, fallbackLeft),
+                left:   fallbackLeft,
                 width:  fallbackWidth,
                 hidden: false
             };
@@ -118,14 +119,13 @@
         }
 
         // 決定最終寬度：naturalWidth 若超出間隙則收縮至間隙寬度；無最小寬度限制
+        // Math.round 消除子像素抖動，對稱 center 分支的捨入策略
         var gapWidth  = availableGap;
-        var finalWidth = naturalWidth <= gapWidth ? naturalWidth : gapWidth;
-        // 仍受 maxWidth 上限約束
-        finalWidth = Math.min(finalWidth, maxWidth);
+        var finalWidth = Math.round(Math.min(naturalWidth <= gapWidth ? naturalWidth : gapWidth, maxWidth));
 
         // 間隙中心相對容器左緣
         var gapCenterAbs = titleRight + gapSafety + gapWidth / 2;
-        var gapLeft      = gapCenterAbs - containerRect.left - finalWidth / 2;
+        var gapLeft      = Math.round(gapCenterAbs - containerRect.left - finalWidth / 2);
 
         console.log('[DSS-DIAG] computePlacement', {
             windowWidth: windowWidth,

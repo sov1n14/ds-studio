@@ -169,10 +169,10 @@ function makeCtx(overrides = {}) {
 //
 // With windowWidth=1024 (center mode) and naturalWidth≈20 (happy-dom returns 0 → ~20):
 //   width = min(naturalWidth, maxWidth) = ~20
-//   center left = (767 - ~20) / 2 ≈ 373.5
+//   center left = Math.round((767 - ~20) / 2) = 374  (Math.round added in v4.2.1)
 //
 // To produce a stable expected value, tests stub getNaturalWidth to return 20
-// or assert toBeCloseTo against the center formula.
+// and assert with toBe against the exact rounded integer.
 
 const CONTAINER_RECT = rect(0,   767);
 const TITLE_RECT     = rect(0,   180);
@@ -180,8 +180,8 @@ const NEWCHAT_RECT   = rect(683, 44);
 const BTN1_RECT      = rect(0,   44);
 
 // Expected center-mode left when container=767 and getNaturalWidth()≈20:
-// (767 - 20) / 2 = 373.5
-const EXPECTED_CENTER_LEFT = (767 - 20) / 2; // 373.5
+// Math.round((767 - 20) / 2) = Math.round(373.5) = 374
+const EXPECTED_CENTER_LEFT = Math.round((767 - 20) / 2); // 374
 
 // ── Group 1: correct element resolution via reposition() ─────────────────────
 
@@ -219,7 +219,7 @@ describe('DOM resolvers — correct element resolution via reposition()', () => 
         const leftPx  = parseFloat(overlay.wrapperEl.style.left);
         const widthPx = parseFloat(overlay.wrapperEl.style.width);
 
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
         expect(widthPx).toBeGreaterThan(0);
         expect(overlay.wrapperEl.style.transform).toBe('translateY(-50%)');
     });
@@ -235,7 +235,7 @@ describe('DOM resolvers — correct element resolution via reposition()', () => 
         overlay.reposition('btn-identity-test');
 
         const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
         expect(isFinite(leftPx)).toBe(true);
         expect(leftPx).toBeGreaterThan(0);
     });
@@ -310,7 +310,7 @@ describe('DOM resolvers — hash-fallback title path', () => {
 
         // center mode (windowWidth=1024): left = (767 - naturalWidth) / 2
         const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
     });
 
     it('falls back gracefully (no throw) when both wrapper and ._9986c0c are absent', () => {
@@ -338,7 +338,7 @@ describe('DOM resolvers — hash-fallback title path', () => {
 
         const leftPx = parseFloat(overlay.wrapperEl.style.left);
         // center fallback: (767 - naturalWidth) / 2
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
     });
 });
 
@@ -527,7 +527,7 @@ describe('DOM resolvers — structural-fallback button path', () => {
 
         // center mode (windowWidth=1024): left = (767 - naturalWidth) / 2
         const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
     });
 
     it('falls back to LAST role-button in wrapper when title cannot be resolved', () => {
@@ -559,7 +559,7 @@ describe('DOM resolvers — structural-fallback button path', () => {
 
         // titleRect=null, windowWidth=1024 → center fallback
         const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
     });
 });
 
@@ -601,7 +601,7 @@ describe('DOM resolvers — null paths and guard clauses', () => {
         expect(() => overlay.reposition('no-wrapper-test')).not.toThrow();
         // buttonRect=null → fallback center
         const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBeCloseTo(EXPECTED_CENTER_LEFT, 1);
+        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
     });
 
     it('reposition() is a no-op (no throw) when wrapperEl is null (not mounted)', () => {
@@ -763,5 +763,65 @@ describe('DOM resolvers — window resize listener', () => {
         // Gap mode left will differ from center mode left
         expect(leftGap).not.toBeCloseTo(leftCenter, 0);
         expect(isFinite(leftGap)).toBe(true);
+    });
+});
+
+// ── Group 9: idempotency regression (Bug #2 fix — v4.2.1) ────────────────────
+//
+// getNaturalWidth() now uses canvas-based measureTextWidth + stable constant 16
+// for arrow width (no longer reads arrow.getBoundingClientRect()). Calling
+// reposition() twice with the same label text must yield the exact same integer
+// left and width on both calls — no sub-pixel drift between invocations.
+
+describe('DOM resolvers — reposition() idempotency (Bug #2 regression)', () => {
+    let overlay, ctx, dom, restoreRaf;
+
+    beforeEach(() => {
+        restoreRaf = makeRafSync();
+        setInnerWidth(1024); // center mode (>=768)
+        spyStorageManager();
+        ctx = makeCtx();
+        dom = buildRealisticHeader();
+        overlay = createPresetOverlay(ctx);
+        overlay.mountTo(dom.container);
+    });
+
+    afterEach(() => {
+        restoreRaf();
+        restoreInnerWidth();
+        if (overlay) overlay.unmount();
+        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
+        restoreStorageManager();
+        vi.restoreAllMocks();
+    });
+
+    it('two consecutive reposition() calls with the same label yield identical integer left and width (no drift)', () => {
+        // Arrange: stable geometry so computation is deterministic
+        stubRect(dom.container,  CONTAINER_RECT);
+        stubRect(dom.titleEl,    TITLE_RECT);
+        stubRect(dom.newChatBtn, NEWCHAT_RECT);
+        stubRect(dom.btn1,       BTN1_RECT);
+
+        // First reposition
+        overlay.reposition('idempotency-run-1');
+        const left1  = overlay.wrapperEl.style.left;
+        const width1 = overlay.wrapperEl.style.width;
+
+        // Second reposition — same label, same geometry, same windowWidth
+        overlay.reposition('idempotency-run-2');
+        const left2  = overlay.wrapperEl.style.left;
+        const width2 = overlay.wrapperEl.style.width;
+
+        // Both values must be non-empty (placement occurred)
+        expect(left1).not.toBe('');
+        expect(width1).not.toBe('');
+
+        // Must be identical across both calls — no sub-pixel drift
+        expect(left2).toBe(left1);
+        expect(width2).toBe(width1);
+
+        // Values must represent integers (Math.round applied in v4.2.1)
+        expect(parseFloat(left1) % 1).toBe(0);
+        expect(parseFloat(width1) % 1).toBe(0);
     });
 });

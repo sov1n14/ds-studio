@@ -393,7 +393,9 @@
         function getNaturalWidth() {
             const labelText   = label.textContent || '';
             const labelWidth  = measureTextWidth(label, labelText);
-            const arrowWidth  = arrow.getBoundingClientRect().width || 16; // 箭頭估算 16px
+            // 箭頭寬度使用穩定常數，避免 getBoundingClientRect 受當前 inline width 約束影響，
+            // 確保連續兩次呼叫對相同標籤文字回傳完全相同的值（冪等性保證）
+            const arrowWidth  = 16;
 
             // 讀取觸發器水平 padding（在 jsdom 中為 0，不影響邏輯正確性）
             const computed        = window.getComputedStyle(trigger);
