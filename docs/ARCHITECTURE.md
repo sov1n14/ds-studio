@@ -8,16 +8,24 @@ DS studio follows a standard Manifest V3 Chrome Extension architecture, focused 
 ds-studio/
 ├── assets/icons/            ─  Extension icons (16px, 48px, 128px)
 ├── content/                 ─  Content scripts & web-accessible resources
-│   ├── content-script.js    ─  DOM event interception, PresetOverlay, export dispatch
+│   ├── content-script.js    ─  Entry: event interception, init, prefix injection (v4.0.0 split)
+│   ├── content-script.export.js   ─  Markdown export pipeline (HTML→MD, download)
+│   ├── content-script.overlay.js  ─  PresetOverlay UI (createPresetOverlay ctx factory)
 │   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
 │   ├── quote-reply.js       ─  Floating "引用回覆" button on text selection
-│   ├── censor-reply-restore.js  ─  SSE intercept & restore censored replies
+│   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
+│   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
+│   ├── censor-reply-restore.dom.js       ─  Fragment extraction & DOM injection bundle
+│   ├── censor-reply-restore.storage.js   ─  Restored-message persistence bundle
 │   ├── censor-reply-restore.css ─  Restored-content display styles
 │   ├── harvest.js           ─  Scroll-and-harvest full-conversation Markdown export
-│   ├── go-top.js            ─  "回到頂部" floating button w/ scroll-to-top API
+│   ├── go-top.js            ─  Entry: "回到頂部" button lifecycle & observers (v4.0.0 split)
+│   ├── go-top.locate.js     ─  DOM query / locator / visibility bundle
+│   ├── go-top.render.js     ─  Button render / inject / mode-transition bundle
+│   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
 │   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression
@@ -26,13 +34,21 @@ ds-studio/
 │   └── prevent-auto-scroll.js *       ─  Main-world auto-scroll patch (web accessible)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
-│   ├── popup.css            ─  Layout, cards, modal, toast, slider, toggle styles
-│   ├── popup.js             ─  UI logic: Modal, preset CRUD, editor window, export dispatch
+│   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
+│   ├── popup-controls.css   ─  Switch, button, icon-button, range slider, toast styles
+│   ├── popup.js             ─  Entry: UI init & inline event wiring (v4.0.0 split)
+│   ├── popup.modal.js       ─  Modal + Toast components
+│   ├── popup.preset-manager.js  ─  Preset CRUD helpers (createPresetManager ctx factory)
+│   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
 │   └── editor/              ─  Standalone 1280×720 prompt editor (v3.0.0)
 │       ├── editor.html / editor.css
 │       └── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
-│   ├── storage-manager.js   ─  Multi-key storage, migration, sync conflict, preset merge
+│   ├── storage-manager.js   ─  Entry: storage API, getSettings, initialize (v4.0.0 split)
+│   ├── storage-manager.chunking.js  ─  ChatPresetMap chunked read/write bundle
+│   ├── storage-manager.lock.js      ─  Cross-context advisory lock bundle
+│   ├── storage-manager.sync.js      ─  Cloud sync / conflict / restore bundle
+│   ├── storage-manager.presets.js   ─  Preset CRUD & chat-binding bundle
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
 ├── samples/                 ─  DOM reference HTML samples
 └── test/                    ─  Unit tests (Vitest only; integration tests removed v2.8.2)
@@ -41,6 +57,15 @@ ds-studio/
 ```
 
 > `*` = 標記者為 web_accessible_resources，注入至頁面 MAIN world，不受 content script 的 isolated world CSP 限制。
+
+### Modular Load Order (v4.0.0)
+
+Several large files were split into smaller modules using a **dual-load pattern** that works for both classic-script production loading and the Vitest test runner:
+
+- **Bundle files** define a method group / helper and attach it to a global key (e.g., `globalThis.__DS_GoToTop_render`), guarded by `if (typeof module !== 'undefined' && module.exports)` for the test runner.
+- **Entry files** (keeping the original filename) declare the state-bearing singleton, then run `Object.assign(Singleton, globalThis.__DS_* )` to merge the bundles before attaching to `window` / `module.exports`. Helpers that close over mutable state (`content-script.overlay.js`, `popup.preset-manager.js`, `popup.backup-manager.js`) use a `createX(ctx)` factory with live getter/setter callbacks instead.
+- **Load order is mandatory**: every bundle MUST load before its entry file. This is enforced in `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, and `popup/editor/editor.html`, and replicated for tests via preload imports in `test/setup/vitest.setup.js`.
+- Runtime behavior and public APIs are **unchanged**; the split is purely structural.
 
 ## Key Mechanisms
 

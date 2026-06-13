@@ -3,6 +3,8 @@
 > 📂 [DS studio 文件](../) › [架構文件](../ARCHITECTURE.md) › 儲存與狀態管理
 >
 > **相關規格**：[資料儲存規格](../spec/05-data-storage.md) · [提示詞系統規格](../spec/01-prompt-system.md)
+>
+> **v4.0.0 模組化**：`StorageManager` 已拆分為入口檔 `utils/storage-manager.js`（API、`getSettings`、`initialize`、共享狀態）加四個方法包：`storage-manager.chunking.js`（分塊）、`storage-manager.lock.js`（跨 context 鎖）、`storage-manager.sync.js`（雲端同步/衝突/還原）、`storage-manager.presets.js`（提示詞 CRUD 與對話綁定）。入口檔以 `Object.assign` 合併方法包，對外 API 與行為完全不變；本文件描述的所有機制仍然適用。
 
 ## State Management
 

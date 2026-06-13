@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 版本摘要
 
+### v4.x — 模組化架構重構
+
+| 版本 | 摘要 |
+|-|-|
+| [4.0.0](changelog/v4.md#400---2026-06-13) | 大型檔案模組化重構：storage-manager、go-top、censor-reply-restore、content-script、popup 拆分為單一職責模組；行為不變、985 測試全綠 |
+
 ### v3.x — 編輯器與架構精煉
 
 | 版本 | 摘要 |
@@ -100,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本系列 | 文件 |
 |-|-|
+| v4.x 詳細變更 | [→ changelog/v4.md](changelog/v4.md) |
 | v3.x 詳細變更 | [→ changelog/v3.md](changelog/v3.md) |
 | v2.x 詳細變更 | [→ changelog/v2.md](changelog/v2.md) |
 | v1.x 詳細變更 | [→ changelog/v1.md](changelog/v1.md) |
