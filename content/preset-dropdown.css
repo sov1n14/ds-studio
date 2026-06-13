@@ -1,0 +1,152 @@
+/* DS Studio — PresetDropdown 元件外觀樣式 */
+/* 此檔案僅負責外觀（trigger / menu / option / 狀態 / ellipsis）。 */
+/* 元件定位（position / top / left / width）由 controller 以 inline style 管理，此處不設定。 */
+
+/* ── 觸發器按鈕 ─────────────────────────────────────────────────────────────── */
+
+.dss-preset-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  /* 預設寬度由內容決定，controller 以 inline style 覆寫；
+     不設 min-width，允許 <768px 間隙分支收縮至任意寬度直至隱藏閾值 */
+  width: max-content;
+  max-width: 200px;
+  box-sizing: border-box;
+  /* 重設瀏覽器預設 button 樣式，避免平台差異 */
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+
+/* 焦點可見性（keyboard 導航） */
+.dss-preset-trigger:focus-visible,
+.dss-preset-trigger:focus {
+  outline: none;
+  border-color: #4d6bfe;
+  box-shadow: 0 0 0 2px rgba(77, 107, 254, 0.3);
+}
+
+/* Hover 狀態：輕微加亮邊框 */
+.dss-preset-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+/* ── Label（可 ellipsis 截斷的文字區） ────────────────────────────────────── */
+
+.dss-preset-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* 未選取任何 preset 時的佔位文字樣式 */
+.dss-preset-label--placeholder {
+  opacity: 0.6;
+}
+
+/* ── 箭頭指示符 ──────────────────────────────────────────────────────────── */
+
+.dss-preset-arrow {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.7;
+  /* 展開時旋轉由 JS aria-expanded 配合 CSS 選擇器驅動（可選） */
+  transition: transform 0.15s ease;
+}
+
+/* 選單展開時箭頭旋轉 180 度 */
+[aria-expanded="true"] .dss-preset-arrow {
+  transform: rotate(180deg);
+}
+
+/* ── 選單浮層（position:fixed 由 JS 注入 inline style） ──────────────────── */
+
+.dss-preset-menu {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  max-height: 300px;
+  overflow-y: auto;
+  /* z-index 高於所有宿主頁面元素，確保不被遮蓋 */
+  z-index: 2147483000;
+  min-width: 120px;
+  box-sizing: border-box;
+}
+
+/* 防止 hidden attribute 被外部 CSS 覆蓋 */
+.dss-preset-menu[hidden] {
+  display: none;
+}
+
+/* Scrollbar 美化（Webkit） */
+.dss-preset-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dss-preset-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dss-preset-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* ── 選項 ────────────────────────────────────────────────────────────────── */
+
+.dss-preset-option {
+  padding: 8px 10px;
+  min-height: 36px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+  /* 防止長名稱撐破選單 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* 清除 <li> 預設樣式 */
+  list-style: none;
+  user-select: none;
+}
+
+/* Hover 與鍵盤 active 狀態 */
+.dss-preset-option:hover,
+.dss-preset-option--active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* 選中的選項：字重加強 + 左側藍色指示條 */
+.dss-preset-option[aria-selected="true"] {
+  font-weight: 600;
+  /* 左側 3px 藍色指示條（不使用 border-left 以避免影響 padding 計算） */
+  box-shadow: inset 3px 0 0 #4d6bfe;
+  padding-left: 13px; /* 原 10px + 3px 指示條補償，維持視覺對齊 */
+}
+
+/* 選中且 hover / active：保留藍色指示條並加亮背景 */
+.dss-preset-option[aria-selected="true"]:hover,
+.dss-preset-option[aria-selected="true"].dss-preset-option--active {
+  background: rgba(77, 107, 254, 0.15);
+}

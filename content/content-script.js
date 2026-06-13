@@ -32,7 +32,7 @@ var formatSystemTime             = __DSExport.formatSystemTime;
 // 取得 factory 參照並以 ctx 物件實例化，ctx 的 getter/setter 直接讀寫本模組的
 // let 變數，確保 __setState/__getState 的異動對 overlay 即時可見，反之亦然。
 var __overlayFactory = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_PresetOverlay ||
-    (typeof require !== 'undefined' ? require('./content-script.overlay.js') : {});
+    (typeof require !== 'undefined' ? require('./preset-overlay.controller.js') : {});
 const PresetOverlay = __overlayFactory.createPresetOverlay({
     getIsEnabled:              () => isEnabled,
     getCurrentChatUuid:        () => currentChatUuid,
