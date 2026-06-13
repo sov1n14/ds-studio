@@ -218,18 +218,6 @@
 
                     var naturalWidth = this.dropdown ? this.dropdown.getNaturalWidth() : 80;
 
-                    // [DSS-DIAG] 量測基礎資料快照
-                    console.log('[DSS-DIAG] reposition:entry', {
-                        reason:      reason || 'unknown',
-                        windowWidth: currentWindowWidth,
-                        container:   { left: containerRect.left, right: containerRect.right, width: containerRect.width },
-                        titleRight:  titleRect  ? titleRect.right  : null,
-                        buttonLeft:  buttonRect ? buttonRect.left  : null,
-                        naturalWidth: naturalWidth,
-                        titlePath:   titleResult.path,
-                        buttonPath:  buttonResult.path
-                    });
-
                     var placement = computePlacement({
                         containerRect: containerRect,
                         titleRect:     titleRect,
@@ -272,11 +260,19 @@
                     },
                     apply: function (r) { self.reposition(r); },
                     schedule: scheduleFrame,
-                    maxFrames: 30,
-                    stableK: 3,
-                    epsilon: 0.5,
-                    onLog: function (phase, detail) {
-                        console.log('[DSS-DIAG] ' + phase, JSON.stringify(detail));
+                    maxFrames: 7200,
+                    stableK: 18,
+                    epsilon: 1,
+                    onDone: function (result) {
+                        var elapsed = result.elapsedMs < 1000
+                            ? result.elapsedMs + 'ms'
+                            : (result.elapsedMs / 1000).toFixed(1) + 's';
+                        console.log(
+                            '[DS-Studio] Overlay settle ' + result.reason +
+                            ' — ' + result.frames + ' frames, ' +
+                            elapsed +
+                            (result.finalMetric !== null ? ', final=' + result.finalMetric : '')
+                        );
                     }
                 };
                 this._settle = runSettle(opts);

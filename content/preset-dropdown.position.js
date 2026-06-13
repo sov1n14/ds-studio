@@ -53,17 +53,6 @@
             var desktopWidth = Math.round(Math.min(naturalWidth, maxWidth));
             var desktopLeft  = Math.round(Math.max(0, (containerRect.width - desktopWidth) / 2));
 
-            console.log('[DSS-DIAG] computePlacement', {
-                windowWidth: windowWidth,
-                branch: 'center',
-                titleRight: titleRect ? titleRect.right : null,
-                buttonLeft: buttonRect ? buttonRect.left : null,
-                availableGap: null,
-                naturalWidth: naturalWidth,
-                finalWidth: desktopWidth,
-                left: desktopLeft
-            });
-
             return {
                 mode:   'center',
                 left:   desktopLeft,
@@ -78,17 +67,6 @@
         if (!titleRect || !buttonRect) {
             var fallbackWidth = Math.round(Math.min(naturalWidth, maxWidth));
             var fallbackLeft  = Math.round(Math.max(0, (containerRect.width - fallbackWidth) / 2));
-
-            console.log('[DSS-DIAG] computePlacement', {
-                windowWidth: windowWidth,
-                branch: 'center(fallback-no-rects)',
-                titleRight: null,
-                buttonLeft: null,
-                availableGap: null,
-                naturalWidth: naturalWidth,
-                finalWidth: fallbackWidth,
-                left: fallbackLeft
-            });
 
             return {
                 mode:   'center',
@@ -105,16 +83,6 @@
 
         // 間隙 <= 0：隱藏 overlay
         if (availableGap <= 0) {
-            console.log('[DSS-DIAG] computePlacement', {
-                windowWidth: windowWidth,
-                branch: 'hidden',
-                titleRight: titleRight,
-                buttonLeft: buttonLeft,
-                availableGap: availableGap,
-                naturalWidth: naturalWidth,
-                finalWidth: 0,
-                left: 0
-            });
             return { mode: 'hidden', left: 0, width: 0, hidden: true };
         }
 
@@ -126,17 +94,6 @@
         // 間隙中心相對容器左緣
         var gapCenterAbs = titleRight + gapSafety + gapWidth / 2;
         var gapLeft      = Math.round(gapCenterAbs - containerRect.left - finalWidth / 2);
-
-        console.log('[DSS-DIAG] computePlacement', {
-            windowWidth: windowWidth,
-            branch: 'gap',
-            titleRight: titleRight,
-            buttonLeft: buttonLeft,
-            availableGap: availableGap,
-            naturalWidth: naturalWidth,
-            finalWidth: finalWidth,
-            left: gapLeft
-        });
 
         return {
             mode:   'gap',
