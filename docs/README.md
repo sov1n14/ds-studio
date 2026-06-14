@@ -1,5 +1,8 @@
 # DS studio
 
+> **English version available at [docs/en/README.md](en/README.md).**  
+> **英文版請參閱 [docs/en/README.md](en/README.md)。**
+
 DS studio 是一個 Chrome 擴充功能，專為優化 `chat.deepseek.com` 的使用體驗而設計。您可以建立多組提示詞組，在發送訊息前自動將選取的提示詞注入到輸入內容中，並針對不同場景快速切換。
 
 ## 功能一覽
