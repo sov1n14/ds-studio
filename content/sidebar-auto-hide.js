@@ -82,17 +82,23 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
     applyOverflow() {
         if (!this.sidebarEl) return;
-        if (this.isNativelyCollapsed()) {
-            // Native collapse already hides the full content; ca6d4be1 bar
-            // should remain fully visible without overflow clipping.
+        const nativelyCollapsed = this.isNativelyCollapsed();
+        const ourCollapsed = this.isCollapsed();
+        // 僅在我們自己收起側邊欄且非原生摺疊時才隱藏溢出內容，
+        // 避免展開過程中 MutationObserver 重新套用 overflow:hidden 導致裁切。
+        if (nativelyCollapsed || !ourCollapsed) {
             this.sidebarEl.style.overflow = '';
         } else {
             this.sidebarEl.style.overflow = 'hidden';
         }
+        console.log(
+            `[DS-Sidebar] applyOverflow() — nativelyCollapsed=${nativelyCollapsed} isCollapsed=${ourCollapsed} → overflow=${this.sidebarEl.style.overflow}`
+        );
     },
 
     collapse() {
         if (!this.sidebarEl || this.isCollapsed()) return;
+        console.log(`[DS-Sidebar] collapse() — width=${this.COLLAPSED_WIDTH}px`);
         this.sidebarEl.classList.add(this.COLLAPSED_CLASS);
         this.sidebarEl.style.width = this.COLLAPSED_WIDTH + 'px';
         this.applyOverflow();
@@ -122,6 +128,7 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         } else {
             this.sidebarEl.style.width = '';
         }
+        console.log(`[DS-Sidebar] expand() — overflow='${this.sidebarEl.style.overflow}', originalWidth=${this.originalWidth}`);
     },
 
     handleMouseEnter() {
@@ -191,6 +198,8 @@ ${this.SIDEBAR_INNER_SELECTOR} {
             const nowNativelyCollapsed = this.isNativelyCollapsed();
             const nativeStateChanged = nowNativelyCollapsed !== this._wasNativelyCollapsed;
             this._wasNativelyCollapsed = nowNativelyCollapsed;
+
+            console.log(`[DS-Sidebar] MutationObserver fired — nativeChanged=${nativeStateChanged}, calling applyOverflow()`);
 
             if (nativeStateChanged && !nowNativelyCollapsed && this.isCollapsed()) {
                 // Native expand while our collapse is active — DeepSeek may have

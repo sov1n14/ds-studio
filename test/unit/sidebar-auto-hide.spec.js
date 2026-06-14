@@ -46,6 +46,7 @@ beforeEach(() => {
     SidebarAutoHide.sidebarInnerWidth = null;
     SidebarAutoHide._hoverMonitorHandler = null;
     SidebarAutoHide._activeDropdownEl = null;
+    SidebarAutoHide._wasNativelyCollapsed = false;
 
     if (SidebarAutoHide.enterTimer) {
         clearTimeout(SidebarAutoHide.enterTimer);
@@ -541,5 +542,74 @@ describe('Group E — enable() / disable() state management', () => {
 
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
         expect(sidebar.style.width).toBe('');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group F1 — applyOverflow() overflow state management
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group F1 — applyOverflow() overflow state management', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+    });
+
+    it('F1: sets overflow: hidden when sidebar is collapsed AND not natively collapsed', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.applyOverflow();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('hidden');
+    });
+
+    it('F2: clears overflow when sidebar is expanded (not our collapsed)', () => {
+        SidebarAutoHide.applyOverflow();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('');
+    });
+
+    it('F3: clears overflow when natively collapsed regardless of our collapse state', () => {
+        const nativeBar = document.createElement('div');
+        nativeBar.className = 'ca6d4be1';
+        SidebarAutoHide.sidebarEl.appendChild(nativeBar);
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.applyOverflow();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group F2 — MutationObserver guards on applyOverflow()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group F2 — MutationObserver guards on applyOverflow()', () => {
+    beforeEach(() => {
+        createSidebarInner(createSidebar());
+        SidebarAutoHide.enable();
+    });
+
+    it('F4: MutationObserver does NOT re-apply overflow: hidden after expand() is called', async () => {
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        SidebarAutoHide.expand();
+
+        const dummy = document.createElement('div');
+        dummy.className = 'dummy';
+        SidebarAutoHide.sidebarEl.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).not.toBe('hidden');
+    });
+
+    it('F5: MutationObserver DOES re-apply overflow: hidden after collapse() (normal behavior preserved)', async () => {
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        const dummy = document.createElement('div');
+        dummy.className = 'dummy';
+        SidebarAutoHide.sidebarEl.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('hidden');
     });
 });
