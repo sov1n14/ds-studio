@@ -10,11 +10,11 @@
 
     // ── 常數 ────────────────────────────────────────────────────────────────────
 
-    /** 空選項的預設顯示文字 */
-    const DEFAULT_EMPTY_OPTION_TEXT = dsI18n.t('dropdownEmptyOption');
+    /** 空選項的預設顯示文字（getter — 確保使用當下語系） */
+    function DEFAULT_EMPTY_OPTION_TEXT() { return dsI18n.t('dropdownEmptyOption'); }
 
-    /** 預設佔位文字（未選取任何 preset 時顯示） */
-    const DEFAULT_PLACEHOLDER_TEXT = dsI18n.t('dropdownPlaceholder');
+    /** 預設佔位文字（getter — 確保使用當下語系） */
+    function DEFAULT_PLACEHOLDER_TEXT() { return dsI18n.t('dropdownPlaceholder'); }
 
     /** 下拉選單 id */
     const MENU_ID = 'dss-preset-menu';
@@ -105,8 +105,8 @@
         }
 
         const onChange        = typeof options.onChange === 'function' ? options.onChange : null;
-        const placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT;
-        const emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT;
+        const placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT();
+        const emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT();
 
         // ── 狀態 ──────────────────────────────────────────────────────────────
         let currentValue  = '';   // 目前選中的選項 value
