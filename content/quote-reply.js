@@ -257,6 +257,18 @@ html[data-theme="dark"] .dss-quote-btn {
         document.addEventListener('mousedown', (e) => {
             if (_btnEl && !_btnEl.contains(e.target)) QuoteReply.hideButton();
         });
+
+        // 即時語系切換：更新已存在的按鈕文字
+        document.addEventListener('dsI18n-locale-changed', function () {
+            if (_btnEl) {
+                var svg = _btnEl.querySelector('svg');
+                _btnEl.innerHTML = '';
+                if (svg) _btnEl.appendChild(svg);
+                var span = document.createElement('span');
+                span.textContent = dsI18n.t('quoteReplyBtnLabel');
+                _btnEl.appendChild(span);
+            }
+        });
     },
 };
 

@@ -470,6 +470,26 @@
         }
       }
     });
+
+    // 4. Live locale switch — listen for storage changes from popup
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener(function (changes, area) {
+        if (area === 'sync' && changes[STORAGE_KEY]) {
+          var newVal = changes[STORAGE_KEY].newValue;
+          if (newVal && LOCALE_NAMES[newVal] && newVal !== i18n._locale) {
+            i18n._locale = newVal;
+            i18n._data = newVal === 'en' ? en : zh_TW;
+            try { localStorage.setItem(STORAGE_KEY, newVal); } catch (_) { /* ignore */ }
+            // Re-apply i18n to DOM elements (static data-i18n attributes)
+            i18n.apply();
+            // Dispatch custom event so content-script modules can react
+            if (typeof document !== 'undefined') {
+              try { document.dispatchEvent(new CustomEvent('dsI18n-locale-changed', { detail: { locale: newVal } })); } catch (_) { /* ignore */ }
+            }
+          }
+        }
+      });
+    }
   })();
 
   // ============================================================

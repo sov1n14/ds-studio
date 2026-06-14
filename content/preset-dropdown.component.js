@@ -105,8 +105,8 @@
         }
 
         const onChange        = typeof options.onChange === 'function' ? options.onChange : null;
-        const placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT();
-        const emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT();
+        var placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT();
+        var emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT();
 
         // ── 狀態 ──────────────────────────────────────────────────────────────
         let currentValue  = '';   // 目前選中的選項 value
@@ -433,7 +433,26 @@
             open,
             close,
             toggle,
-            destroy
+            destroy,
+
+            /** 語系切換時更新顯示文字（placeholder / emptyOption） */
+            updateLocale: function () {
+                placeholderText = DEFAULT_PLACEHOLDER_TEXT();
+                emptyOptionText = DEFAULT_EMPTY_OPTION_TEXT();
+                // 更新 label（若目前為 placeholder 狀態）
+                if (currentValue === '') {
+                    label.textContent = placeholderText;
+                }
+                // 重建選項清單以更新空選項文字
+                var menuItems = menu.querySelectorAll('.dss-preset-option');
+                if (menuItems.length > 0) {
+                    var firstItem = menuItems[0];
+                    if (firstItem && firstItem.getAttribute('data-value') === '') {
+                        var nameEl = firstItem.querySelector('.dss-preset-option-name');
+                        if (nameEl) nameEl.textContent = emptyOptionText;
+                    }
+                }
+            }
         };
     }
 
