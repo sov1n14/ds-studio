@@ -261,19 +261,9 @@
                     apply: function (r) { self.reposition(r); },
                     schedule: scheduleFrame,
                     maxFrames: 7200,
-                    stableK: 18,
+                    stableK: 120,
                     epsilon: 1,
-                    onDone: function (result) {
-                        var elapsed = result.elapsedMs < 1000
-                            ? result.elapsedMs + 'ms'
-                            : (result.elapsedMs / 1000).toFixed(1) + 's';
-                        console.log(
-                            '[DS-Studio] Overlay settle ' + result.reason +
-                            ' — ' + result.frames + ' frames, ' +
-                            elapsed +
-                            (result.finalMetric !== null ? ', final=' + result.finalMetric : '')
-                        );
-                    }
+                    onDone: undefined
                 };
                 this._settle = runSettle(opts);
             },
