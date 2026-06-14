@@ -443,12 +443,12 @@
                 if (currentValue === '') {
                     label.textContent = placeholderText;
                 }
-                // 重建選項清單以更新空選項文字
-                var menuItems = menu.querySelectorAll('.dss-preset-option');
-                if (menuItems.length > 0) {
-                    var firstItem = menuItems[0];
-                    if (firstItem && firstItem.getAttribute('data-value') === '') {
-                        var nameEl = firstItem.querySelector('.dss-preset-option-name');
+                // 重建 optionData 與選單中空選項的 DOM
+                if (optionData.length > 0) {
+                    optionData[0].name = emptyOptionText;
+                    var menuItems = menu.querySelectorAll('.dss-preset-option');
+                    if (menuItems.length > 0) {
+                        var nameEl = menuItems[0].querySelector('.dss-preset-option-name');
                         if (nameEl) nameEl.textContent = emptyOptionText;
                     }
                 }
