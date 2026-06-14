@@ -140,6 +140,25 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
         expect(s().promptPrefix).toBe('');
         expect(s().pendingPresetId).toBeNull();
     });
+
+    it('uses pendingPresetId when currentChatUuid has no binding — Bug 2 part 2 fix', async () => {
+        // Seed a preset so it can be looked up by updatePromptPrefixFromBinding
+        await seedPreset('p1', 'Helper', 'You are helpful.');
+
+        // Scenario: user is on a chat page (currentChatUuid set),
+        // no binding exists (chatPresetMap empty),
+        // but a pending preset is set — the old condition `!currentChatUuid && pendingPresetId`
+        // would have skipped this; the fix checks `pendingPresetId` unconditionally.
+        contentScript.__setState({
+            currentChatUuid: 'some-chat-uuid',
+            chatPresetMap: {},
+            pendingPresetId: 'p1',
+        });
+
+        await contentScript.updatePromptPrefixFromBinding();
+
+        expect(s().promptPrefix).toBe('You are helpful.');
+    });
 });
 
 describe('2.7.2: awaitingNewChatUuid 5-second timeout', () => {

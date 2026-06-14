@@ -46,6 +46,7 @@ beforeEach(() => {
     SidebarAutoHide.sidebarInnerWidth = null;
     SidebarAutoHide._hoverMonitorHandler = null;
     SidebarAutoHide._activeDropdownEl = null;
+    SidebarAutoHide._wasNativelyCollapsed = false;
 
     if (SidebarAutoHide.enterTimer) {
         clearTimeout(SidebarAutoHide.enterTimer);
@@ -541,5 +542,145 @@ describe('Group E — enable() / disable() state management', () => {
 
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
         expect(sidebar.style.width).toBe('');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group F1 — applyOverflow() overflow state management
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group F1 — applyOverflow() overflow state management', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+    });
+
+    it('F1: sets overflow: hidden when sidebar is collapsed AND not natively collapsed', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.applyOverflow();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('hidden');
+    });
+
+    it('F2: clears overflow when sidebar is expanded (not our collapsed)', () => {
+        SidebarAutoHide.applyOverflow();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('');
+    });
+
+    it('F3: clears overflow when natively collapsed regardless of our collapse state', () => {
+        const nativeBar = document.createElement('div');
+        nativeBar.className = 'ca6d4be1';
+        SidebarAutoHide.sidebarEl.appendChild(nativeBar);
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.applyOverflow();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group F2 — MutationObserver guards on applyOverflow()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group F2 — MutationObserver guards on applyOverflow()', () => {
+    beforeEach(() => {
+        createSidebarInner(createSidebar());
+        SidebarAutoHide.enable();
+    });
+
+    it('F4: MutationObserver does NOT re-apply overflow: hidden after expand() is called', async () => {
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        SidebarAutoHide.expand();
+
+        const dummy = document.createElement('div');
+        dummy.className = 'dummy';
+        SidebarAutoHide.sidebarEl.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).not.toBe('hidden');
+    });
+
+    it('F5: MutationObserver DOES re-apply overflow: hidden after collapse() (normal behavior preserved)', async () => {
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        const dummy = document.createElement('div');
+        dummy.className = 'dummy';
+        SidebarAutoHide.sidebarEl.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('hidden');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group G — storeOriginalWidth() guard against collapsed state
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group G — storeOriginalWidth() guard against collapsed state', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+    });
+
+    it('G1: storeOriginalWidth() captures width when sidebar is expanded (normal case)', () => {
+        vi.spyOn(SidebarAutoHide.sidebarEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+
+        SidebarAutoHide.storeOriginalWidth();
+
+        expect(SidebarAutoHide.originalWidth).toBeGreaterThan(SidebarAutoHide.COLLAPSED_WIDTH);
+        expect(SidebarAutoHide.originalWidth).toBe(260);
+    });
+
+    it('G2: storeOriginalWidth() does NOT overwrite when sidebar is collapsed', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.originalWidth = 260;
+
+        SidebarAutoHide.storeOriginalWidth();
+
+        expect(SidebarAutoHide.originalWidth).toBe(260);
+    });
+
+    it('G3: storeOriginalWidth() does NOT overwrite when measured width ≤ COLLAPSED_WIDTH', () => {
+        vi.spyOn(SidebarAutoHide.sidebarEl, 'getBoundingClientRect').mockReturnValue({ width: 60 });
+        SidebarAutoHide.originalWidth = 260;
+
+        SidebarAutoHide.storeOriginalWidth();
+
+        expect(SidebarAutoHide.originalWidth).toBe(260);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group H — expand() fallback when originalWidth is invalid
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group H — expand() fallback when originalWidth is invalid', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        createSidebarInner(SidebarAutoHide.sidebarEl);
+    });
+
+    it('H1: expand() clears inline width (style.width = "") when originalWidth is null', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.sidebarEl.style.width = '60px';
+        SidebarAutoHide.originalWidth = null;
+
+        SidebarAutoHide.expand();
+
+        expect(SidebarAutoHide.sidebarEl.style.width).toBe('');
+        expect(SidebarAutoHide.sidebarEl.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
+    });
+
+    it('H2: expand() clears inline width when originalWidth ≤ COLLAPSED_WIDTH', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.sidebarEl.style.width = '60px';
+        SidebarAutoHide.originalWidth = 60;
+
+        SidebarAutoHide.expand();
+
+        // Falls back to CSS default, NOT '60px'
+        expect(SidebarAutoHide.sidebarEl.style.width).toBe('');
+        expect(SidebarAutoHide.sidebarEl.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
     });
 });
