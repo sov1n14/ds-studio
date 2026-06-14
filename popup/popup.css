@@ -61,6 +61,7 @@ header {
     align-items: center;
 }
 
+/* ── 語言切換面板 ── */
 .locale-panel {
     position: absolute;
     top: 100%;
@@ -90,13 +91,8 @@ header {
     margin: 0;
     accent-color: var(--primary-color);
 }
-.card-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0;
-    position: relative;
-}
+
+.card {
     background-color: var(--bg-color);
     border-radius: 10px;
     padding: 16px;
@@ -112,6 +108,14 @@ header {
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.card-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0;
+    position: relative;
 }
 
 .card-title-actions {
