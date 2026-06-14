@@ -22,7 +22,8 @@
      * @param {number} opts.maxFrames                 - 硬上限幀數。安全閥，防止無限迴圈。
      * @param {number} opts.stableK                   - 收斂所需連續穩定幀數。
      * @param {number} opts.epsilon                   - 相等判定容差（px），吸收子像素抖動。
-     * @param {(phase: string, detail: object) => void} opts.onLog - 診斷日誌回呼。
+     * @param {(result: {reason:string, frames:number, elapsedMs:number, finalMetric:number|null}) => void} [opts.onDone]
+     *                                                   收斂結束回呼（選擇性）。接收結果摘要。
      * @returns {{ cancel: () => void }}
      */
     function runSettle(opts) {
@@ -46,24 +47,26 @@
         if (typeof opts.epsilon !== 'number') {
             throw new Error('runSettle: opts.epsilon must be a number');
         }
-        if (typeof opts.onLog !== 'function') {
-            throw new Error('runSettle: opts.onLog must be a function');
-        }
+        // onDone 是選擇性的 — 不需要 guard clause
 
         // ── 內部狀態 ────────────────────────────────────────────────────────
         var _cancelled  = false;
         var frame       = 0;
         var prevMetric  = null;
         var stableCount = 0;
+        var startTime   = Date.now();
 
-        // ── 起始日誌 ─────────────────────────────────────────────────────────
-        opts.onLog('settle:start', {
-            reason:        'settle:start',
-            maxFrames:     opts.maxFrames,
-            stableK:       opts.stableK,
-            epsilon:       opts.epsilon,
-            initialMetric: null
-        });
+        // ── 結束回呼辅助 ──────────────────────────────────────────────────────
+        function emitDone(reason, frames, finalMetric) {
+            if (opts.onDone) {
+                opts.onDone({
+                    reason:      reason,
+                    frames:      frames,
+                    elapsedMs:   Date.now() - startTime,
+                    finalMetric: finalMetric
+                });
+            }
+        }
 
         // ── 單幀回呼 ─────────────────────────────────────────────────────────
         function runFrame() {
@@ -79,11 +82,7 @@
             if (currentMetric === null) {
                 if (prevMetric !== null) {
                     // 之前有非 null 值但現在消失 → 元素在 settle 過程中被移除 DOM
-                    opts.onLog('settle:stop', {
-                        reason:      'detached',
-                        frames:      frame + 1,
-                        finalMetric: null
-                    });
+                    emitDone('detached', frame + 1, currentMetric);
                     return;
                 }
 
@@ -92,11 +91,7 @@
                 frame++;
 
                 if (frame >= opts.maxFrames) {
-                    opts.onLog('settle:stop', {
-                        reason:      'maxFrames',
-                        frames:      frame,
-                        finalMetric: null
-                    });
+                    emitDone('maxFrames', frame, currentMetric);
                     return;
                 }
 
@@ -120,33 +115,16 @@
 
             prevMetric = currentMetric;
 
-            // 逐幀日誌（記錄比較前後的值以利診斷）
-            opts.onLog('settle:frame', {
-                frame:       frame,
-                metric:      currentMetric,
-                prevMetric:  oldPrevMetric,
-                delta:       delta,
-                stableCount: stableCount
-            });
-
             // Step 6: 停止條件檢查
             if (stableCount >= opts.stableK) {
-                opts.onLog('settle:stop', {
-                    reason:      'converged',
-                    frames:      frame + 1,
-                    finalMetric: currentMetric
-                });
+                emitDone('converged', frame + 1, currentMetric);
                 return;
             }
 
             frame++;
 
             if (frame >= opts.maxFrames) {
-                opts.onLog('settle:stop', {
-                    reason:      'maxFrames',
-                    frames:      frame,
-                    finalMetric: currentMetric
-                });
+                emitDone('maxFrames', frame, currentMetric);
                 return;
             }
 

@@ -64,13 +64,13 @@ function defaultOpts(overrides) {
         maxFrames: 30,
         stableK:   3,
         epsilon:   0.5,
-        onLog:     function () {},
+        onDone:    function () {},
         ...overrides,
     };
 }
 
 // ---------------------------------------------------------------------------
-// Group A: Guard clauses — each missing or invalid param must throw
+// Group A: Guard clauses — each missing or invalid param must throw (7 tests)
 // ---------------------------------------------------------------------------
 
 describe('runSettle — guard clauses', function () {
@@ -109,10 +109,6 @@ describe('runSettle — guard clauses', function () {
             .toThrow('runSettle: opts.epsilon must be a number');
     });
 
-    it('throws when opts.onLog is not a function', function () {
-        expect(function () { runSettle(defaultOpts({ onLog: true })); })
-            .toThrow('runSettle: opts.onLog must be a function');
-    });
 });
 
 // ---------------------------------------------------------------------------
@@ -138,7 +134,7 @@ describe('runSettle — settle behavior', function () {
     it('converges after a delayed right-shift (the actual bug)', function () {
         var q = createFrameQueue();
         var apply   = vi.fn();
-        var onLog   = vi.fn();
+        var onDone  = vi.fn();
         var measure = sequenceMeasure([160, 160, 189, 189, 189, 189]);
 
         runSettle({
@@ -148,7 +144,7 @@ describe('runSettle — settle behavior', function () {
             maxFrames: 30,
             stableK: 3,
             epsilon: 0.5,
-            onLog: onLog,
+            onDone: onDone,
         });
 
         q.drainFrames(6);
@@ -163,14 +159,13 @@ describe('runSettle — settle behavior', function () {
         expect(apply).toHaveBeenNthCalledWith(6, 'settle:frame-5');
 
         // — converged with correct stop metadata
-        expect(onLog).toHaveBeenCalledWith(
-            'settle:stop',
-            expect.objectContaining({
-                reason:      'converged',
-                frames:      6,
-                finalMetric: 189,
-            })
-        );
+        expect(onDone).toHaveBeenCalledOnce();
+        expect(onDone).toHaveBeenCalledWith(expect.objectContaining({
+            reason:      'converged',
+            frames:      6,
+            finalMetric: 189,
+            elapsedMs:   expect.any(Number),
+        }));
     });
 
     // -----------------------------------------------------------------------
@@ -182,7 +177,7 @@ describe('runSettle — settle behavior', function () {
     it('stops with "detached" when element disappears mid-settle', function () {
         var q = createFrameQueue();
         var apply   = vi.fn();
-        var onLog   = vi.fn();
+        var onDone  = vi.fn();
         var measure = sequenceMeasure([160, 189, null]);
 
         runSettle({
@@ -192,20 +187,19 @@ describe('runSettle — settle behavior', function () {
             maxFrames: 30,
             stableK: 3,
             epsilon: 0.5,
-            onLog: onLog,
+            onDone: onDone,
         });
 
         q.drainFrames(3);
 
         expect(apply).toHaveBeenCalledTimes(3);
-        expect(onLog).toHaveBeenCalledWith(
-            'settle:stop',
-            expect.objectContaining({
-                reason:      'detached',
-                frames:      3,
-                finalMetric: null,
-            })
-        );
+        expect(onDone).toHaveBeenCalledOnce();
+        expect(onDone).toHaveBeenCalledWith(expect.objectContaining({
+            reason:      'detached',
+            frames:      3,
+            finalMetric: null,
+            elapsedMs:   expect.any(Number),
+        }));
     });
 
     // -----------------------------------------------------------------------
@@ -217,7 +211,7 @@ describe('runSettle — settle behavior', function () {
     it('stops with "maxFrames" when elements never converge', function () {
         var q = createFrameQueue();
         var apply   = vi.fn();
-        var onLog   = vi.fn();
+        var onDone  = vi.fn();
         var measure = sequenceMeasure([100, 200, 100, 200]);
 
         runSettle({
@@ -227,19 +221,18 @@ describe('runSettle — settle behavior', function () {
             maxFrames: 4,
             stableK: 3,
             epsilon: 0.5,
-            onLog: onLog,
+            onDone: onDone,
         });
 
         q.drainFrames(4);
 
         expect(apply).toHaveBeenCalledTimes(4);
-        expect(onLog).toHaveBeenCalledWith(
-            'settle:stop',
-            expect.objectContaining({
-                reason: 'maxFrames',
-                frames: 4,
-            })
-        );
+        expect(onDone).toHaveBeenCalledOnce();
+        expect(onDone).toHaveBeenCalledWith(expect.objectContaining({
+            reason:    'maxFrames',
+            frames:    4,
+            elapsedMs: expect.any(Number),
+        }));
     });
 
     // -----------------------------------------------------------------------
@@ -251,7 +244,7 @@ describe('runSettle — settle behavior', function () {
     it('can be cancelled before any frame executes', function () {
         var q = createFrameQueue();
         var apply = vi.fn();
-        var onLog = vi.fn();
+        var onDone = vi.fn();
 
         var handle = runSettle({
             measure:   function () { return 160; },
@@ -260,7 +253,7 @@ describe('runSettle — settle behavior', function () {
             maxFrames: 30,
             stableK:   3,
             epsilon:   0.5,
-            onLog:     onLog,
+            onDone:    onDone,
         });
 
         // Cancel before draining — the scheduled runFrame is still in the queue
@@ -270,11 +263,8 @@ describe('runSettle — settle behavior', function () {
         // The frame was queued but _cancelled prevents execution
         expect(apply).not.toHaveBeenCalled();
 
-        // settle:start is logged synchronously inside runSettle() BEFORE
-        // the first schedule, so it should have been called.
-        expect(onLog).toHaveBeenCalledWith('settle:start', expect.any(Object));
-        // settle:stop should NOT be logged because no frame actually ran.
-        expect(onLog).not.toHaveBeenCalledWith('settle:stop', expect.any(Object));
+        // onDone should NOT be called because no frame actually ran to completion
+        expect(onDone).not.toHaveBeenCalled();
     });
 
     // -----------------------------------------------------------------------
@@ -285,8 +275,8 @@ describe('runSettle — settle behavior', function () {
 
     it('can be cancelled mid-execution', function () {
         var q = createFrameQueue();
-        var apply = vi.fn();
-        var onLog = vi.fn();
+        var apply  = vi.fn();
+        var onDone = vi.fn();
 
         var handle = runSettle({
             measure:   function () { return 160; },
@@ -295,7 +285,7 @@ describe('runSettle — settle behavior', function () {
             maxFrames: 30,
             stableK:   5,
             epsilon:   0.5,
-            onLog:     onLog,
+            onDone:    onDone,
         });
 
         // Execute first 2 frames
@@ -320,7 +310,7 @@ describe('runSettle — settle behavior', function () {
     it('waits when measure returns null initially (element not yet rendered)', function () {
         var q = createFrameQueue();
         var apply   = vi.fn();
-        var onLog   = vi.fn();
+        var onDone  = vi.fn();
         // Two nulls (not yet rendered), then 200 that stabilises.
         // With stableK=2 we need 2 consecutive identical values.
         var measure = sequenceMeasure([null, null, 200, 200, 200]);
@@ -332,7 +322,7 @@ describe('runSettle — settle behavior', function () {
             maxFrames: 30,
             stableK: 2,
             epsilon: 0.5,
-            onLog: onLog,
+            onDone: onDone,
         });
 
         q.drainFrames(10);
@@ -343,12 +333,65 @@ describe('runSettle — settle behavior', function () {
         // Frame 3: measure=200,  delta=0         → stableCount=1
         // Frame 4: measure=200,  delta=0         → stableCount=2 >= 2 → CONVERGED
         expect(apply).toHaveBeenCalledTimes(5);
-        expect(onLog).toHaveBeenCalledWith(
-            'settle:stop',
-            expect.objectContaining({
-                reason:      'converged',
-                finalMetric: 200,
-            })
-        );
+        expect(onDone).toHaveBeenCalledOnce();
+        expect(onDone).toHaveBeenCalledWith(expect.objectContaining({
+            reason:      'converged',
+            finalMetric: 200,
+            elapsedMs:   expect.any(Number),
+        }));
+    });
+});
+
+// -----------------------------------------------------------------------
+// Group C: API contract (regression) — verify controller-compatible opts
+// -----------------------------------------------------------------------
+// Root cause of "改A壞B" bug: scheduler expected `onLog` but controller
+// passed `onDone`. These tests ensure the scheduler accepts the opts
+// shape that the controller provides without throwing.
+
+describe('runSettle — API contract regression', function () {
+
+    it('accepts onDone callback (the controller\'s opts shape)', function () {
+        var q = createFrameQueue();
+        var apply   = vi.fn();
+        var onDone  = vi.fn();
+        // 4 values needed: frame0 sets prevMetric, frames 1-3 converge
+        var measure = sequenceMeasure([100, 100, 100, 100]);
+
+        runSettle({
+            measure: measure,
+            apply: apply,
+            schedule: q.schedule,
+            maxFrames: 30,
+            stableK: 3,
+            epsilon: 0.5,
+            onDone: onDone,
+        });
+
+        q.drainFrames(4);
+
+        // Must converge without throwing (regression: API mismatch)
+        expect(apply).toHaveBeenCalled();
+        expect(onDone).toHaveBeenCalledOnce();
+        expect(onDone).toHaveBeenCalledWith(expect.objectContaining({
+            reason: 'converged',
+        }));
+    });
+
+    it('does not require onLog — onDone is optional', function () {
+        var q = createFrameQueue();
+
+        // No onLog, no onDone — must not throw
+        expect(function () {
+            runSettle({
+                measure: function () { return 100; },
+                apply: function () {},
+                schedule: q.schedule,
+                maxFrames: 30,
+                stableK: 3,
+                epsilon: 0.5,
+                // Intentionally no onLog and no onDone — API contract
+            });
+        }).not.toThrow();
     });
 });
