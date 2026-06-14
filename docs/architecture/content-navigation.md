@@ -28,7 +28,7 @@ This ensures merely opening a popup on a new chat page and selecting a preset, t
 
 ## Overlay Preset Selector
 
-The `PresetOverlay` module in `content/content-script.js` renders a floating `<select>` dropdown centered on the chat title bar (`div._2be88ba`) on the DeepSeek page, enabling preset switching without opening the popup.
+The `PresetOverlay` module (coordinated by `content/content-script.js` via factory, with UI logic split across `preset-overlay.controller.js`, `preset-overlay.resolvers.js`, `preset-overlay.styles.js`, `preset-dropdown.component.js`, `preset-dropdown.position.js`, and `preset-settle.scheduler.js`) renders a floating dropdown centered on the chat title bar (`div._2be88ba`) on the DeepSeek page, enabling preset switching without opening the popup.
 
 **DOM Structure**:
 - A `<div id="dss-preset-overlay">` wrapper is absolutely positioned at `top: 50%; left: 50%; transform: translate(-50%, -50%)` within the title bar (`z-index: 1000`).
@@ -50,6 +50,14 @@ The `PresetOverlay` module in `content/content-script.js` renders a floating `<s
 - The DOM observer detects title bar replacement during conversation switching.
 - `handleChatChange()` calls `PresetOverlay.updateActiveId(resolvedId)` at both the early return (no-UUID → clear) and the main return (UUID → show bound preset).
 - `findAndMount()` avoids redundant mounts by comparing `this.targetEl` with the found element.
+
+**ARIA and Accessibility**:
+The custom preset dropdown follows ARIA authoring practices:
+- The trigger has `role="combobox"`, `aria-haspopup="listbox"`, and `aria-expanded`.
+- The panel has `role="listbox"` and `aria-label="提示詞組清單"`.
+- Each preset item has `role="option"`.
+- Action buttons (edit, delete) have `aria-label` attributes.
+- The drag handle has `aria-hidden="true"` since drag is an enhancement not available to all input modalities.
 
 ## Empty Preset (No-Op Mode)
 

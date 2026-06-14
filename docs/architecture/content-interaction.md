@@ -50,16 +50,7 @@ The button hides when: (1) text selection is cleared or collapses, (2) selection
 
 ### Test Interface
 
-Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQuote`, `computeButtonPosition`, `isSelectionInScope`, `formatQuote`, `showButton`, `hideButton`, `getButtonEl`, `__resetState`, `__setState`, `__getState`. Pattern matches `content-script.js:756-795`.
-
-### ARIA and Accessibility
-
-The combobox follows ARIA authoring practices:
-- The trigger has `role="combobox"`, `aria-haspopup="listbox"`, and `aria-expanded`.
-- The panel has `role="listbox"` and `aria-label="提示詞組清單"`.
-- Each preset item has `role="option"`.
-- Action buttons (edit, delete) have `aria-label` attributes.
-- The drag handle has `aria-hidden="true"` since drag is an enhancement not available to all input modalities.
+Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQuote`, `computeButtonPosition`, `isSelectionInScope`, `formatQuote`, `showButton`, `hideButton`, `getButtonEl`, `__resetState`, `__setState`, `__getState`.
 
 ## Edit Message Cleanup Module
 

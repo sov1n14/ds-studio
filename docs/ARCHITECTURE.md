@@ -10,7 +10,7 @@ ds-studio/
 ├── content/                 ─  Content scripts & web-accessible resources
 │   ├── content-script.js    ─  Entry: event interception, init, prefix injection (v4.0.0 split)
 │   ├── content-script.export.js   ─  Markdown export pipeline (HTML→MD, download)
-│   ├── content-script.overlay.js  ─  PresetOverlay UI (createPresetOverlay ctx factory) (legacy, replaced by the five overlay modules below since v4.2.0)
+│   ├── edit-message-cleanup.js    ─  Strip injected wrapper from edit textarea (v3.2.1)
 │   ├── preset-overlay.controller.js ─  PresetOverlay lifecycle, mount/unmount, observer setup, settle loop
 │   ├── preset-overlay.resolvers.js  ─  Semantic DOM resolvers for title & new-chat button
 │   ├── preset-overlay.styles.js     ─  Overlay CSS inject/remove
@@ -33,8 +33,10 @@ ds-studio/
 │   ├── go-top.render.js     ─  Button render / inject / mode-transition bundle
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
 │   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
+│   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression
+│   ├── preset-dropdown.css  ─  Overlay dropdown component styles
 │   ├── sse-parser.js *      ─  SSE stream parser (web accessible)
 │   ├── censor-xhr-hook.js * ─  XHR monkey-patch for SSE interception (web accessible)
 │   └── prevent-auto-scroll.js *       ─  Main-world auto-scroll patch (web accessible)
@@ -69,7 +71,7 @@ ds-studio/
 Several large files were split into smaller modules using a **dual-load pattern** that works for both classic-script production loading and the Vitest test runner:
 
 - **Bundle files** define a method group / helper and attach it to a global key (e.g., `globalThis.__DS_GoToTop_render`), guarded by `if (typeof module !== 'undefined' && module.exports)` for the test runner.
-- **Entry files** (keeping the original filename) declare the state-bearing singleton, then run `Object.assign(Singleton, globalThis.__DS_* )` to merge the bundles before attaching to `window` / `module.exports`. Helpers that close over mutable state (`content-script.overlay.js`, `popup.preset-manager.js`, `popup.backup-manager.js`) use a `createX(ctx)` factory with live getter/setter callbacks instead.
+- **Entry files** (keeping the original filename) declare the state-bearing singleton, then run `Object.assign(Singleton, globalThis.__DS_* )` to merge the bundles before attaching to `window` / `module.exports`. Helpers that close over mutable state (`popup.preset-manager.js`, `popup.backup-manager.js`, and the overlay modules via `preset-overlay.controller.js`) use a `createX(ctx)` factory with live getter/setter callbacks instead.
 - **Load order is mandatory**: every bundle MUST load before its entry file. This is enforced in `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, and `popup/editor/editor.html`, and replicated for tests via preload imports in `test/setup/vitest.setup.js`.
 - Runtime behavior and public APIs are **unchanged**; the split is purely structural.
 
