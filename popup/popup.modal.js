@@ -93,8 +93,8 @@ const Modal = {
             this.inputEl.placeholder = placeholder || '';
 
             this.actionsEl.innerHTML = '';
-            const cancelBtn = this._buildButton('取消', '', () => finish(null));
-            const confirmBtn = this._buildButton('確認', 'modal-btn--primary', () => {
+            const cancelBtn = this._buildButton(dsI18n.t('cancelButton'), '', () => finish(null));
+            const confirmBtn = this._buildButton(dsI18n.t('confirmButtonDefault'), 'modal-btn--primary', () => {
                 const val = this.inputEl.value.trim();
                 if (val) finish(val);
             });
@@ -150,11 +150,11 @@ const Modal = {
             this.actionsEl.innerHTML = '';
             // 單按鈕模式時省略取消鈕
             if (cancelText !== null) {
-                this._buildButton(cancelText || '取消', '', () => finish(false));
+                this._buildButton(cancelText || dsI18n.t('cancelButton'), '', () => finish(false));
             }
 
             const btnClass = variant === 'danger' ? 'modal-btn--danger' : 'modal-btn--primary';
-            this._buildButton(confirmText || '確認', btnClass, () => finish(true));
+            this._buildButton(confirmText || dsI18n.t('confirmButtonDefault'), btnClass, () => finish(true));
 
             this._setup();
         });

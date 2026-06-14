@@ -82,7 +82,7 @@
             btn.setAttribute('role', 'button');
             btn.setAttribute('tabindex', '0');
             btn.setAttribute('aria-disabled', 'false');
-            btn.setAttribute('aria-label', '回到頂部');
+            btn.setAttribute('aria-label', dsI18n.t('goTopAriaLabel'));
 
             // 替換圖示子節點的 innerHTML 為翻轉向上箭頭
             // 防禦性處理：若 clone 後圖示節點不存在，補建一個

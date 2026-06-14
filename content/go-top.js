@@ -256,7 +256,7 @@ const GoToTop = {
                 'font-size:16px',
                 'font-family:sans-serif',
             ].join(';') + ';';
-            overlay.textContent = text || '正在載入完整對話，請稍候…';
+            overlay.textContent = text || dsI18n.t('exportOverlayLoading');
             document.body.appendChild(overlay);
         } else {
             overlay.style.display = 'flex';

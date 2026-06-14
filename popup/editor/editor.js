@@ -96,10 +96,10 @@ function updateSaveStatus(statusEl, state) {
     if (!statusEl) return;
 
     if (state === 'saving') {
-        statusEl.textContent = '儲存中…';
+        statusEl.textContent = dsI18n.t('savingStatus');
         statusEl.classList.remove('save-status--hidden');
     } else {
-        statusEl.textContent = '已儲存';
+        statusEl.textContent = dsI18n.t('savedStatus');
         statusEl.classList.remove('save-status--hidden');
         // 顯示 1 秒後淡出
         setTimeout(() => {
@@ -166,7 +166,7 @@ async function loadContent(target) {
     if (target.type === 'global') {
         return {
             content: settings.globalDefaultPrompt ?? '',
-            title: '全域預設提示詞',
+            title: dsI18n.t('globalPresetTitle'),
         };
     }
 
@@ -194,11 +194,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const statusEl  = document.getElementById('editorSaveStatus');
     const textareaEl = document.getElementById('editorTextarea');
 
+    await dsI18n.init();
+
     // 解析目標
     const target = parseTarget();
 
     if (!target) {
-        renderDisabledState(titleEl, textareaEl, '無效的編輯器參數');
+        renderDisabledState(titleEl, textareaEl, dsI18n.t('invalidParamsError'));
         return;
     }
 
@@ -207,13 +209,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         loaded = await loadContent(target);
     } catch (err) {
-        renderDisabledState(titleEl, textareaEl, '載入失敗，請關閉後重試');
+        renderDisabledState(titleEl, textareaEl, dsI18n.t('loadFailedError'));
         return;
     }
 
     if (!loaded) {
         // 找不到提示詞組（可能已被刪除）
-        renderDisabledState(titleEl, textareaEl, '找不到提示詞組（可能已被刪除）');
+        renderDisabledState(titleEl, textareaEl, dsI18n.t('presetNotFoundError'));
         return;
     }
 
@@ -222,8 +224,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.title = loaded.title;
     textareaEl.value = loaded.content;
     textareaEl.placeholder = target.type === 'global'
-        ? '輸入全域預設提示詞（會在所有對話中自動插入）'
-        : '請輸入提示詞內容...';
+        ? dsI18n.t('globalPlaceholder')
+        : dsI18n.t('presetPlaceholder');
 
     // ── 自動儲存狀態 ──
     let isDirty = false;

@@ -61,6 +61,21 @@ header {
     align-items: center;
 }
 
+.locale-switcher {
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    outline: none;
+}
+.locale-switcher:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 .card {
     background-color: var(--bg-color);
     border-radius: 10px;

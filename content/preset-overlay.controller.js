@@ -97,8 +97,8 @@
             buildDOM() {
                 this.dropdown = createPresetDropdown({
                     onChange: (id) => this.onSelectChange(id),
-                    placeholderText: '選擇提示詞',
-                    emptyOptionText: '（無）'
+                    placeholderText: dsI18n.t('dropdownPlaceholder'),
+                    emptyOptionText: dsI18n.t('dropdownEmptyOption')
                 });
                 this.wrapperEl = this.dropdown.el;
             },

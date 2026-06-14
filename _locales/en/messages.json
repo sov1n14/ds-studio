@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "DS studio",
+    "description": "Extension name"
+  },
+  "extDesc": {
+    "message": "Automatically inject prompts into chat.deepseek.com, export conversations, restore censored replies, and enhance the DeepSeek experience",
+    "description": "Extension description"
+  }
+}

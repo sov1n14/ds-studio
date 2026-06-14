@@ -1,6 +1,11 @@
 import { vi, beforeEach } from 'vitest';
 import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 
+// ── Globals preload (i18n) ──────────────────────────────────────────────────
+// dsI18n is referenced by many modules at load time. Load it first so the
+// IIFE runs and populates window.dsI18n before any dependent module evaluates.
+import '../../utils/i18n.js';
+
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the

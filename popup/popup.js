@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Init Modal & Toast
     Modal.init();
     Toast.init();
+    await dsI18n.init();
 
     // --- 狀態 ---
     let presets        = [];
@@ -76,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = document.getElementById('syncStatus');
             el.classList.toggle('synced',   isSynced);
             el.classList.toggle('unsynced', !isSynced);
-            el.textContent = isSynced ? '雲端同步' : '未同步';
+            el.textContent = isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced');
         } catch (e) { /* 靜默忽略 — 僅為 UI 提示 */ }
     }
 
@@ -167,15 +168,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isConflictPending = await StorageManager.checkSyncConflictPending();
     if (isConflictPending) {
         const isResolved = await Modal.confirm({
-            title: '雲端同步衝突',
-            message: '偵測到雲端同步資料與本機資料不一致。是否要將雲端設定與本機資料合併？介面設定將以雲端為主，提示詞則會進行合併。',
-            confirmText: '合併同步',
-            cancelText: '暫時取消'
+            title: dsI18n.t('syncConflictTitle'),
+            message: dsI18n.t('syncConflictMessage'),
+            confirmText: dsI18n.t('mergeSyncConfirmButton'),
+            cancelText: dsI18n.t('temporarilyCancelButton')
         });
 
         if (isResolved) {
             await StorageManager.resolveSyncConflict();
-            Toast.show('資料已成功合併同步');
+            Toast.show(dsI18n.t('syncMergedSuccessToast'));
             setTimeout(() => window.location.reload(), 1000);
             return;
         }
@@ -307,8 +308,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 新增提示詞組 ---
     addPresetBtn.addEventListener('click', async () => {
         const name = await Modal.prompt({
-            title: '新增提示詞組',
-            placeholder: '請輸入提示詞組名稱...'
+            title: dsI18n.t('addPresetDialogTitle'),
+            placeholder: dsI18n.t('addPresetPlaceholder')
         });
 
         if (!name) return;
@@ -316,9 +317,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 名稱重複檢查
         if (presets.some(p => p.name === name)) {
             await Modal.confirm({
-                title: '名稱重複',
-                message: `「${name}」已存在，請使用不同的名稱。`,
-                confirmText: '確定',
+                title: dsI18n.t('duplicateNameTitle'),
+                message: dsI18n.t('duplicateNameMessage', { name }),
+                confirmText: dsI18n.t('confirmButton'),
                 cancelText: null
             });
             return;
@@ -479,13 +480,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     includeThinking:   includeThinkingToggle   ? includeThinkingToggle.checked   : true,
                     includeReferences: includeReferencesToggle ? includeReferencesToggle.checked : true
                 }).catch(() => {
-                    Toast.show('匯出失敗，請重整頁面後再試');
+                    Toast.show(dsI18n.t('exportFailedRefreshToast'));
                 });
             } else {
                 await Modal.confirm({
-                    title: '提示',
-                    message: '請在 chat.deepseek.com 頁面使用此功能。',
-                    confirmText: '確定',
+                    title: dsI18n.t('notOnDeepseekTitle'),
+                    message: dsI18n.t('notOnDeepseekMessage'),
+                    confirmText: dsI18n.t('confirmButton'),
                     cancelText: null
                 });
             }
@@ -516,16 +517,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         forceSyncBtn.addEventListener('click', async () => {
             const original = forceSyncBtn.textContent;
             forceSyncBtn.disabled = true;
-            forceSyncBtn.textContent = '同步中…';
+            forceSyncBtn.textContent = dsI18n.t('syncingButtonText');
             try {
                 const result = await StorageManager.retrySync();
                 if (result.success) {
-                    Toast.show('已同步完成');
+                    Toast.show(dsI18n.t('syncCompleteToast'));
                 } else {
-                    Toast.show('仍有 ' + result.remainingUnsyncedCount + ' 項未同步');
+                    Toast.show(dsI18n.t('syncRemainingToast', { count: result.remainingUnsyncedCount }));
                 }
             } catch (e) {
-                Toast.show('同步失敗');
+                Toast.show(dsI18n.t('syncFailedToast'));
             } finally {
                 forceSyncBtn.disabled = false;
                 forceSyncBtn.textContent = original;
