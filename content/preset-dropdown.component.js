@@ -446,10 +446,9 @@
                 // 重建 optionData 與選單中空選項的 DOM
                 if (optionData.length > 0) {
                     optionData[0].name = emptyOptionText;
-                    var menuItems = menu.querySelectorAll('.dss-preset-option');
-                    if (menuItems.length > 0) {
-                        var nameEl = menuItems[0].querySelector('.dss-preset-option-name');
-                        if (nameEl) nameEl.textContent = emptyOptionText;
+                    var emptyOptionEl = menu.querySelector('.dss-preset-option[data-value=""]');
+                    if (emptyOptionEl) {
+                        emptyOptionEl.textContent = emptyOptionText;
                     }
                 }
             }
