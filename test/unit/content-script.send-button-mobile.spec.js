@@ -131,6 +131,31 @@ function makeEditSendButtonInContainer(value = 'edit text') {
 }
 
 /**
+ * Build an edit-message send button where the textarea is NOT inside the
+ * button's ancestor DOM tree (simulates React portal scenario where the
+ * DOM walk-up in the handler fails).
+ * Returns { button, span, textarea } all independent elements.
+ */
+function makeEditSendButtonStandalone(value = 'edit text') {
+    const button = document.createElement('div');
+    button.className =
+        'ds-button ds-button--primary ds-button--filled ds-button--capsule ' +
+        'ds-button--s ds-button--icon-relative-m ds-button--min-width';
+    button.setAttribute('role', 'button');
+
+    const span = document.createElement('span');
+    span.className = 'ds-button__content';
+    span.textContent = '发送';
+    button.appendChild(span);
+
+    // Textarea is a sibling of button on body, NOT inside any ancestor of button
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+
+    return { button, span, textarea };
+}
+
+/**
  * Attach button + textarea to document.body and return a cleanup function.
  */
 function mountInDocument(...elements) {
@@ -244,5 +269,22 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
 
         expect(textarea.value).toBe(originalValue);
         expect(textarea.value).not.toContain('<user-input>');
+    });
+
+    // -----------------------------------------------------------------------
+    // TC-6: Edit send button with textarea outside button DOM tree (React portal)
+    //       Must trigger injection via the document.activeElement fallback
+    // -----------------------------------------------------------------------
+    it('TC-6 EDIT-SEND FALLBACK: injection works when textarea is outside button DOM tree', () => {
+        const { button, span, textarea } = makeEditSendButtonStandalone('fallback test');
+        cleanup = mountInDocument(button, textarea);
+
+        // Focus the textarea so the fallback can find it via document.activeElement
+        textarea.focus();
+
+        dispatchPointerdown(span);
+
+        expect(textarea.value).toContain('<user-input>');
+        expect(textarea.value).toContain('fallback test');
     });
 });

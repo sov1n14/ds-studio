@@ -14,13 +14,11 @@
  */
 async function broadcastActivePreset(presetId, presetContent) {
     // 取得目前作用中分頁；若查詢失敗則靜默結束
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+    const tabs = await chrome.tabs.query({ url: '*://chat.deepseek.com/*' }).catch(() => []);
     const tab = tabs[0];
 
-    // 未找到分頁或非 DeepSeek 網址則略過
+    // 未找到分頁則略過（URL 查詢已過濾，無須額外檢查）
     if (!tab?.id) return;
-    const isDeepSeekTab = tab.url && tab.url.includes('chat.deepseek.com');
-    if (!isDeepSeekTab) return;
 
     await chrome.tabs.sendMessage(tab.id, {
         action: 'ACTIVE_PRESET_CHANGED',

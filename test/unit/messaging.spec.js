@@ -27,23 +27,12 @@ describe('broadcastActivePreset', () => {
 
         await broadcastActivePreset('preset-1', 'Hello world');
 
-        expect(chrome.tabs.query).toHaveBeenCalledWith({ active: true, currentWindow: true });
+        expect(chrome.tabs.query).toHaveBeenCalledWith({ url: '*://chat.deepseek.com/*' });
         expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(42, {
             action: 'ACTIVE_PRESET_CHANGED',
             presetId: 'preset-1',
             presetContent: 'Hello world',
         });
-    });
-
-    it('does not call sendMessage for a non-DeepSeek tab', async () => {
-        chrome.tabs.query = vi.fn().mockResolvedValue([
-            { id: 99, url: 'https://www.google.com/' },
-        ]);
-        chrome.tabs.sendMessage = vi.fn().mockResolvedValue({});
-
-        await broadcastActivePreset('preset-1', 'Hello');
-
-        expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
     });
 
     it('does not call sendMessage when no tabs are returned', async () => {
@@ -83,14 +72,4 @@ describe('broadcastActivePreset', () => {
         expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('does not call sendMessage when tab url is undefined', async () => {
-        chrome.tabs.query = vi.fn().mockResolvedValue([
-            { id: 42, url: undefined },
-        ]);
-        chrome.tabs.sendMessage = vi.fn().mockResolvedValue({});
-
-        await broadcastActivePreset('preset-1', 'Hello');
-
-        expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
-    });
 });

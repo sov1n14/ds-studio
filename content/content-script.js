@@ -149,7 +149,7 @@ async function updatePromptPrefixFromBinding() {
     let presetId = null;
     if (currentChatUuid && chatPresetMap[currentChatUuid]) {
         presetId = chatPresetMap[currentChatUuid];
-    } else if (!currentChatUuid && pendingPresetId) {
+    } else if (pendingPresetId) {
         presetId = pendingPresetId;
     }
 
@@ -375,6 +375,12 @@ document.addEventListener('keydown', (e) => {
                     const ta = el.querySelector('textarea');
                     if (ta) { textarea = ta; break; }
                     el = el.parentElement;
+                }
+                // Fallback: DOM 遍歷找不到時試 activeElement 或全局查詢
+                if (!textarea) {
+                    textarea = document.activeElement?.tagName === 'TEXTAREA'
+                        ? document.activeElement
+                        : document.querySelector('textarea');
                 }
             } else {
                 textarea = document.querySelector('textarea');
