@@ -613,3 +613,74 @@ describe('Group F2 — MutationObserver guards on applyOverflow()', () => {
         expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('hidden');
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group G — storeOriginalWidth() guard against collapsed state
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group G — storeOriginalWidth() guard against collapsed state', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+    });
+
+    it('G1: storeOriginalWidth() captures width when sidebar is expanded (normal case)', () => {
+        vi.spyOn(SidebarAutoHide.sidebarEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+
+        SidebarAutoHide.storeOriginalWidth();
+
+        expect(SidebarAutoHide.originalWidth).toBeGreaterThan(SidebarAutoHide.COLLAPSED_WIDTH);
+        expect(SidebarAutoHide.originalWidth).toBe(260);
+    });
+
+    it('G2: storeOriginalWidth() does NOT overwrite when sidebar is collapsed', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.originalWidth = 260;
+
+        SidebarAutoHide.storeOriginalWidth();
+
+        expect(SidebarAutoHide.originalWidth).toBe(260);
+    });
+
+    it('G3: storeOriginalWidth() does NOT overwrite when measured width ≤ COLLAPSED_WIDTH', () => {
+        vi.spyOn(SidebarAutoHide.sidebarEl, 'getBoundingClientRect').mockReturnValue({ width: 60 });
+        SidebarAutoHide.originalWidth = 260;
+
+        SidebarAutoHide.storeOriginalWidth();
+
+        expect(SidebarAutoHide.originalWidth).toBe(260);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group H — expand() fallback when originalWidth is invalid
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group H — expand() fallback when originalWidth is invalid', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        createSidebarInner(SidebarAutoHide.sidebarEl);
+    });
+
+    it('H1: expand() clears inline width (style.width = "") when originalWidth is null', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.sidebarEl.style.width = '60px';
+        SidebarAutoHide.originalWidth = null;
+
+        SidebarAutoHide.expand();
+
+        expect(SidebarAutoHide.sidebarEl.style.width).toBe('');
+        expect(SidebarAutoHide.sidebarEl.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
+    });
+
+    it('H2: expand() clears inline width when originalWidth ≤ COLLAPSED_WIDTH', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.sidebarEl.style.width = '60px';
+        SidebarAutoHide.originalWidth = 60;
+
+        SidebarAutoHide.expand();
+
+        // Falls back to CSS default, NOT '60px'
+        expect(SidebarAutoHide.sidebarEl.style.width).toBe('');
+        expect(SidebarAutoHide.sidebarEl.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
+    });
+});

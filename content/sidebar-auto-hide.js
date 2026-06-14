@@ -1,5 +1,5 @@
 /**
- * DS studio v1.5.2 — Sidebar Auto-Hide
+ * DS studio v1.5.3 — Sidebar Auto-Hide
  * Collapses the sidebar to 60px when idle, expands on hover.
  */
 const SidebarAutoHide = {
@@ -64,7 +64,13 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
     storeOriginalWidth() {
         if (!this.sidebarEl) return;
-        this.originalWidth = this.sidebarEl.getBoundingClientRect().width;
+        // 收合狀態下不安裝原始寬度 — MutationObserver 可能在 collapse() 後
+        // 因 React 重新渲染而觸發，此時 getBoundingClientRect().width 為收合寬度
+        if (this.isCollapsed()) return;
+        const w = this.sidebarEl.getBoundingClientRect().width;
+        if (w <= this.COLLAPSED_WIDTH) return;
+        this.originalWidth = w;
+        console.log(`[DS-Sidebar] storeOriginalWidth() — captured originalWidth=${w}`);
         this.sidebarInnerEl = this.sidebarEl.querySelector(this.SIDEBAR_INNER_SELECTOR);
         this.sidebarInnerWidth = this.sidebarInnerEl
             ? this.sidebarInnerEl.getBoundingClientRect().width
@@ -123,12 +129,13 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         if (innerEl) {
             innerEl.style.marginLeft = '';
         }
-        if (this.originalWidth) {
+        if (this.originalWidth && this.originalWidth > this.COLLAPSED_WIDTH) {
             this.sidebarEl.style.width = this.originalWidth + 'px';
         } else {
+            // originalWidth 未捕捉或無效 → 清除 inline width，讓 CSS/瀏覽器決定自然寬度
             this.sidebarEl.style.width = '';
         }
-        console.log(`[DS-Sidebar] expand() — overflow='${this.sidebarEl.style.overflow}', originalWidth=${this.originalWidth}`);
+        console.log(`[DS-Sidebar] expand() — overflow='${this.sidebarEl.style.overflow}', width=${this.sidebarEl.style.width || 'CSS-default'}, originalWidth=${this.originalWidth}`);
     },
 
     handleMouseEnter() {
