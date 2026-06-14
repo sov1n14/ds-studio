@@ -19,10 +19,6 @@
                         <h1>DS studio</h1>
                         <span id="saveStatus" class="status-hidden" data-i18n="saveStatus">已儲存</span>
                         <span id="syncStatus"></span>
-                        <select id="ds-locale-switcher" class="locale-switcher" title="Switch Language">
-                            <option value="zh_TW">中文</option>
-                            <option value="en">English</option>
-                        </select>
                     </div>
                     <label class="switch">
                         <input type="checkbox" id="enableToggle">
@@ -139,7 +135,25 @@
 
         <div class="column">
             <div class="card">
-                <div class="card-title">Features & Export</div>
+                <div class="card-title-row">
+                    <div class="card-title">Features & Export</div>
+                    <div class="card-title-actions">
+                        <button id="localeSwitcherBtn" class="icon-btn" title="Switch Language">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M2 12h20"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                        </button>
+                        <!-- 語言面板（預設隱藏） -->
+                        <div id="localePanel" class="locale-panel" hidden>
+                            <label class="locale-option">
+                                <input type="radio" name="locale" value="zh_TW"> 中文
+                            </label>
+                            <label class="locale-option">
+                                <input type="radio" name="locale" value="en"> English
+                            </label>
+                        </div>
                 <div class="input-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="includeThinkingToggle" checked>
@@ -240,12 +254,37 @@
         await dsI18n.init();
         dsI18n.apply();
 
-        const switcher = document.getElementById('ds-locale-switcher');
-        if (switcher) {
-          switcher.value = dsI18n.getLocale();
-          switcher.addEventListener('change', async function() {
-            await dsI18n.setLocale(this.value);
-            dsI18n.apply();
+        // 語言切換：地球按鈕 → 面板切換
+        const localeBtn = document.getElementById('localeSwitcherBtn');
+        const localePanel = document.getElementById('localePanel');
+        if (localeBtn && localePanel) {
+          localeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const hidden = localePanel.hasAttribute('hidden');
+            localePanel.toggleAttribute('hidden');
+            if (hidden) {
+              const cur = dsI18n.getLocale();
+              localePanel.querySelectorAll('input[type="radio"]').forEach(function(r) {
+                r.checked = r.value === cur;
+              });
+            }
+          });
+          document.addEventListener('click', function(e) {
+            if (!localePanel.hidden &&
+                !localePanel.contains(e.target) &&
+                e.target !== localeBtn &&
+                !localeBtn.contains(e.target)) {
+              localePanel.hidden = true;
+            }
+          });
+          localePanel.addEventListener('change', async function(e) {
+            if (e.target.matches('input[type="radio"]') && e.target.checked) {
+              var val = e.target.value;
+              if (val !== dsI18n.getLocale()) {
+                await dsI18n.setLocale(val);
+                window.location.reload();
+              }
+            }
           });
         }
       })();

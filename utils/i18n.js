@@ -353,16 +353,24 @@
 
     _data: null,
     _locale: DEFAULT_LOCALE,
+    _ready: false,
 
-    /** Initialize — load saved locale from chrome.storage.sync */
+    /** Initialize — read saved locale from chrome.storage.sync.
+     *  Safe to call multiple times; re-reads from storage each time. */
     async init() {
+      this._ready = true;
       try {
         const result = await chrome.storage.sync.get(STORAGE_KEY);
-        this._locale = result[STORAGE_KEY] || DEFAULT_LOCALE;
-      } catch (_e) {
-        this._locale = DEFAULT_LOCALE;
+        if (result[STORAGE_KEY] && LOCALE_NAMES[result[STORAGE_KEY]]) {
+          this._locale = result[STORAGE_KEY];
+          this._data = result[STORAGE_KEY] === 'en' ? en : zh_TW;
+          try { localStorage.setItem(STORAGE_KEY, this._locale); } catch (_) { /* ignore */ }
+        }
+      } catch (_e) { /* storage unavailable */ }
+      // Ensure _data is populated even when storage is empty/unavailable
+      if (this._data === null) {
+        this._data = this._locale === 'en' ? en : zh_TW;
       }
-      this._data = this._locale === 'en' ? en : zh_TW;
     },
 
     /** Get current locale code (zh_TW | en) */
@@ -375,14 +383,23 @@
       return LOCALE_NAMES[this._locale] || this._locale;
     },
 
-    /** Switch locale, persist to storage, return true on success */
+    /** For testing only — reset internal state so init() re-reads storage */
+    _reset() {
+      this._ready = false;
+      this._locale = DEFAULT_LOCALE;
+      this._data = null;
+    },
+
+    /**
+     * Switch locale, persist to localStorage (sync) and
+     * chrome.storage.sync (async), then reload to refresh all strings.
+     */
     async setLocale(locale) {
       if (!LOCALE_NAMES[locale]) return false;
       this._locale = locale;
       this._data = locale === 'en' ? en : zh_TW;
-      try {
-        await chrome.storage.sync.set({ [STORAGE_KEY]: locale });
-      } catch (_e) { /* ignore storage errors */ }
+      try { localStorage.setItem(STORAGE_KEY, locale); } catch (_) { /* ignore */ }
+      try { await chrome.storage.sync.set({ [STORAGE_KEY]: locale }); } catch (_) { /* ignore */ }
       return true;
     },
 
@@ -427,7 +444,38 @@
   };
 
   // ============================================================
+  //  Auto-Init (runs once when the script loads)
+  // ============================================================
+  (function autoInit() {
+    // 1. Synchronous init from localStorage (instant — no await)
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached && LOCALE_NAMES[cached]) {
+        i18n._locale = cached;
+        i18n._data = cached === 'en' ? en : zh_TW;
+      }
+    } catch (_) { /* localStorage unavailable */ }
+
+    // 2. Async init from chrome.storage.sync (may update cached value)
+    i18n.init().then(function () {
+      // 3. Auto-apply when DOM is ready (only in browser context)
+      if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function onReady() {
+            document.removeEventListener('DOMContentLoaded', onReady);
+            i18n.apply();
+          });
+        } else {
+          i18n.apply();
+        }
+      }
+    });
+  })();
+
+  // ============================================================
   //  Export to global scope
   // ============================================================
-  window.dsI18n = i18n;
+  // Export: try both globalThis (vitest/happy-dom) and window (browser)
+  try { globalThis.dsI18n = i18n; } catch (_) {}
+  try { window.dsI18n = i18n; } catch (_) {}
 })();
