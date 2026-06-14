@@ -47,11 +47,11 @@
 
     // ---- Popup: Backup & Restore Section ----
     exportLabel: '匯出：',
-    exportJsonSettingsButton: 'JSON 設定',
-    exportRestoredBackupButton: '復原信息備份',
+    exportJsonSettingsButton: '擴充設定',
+    exportRestoredBackupButton: '已復原信息',
     importLabel: '匯入：',
-    importJsonSettingsButton: 'JSON 設定',
-    importRestoredBackupButton: '復原信息備份',
+    importJsonSettingsButton: '擴充設定',
+    importRestoredBackupButton: '已復原信息',
     clearRestoredRecordsButton: '清除所有已還原紀錄',
     manualSyncButton: '手動同步',
 
@@ -116,7 +116,7 @@
     restoreFailedMessage: '讀取備份檔案時發生錯誤：{message}',
     confirmButtonBackupManager: '確定',
 
-    // ---- Backup Manager: Restored Records Backup ----
+    // ---- Backup Manager: Restored Messages Backup ----
     restoredBackupExportedToast: '復原備份已成功匯出',
     invalidRestoredBackupFormatError: '無效的備份檔案格式：缺少 restored_messages',
     restoredBackupImportedToast: '復原備份已成功匯入',
@@ -124,7 +124,7 @@
     importFailedMessage: '讀取備份檔案時發生錯誤：{message}',
     confirmButtonImportFailed: '確定',
 
-    // ---- Backup Manager: Clear Restored Records ----
+    // ---- Backup Manager: Clear Restored Messages ----
     clearRestoredRecordsTitle: '清除已還原紀錄',
     clearRestoredRecordsMessage: '確定要清除所有已還原內容嗎？此操作無法復原。',
     clearButton: '清除',
@@ -212,12 +212,12 @@
 
     // ---- Popup: Backup & Restore Section ----
     exportLabel: 'Export:',
-    exportJsonSettingsButton: 'JSON Settings',
-    exportRestoredBackupButton: 'Restore Records Backup',
+    exportJsonSettingsButton: 'Extension Settings',
+    exportRestoredBackupButton: 'Restored Messages',
     importLabel: 'Import:',
-    importJsonSettingsButton: 'JSON Settings',
-    importRestoredBackupButton: 'Restore Records Backup',
-    clearRestoredRecordsButton: 'Clear All Restored Records',
+    importJsonSettingsButton: 'Extension Settings',
+    importRestoredBackupButton: 'Restored Messages',
+    clearRestoredRecordsButton: 'Clear All Restored Messages',
     manualSyncButton: 'Manual Sync',
 
     // ---- Popup: Sync Status ----
@@ -281,20 +281,20 @@
     restoreFailedMessage: 'Error reading backup file: {message}',
     confirmButtonBackupManager: 'OK',
 
-    // ---- Backup Manager: Restored Records Backup ----
-    restoredBackupExportedToast: 'Restore records backup exported successfully',
+    // ---- Backup Manager: Restored Messages Backup ----
+    restoredBackupExportedToast: 'Restored Messages backup exported successfully',
     invalidRestoredBackupFormatError: 'Invalid backup format: missing restored_messages',
-    restoredBackupImportedToast: 'Restore records backup imported successfully',
+    restoredBackupImportedToast: 'Restored Messages backup imported successfully',
     importFailedTitle: 'Import Failed',
     importFailedMessage: 'Error reading backup file: {message}',
     confirmButtonImportFailed: 'OK',
 
-    // ---- Backup Manager: Clear Restored Records ----
-    clearRestoredRecordsTitle: 'Clear Restored Records',
+    // ---- Backup Manager: Clear Restored Messages ----
+    clearRestoredRecordsTitle: 'Clear Restored Messages',
     clearRestoredRecordsMessage: 'Are you sure you want to clear all restored content? This action cannot be undone.',
     clearButton: 'Clear',
     cancelButtonClearRestored: 'Cancel',
-    restoredRecordsClearedToast: 'All restored records cleared',
+    restoredRecordsClearedToast: 'All Restored Messages cleared',
     clearFailedToast: 'Clear failed',
 
     // ---- Custom Select ----
