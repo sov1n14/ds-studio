@@ -27,6 +27,7 @@ var exportConversationToMarkdown = __DSExport.exportConversationToMarkdown;
 var _buildMarkdownHeader         = __DSExport._buildMarkdownHeader;
 var downloadMarkdown             = __DSExport.downloadMarkdown;
 var formatSystemTime             = __DSExport.formatSystemTime;
+var formatTimezoneOffset         = __DSExport.formatTimezoneOffset;
 
 // ── PresetOverlay factory（由 content-script.overlay.js 在前載入） ────────────
 // 取得 factory 參照並以 ctx 物件實例化，ctx 的 getter/setter 直接讀寫本模組的
@@ -441,6 +442,7 @@ if (typeof module !== 'undefined' && module.exports) {
         injectPrefix,
         markChatCreationAttempt,
         formatSystemTime,
+        formatTimezoneOffset,
         PresetOverlay,
         __resetState: () => {
             clearTimeout(awaitingNewChatUuidTimer);

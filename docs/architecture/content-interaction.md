@@ -139,10 +139,11 @@ A checkbox in the Features & Export card (`#showSystemTimeToggle`) controls the 
 In `content-script.js`:
 
 - `let showSystemTime = false` — runtime state variable, initialized from storage during `initSettings()`.
-- `formatSystemTime(date = new Date())` — pure function returning `yyyy/mm/dd hh:mm:ss` in 24-hour format with zero-padding.
+- `formatSystemTime(date = new Date())` — pure function returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
+- `formatTimezoneOffset(date)` — pure helper returning the timezone offset string `UTC±hh:mm` (e.g., `UTC+08:00`, `UTC-03:45`).
 - In `injectPrefix()`, the system time is prepended before the injection prefix:
   ```
-  Current Time: 2026/05/31 14:30:00\n\n
+  Current Time: 2026/05/31 14:30:00 (UTC+08:00)\n\n
   ```
   This string is inserted before the injection prefix (if any) and the `<user-input>` wrapper.
 

@@ -48,7 +48,7 @@
 
 - **開關位置**：彈出選單「功能與匯出」卡片中的 `#showSystemTimeToggle` 核取方塊，位於參考連結開關下方。
 - **儲存鍵**：`dsShowSystemTime`（布林值，預設 `false`）。
-- **注入格式**：啟用後，在每則訊息前端以 `Current Time: yyyy/mm/dd hh:mm:ss`（24 小時制、零補位）格式插入目前系統時間，位於 `<system-prompt>` 區塊（若存在）或 `<user-input>` 區塊之前。
+- **注入格式**：啟用後，在每則訊息前端以 `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`（24 小時制、零補位，含當地時區偏移）格式插入目前系統時間，位於 `<system-prompt>` 區塊（若存在）或 `<user-input>` 區塊之前。範例：`Current Time: 2026/06/14 20:19:32 (UTC+08:00)`。
 - **重複注入防護**：若文字輸入區開頭已包含 `Current Time: ` 前綴，則跳過注入。
 - **主開關感知**：當主開關（`isEnabled`）關閉時，此切換會停用（透過 `disabled` 屬性）。
 
