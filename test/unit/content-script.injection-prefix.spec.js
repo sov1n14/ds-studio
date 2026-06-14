@@ -145,7 +145,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         });
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\n\n<system-prompt>/);
+        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-prompt>/);
     });
 
     it('prepends system time before <user-input> when showSystemTime enabled and no prompt', () => {
@@ -157,7 +157,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         });
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\n\n<user-input>/);
+        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<user-input>/);
     });
 
     it('does not prepend time when showSystemTime is false', () => {
@@ -192,7 +192,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         });
         const ta = makeTextarea('hello');
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\n\n/);
+        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n/);
     });
 
     it('system time is present in combined injection with both system prompt and user input', () => {
@@ -205,7 +205,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         const ta = makeTextarea('user input');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         const result = ta.value;
-        expect(result).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\n\n<system-prompt>/);
+        expect(result).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-prompt>/);
         expect(result).toContain('<user-input>\nuser input\n</user-input>');
     });
 });
@@ -237,9 +237,9 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
             promptPrefix: '',
             globalDefaultPrompt: '',
         });
-        const ta = makeTextarea('Current Time: 2000/01/01 00:00:00\n\n<user-input>\nhello\n</user-input>');
+        const ta = makeTextarea('Current Time: 2000/01/01 00:00:00 (UTC+00:00)\n\n<user-input>\nhello\n</user-input>');
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toMatch(/^Current Time: (?!2000\/01\/01 00:00:00)/);
+        expect(ta.value).toMatch(/^Current Time: (?!2000\/01\/01 00:00:00 \(UTC\+00:00\))\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<user-input>/);
         expect(ta.value).toContain('<user-input>\nhello\n</user-input>');
     });
 
