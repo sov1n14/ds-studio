@@ -70,7 +70,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         const w = this.sidebarEl.getBoundingClientRect().width;
         if (w <= this.COLLAPSED_WIDTH) return;
         this.originalWidth = w;
-        console.log(`[DS-Sidebar] storeOriginalWidth() — captured originalWidth=${w}`);
         this.sidebarInnerEl = this.sidebarEl.querySelector(this.SIDEBAR_INNER_SELECTOR);
         this.sidebarInnerWidth = this.sidebarInnerEl
             ? this.sidebarInnerEl.getBoundingClientRect().width
@@ -97,14 +96,10 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         } else {
             this.sidebarEl.style.overflow = 'hidden';
         }
-        console.log(
-            `[DS-Sidebar] applyOverflow() — nativelyCollapsed=${nativelyCollapsed} isCollapsed=${ourCollapsed} → overflow=${this.sidebarEl.style.overflow}`
-        );
     },
 
     collapse() {
         if (!this.sidebarEl || this.isCollapsed()) return;
-        console.log(`[DS-Sidebar] collapse() — width=${this.COLLAPSED_WIDTH}px`);
         this.sidebarEl.classList.add(this.COLLAPSED_CLASS);
         this.sidebarEl.style.width = this.COLLAPSED_WIDTH + 'px';
         this.applyOverflow();
@@ -135,7 +130,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
             // originalWidth 未捕捉或無效 → 清除 inline width，讓 CSS/瀏覽器決定自然寬度
             this.sidebarEl.style.width = '';
         }
-        console.log(`[DS-Sidebar] expand() — overflow='${this.sidebarEl.style.overflow}', width=${this.sidebarEl.style.width || 'CSS-default'}, originalWidth=${this.originalWidth}`);
     },
 
     handleMouseEnter() {
@@ -205,8 +199,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
             const nowNativelyCollapsed = this.isNativelyCollapsed();
             const nativeStateChanged = nowNativelyCollapsed !== this._wasNativelyCollapsed;
             this._wasNativelyCollapsed = nowNativelyCollapsed;
-
-            console.log(`[DS-Sidebar] MutationObserver fired — nativeChanged=${nativeStateChanged}, calling applyOverflow()`);
 
             if (nativeStateChanged && !nowNativelyCollapsed && this.isCollapsed()) {
                 // Native expand while our collapse is active — DeepSeek may have
