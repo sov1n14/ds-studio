@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DS studio",
-  "version": "4.1.0",
+  "version": "4.2.4",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5m3yyRKn27CeKs8JGkaVRTRHLvqdyacX4c/WMpYohs1PXPY+xcB2CP9SDlPtocX5qZjmP7B+Qs/pWFc/vEvOWcorQhbebm6jiGS+ZAe75NemUSt7MCJV61THdtb30k1nPGxL8viEYb09B8ZWh+QEN4t+hHAHsMFf9EA9UPrJb7YgIrulQVIkWPT+2afjdlwe6oUeogpdN6QJK19qe52vf9dZXTt0AFw/ORk1c3PLKBIitM1l3RZYbrBiG2DwgJw6N5iSVgHwEq5qPCdkFXlEl9LnFWa4wviFV8OpaAdCC0B3Ud+QNWNJrBWeiVAMi4wamg34f0P6gXAbvS4nEfEkKwIDAQAB",
   "description": "Automatically injects a preset prompt prefix into chat messages on chat.deepseek.com.",
   "permissions": [
@@ -51,7 +51,12 @@
         "content/prevent-auto-scroll-bridge.js",
         "content/harvest.js",
         "content/content-script.export.js",
-        "content/content-script.overlay.js",
+        "content/preset-dropdown.position.js",
+        "content/preset-dropdown.component.js",
+        "content/preset-overlay.styles.js",
+        "content/preset-overlay.resolvers.js",
+        "content/preset-settle.scheduler.js",
+        "content/preset-overlay.controller.js",
         "content/content-script.js",
         "content/edit-message-cleanup.js",
         "content/quote-reply.js",
@@ -62,7 +67,7 @@
         "content/mobile-sidebar-swipe.js",
         "content/mobile-homepage-cleanup.js"
       ],
-      "css": ["content/censor-reply-restore.css", "content/go-top.css"],
+      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css"],
       "run_at": "document_end"
     }
   ]

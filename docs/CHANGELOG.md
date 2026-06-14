@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.2.2](changelog/v4.md#422---2026-06-14) | 行動版重新整理後下拉框位置競態條件修復 — 新增有界 settle 重試迴圈，度量標籤列按鈕位置直到穩定 |
+| [4.2.1](changelog/v4.md#421---2026-06-14) | 修復下拉選單位置計算子像素抖動問題並強化冪等性（Math.round + 捨去尾數重複） |
+| [4.2.0](changelog/v4.md#420---2026-06-14) | 重構預設集覆蓋層：拆分大型模組為職責單一的小型檔案（controller、resolvers、position、styles、component） |
+| [4.1.0](changelog/v4.md#410---2026-06-14) | 新增行動版首頁清理模組 v4.1.0 |
 | [4.0.0](changelog/v4.md#400---2026-06-13) | 大型檔案模組化重構：storage-manager、go-top、censor-reply-restore、content-script、popup 拆分為單一職責模組；行為不變、985 測試全綠 |
 
 ### v3.x — 編輯器與架構精煉

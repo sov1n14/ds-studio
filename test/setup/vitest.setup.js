@@ -15,8 +15,28 @@ import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
-import '../../content/content-script.overlay.js';
+// Overlay refactor: load the four replacement modules in dependency order so
+// that window.__DS_PresetOverlay (and the other globals) are available before
+// content-script.js (loaded by individual specs via require) resolves them.
+import '../../content/preset-dropdown.position.js';
+import '../../content/preset-dropdown.component.js';
+import '../../content/preset-overlay.styles.js';
+import '../../content/preset-overlay.resolvers.js';
+import '../../content/preset-settle.scheduler.js';
+import '../../content/preset-overlay.controller.js';
 import '../../content/content-script.export.js';
+
+// ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
+// The controller feature-detects it (typeof ResizeObserver === 'undefined') and
+// skips setup when absent, so this stub simply prevents crashes if the check is
+// bypassed or if future code calls it unconditionally.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = class ResizeObserver {
+        observe()    {}
+        unobserve()  {}
+        disconnect() {}
+    };
+}
 // ───────────────────────────────────────────────────────────────────────────
 
 // jest-chrome uses jest.fn() internally; map jest → vi so it works in vitest
