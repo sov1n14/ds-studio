@@ -388,7 +388,7 @@ const StorageManager = {
             if (oldData && oldData.promptPrefix !== undefined && oldData.promptPrefix !== '') {
                 const migratedPreset = {
                     id: 'preset-migrated-' + Date.now(),
-                    name: '我的提示詞',
+                    name: dsI18n.t('migratedPresetName'),
                     content: oldData.promptPrefix,
                     createdAt: Date.now(),
                     updatedAt: Date.now()

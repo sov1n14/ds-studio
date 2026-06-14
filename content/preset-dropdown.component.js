@@ -10,11 +10,11 @@
 
     // ── 常數 ────────────────────────────────────────────────────────────────────
 
-    /** 空選項的預設顯示文字 */
-    const DEFAULT_EMPTY_OPTION_TEXT = '（無）';
+    /** 空選項的預設顯示文字（getter — 確保使用當下語系） */
+    function DEFAULT_EMPTY_OPTION_TEXT() { return dsI18n.t('dropdownEmptyOption'); }
 
-    /** 預設佔位文字（未選取任何 preset 時顯示） */
-    const DEFAULT_PLACEHOLDER_TEXT = '選擇提示詞';
+    /** 預設佔位文字（getter — 確保使用當下語系） */
+    function DEFAULT_PLACEHOLDER_TEXT() { return dsI18n.t('dropdownPlaceholder'); }
 
     /** 下拉選單 id */
     const MENU_ID = 'dss-preset-menu';
@@ -105,8 +105,8 @@
         }
 
         const onChange        = typeof options.onChange === 'function' ? options.onChange : null;
-        const placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT;
-        const emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT;
+        var placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT();
+        var emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT();
 
         // ── 狀態 ──────────────────────────────────────────────────────────────
         let currentValue  = '';   // 目前選中的選項 value
@@ -122,7 +122,7 @@
         el.setAttribute('role', 'combobox');
         el.setAttribute('aria-expanded', 'false');
         el.setAttribute('aria-haspopup', 'listbox');
-        el.setAttribute('aria-label', '選擇提示詞組');
+        el.setAttribute('aria-label', dsI18n.t('dropdownComboboxAriaLabel'));
 
         // 觸發器按鈕
         const trigger = document.createElement('button');
@@ -150,7 +150,7 @@
         menu.id = MENU_ID;
         menu.className = 'dss-preset-menu';
         menu.setAttribute('role', 'listbox');
-        menu.setAttribute('aria-label', '提示詞組列表');
+        menu.setAttribute('aria-label', dsI18n.t('dropdownListboxAriaLabel'));
         menu.hidden = true;
         document.body.appendChild(menu);
 
@@ -433,7 +433,25 @@
             open,
             close,
             toggle,
-            destroy
+            destroy,
+
+            /** 語系切換時更新顯示文字（placeholder / emptyOption） */
+            updateLocale: function () {
+                placeholderText = DEFAULT_PLACEHOLDER_TEXT();
+                emptyOptionText = DEFAULT_EMPTY_OPTION_TEXT();
+                // 更新 label（若目前為 placeholder 狀態）
+                if (currentValue === '') {
+                    label.textContent = placeholderText;
+                }
+                // 重建 optionData 與選單中空選項的 DOM
+                if (optionData.length > 0) {
+                    optionData[0].name = emptyOptionText;
+                    var emptyOptionEl = menu.querySelector('.dss-preset-option[data-value=""]');
+                    if (emptyOptionEl) {
+                        emptyOptionEl.textContent = emptyOptionText;
+                    }
+                }
+            }
         };
     }
 

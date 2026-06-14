@@ -30,18 +30,18 @@ function createPresetManager(ctx) {
         if (!current) return;
 
         const newName = await ctx.Modal.prompt({
-            title: '重新命名',
+            title: dsI18n.t('renamePresetTitle'),
             value: current.name,
-            placeholder: '請輸入新名稱...'
+            placeholder: dsI18n.t('renamePresetPlaceholder')
         });
 
         if (!newName || newName === current.name) return;
 
         if (presets.some(p => p.name === newName && p.id !== current.id)) {
             await ctx.Modal.confirm({
-                title: '名稱重複',
-                message: `「${newName}」已存在，請使用不同的名稱。`,
-                confirmText: '確定',
+                title: dsI18n.t('duplicateNameTitlePresetManager'),
+                message: dsI18n.t('duplicateNameMessagePresetManager', { name: newName }),
+                confirmText: dsI18n.t('confirmButtonPresetManager'),
                 cancelText: null
             });
             return;
@@ -62,9 +62,9 @@ function createPresetManager(ctx) {
         if (!current) return;
 
         const isConfirmed = await ctx.Modal.confirm({
-            title: '刪除提示詞組',
-            message: `確定要刪除「${current.name}」嗎？此操作無法復原。`,
-            confirmText: '刪除',
+            title: dsI18n.t('deletePresetTitle'),
+            message: dsI18n.t('deletePresetMessage', { name: current.name }),
+            confirmText: dsI18n.t('deleteButton'),
             variant: 'danger'
         });
 

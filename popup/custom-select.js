@@ -100,11 +100,11 @@
         function _updateTrigger() {
             const activeId = getActivePresetId();
             if (!activeId) {
-                valueEl.textContent = '（無提示詞組）';
+                valueEl.textContent = dsI18n.t('noPresetOptionCustomSelect');
                 return;
             }
             const preset = getPresets().find(p => p.id === activeId);
-            valueEl.textContent = preset ? preset.name : '（無提示詞組）';
+            valueEl.textContent = preset ? preset.name : dsI18n.t('noPresetOptionCustomSelect');
         }
 
         function _renderList() {
@@ -135,8 +135,8 @@
                 item.innerHTML =
                     `<span class="ds-select__drag-handle" aria-hidden="true">⠿</span>` +
                     `<span class="ds-select__item-name">${_escapeHtml(p.name)}</span>` +
-                    `<button class="ds-select__item-btn ds-select__item-btn--edit" type="button" aria-label="重新命名">✎</button>` +
-                    `<button class="ds-select__item-btn ds-select__item-btn--delete" type="button" aria-label="刪除">✕</button>`;
+                    `<button class="ds-select__item-btn ds-select__item-btn--edit" type="button" aria-label="${dsI18n.t('renameAriaLabel')}">✎</button>` +
+                    `<button class="ds-select__item-btn ds-select__item-btn--delete" type="button" aria-label="${dsI18n.t('deleteAriaLabel')}">✕</button>`;
                 listEl.appendChild(item);
             });
 

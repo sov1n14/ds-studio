@@ -97,8 +97,8 @@
             buildDOM() {
                 this.dropdown = createPresetDropdown({
                     onChange: (id) => this.onSelectChange(id),
-                    placeholderText: '選擇提示詞',
-                    emptyOptionText: '（無）'
+                    placeholderText: dsI18n.t('dropdownPlaceholder'),
+                    emptyOptionText: dsI18n.t('dropdownEmptyOption')
                 });
                 this.wrapperEl = this.dropdown.el;
             },
@@ -410,6 +410,17 @@
                 this.findAndMount();
                 this.render(presets, activeId);
                 if (enable !== undefined) this.setVisible(enable);
+
+                // 即時語系切換：監聽 i18n 變更事件
+                if (!this._localeListenerAttached) {
+                    this._localeListenerAttached = true;
+                    var self = this;
+                    document.addEventListener('dsI18n-locale-changed', function () {
+                        if (self.dropdown && self.dropdown.updateLocale) {
+                            self.dropdown.updateLocale();
+                        }
+                    });
+                }
             }
         };
 

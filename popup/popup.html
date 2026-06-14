@@ -17,7 +17,7 @@
                 <header>
                     <div class="header-left">
                         <h1>DS studio</h1>
-                        <span id="saveStatus" class="status-hidden">已儲存</span>
+                        <span id="saveStatus" class="status-hidden" data-i18n="saveStatus">已儲存</span>
                         <span id="syncStatus"></span>
                     </div>
                     <label class="switch">
@@ -32,10 +32,12 @@
                 <div class="card-title">Global Prompt</div>
                 <div class="global-prompt-row">
                     <div class="global-prompt-label">
-                        <label>全域預設提示詞</label>
+                        <label data-i18n="globalPromptLabel">全域預設提示詞</label>
                         <button id="editGlobalPromptBtn"
                                 class="icon-btn"
-                                title="編輯全域預設提示詞">
+                                title="編輯全域預設提示詞"
+                                data-i18n="editGlobalPromptTitle"
+                                data-i18n-attr="title">
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
                                 <path d="M10 4 L12 6"/>
@@ -55,7 +57,7 @@
                 <div class="card-title">Prompt Group</div>
                 <div class="input-group">
                     <div class="preset-selector">
-                        <label>提示詞組</label>
+                        <label data-i18n="presetGroupLabel">提示詞組</label>
                         <div class="preset-controls">
                             <div id="presetSelect"
                                  class="ds-select"
@@ -68,8 +70,8 @@
                             </div>
                             <!-- 操作按鈕：新增在左，鉛筆（編輯）在右 -->
                             <div class="preset-actions">
-                                <button id="addPresetBtn" class="icon-btn" title="新增提示詞組">+</button>
-                                <button id="editPresetBtn" class="icon-btn" title="編輯提示詞組內容" disabled>
+                                <button id="addPresetBtn" class="icon-btn" title="新增提示詞組" data-i18n="addPresetTitle" data-i18n-attr="title">+</button>
+                                <button id="editPresetBtn" class="icon-btn" title="編輯提示詞組內容" data-i18n="editPresetContentTitle" data-i18n-attr="title" disabled>
                                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                         <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
                                         <path d="M10 4 L12 6"/>
@@ -81,22 +83,26 @@
                                  class="ds-select__panel"
                                  role="listbox"
                                  aria-label="提示詞組清單"
+                                 data-i18n="presetSelectPanelAriaLabel"
+                                 data-i18n-attr="aria-label"
                                  hidden>
                                 <div class="ds-select__search-row">
                                     <input type="text"
                                            id="presetSearchInput"
                                            class="ds-select__search-input"
                                            placeholder="搜尋提示詞組"
+                                           data-i18n="searchPresetPlaceholder"
+                                           data-i18n-attr="placeholder"
                                            autocomplete="off">
                                 </div>
                                 <div class="ds-select__item ds-select__item--empty"
                                      role="option"
                                      data-id=""
                                      data-blank="true">
-                                    <span class="ds-select__item-name">（無提示詞組）</span>
+                                    <span class="ds-select__item-name" data-i18n="noPresetOption">（無提示詞組）</span>
                                 </div>
                                 <div id="presetSelectList" class="ds-select__list"></div>
-                                <div id="presetSelectEmptyHint" class="ds-select__empty-hint" hidden>無相符結果</div>
+                                <div id="presetSelectEmptyHint" class="ds-select__empty-hint" data-i18n="noSearchResultsHint" hidden>無相符結果</div>
                             </div>
                         </div>
                     </div>
@@ -108,20 +114,20 @@
                 <div class="card-title-row">
                     <div class="card-title">Backup & Restore</div>
                     <div class="card-title-actions">
-                        <button id="clearRestoredBtn" class="btn btn-outline btn-xs">清除所有已還原紀錄</button>
-                        <button id="forceSyncBtn" class="btn btn-outline btn-xs">手動同步</button>
+                        <button id="clearRestoredBtn" class="btn btn-outline btn-xs" data-i18n="clearRestoredRecordsButton">清除所有已還原紀錄</button>
+                        <button id="forceSyncBtn" class="btn btn-outline btn-xs" data-i18n="manualSyncButton">手動同步</button>
                     </div>
                 </div>
                 <div class="input-group input-group--row">
-                    <span class="io-label">匯出：</span>
-                    <button id="exportJsonBtn" class="btn btn--flex">JSON 設定</button>
-                    <button id="exportRestoredBtn" class="btn btn--flex">復原信息備份</button>
+                    <span class="io-label" data-i18n="exportLabel">匯出：</span>
+                    <button id="exportJsonBtn" class="btn btn--flex" data-i18n="exportJsonSettingsButton">JSON 設定</button>
+                    <button id="exportRestoredBtn" class="btn btn--flex" data-i18n="exportRestoredBackupButton">復原信息備份</button>
                     <input type="file" id="importJsonInput" accept=".json" hidden>
                 </div>
                 <div class="input-group input-group--row">
-                    <span class="io-label">匯入：</span>
-                    <button id="importJsonBtn" class="btn btn-outline btn--flex">JSON 設定</button>
-                    <button id="importRestoredBtn" class="btn btn-outline btn--flex">復原信息備份</button>
+                    <span class="io-label" data-i18n="importLabel">匯入：</span>
+                    <button id="importJsonBtn" class="btn btn-outline btn--flex" data-i18n="importJsonSettingsButton">JSON 設定</button>
+                    <button id="importRestoredBtn" class="btn btn-outline btn--flex" data-i18n="importRestoredBackupButton">復原信息備份</button>
                     <input type="file" id="importRestoredInput" accept=".json" hidden>
                 </div>
             </div>
@@ -129,21 +135,41 @@
 
         <div class="column">
             <div class="card">
-                <div class="card-title">Features & Export</div>
+                <div class="card-title-row">
+                    <div class="card-title">Features & Export</div>
+                    <div class="card-title-actions">
+                        <button id="localeSwitcherBtn" class="icon-btn" title="Switch Language">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M2 12h20"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                        </button>
+                        <!-- 語言面板（預設隱藏） -->
+                        <div id="localePanel" class="locale-panel" hidden>
+                            <label class="locale-option">
+                                <input type="radio" name="locale" value="zh_TW"> 中文
+                            </label>
+                            <label class="locale-option">
+                                <input type="radio" name="locale" value="en"> English
+                            </label>
+                        </div>
+                    </div>
+                </div>
                 <div class="input-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="includeThinkingToggle" checked>
-                        <label for="includeThinkingToggle">匯出包含思考過程 (Thinking Process)</label>
+                        <label for="includeThinkingToggle" data-i18n="includeThinkingLabel">匯出包含思考過程 (Thinking Process)</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="includeReferencesToggle" checked>
-                        <label for="includeReferencesToggle">匯出包含參考連結 (Reference Links)</label>
+                        <label for="includeReferencesToggle" data-i18n="includeReferencesLabel">匯出包含參考連結 (Reference Links)</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="showSystemTimeToggle">
-                        <label for="showSystemTimeToggle">在訊息開頭注入目前系統時間</label>
+                        <label for="showSystemTimeToggle" data-i18n="showSystemTimeLabel">在訊息開頭注入目前系統時間</label>
                     </div>
-                    <button id="exportMdBtn" class="btn">匯出當前頁面對話為 Markdown</button>
+                    <button id="exportMdBtn" class="btn" data-i18n="exportMarkdownButton">匯出當前頁面對話為 Markdown</button>
                 </div>
             </div>
 
@@ -152,28 +178,28 @@
                 <div class="input-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="sidebarAutoHideToggle">
-                        <label for="sidebarAutoHideToggle">側邊欄自動隱藏（保留 60px hover 展開）</label>
+                        <label for="sidebarAutoHideToggle" data-i18n="sidebarAutoHideLabel">側邊欄自動隱藏（保留 60px hover 展開）</label>
                     </div>
                 </div>
                 <div class="input-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="hideThinkingToggle">
-                        <label for="hideThinkingToggle">隱藏思考過程</label>
+                        <label for="hideThinkingToggle" data-i18n="hideThinkingLabel">隱藏思考過程</label>
                     </div>
                 </div>
                 <div class="input-group input-group--no-gap">
                     <div class="toggle-with-slider">
                         <div class="checkbox-group">
                             <input type="checkbox" id="chatWidthToggle">
-                            <label for="chatWidthToggle">對話區域寬度</label>
+                            <label for="chatWidthToggle" data-i18n="chatWidthLabel">對話區域寬度</label>
                         </div>
                         <span id="chatWidthValue" class="width-value">70%</span>
                     </div>
                     <div id="chatWidthSliderContainer" class="slider-container">
                         <input type="range" id="chatWidthSlider" min="30" max="100" value="70" step="1">
                         <div class="range-labels">
-                            <span>窄</span>
-                            <span>寬</span>
+                            <span data-i18n="narrowLabel">窄</span>
+                            <span data-i18n="wideLabel">寬</span>
                         </div>
                     </div>
                 </div>
@@ -181,15 +207,15 @@
                     <div class="toggle-with-slider">
                         <div class="checkbox-group">
                             <input type="checkbox" id="inputWidthToggle">
-                            <label for="inputWidthToggle">編輯輸入框寬度</label>
+                            <label for="inputWidthToggle" data-i18n="inputWidthLabel">編輯輸入框寬度</label>
                         </div>
                         <span id="inputWidthValue" class="width-value">70%</span>
                     </div>
                     <div id="inputWidthSliderContainer" class="slider-container">
                         <input type="range" id="inputWidthSlider" min="30" max="100" value="70" step="1">
                         <div class="range-labels">
-                            <span>窄</span>
-                            <span>寬</span>
+                            <span data-i18n="narrowLabel">窄</span>
+                            <span data-i18n="wideLabel">寬</span>
                         </div>
                     </div>
                 </div>
@@ -207,7 +233,7 @@
             <p id="modalMessage" class="modal-message"></p>
             <div class="modal-field">
                 <input id="modalInput" class="modal-input" type="text" autocomplete="off">
-                <span id="modalRequired" class="modal-required" hidden>* 必填</span>
+                <span id="modalRequired" class="modal-required" data-i18n="requiredIndicator" hidden>* 必填</span>
             </div>
             <div id="modalActions" class="modal-actions"></div>
         </div>
@@ -219,10 +245,12 @@
     <script src="../utils/storage-manager.presets.js"></script>
     <script src="../utils/storage-manager.js"></script>
     <script src="../utils/messaging.js"></script>
+    <script src="../utils/i18n.js"></script>
     <script src="custom-select.js"></script>
     <script src="popup.modal.js"></script>
     <script src="popup.preset-manager.js"></script>
     <script src="popup.backup-manager.js"></script>
     <script src="popup.js"></script>
+    <script src="popup.locale.js"></script>
 </body>
 </html>

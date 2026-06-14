@@ -412,7 +412,7 @@ function showHarvestToastScrolling() {
 
     const text = toast.querySelector('.dss-harvest-toast__text');
     if (text) {
-        text.textContent = '正在捲動至對話頂端…';
+        text.textContent = dsI18n.t('harvestScrollingToast');
     }
 
     // 捲動階段不顯示警示行
@@ -437,13 +437,13 @@ function showHarvestToastCapturing(capturedCount) {
     // 第一行：進度數量
     const text = toast.querySelector('.dss-harvest-toast__text');
     if (text) {
-        text.textContent = `正在擷取完整對話… 已擷取 ${capturedCount} 則`;
+        text.textContent = dsI18n.t('harvestCapturingToast', { count: capturedCount });
     }
 
     // 第二行：警示——整個擷取階段持續可見
     const warn = toast.querySelector('.dss-harvest-toast__warn');
     if (warn) {
-        warn.textContent = '⚠ 請勿捲動對話記錄，以免擷取失敗';
+        warn.textContent = dsI18n.t('harvestWarning');
         warn.style.display = '';
     }
 

@@ -285,7 +285,7 @@
             // Harvest 模組不存在（舊版相容回退：直接擷取目前可見訊息）
             var messages = document.querySelectorAll('.ds-virtual-list-visible-items .ds-message');
             if (!messages || messages.length === 0) {
-                alert('找不到對話紀錄。請確認您正在 DeepSeek 聊天頁面中。');
+                alert(dsI18n.t('exportNoConversationAlert'));
                 return;
             }
             var markdownContent = _buildMarkdownHeader();
@@ -301,7 +301,7 @@
 
         // Guard: 完全沒有訊息
         if (!harvestResult.items || harvestResult.items.length === 0) {
-            alert('找不到對話紀錄。請確認您正在 DeepSeek 聊天頁面中。');
+            alert(dsI18n.t('exportNoConversationAlert'));
             return;
         }
 

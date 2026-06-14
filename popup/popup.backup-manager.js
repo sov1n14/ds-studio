@@ -45,9 +45,9 @@ function createBackupManager(ctx) {
                 const blob = new Blob([dataStr], { type: 'application/json' });
                 const { yyyy, mm, dd } = _formatDate(new Date());
                 _triggerDownload(blob, `ds-studio-backup-${yyyy}${mm}${dd}.json`);
-                ctx.Toast.show('設定已成功匯出');
+                ctx.Toast.show(dsI18n.t('settingsExportedToast'));
             } catch (err) {
-                ctx.Toast.show('匯出失敗');
+                ctx.Toast.show(dsI18n.t('exportFailedToast'));
             }
         });
     }
@@ -69,16 +69,14 @@ function createBackupManager(ctx) {
                 const importedSettings = JSON.parse(text);
 
                 if (!importedSettings.promptPresets || !Array.isArray(importedSettings.promptPresets)) {
-                    throw new Error('無效的備份檔案格式');
+                    throw new Error(dsI18n.t('invalidBackupFormatError'));
                 }
 
                 const isConfirmed = await ctx.Modal.confirm({
-                    title: '還原設定',
-                    message: '確定要匯入嗎？\n' +
-                        '• 覆蓋：介面設定、對話綁定、全域提示詞\n' +
-                        '• 合併：提示詞組合（相同 ID 保留本地、新組合新增於後）',
-                    confirmText: '匯入並合併',
-                    cancelText:  '取消',
+                    title: dsI18n.t('restoreSettingsTitle'),
+                    message: dsI18n.t('restoreSettingsMessage'),
+                    confirmText: dsI18n.t('importAndMergeButton'),
+                    cancelText:  dsI18n.t('cancelButtonBackupManager'),
                     variant:     'danger'
                 });
 
@@ -90,14 +88,14 @@ function createBackupManager(ctx) {
                 await ctx.StorageManager.restoreSettings(importedSettings);
                 await ctx.refreshSyncStatus();
 
-                ctx.Toast.show('設定已成功還原，請重新整理頁面。');
+                ctx.Toast.show(dsI18n.t('settingsRestoredToast'));
                 setTimeout(() => window.location.reload(), 3000);
 
             } catch (err) {
                 await ctx.Modal.confirm({
-                    title: '還原失敗',
-                    message: '讀取備份檔案時發生錯誤：' + err.message,
-                    confirmText: '確定',
+                    title: dsI18n.t('restoreFailedTitle'),
+                    message: dsI18n.t('restoreFailedMessage', { message: err.message }),
+                    confirmText: dsI18n.t('confirmButtonBackupManager'),
                     cancelText:  null
                 });
             } finally {
@@ -117,9 +115,9 @@ function createBackupManager(ctx) {
                 const blob    = new Blob([dataStr], { type: 'application/json' });
                 const { yyyy, mm, dd } = _formatDate(new Date());
                 _triggerDownload(blob, `ds-studio-restore-backup-${yyyy}-${mm}-${dd}.json`);
-                ctx.Toast.show('復原備份已成功匯出');
+                ctx.Toast.show(dsI18n.t('restoredBackupExportedToast'));
             } catch (err) {
-                ctx.Toast.show('匯出失敗');
+                ctx.Toast.show(dsI18n.t('exportFailedToast'));
             }
         });
     }
@@ -141,22 +139,22 @@ function createBackupManager(ctx) {
                 const importedData = JSON.parse(text);
 
                 if (!importedData.restored_messages || typeof importedData.restored_messages !== 'object') {
-                    throw new Error('無效的備份檔案格式：缺少 restored_messages');
+                    throw new Error(dsI18n.t('invalidRestoredBackupFormatError'));
                 }
 
                 const existing = await chrome.storage.local.get('restored_messages');
                 const merged   = { ...(existing.restored_messages || {}), ...importedData.restored_messages };
 
                 await chrome.storage.local.set({ restored_messages: merged });
-                ctx.Toast.show('復原備份已成功匯入');
+                ctx.Toast.show(dsI18n.t('restoredBackupImportedToast'));
 
                 // 重新載入 popup 以更新開關狀態
                 setTimeout(() => window.location.reload(), 1500);
             } catch (err) {
                 await ctx.Modal.confirm({
-                    title: '匯入失敗',
-                    message: '讀取備份檔案時發生錯誤：' + err.message,
-                    confirmText: '確定',
+                    title: dsI18n.t('importFailedTitle'),
+                    message: dsI18n.t('importFailedMessage', { message: err.message }),
+                    confirmText: dsI18n.t('confirmButtonImportFailed'),
                     cancelText:  null
                 });
             } finally {
@@ -170,10 +168,10 @@ function createBackupManager(ctx) {
         if (!clearRestoredBtn) return;
         clearRestoredBtn.addEventListener('click', async () => {
             const isConfirmed = await ctx.Modal.confirm({
-                title: '清除已還原紀錄',
-                message: '確定要清除所有已還原內容嗎？此操作無法復原。',
-                confirmText: '清除',
-                cancelText:  '取消',
+                title: dsI18n.t('clearRestoredRecordsTitle'),
+                message: dsI18n.t('clearRestoredRecordsMessage'),
+                confirmText: dsI18n.t('clearButton'),
+                cancelText:  dsI18n.t('cancelButtonClearRestored'),
                 variant:     'danger'
             });
 
@@ -191,9 +189,9 @@ function createBackupManager(ctx) {
                     }
                 }
 
-                ctx.Toast.show('已清除所有復原紀錄');
+                ctx.Toast.show(dsI18n.t('restoredRecordsClearedToast'));
             } catch (err) {
-                ctx.Toast.show('清除失敗');
+                ctx.Toast.show(dsI18n.t('clearFailedToast'));
             }
         });
     }

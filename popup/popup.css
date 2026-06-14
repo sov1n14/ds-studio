@@ -61,6 +61,37 @@ header {
     align-items: center;
 }
 
+/* ── 語言切換面板 ── */
+.locale-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    min-width: 130px;
+}
+.locale-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+.locale-option:hover {
+    background: var(--body-bg);
+}
+.locale-option input[type="radio"] {
+    margin: 0;
+    accent-color: var(--primary-color);
+}
+
 .card {
     background-color: var(--bg-color);
     border-radius: 10px;
@@ -84,12 +115,14 @@ header {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 0;
+    position: relative;
 }
 
 .card-title-actions {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    position: relative;
 }
 
 h1 {

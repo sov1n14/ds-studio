@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "DS studio",
+    "description": "Extension name"
+  },
+  "extDesc": {
+    "message": "自動為 chat.deepseek.com 注入提示詞、匯出對話、恢復審查回覆，強化 DeepSeek 使用體驗",
+    "description": "Extension description"
+  }
+}

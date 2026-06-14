@@ -94,7 +94,7 @@ html[data-theme="dark"] .dss-quote-btn {
             _btnEl = document.createElement('div');
             _btnEl.className = 'dss-quote-btn';
             _btnEl.style.display = 'none';
-            _btnEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"></path></svg><span>引用回覆</span>`;
+            _btnEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"></path></svg><span>${dsI18n.t('quoteReplyBtnLabel')}</span>`;
 
             _btnEl.addEventListener('mousedown', (e) => {
                 e.preventDefault();
@@ -256,6 +256,18 @@ html[data-theme="dark"] .dss-quote-btn {
 
         document.addEventListener('mousedown', (e) => {
             if (_btnEl && !_btnEl.contains(e.target)) QuoteReply.hideButton();
+        });
+
+        // 即時語系切換：更新已存在的按鈕文字
+        document.addEventListener('dsI18n-locale-changed', function () {
+            if (_btnEl) {
+                var svg = _btnEl.querySelector('svg');
+                _btnEl.innerHTML = '';
+                if (svg) _btnEl.appendChild(svg);
+                var span = document.createElement('span');
+                span.textContent = dsI18n.t('quoteReplyBtnLabel');
+                _btnEl.appendChild(span);
+            }
         });
     },
 };
