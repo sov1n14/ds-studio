@@ -34,7 +34,7 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `syncConflictPending` | boolean | `false` | Whether a sync conflict needs user resolution (local-only). |
 | `restored_messages` | object | `{}` | Stores censor-restored messages keyed by message ID (local-only, excluded from sync). |
 | `dsLocalAuth` | `string[]` | `[]` | List of keys where local storage is authoritative over sync (local-only, used for Plan A fallback). |
-| `promptPresets` | `PromptPreset[]` | — | *Retired in v1.7.0*: Replaced by `dsPresetIndex` and individual keys. |
+| `promptPresets` | `PromptPreset[]` | — | *Retired as a storage key in v1.7.0*: Replaced by `dsPresetIndex` + `dsPreset_<id>` per-key format. Still composed as a runtime property in `getSettings()` return value. |
 
 ### PromptPreset Interface
 

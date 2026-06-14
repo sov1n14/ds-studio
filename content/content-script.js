@@ -29,7 +29,7 @@ var downloadMarkdown             = __DSExport.downloadMarkdown;
 var formatSystemTime             = __DSExport.formatSystemTime;
 var formatTimezoneOffset         = __DSExport.formatTimezoneOffset;
 
-// ── PresetOverlay factory（由 content-script.overlay.js 在前載入） ────────────
+// ── PresetOverlay factory（由 preset-overlay.controller.js 在前載入） ────────
 // 取得 factory 參照並以 ctx 物件實例化，ctx 的 getter/setter 直接讀寫本模組的
 // let 變數，確保 __setState/__getState 的異動對 overlay 即時可見，反之亦然。
 var __overlayFactory = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_PresetOverlay ||
