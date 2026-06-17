@@ -10,6 +10,8 @@
     var originalOpen = XMLHttpRequest.prototype.open;
     var originalSend = XMLHttpRequest.prototype.send;
     var pendingStates = new Map();
+    var originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+    var lastCapturedAuth = null;
 
     // 需攔截的端點路徑清單：一般補全與訊息編輯均使用相同的 SSE 回應格式
     var INTERCEPTED_ENDPOINTS = ['/api/v0/chat/completion', '/api/v0/chat/edit_message'];
@@ -84,5 +86,14 @@
         });
 
         return originalSend.apply(xhr, arguments);
+    };
+
+    // 攔截 setRequestHeader 以擷取 authorization token（適用於所有 XHR 請求）
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+        if (name.toLowerCase() === 'authorization' && value !== lastCapturedAuth) {
+            lastCapturedAuth = value;
+            window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization: value }, '*');
+        }
+        return originalSetRequestHeader.apply(this, arguments);
     };
 })();
