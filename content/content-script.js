@@ -452,18 +452,19 @@ window.addEventListener('message', (e) => {
     capturedAuthToken = e.data.authorization || null;
 });
 
-// 偵測頁面重新整理（Navigation API，Chrome 102+）；跨域導航不觸發 navigate 事件，故不受影響
+// 偵測頁面重新整理：Navigation API（Chrome 102+）涵蓋瀏覽器重新整理按鈕與程式化 reload
 if (typeof window.navigation !== 'undefined') {
     window.navigation.addEventListener('navigate', (event) => {
-        isPageRefresh = (event.destination.url === window.location.href);
+        isPageRefresh = (event.navigationType === 'reload');
     });
-} else {
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r') || (e.metaKey && e.key.toLowerCase() === 'r')) {
-            isPageRefresh = true;
-        }
-    }, true);
 }
+
+// 鍵盤快捷鍵偵測（F5/Ctrl+R/Cmd+R）作為補充保障（與 Navigation API 並行，非互斥）
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r') || (e.metaKey && e.key.toLowerCase() === 'r')) {
+        isPageRefresh = true;
+    }
+}, true);
 
 // 離開網站時（關閉分頁、跨域導航等）刪除當前 session；重新整理除外
 window.addEventListener('beforeunload', () => {
