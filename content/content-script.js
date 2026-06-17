@@ -17,8 +17,6 @@ let chatPresetMap = {};
 let pendingPresetId = null;
 let awaitingNewChatUuid = false;
 let awaitingNewChatUuidTimer = null;
-let capturedAuthToken = null;
-let isPageRefresh = false;
 
 // 綁定 Export 模組（瀏覽器：由 content-script.export.js 在前載入；Node.js 測試：直接 require）
 var __DSExport = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_ContentExport ||
@@ -146,30 +144,6 @@ function markChatCreationAttempt() {
     }, 5000);
 }
 
-// POC: 刪除指定聊天 session（離開對話時呼叫）
-async function deleteChatSession(chatUuid, { keepalive = false } = {}) {
-    if (!capturedAuthToken || !chatUuid) return;
-    try {
-        await fetch('https://chat.deepseek.com/api/v0/chat_session/delete', {
-            method: 'POST',
-            keepalive,
-            headers: {
-                'authorization': capturedAuthToken,
-                'content-type': 'application/json',
-                'x-app-version': '2.0.0',
-                'x-client-bundle-id': 'com.deepseek.chat',
-                'x-client-locale': 'zh_Hant',
-                'x-client-platform': 'web',
-                'x-client-timezone-offset': '28800',
-                'x-client-version': '2.0.0',
-            },
-            body: JSON.stringify({ chat_session_id: chatUuid }),
-        });
-    } catch {
-        // POC: 靜默忽略網路錯誤
-    }
-}
-
 // 根據當前聊天 UUID 綁定重新計算 promptPrefix；無綁定則清空。
 async function updatePromptPrefixFromBinding() {
     let presetId = null;
@@ -192,9 +166,15 @@ async function updatePromptPrefixFromBinding() {
 async function handleChatChange() {
     const newUuid = extractUuidFromUrl();
 
-    // POC: 離開當前對話前先刪除該 session
+    // 通知 temporary-chat-delete 模組使用者已離開該對話
     if (currentChatUuid && currentChatUuid !== newUuid) {
-        deleteChatSession(currentChatUuid);
+        const DSS_CHAT_LEFT_EVENT =
+            (typeof globalThis !== 'undefined' && globalThis.DSS_CHAT_LEFT_EVENT) ||
+            (typeof window !== 'undefined' && window.DSS_CHAT_LEFT_EVENT) ||
+            'dss-chat-left';
+        window.dispatchEvent(new CustomEvent(DSS_CHAT_LEFT_EVENT, {
+            detail: { chatUuid: currentChatUuid },
+        }));
     }
 
     if (!newUuid) {
@@ -445,33 +425,6 @@ initSettings().catch(e => {
     if (e?.message?.includes('Extension context invalidated')) return;
 });
 
-// 監聽來自 MAIN world XHR hook 擷取的 authorization token
-window.addEventListener('message', (e) => {
-    if (e.source !== window) return;
-    if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
-    capturedAuthToken = e.data.authorization || null;
-});
-
-// 偵測頁面重新整理：Navigation API（Chrome 102+）涵蓋瀏覽器重新整理按鈕與程式化 reload
-if (typeof window.navigation !== 'undefined') {
-    window.navigation.addEventListener('navigate', (event) => {
-        isPageRefresh = (event.navigationType === 'reload');
-    });
-}
-
-// 鍵盤快捷鍵偵測（F5/Ctrl+R/Cmd+R）作為補充保障（與 Navigation API 並行，非互斥）
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r') || (e.metaKey && e.key.toLowerCase() === 'r')) {
-        isPageRefresh = true;
-    }
-}, true);
-
-// 離開網站時（關閉分頁、跨域導航等）刪除當前 session；重新整理除外
-window.addEventListener('beforeunload', () => {
-    if (isPageRefresh || !currentChatUuid || !capturedAuthToken) return;
-    deleteChatSession(currentChatUuid, { keepalive: true });
-});
-
 // Popup 訊息監聽
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'EXPORT_MARKDOWN') {
@@ -497,7 +450,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         extractUuidFromUrl,
         buildInjectionPrefix,
-        deleteChatSession,
         parseHtmlToMarkdown,
         convertMessageNodeToMarkdown,
         exportConversationToMarkdown,
@@ -515,8 +467,6 @@ if (typeof module !== 'undefined' && module.exports) {
             isGlobalPromptEnabled = true; showSystemTime = false;
             currentChatUuid = null; chatPresetMap = {};
             pendingPresetId = null; awaitingNewChatUuid = false;
-            capturedAuthToken = null;
-            isPageRefresh = false;
         },
         __setState: (s) => {
             if ('isEnabled' in s) isEnabled = s.isEnabled;
@@ -528,8 +478,7 @@ if (typeof module !== 'undefined' && module.exports) {
             if ('chatPresetMap' in s) chatPresetMap = s.chatPresetMap;
             if ('pendingPresetId' in s) pendingPresetId = s.pendingPresetId;
             if ('awaitingNewChatUuid' in s) awaitingNewChatUuid = s.awaitingNewChatUuid;
-            if ('capturedAuthToken' in s) capturedAuthToken = s.capturedAuthToken;
-            if ('isPageRefresh' in s) isPageRefresh = s.isPageRefresh; },
+        },
         __getState: () => ({
             isEnabled,
             promptPrefix,
@@ -540,8 +489,6 @@ if (typeof module !== 'undefined' && module.exports) {
             chatPresetMap,
             pendingPresetId,
             awaitingNewChatUuid,
-            capturedAuthToken,
-            isPageRefresh,
         }),
     };
 }

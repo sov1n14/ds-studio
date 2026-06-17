@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 import contentScript from '../../content/content-script.js';
 
-const s = () => contentScript.__getState();
+// ── Helper ────────────────────────────────────────────────────────────────────
+function setPathname(path) {
+    window.history.replaceState({}, '', path);
+}
+
+// ── deleteChatSession guard clauses & API shape ───────────────────────────────
 
 describe('deleteChatSession', () => {
     beforeEach(() => {
-        contentScript.__resetState();
+        TemporaryChatDelete.__resetState();
         global.fetch = vi.fn().mockResolvedValue({ ok: true });
     });
 
@@ -15,32 +21,29 @@ describe('deleteChatSession', () => {
     });
 
     it('returns early without calling fetch when capturedAuthToken is null', async () => {
-        contentScript.__setState({ capturedAuthToken: null });
-        await contentScript.deleteChatSession('some-uuid');
-
+        TemporaryChatDelete.__setState({ capturedAuthToken: null });
+        await TemporaryChatDelete.deleteChatSession('some-uuid');
         expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('returns early without calling fetch when chatUuid is null', async () => {
-        contentScript.__setState({ capturedAuthToken: 'Bearer token123' });
-        await contentScript.deleteChatSession(null);
-
+        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token123' });
+        await TemporaryChatDelete.deleteChatSession(null);
         expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('returns early without calling fetch when chatUuid is an empty string', async () => {
-        contentScript.__setState({ capturedAuthToken: 'Bearer token123' });
-        await contentScript.deleteChatSession('');
-
+        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token123' });
+        await TemporaryChatDelete.deleteChatSession('');
         expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('calls fetch with correct URL, method, headers, and body when token and uuid are present', async () => {
         const token = 'Bearer test-auth-token';
         const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        contentScript.__setState({ capturedAuthToken: token });
+        TemporaryChatDelete.__setState({ capturedAuthToken: token });
 
-        await contentScript.deleteChatSession(uuid);
+        await TemporaryChatDelete.deleteChatSession(uuid);
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         const [url, options] = global.fetch.mock.calls[0];
@@ -51,17 +54,42 @@ describe('deleteChatSession', () => {
         expect(options.body).toBe(JSON.stringify({ chat_session_id: uuid }));
     });
 
+    it('passes keepalive: true when requested', async () => {
+        const token = 'Bearer keepalive-token';
+        const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+        TemporaryChatDelete.__setState({ capturedAuthToken: token });
+
+        await TemporaryChatDelete.deleteChatSession(uuid, { keepalive: true });
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const [, options] = global.fetch.mock.calls[0];
+        expect(options.keepalive).toBe(true);
+    });
+
+    it('passes keepalive: false by default', async () => {
+        const token = 'Bearer default-token';
+        const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+        TemporaryChatDelete.__setState({ capturedAuthToken: token });
+
+        await TemporaryChatDelete.deleteChatSession(uuid);
+
+        const [, options] = global.fetch.mock.calls[0];
+        expect(options.keepalive).toBe(false);
+    });
+
     it('swallows fetch errors silently without throwing', async () => {
-        contentScript.__setState({ capturedAuthToken: 'Bearer token123' });
+        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token123' });
         global.fetch = vi.fn().mockRejectedValue(new Error('Network failure'));
 
-        await expect(contentScript.deleteChatSession('some-uuid')).resolves.toBeUndefined();
+        await expect(TemporaryChatDelete.deleteChatSession('some-uuid')).resolves.toBeUndefined();
     });
 });
 
-describe('beforeunload handler', () => {
+// ── beforeunload handler ──────────────────────────────────────────────────────
+
+describe('beforeunload handler (TemporaryChatDelete)', () => {
     beforeEach(() => {
-        contentScript.__resetState();
+        TemporaryChatDelete.__resetState();
         global.fetch = vi.fn().mockResolvedValue({ ok: true });
     });
 
@@ -69,12 +97,13 @@ describe('beforeunload handler', () => {
         vi.restoreAllMocks();
     });
 
-    it('calls deleteChatSession with keepalive when leaving site', () => {
+    it('calls deleteChatSession with keepalive when enabled and leaving site', () => {
         const token = 'Bearer leave-token';
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
-        contentScript.__setState({ capturedAuthToken: token, currentChatUuid: uuid });
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({ capturedAuthToken: token, isEnabled: true });
 
-        window.dispatchEvent(new Event('beforeunload'));
+        TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         const [url, options] = global.fetch.mock.calls[0];
@@ -83,66 +112,57 @@ describe('beforeunload handler', () => {
     });
 
     it('does NOT call fetch when isPageRefresh is true', () => {
-        contentScript.__setState({
+        const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
             capturedAuthToken: 'Bearer token',
-            currentChatUuid: 'ffffffff-0000-0000-0000-ffffffffffff',
+            isEnabled: true,
             isPageRefresh: true,
         });
 
-        window.dispatchEvent(new Event('beforeunload'));
+        TemporaryChatDelete.handleBeforeUnload();
+
+        expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call fetch when isEnabled is false', () => {
+        const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token', isEnabled: false });
+
+        TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('does NOT call fetch when capturedAuthToken is null', () => {
-        contentScript.__setState({ currentChatUuid: 'ffffffff-0000-0000-0000-ffffffffffff' });
+        const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({ isEnabled: true });
 
-        window.dispatchEvent(new Event('beforeunload'));
+        TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('does NOT call fetch when currentChatUuid is null', () => {
-        contentScript.__setState({ capturedAuthToken: 'Bearer token' });
+    it('does NOT call fetch when URL has no chat UUID', () => {
+        setPathname('/');
+        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token', isEnabled: true });
 
-        window.dispatchEvent(new Event('beforeunload'));
+        TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.fetch).not.toHaveBeenCalled();
     });
 });
 
-describe('isPageRefresh state machinery', () => {
-    beforeEach(() => {
-        contentScript.__resetState();
-    });
+// ── handleChatChange dispatches 'dss-chat-left' event ────────────────────────
 
-    it('isPageRefresh starts as false after __resetState', () => {
-        expect(contentScript.__getState().isPageRefresh).toBe(false);
-    });
-
-    it('isPageRefresh can be set to true via __setState', () => {
-        contentScript.__setState({ isPageRefresh: true });
-        expect(contentScript.__getState().isPageRefresh).toBe(true);
-    });
-
-    it('__resetState resets isPageRefresh to false', () => {
-        contentScript.__setState({ isPageRefresh: true });
-        contentScript.__resetState();
-        expect(contentScript.__getState().isPageRefresh).toBe(false);
-    });
-});
-
-describe('handleChatChange — deleteChatSession integration', () => {
-    function setPathname(path) {
-        window.history.replaceState({}, '', path);
-    }
-
+describe('handleChatChange — dispatches dss-chat-left event', () => {
     beforeEach(async () => {
         await new Promise(r => setTimeout(r, 0));
         contentScript.__resetState();
         global.fetch = vi.fn().mockResolvedValue({ ok: true });
 
-        // Clear storage keys used by handleChatChange
         await chrome.storage.local.remove([
             'chatPresetMap', 'dsPresetIndex', 'activePresetId', 'syncInitialized',
         ]);
@@ -155,45 +175,52 @@ describe('handleChatChange — deleteChatSession integration', () => {
         vi.restoreAllMocks();
     });
 
-    it('calls deleteChatSession with the OLD uuid when navigating away from a known chat', async () => {
+    it('dispatches dss-chat-left with the OLD uuid when navigating away from a known chat', async () => {
         const oldUuid = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';
         const newUuid = 'bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb';
-        const token = 'Bearer nav-token';
 
-        contentScript.__setState({ currentChatUuid: oldUuid, capturedAuthToken: token });
+        contentScript.__setState({ currentChatUuid: oldUuid });
         setPathname(`/a/chat/s/${newUuid}`);
+
+        const events = [];
+        window.addEventListener('dss-chat-left', (e) => events.push(e.detail));
 
         await contentScript.handleChatChange();
 
-        // fetch should have been called for the delete of oldUuid
-        expect(global.fetch).toHaveBeenCalledWith(
-            'https://chat.deepseek.com/api/v0/chat_session/delete',
-            expect.objectContaining({
-                method: 'POST',
-                body: JSON.stringify({ chat_session_id: oldUuid }),
-            })
-        );
+        window.removeEventListener('dss-chat-left', events);
+        expect(events.length).toBe(1);
+        expect(events[0].chatUuid).toBe(oldUuid);
     });
 
-    it('does NOT call deleteChatSession on first load when currentChatUuid is null', async () => {
+    it('does NOT dispatch dss-chat-left on first load when currentChatUuid is null', async () => {
         const newUuid = 'cccccccc-3333-3333-3333-cccccccccccc';
 
-        contentScript.__setState({ currentChatUuid: null, capturedAuthToken: 'Bearer token' });
+        contentScript.__setState({ currentChatUuid: null });
         setPathname(`/a/chat/s/${newUuid}`);
 
+        const events = [];
+        const handler = (e) => events.push(e.detail);
+        window.addEventListener('dss-chat-left', handler);
+
         await contentScript.handleChatChange();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        window.removeEventListener('dss-chat-left', handler);
+        expect(events.length).toBe(0);
     });
 
-    it('does NOT call deleteChatSession when navigating to the same UUID (URL unchanged)', async () => {
+    it('does NOT dispatch dss-chat-left when navigating to the same UUID', async () => {
         const sameUuid = 'dddddddd-4444-4444-4444-dddddddddddd';
 
-        contentScript.__setState({ currentChatUuid: sameUuid, capturedAuthToken: 'Bearer token' });
+        contentScript.__setState({ currentChatUuid: sameUuid });
         setPathname(`/a/chat/s/${sameUuid}`);
+
+        const events = [];
+        const handler = (e) => events.push(e.detail);
+        window.addEventListener('dss-chat-left', handler);
 
         await contentScript.handleChatChange();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        window.removeEventListener('dss-chat-left', handler);
+        expect(events.length).toBe(0);
     });
 });

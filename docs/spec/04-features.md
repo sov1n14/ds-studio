@@ -77,3 +77,21 @@
   - **RESPONSE** 片段：透過 `_renderMarkdown()` 將原始 Markdown 渲染為 HTML，附加「⚠ 已復原內容」徽章。
   - **THINK** 片段：若存在思考過程，使用 `_buildThinkBlock()` 重建可折疊的思考區塊，顯示思考時間。
 - **舊鍵 migration**：`_loadRestoredMessages()` 載入時偵測不含 `::` 的舊式裸 message_id 鍵，依記錄內嵌的 `chat_session_id` 重新編鍵（null → `nosession::`，依嚴格比對規則永不匹配，透過 LRU 自然淘汰），並一次性寫回 storage。
+
+## 21. 臨時對話 (Temporary Conversation)
+
+- **目的**：開啟後，使用者離開某對話時自動呼叫 `POST https://chat.deepseek.com/api/v0/chat_session/delete`（body `{ "chat_session_id": "<uuid>" }`）將該對話刪除，達成「不留紀錄」的臨時提問。
+- **整體閘控（預設關閉）**：功能由首頁開關控制，預設關閉。關閉時整個功能停用——不擷取授權 token、不監聽導航/重新整理、不註冊 `beforeunload`、不刪除任何對話。
+- **共用契約**（`content/temporary-chat-constants.js`，載入順序最先以確保全域常數先就緒）：
+  - `DSS_TEMP_CHAT_STORAGE_KEY = 'dss-temporary-chat-enabled'`：sessionStorage 鍵，值 `'true'`/`'false'`，缺值或非 `'true'` 一律視為關閉。
+  - `DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed'`：開關狀態變更時由 toggle 模組於 window 派發，`detail: { isEnabled }`。
+  - `DSS_CHAT_LEFT_EVENT = 'dss-chat-left'`：`content-script.js` 的 `handleChatChange()` 在使用者離開對話（`currentChatUuid && currentChatUuid !== newUuid`）時於 window 派發，`detail: { chatUuid }`。
+- **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁運作；以 `MutationObserver` 等待 `div.aaff8b8f` 出現後，於其下方 38px 插入「開關（左）+ `臨時對話` 文字（右）」列。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。SPA 重新掛載時以 id 去重後重新注入。狀態變更時寫入 sessionStorage、更新視覺並派發 `dss-temporary-chat-changed`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
+- **授權擷取**：沿用 `censor-xhr-hook.js`（主 world）攔截 `setRequestHeader('authorization', ...)`，以 `window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization })` 廣播；`temporary-chat-delete.js` 僅在功能啟用時消費並暫存 token。
+- **刪除邏輯**（`content/temporary-chat-delete.js`）：
+  - `deleteChatSession(chatUuid, { keepalive })`：guard clause 缺 token 或缺 chatUuid 即不送出；以 `fetch` POST 帶 authorization 與 x-client-* 標頭。
+  - 監聽 `dss-chat-left`：啟用時對離開的 chatUuid 呼叫刪除（涵蓋 SPA 切換對話 / 上一頁 / 下一頁）。
+  - `beforeunload` 處理：啟用且非重新整理時，對當前 URL 的 chatUuid 以 `keepalive: true` 刪除（涵蓋關閉分頁/瀏覽器、導向外部頁面）。
+  - 重新整理偵測：Navigation API `navigationType === 'reload'` 搭配 F5 / Ctrl+R / Cmd+R 鍵盤偵測設定 `isPageRefresh`；重新整理與導向目前網址皆不刪除。
+- **啟用狀態管理**：初始化時讀取 sessionStorage；監聽 `dss-temporary-chat-changed` 以啟用/停用對應監聽，停用時不進行任何監聽工作。
+- **獨立性**：此功能不受彈出選單右上角主開關連動，僅由首頁開關獨立控制。

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "zh_TW",
   "name": "__MSG_extName__",
-  "version": "4.4.2",
+  "version": "4.5.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5m3yyRKn27CeKs8JGkaVRTRHLvqdyacX4c/WMpYohs1PXPY+xcB2CP9SDlPtocX5qZjmP7B+Qs/pWFc/vEvOWcorQhbebm6jiGS+ZAe75NemUSt7MCJV61THdtb30k1nPGxL8viEYb09B8ZWh+QEN4t+hHAHsMFf9EA9UPrJb7YgIrulQVIkWPT+2afjdlwe6oUeogpdN6QJK19qe52vf9dZXTt0AFw/ORk1c3PLKBIitM1l3RZYbrBiG2DwgJw6N5iSVgHwEq5qPCdkFXlEl9LnFWa4wviFV8OpaAdCC0B3Ud+QNWNJrBWeiVAMi4wamg34f0P6gXAbvS4nEfEkKwIDAQAB",
   "description": "__MSG_extDesc__",
   "permissions": [
@@ -59,7 +59,10 @@
         "content/preset-overlay.resolvers.js",
         "content/preset-settle.scheduler.js",
         "content/preset-overlay.controller.js",
+        "content/temporary-chat-constants.js",
         "content/content-script.js",
+        "content/temporary-chat-delete.js",
+        "content/temporary-chat-toggle.js",
         "content/edit-message-cleanup.js",
         "content/quote-reply.js",
         "content/go-top.locate.js",
@@ -69,7 +72,7 @@
         "content/mobile-sidebar-swipe.js",
         "content/mobile-homepage-cleanup.js"
       ],
-      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css"],
+      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css", "content/temporary-chat-toggle.css"],
       "run_at": "document_end"
     }
   ]
