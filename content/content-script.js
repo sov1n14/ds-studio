@@ -166,17 +166,6 @@ async function updatePromptPrefixFromBinding() {
 async function handleChatChange() {
     const newUuid = extractUuidFromUrl();
 
-    // 通知 temporary-chat-delete 模組使用者已離開該對話
-    if (currentChatUuid && currentChatUuid !== newUuid) {
-        const DSS_CHAT_LEFT_EVENT =
-            (typeof globalThis !== 'undefined' && globalThis.DSS_CHAT_LEFT_EVENT) ||
-            (typeof window !== 'undefined' && window.DSS_CHAT_LEFT_EVENT) ||
-            'dss-chat-left';
-        window.dispatchEvent(new CustomEvent(DSS_CHAT_LEFT_EVENT, {
-            detail: { chatUuid: currentChatUuid },
-        }));
-    }
-
     if (!newUuid) {
         currentChatUuid = null;
         promptPrefix = '';

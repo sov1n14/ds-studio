@@ -13,15 +13,25 @@ describe('temporary-chat-constants', () => {
         expect(constants.DSS_TEMP_CHAT_CHANGED_EVENT).toBe('dss-temporary-chat-changed');
     });
 
-    it('DSS_CHAT_LEFT_EVENT has the exact expected value', () => {
-        expect(constants.DSS_CHAT_LEFT_EVENT).toBe('dss-chat-left');
+    it('DSS_TEMP_CHAT_UUID_KEY has the exact expected value', () => {
+        expect(constants.DSS_TEMP_CHAT_UUID_KEY).toBe('dss-temporary-chat-uuid');
     });
 
-    it('exports exactly three constants (no extras)', () => {
+    it('DSS_CHAT_CREATE_MESSAGE_TYPE has the exact expected value', () => {
+        expect(constants.DSS_CHAT_CREATE_MESSAGE_TYPE).toBe('DSS_CHAT_CREATE_DETECTED');
+    });
+
+    it('DSS_CHAT_CREATE_ENDPOINT has the exact expected value', () => {
+        expect(constants.DSS_CHAT_CREATE_ENDPOINT).toBe('/api/v0/chat_session/create');
+    });
+
+    it('exports exactly five constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(3);
+        expect(keys).toHaveLength(5);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
-        expect(keys).toContain('DSS_CHAT_LEFT_EVENT');
+        expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
+        expect(keys).toContain('DSS_CHAT_CREATE_MESSAGE_TYPE');
+        expect(keys).toContain('DSS_CHAT_CREATE_ENDPOINT');
     });
 });

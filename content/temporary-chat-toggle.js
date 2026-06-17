@@ -3,6 +3,10 @@
  * 僅在首頁（pathname === '/'）注入切換開關 UI。
  * 單一職責：管理 UI 注入、使用者互動、sessionStorage 讀寫與事件 dispatch。
  * 常數由 temporary-chat-constants.js 在前載入提供。
+ *
+ * SPA-aware: listens to Navigation API (navigate) and popstate to inject/remove
+ * the toggle row whenever the pathname changes. The MutationObserver handles the
+ * case where the anchor element appears asynchronously after the route settles.
  */
 
 const TemporaryChatToggle = (() => {
@@ -130,66 +134,132 @@ const TemporaryChatToggle = (() => {
      * @param {Element} anchorEl - div.aaff8b8f 元素
      */
     function injectToggleRow(anchorEl) {
-        // 去重保護
+        // Dedupe guard: skip if the row already exists in the DOM
         if (document.getElementById('dss-temp-chat-toggle-row')) return;
 
         const isEnabled = readEnabledFlag();
         const row = createToggleRow(isEnabled);
 
-        // insertAfter：插在錨點元素之後（作為下一個兄弟）
+        // insertAfter: place immediately after the anchor element
         anchorEl.parentNode.insertBefore(row, anchorEl.nextSibling);
         _injectedRow = row;
+
+        console.log('[DV:TempChatToggle] injected toggle row | pathname:', window.location.pathname, '| isEnabled:', isEnabled);
     }
 
     /**
-     * 嘗試找出錨點元素並注入；找不到時等待 MutationObserver 偵測。
+     * Removes the injected toggle row from the DOM.
+     * Does NOT touch sessionStorage — persisted flag is preserved.
+     */
+    function removeToggleRow() {
+        const existing = document.getElementById('dss-temp-chat-toggle-row');
+        if (!existing) return;
+
+        existing.remove();
+        _injectedRow = null;
+
+        console.log('[DV:TempChatToggle] removed toggle row | pathname:', window.location.pathname);
+    }
+
+    /**
+     * Attempts to find the anchor element and inject the row.
+     * Silently returns when the anchor is absent — the MutationObserver will retry.
      */
     function tryInject() {
         const anchor = document.querySelector('div.aaff8b8f');
-        if (anchor) {
-            injectToggleRow(anchor);
+
+        console.log('[DV:TempChatToggle] tryInject | pathname:', window.location.pathname, '| anchor found:', !!anchor);
+
+        if (!anchor) return;
+        injectToggleRow(anchor);
+    }
+
+    /**
+     * Central inject-vs-remove decision point called on every SPA navigation.
+     * @param {string} newPathname - the pathname after navigation
+     * @param {string} [oldPathname] - the pathname before navigation (for logging)
+     */
+    function handleNavigation(newPathname, oldPathname) {
+        const isHomepage = newPathname === '/';
+
+        console.log('[DV:TempChatToggle] navigation | old:', oldPathname ?? '(unknown)', '→ new:', newPathname, '| decision:', isHomepage ? 'inject' : 'remove');
+
+        if (isHomepage) {
+            tryInject();
+        } else {
+            removeToggleRow();
         }
     }
 
     /**
-     * 啟動 MutationObserver 監控錨點元素的出現與重新掛載（SPA re-render 防護）。
+     * Wires up SPA navigation listeners (Navigation API + popstate fallback)
+     * and starts the MutationObserver that handles async anchor appearance.
      */
     function startObserver() {
         if (_mutationObserver) return;
 
+        // MutationObserver: handles async anchor appearance and re-injection
+        // after React re-renders the homepage subtree
         _mutationObserver = new MutationObserver(() => {
-            // 先嘗試補回已消失的注入列
+            // If the injected row was disconnected by a React re-render, clear the ref
             if (_injectedRow && !_injectedRow.isConnected) {
+                console.log('[DV:TempChatToggle] observer: row was disconnected; clearing ref | pathname:', window.location.pathname);
                 _injectedRow = null;
             }
-            tryInject();
+
+            // Only attempt re-injection when on the homepage
+            if (window.location.pathname === '/') {
+                tryInject();
+            }
         });
 
         _mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+        // Navigation API (preferred): fires on every SPA route change
+        if (typeof window !== 'undefined' && window.navigation) {
+            window.navigation.addEventListener('navigate', (event) => {
+                const newPathname = new URL(event.destination.url).pathname;
+                const oldPathname = window.location.pathname;
+                handleNavigation(newPathname, oldPathname);
+            });
+        } else {
+            // Fallback: popstate fires on back/forward; hashchange for hash-based routing
+            window.addEventListener('popstate', () => {
+                handleNavigation(window.location.pathname, undefined);
+            });
+        }
     }
 
     // ── 公開 API ─────────────────────────────────────────────────────────────
 
     /**
-     * 初始化模組：僅在首頁執行，否則立即返回。
+     * 初始化模組：在首頁時立即注入；啟動 observer 與 navigation 監聽以處理 SPA 路由切換。
      */
     function init() {
-        // 僅在首頁（chat.deepseek.com/）執行
-        if (window.location.pathname !== '/') return;
+        console.log('[DV:TempChatToggle] init | pathname:', window.location.pathname);
 
-        tryInject();
+        // Start observer and navigation listeners regardless of current path,
+        // so SPA navigations back to '/' are handled correctly
         startObserver();
+
+        // Attempt initial injection if already on homepage
+        if (window.location.pathname === '/') {
+            tryInject();
+        }
     }
 
     return {
         init,
-        // 供單元測試使用的純函式匯出
+        // Pure utility exports for unit tests
         readEnabledFlag,
         writeEnabledFlag,
         applyVisualState,
         createToggleRow,
         dispatchToggleEvent,
         injectToggleRow,
+        // New exports for unit tests (SPA-aware behavior)
+        removeToggleRow,
+        handleNavigation,
     };
 })();
 

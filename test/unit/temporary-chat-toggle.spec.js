@@ -300,3 +300,153 @@ describe('G — toggle interaction writes storage and dispatches event', () => {
         expect(received[0].isEnabled).toBe(false);
     });
 });
+
+// ── Group H: removeToggleRow ──────────────────────────────────────────────────
+
+describe('H — removeToggleRow', () => {
+    beforeEach(() => {
+        sessionStorage.clear();
+        document.body.innerHTML = '';
+    });
+
+    afterEach(() => {
+        sessionStorage.clear();
+        document.body.innerHTML = '';
+    });
+
+    function createAnchorInDOM() {
+        const parent = document.createElement('div');
+        const anchor = document.createElement('div');
+        anchor.className = 'aaff8b8f';
+        parent.appendChild(anchor);
+        document.body.appendChild(parent);
+        return anchor;
+    }
+
+    it('H1: removeToggleRow removes the injected row from DOM', () => {
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+
+        TemporaryChatToggle.removeToggleRow();
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+    });
+
+    it('H2: removeToggleRow is a no-op when row does not exist', () => {
+        expect(() => TemporaryChatToggle.removeToggleRow()).not.toThrow();
+    });
+
+    it('H3: removeToggleRow does NOT modify sessionStorage enabled flag', () => {
+        sessionStorage.setItem(STORAGE_KEY, 'true');
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+
+        TemporaryChatToggle.removeToggleRow();
+
+        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('true');
+    });
+
+    it('H4: removeToggleRow is idempotent (calling twice does not throw)', () => {
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+        TemporaryChatToggle.removeToggleRow();
+        expect(() => TemporaryChatToggle.removeToggleRow()).not.toThrow();
+    });
+});
+
+// ── Group I: handleNavigation (SPA-aware inject/remove) ───────────────────────
+
+describe('I — handleNavigation (SPA-aware)', () => {
+    beforeEach(() => {
+        sessionStorage.clear();
+        document.body.innerHTML = '';
+        window.history.replaceState({}, '', '/');
+    });
+
+    afterEach(() => {
+        sessionStorage.clear();
+        document.body.innerHTML = '';
+        window.history.replaceState({}, '', '/');
+    });
+
+    function createAnchorInDOM() {
+        const parent = document.createElement('div');
+        const anchor = document.createElement('div');
+        anchor.className = 'aaff8b8f';
+        parent.appendChild(anchor);
+        document.body.appendChild(parent);
+        return anchor;
+    }
+
+    it('I1: handleNavigation to "/" injects toggle row when anchor exists', () => {
+        createAnchorInDOM();
+
+        TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+    });
+
+    it('I2: handleNavigation to non-"/" pathname removes the toggle row', () => {
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+
+        TemporaryChatToggle.handleNavigation('/a/chat/s/some-uuid', '/');
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+    });
+
+    it('I3: handleNavigation back to "/" re-injects after prior remove', () => {
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+
+        TemporaryChatToggle.handleNavigation('/a/chat/s/some-uuid', '/');
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+
+        TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+    });
+
+    it('I4: no duplicate rows when handleNavigation to "/" called twice', () => {
+        createAnchorInDOM();
+
+        TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
+        TemporaryChatToggle.handleNavigation('/', '/');
+
+        const rows = document.querySelectorAll('#dss-temp-chat-toggle-row');
+        expect(rows).toHaveLength(1);
+    });
+
+    it('I5: re-injected row reflects persisted enabled flag (true)', () => {
+        sessionStorage.setItem(STORAGE_KEY, 'true');
+        createAnchorInDOM();
+
+        TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
+        TemporaryChatToggle.handleNavigation('/', '/a/chat/s/uuid');
+
+        const input = document.querySelector('.dss-temp-chat-switch__input');
+        expect(input.checked).toBe(true);
+    });
+
+    it('I6: re-injected row reflects persisted enabled flag (false)', () => {
+        sessionStorage.setItem(STORAGE_KEY, 'false');
+        createAnchorInDOM();
+
+        TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
+        TemporaryChatToggle.handleNavigation('/', '/a/chat/s/uuid');
+
+        const input = document.querySelector('.dss-temp-chat-switch__input');
+        expect(input.checked).toBe(false);
+    });
+
+    it('I7: removal does NOT change the sessionStorage enabled flag', () => {
+        sessionStorage.setItem(STORAGE_KEY, 'true');
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+
+        TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
+
+        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('true');
+    });
+});

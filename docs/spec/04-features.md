@@ -80,18 +80,26 @@
 
 ## 21. 臨時對話 (Temporary Conversation)
 
-- **目的**：開啟後，使用者離開某對話時自動呼叫 `POST https://chat.deepseek.com/api/v0/chat_session/delete`（body `{ "chat_session_id": "<uuid>" }`）將該對話刪除，達成「不留紀錄」的臨時提問。
-- **整體閘控（預設關閉）**：功能由首頁開關控制，預設關閉。關閉時整個功能停用——不擷取授權 token、不監聽導航/重新整理、不註冊 `beforeunload`、不刪除任何對話。
+- **目的**：開啟後，使用者**在首頁新建**的對話會被標記為臨時對話；離開該臨時對話時自動呼叫 `POST https://chat.deepseek.com/api/v0/chat_session/delete`（body `{ "chat_session_id": "<uuid>" }`）將其刪除，達成「不留紀錄」的臨時提問。
+- **臨時對話判定（僅刪除新建的對話）**：是否為臨時對話，以「是否觀察到新建對話 API（`/api/v0/chat_session/create`）請求」為權威依據。從清單點開歷史對話會呼叫 `/api/v0/chat/history_messages`，**永不標記、永不刪除**。最小風險原則：未觀察到 create 請求即視為歷史對話。
+- **整體閘控（預設關閉）**：標記新對話的行為由首頁開關控制，預設關閉。但若已存在「追蹤中的臨時對話」，即使關閉開關，離開該對話時仍會刪除（標記跟隨對話生命週期）；僅在無追蹤對話且開關關閉時才完全卸除監聽。
 - **共用契約**（`content/temporary-chat-constants.js`，載入順序最先以確保全域常數先就緒）：
   - `DSS_TEMP_CHAT_STORAGE_KEY = 'dss-temporary-chat-enabled'`：sessionStorage 鍵，值 `'true'`/`'false'`，缺值或非 `'true'` 一律視為關閉。
   - `DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed'`：開關狀態變更時由 toggle 模組於 window 派發，`detail: { isEnabled }`。
-  - `DSS_CHAT_LEFT_EVENT = 'dss-chat-left'`：`content-script.js` 的 `handleChatChange()` 在使用者離開對話（`currentChatUuid && currentChatUuid !== newUuid`）時於 window 派發，`detail: { chatUuid }`。
-- **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁運作；以 `MutationObserver` 等待 `div.aaff8b8f` 出現後，於其下方 38px 插入「開關（左）+ `臨時對話` 文字（右）」列。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。SPA 重新掛載時以 id 去重後重新注入。狀態變更時寫入 sessionStorage、更新視覺並派發 `dss-temporary-chat-changed`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
-- **授權擷取**：沿用 `censor-xhr-hook.js`（主 world）攔截 `setRequestHeader('authorization', ...)`，以 `window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization })` 廣播；`temporary-chat-delete.js` 僅在功能啟用時消費並暫存 token。
-- **刪除邏輯**（`content/temporary-chat-delete.js`）：
+  - `DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid'`：sessionStorage 鍵，保存目前追蹤的臨時對話 UUID（持久化，重新整理後仍保留）。
+  - `DSS_CHAT_CREATE_MESSAGE_TYPE = 'DSS_CHAT_CREATE_DETECTED'`：主 world 偵測到 create 請求時透過 `window.postMessage` 通知 isolated world 的訊息型別。
+  - `DSS_CHAT_CREATE_ENDPOINT = '/api/v0/chat_session/create'`：用於比對新建對話請求的端點子字串。
+- **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
+  - **SPA 注入／移除**：以 Navigation API `navigate` 事件（並輔以 `popstate` 與 `MutationObserver`）在每次導航重新評估：`pathname === '/'` 時等待 `div.aaff8b8f` 出現後於其下方 38px 注入（以 id 去重），`pathname !== '/'` 時移除開關列。移除僅刪除 DOM 元素，**不更動 sessionStorage 狀態**；重新注入時依持久化旗標還原視覺。
+  - **診斷日誌**：於 init／navigation／anchor 查詢／注入／移除／observer 偵測斷線等決策點輸出 `[DV:TempChatToggle]` 前綴日誌，供在真實瀏覽器調查「開關偶爾未出現、重整後才出現」之用。
+- **新建偵測與授權擷取**（`content/censor-xhr-hook.js`，主 world）：
+  - 沿用攔截 `setRequestHeader('authorization', ...)`，以 `window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization })` 廣播；`temporary-chat-delete.js` 僅在需要時消費並暫存 token。
+  - 另偵測 URL 含 `/api/v0/chat_session/create` 的請求（同時攔截 `XMLHttpRequest.prototype.open` 與包裝 `window.fetch`），命中時廣播 `DSS_CHAT_CREATE_DETECTED`。
+- **標記與刪除邏輯**（`content/temporary-chat-delete.js`）：
   - `deleteChatSession(chatUuid, { keepalive })`：guard clause 缺 token 或缺 chatUuid 即不送出；以 `fetch` POST 帶 authorization 與 x-client-* 標頭。
-  - 監聽 `dss-chat-left`：啟用時對離開的 chatUuid 呼叫刪除（涵蓋 SPA 切換對話 / 上一頁 / 下一頁）。
-  - `beforeunload` 處理：啟用且非重新整理時，對當前 URL 的 chatUuid 以 `keepalive: true` 刪除（涵蓋關閉分頁/瀏覽器、導向外部頁面）。
-  - 重新整理偵測：Navigation API `navigationType === 'reload'` 搭配 F5 / Ctrl+R / Cmd+R 鍵盤偵測設定 `isPageRefresh`；重新整理與導向目前網址皆不刪除。
-- **啟用狀態管理**：初始化時讀取 sessionStorage；監聽 `dss-temporary-chat-changed` 以啟用/停用對應監聽，停用時不進行任何監聽工作。
+  - **標記**：收到 `DSS_CHAT_CREATE_DETECTED` 且開關開啟時設 pending；當 Navigation API `navigate` 落在 `/a/chat/s/<uuid>` 時，將該 UUID 寫入 `DSS_TEMP_CHAT_UUID_KEY` 作為追蹤對象並清除 pending。
+  - **離開即刪除**：`navigate` 事件計算離開前的 `fromUuid` 與目的地 URL；當「目的地 URL 與目前 URL 不同且 `navigationType !== 'reload'`」、`fromUuid` 等於追蹤的臨時 UUID、且已擷取 token 時，刪除並清除追蹤 UUID。
+  - **同網址／重整不刪除（Bug 修正）**：`navigationType === 'reload'` 或目的地 URL 等於目前 URL（含於網址列重按目前對話網址）時不刪除，並設定抑制旗標阻擋後續 `beforeunload` 刪除；另以 F5 / Ctrl+R / Cmd+R 鍵盤偵測為第二層保險。
+  - `beforeunload`：涵蓋關閉分頁／瀏覽器與整頁導航；當目前 UUID 等於追蹤 UUID、未被抑制、且有 token 時，以 `keepalive: true` 刪除。
+- **生命週期**：監聽於「開關開啟」或「存在追蹤中的臨時 UUID」任一成立時保持掛載；標記新對話僅在開關開啟時進行；刪除已追蹤對話不受開關關閉影響；追蹤對象清空且開關關閉後才卸除監聽。
 - **獨立性**：此功能不受彈出選單右上角主開關連動，僅由首頁開關獨立控制。

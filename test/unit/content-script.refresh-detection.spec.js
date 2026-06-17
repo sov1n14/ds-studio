@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
 // Tests the refresh detection logic in temporary-chat-delete.js.
-// Current logic: handleNavigationEvent sets _isPageRefresh = (event.navigationType === 'reload').
-// Keyboard supplement: handleRefreshKeydown sets _isPageRefresh = true for F5 / Ctrl+R / Cmd+R.
+// The Navigation API navigate event checks navigationType === 'reload' or same-URL.
+// Keyboard supplement: handleRefreshKeydown sets _isKeyboardRefresh for F5 / Ctrl+R / Cmd+R.
 
 describe('refresh detection — navigationType logic', () => {
     it('marks as refresh when navigationType is reload', () => {
@@ -40,33 +40,33 @@ describe('handleRefreshKeydown — keyboard supplement', () => {
         vi.restoreAllMocks();
     });
 
-    it('sets isPageRefresh to true on F5 key', () => {
+    it('sets isKeyboardRefresh to true on F5 key', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'F5', ctrlKey: false, metaKey: false });
-        expect(TemporaryChatDelete.__getState().isPageRefresh).toBe(true);
+        expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('sets isPageRefresh to true on Ctrl+R', () => {
+    it('sets isKeyboardRefresh to true on Ctrl+R', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'r', ctrlKey: true, metaKey: false });
-        expect(TemporaryChatDelete.__getState().isPageRefresh).toBe(true);
+        expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('sets isPageRefresh to true on Ctrl+R (uppercase R)', () => {
+    it('sets isKeyboardRefresh to true on Ctrl+R (uppercase R)', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'R', ctrlKey: true, metaKey: false });
-        expect(TemporaryChatDelete.__getState().isPageRefresh).toBe(true);
+        expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('sets isPageRefresh to true on Cmd+R (metaKey)', () => {
+    it('sets isKeyboardRefresh to true on Cmd+R (metaKey)', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'r', ctrlKey: false, metaKey: true });
-        expect(TemporaryChatDelete.__getState().isPageRefresh).toBe(true);
+        expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('does NOT set isPageRefresh on arbitrary key (e.g. Enter)', () => {
+    it('does NOT set isKeyboardRefresh on arbitrary key (e.g. Enter)', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'Enter', ctrlKey: false, metaKey: false });
-        expect(TemporaryChatDelete.__getState().isPageRefresh).toBe(false);
+        expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(false);
     });
 
-    it('does NOT set isPageRefresh on Ctrl+S', () => {
+    it('does NOT set isKeyboardRefresh on Ctrl+S', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 's', ctrlKey: true, metaKey: false });
-        expect(TemporaryChatDelete.__getState().isPageRefresh).toBe(false);
+        expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(false);
     });
 });
