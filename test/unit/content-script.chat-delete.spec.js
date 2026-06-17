@@ -59,6 +59,79 @@ describe('deleteChatSession', () => {
     });
 });
 
+describe('beforeunload handler', () => {
+    beforeEach(() => {
+        contentScript.__resetState();
+        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('calls deleteChatSession with keepalive when leaving site', () => {
+        const token = 'Bearer leave-token';
+        const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
+        contentScript.__setState({ capturedAuthToken: token, currentChatUuid: uuid });
+
+        window.dispatchEvent(new Event('beforeunload'));
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const [url, options] = global.fetch.mock.calls[0];
+        expect(url).toBe('https://chat.deepseek.com/api/v0/chat_session/delete');
+        expect(options.keepalive).toBe(true);
+    });
+
+    it('does NOT call fetch when isPageRefresh is true', () => {
+        contentScript.__setState({
+            capturedAuthToken: 'Bearer token',
+            currentChatUuid: 'ffffffff-0000-0000-0000-ffffffffffff',
+            isPageRefresh: true,
+        });
+
+        window.dispatchEvent(new Event('beforeunload'));
+
+        expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call fetch when capturedAuthToken is null', () => {
+        contentScript.__setState({ currentChatUuid: 'ffffffff-0000-0000-0000-ffffffffffff' });
+
+        window.dispatchEvent(new Event('beforeunload'));
+
+        expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call fetch when currentChatUuid is null', () => {
+        contentScript.__setState({ capturedAuthToken: 'Bearer token' });
+
+        window.dispatchEvent(new Event('beforeunload'));
+
+        expect(global.fetch).not.toHaveBeenCalled();
+    });
+});
+
+describe('isPageRefresh state machinery', () => {
+    beforeEach(() => {
+        contentScript.__resetState();
+    });
+
+    it('isPageRefresh starts as false after __resetState', () => {
+        expect(contentScript.__getState().isPageRefresh).toBe(false);
+    });
+
+    it('isPageRefresh can be set to true via __setState', () => {
+        contentScript.__setState({ isPageRefresh: true });
+        expect(contentScript.__getState().isPageRefresh).toBe(true);
+    });
+
+    it('__resetState resets isPageRefresh to false', () => {
+        contentScript.__setState({ isPageRefresh: true });
+        contentScript.__resetState();
+        expect(contentScript.__getState().isPageRefresh).toBe(false);
+    });
+});
+
 describe('handleChatChange — deleteChatSession integration', () => {
     function setPathname(path) {
         window.history.replaceState({}, '', path);
