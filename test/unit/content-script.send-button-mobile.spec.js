@@ -131,6 +131,41 @@ function makeEditSendButtonInContainer(value = 'edit text') {
 }
 
 /**
+ * Build the "empty ancestor composer" scenario for TC-8:
+ * - A non-empty edit textarea placed BEFORE the container in document order,
+ *   so document.querySelector('textarea') resolves to it as a final fallback.
+ * - A container holding an EMPTY textarea (main composer) co-located with the
+ *   edit send button, so the DOM walk-up encounters the empty one first.
+ * Returns { editTextarea, container, button, span, emptyTextarea }.
+ */
+function makeEditScenarioWithEmptyAncestorTextarea(editValue = 'edit message') {
+    const editTextarea = document.createElement('textarea');
+    editTextarea.value = editValue;
+
+    const container = document.createElement('div');
+    container.className = 'outer-send-container';
+
+    const emptyTextarea = document.createElement('textarea');
+    emptyTextarea.value = '';
+
+    const button = document.createElement('div');
+    button.className =
+        'ds-button ds-button--primary ds-button--filled ds-button--capsule ' +
+        'ds-button--s ds-button--icon-relative-m ds-button--min-width';
+    button.setAttribute('role', 'button');
+
+    const span = document.createElement('span');
+    span.className = 'ds-button__content';
+    span.textContent = '发送';
+
+    button.appendChild(span);
+    container.appendChild(emptyTextarea);
+    container.appendChild(button);
+
+    return { editTextarea, container, button, span, emptyTextarea };
+}
+
+/**
  * Build an edit-message send button where the textarea is NOT inside the
  * button's ancestor DOM tree (simulates React portal scenario where the
  * DOM walk-up in the handler fails).
@@ -286,5 +321,68 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
 
         expect(textarea.value).toContain('<user-input>');
         expect(textarea.value).toContain('fallback test');
+    });
+
+    // -----------------------------------------------------------------------
+    // TC-7: document.activeElement TEXTAREA takes priority over the textarea
+    //       found via DOM walk-up.
+    //       With the old logic (walk-up first), the in-container textarea would
+    //       be chosen; the new logic (activeElement first) must choose the
+    //       focused textarea instead.
+    // -----------------------------------------------------------------------
+    it('TC-7 ACTIVE-ELEMENT PRIORITY: focused TEXTAREA is chosen over the textarea found via DOM walk-up', () => {
+        // Container holds its own non-empty textarea + the edit send button.
+        // DOM walk-up from button would find containerTextarea if checked first.
+        const { container, button, span, textarea: containerTextarea } =
+            makeEditSendButtonInContainer('in-container text');
+
+        // Separate textarea that represents the actual edit area being focused.
+        const activeTextarea = document.createElement('textarea');
+        activeTextarea.value = 'active edit text';
+
+        // Mount container before activeTextarea; document.querySelector('textarea')
+        // would find containerTextarea first — activeElement must take priority.
+        cleanup = mountInDocument(container, activeTextarea);
+
+        // Focus the separate textarea: document.activeElement becomes activeTextarea.
+        activeTextarea.focus();
+
+        dispatchPointerdown(span);
+
+        // The focused activeElement must receive injection.
+        expect(activeTextarea.value).toContain('<user-input>');
+        expect(activeTextarea.value).toContain('active edit text');
+        // The in-container textarea must remain untouched.
+        expect(containerTextarea.value).not.toContain('<user-input>');
+    });
+
+    // -----------------------------------------------------------------------
+    // TC-8: DOM walk-up encounters an empty main composer textarea and skips it
+    //       (ta.value.trim() === ''); the final querySelector fallback must
+    //       resolve to the non-empty edit textarea instead.
+    //       document.activeElement is NOT a textarea in this scenario.
+    // -----------------------------------------------------------------------
+    it('TC-8 EMPTY-SKIP FALLBACK: DOM walk-up skips empty main composer and querySelector fallback finds non-empty edit textarea', () => {
+        const { editTextarea, container, button, span, emptyTextarea } =
+            makeEditScenarioWithEmptyAncestorTextarea('edit message');
+
+        // Mount editTextarea FIRST so document.querySelector('textarea') finds it
+        // before the empty main composer inside the container.
+        cleanup = mountInDocument(editTextarea, container);
+
+        // Ensure no textarea is focused — document.activeElement must NOT be a TEXTAREA.
+        // (After cleanup, happy-dom resets focus to body; an explicit blur is a safety net.)
+        if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'TEXTAREA') {
+            document.activeElement.blur();
+        }
+
+        dispatchPointerdown(span);
+
+        // Non-empty edit textarea must receive injection via the querySelector fallback.
+        expect(editTextarea.value).toContain('<user-input>');
+        expect(editTextarea.value).toContain('edit message');
+        // Empty main composer must remain completely untouched.
+        expect(emptyTextarea.value).toBe('');
+        expect(emptyTextarea.value).not.toContain('<user-input>');
     });
 });

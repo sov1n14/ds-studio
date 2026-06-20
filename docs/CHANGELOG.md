@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.5.1](changelog/v4.md#451---2026-06-18) | 修正「臨時對話」：僅刪除（呼叫 create API）新建的對話、歷史對話永不刪除；離開首頁移除開關、回首頁重注入；網址列輸入目前網址／重整不刪除；關閉開關仍刪除已標記對話 |
+| [4.5.0](changelog/v4.md#450---2026-06-18) | 新增「臨時對話」功能：首頁開關控制，開啟時離開對話自動呼叫刪除 API（重新整理／導向當前網址不刪除），狀態存於 sessionStorage |
 | [4.3.0](changelog/v4.md#430---2026-06-14) | 系統時間注入新增時區偏移顯示 — 格式從 `yyyy/mm/dd hh:mm:ss` 改為 `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` |
 | [4.2.1](changelog/v4.md#421---2026-06-14) | 修復下拉選單位置計算子像素抖動問題並強化冪等性（Math.round + 捨去尾數重複） |
 | [4.2.0](changelog/v4.md#420---2026-06-14) | 重構預設集覆蓋層：拆分大型模組為職責單一的小型檔案（controller、resolvers、position、styles、component） |

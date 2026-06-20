@@ -123,13 +123,56 @@ describe('onSelectChange — reposition regression', () => {
 // ── rAF synchroniser ─────────────────────────────────────────────────────────
 
 /**
- * Stub requestAnimationFrame globally to execute synchronously.
+ * Stub requestAnimationFrame with a bounded trampoline.
+ *
+ * Problem: the production settle loop reschedules itself every frame via
+ * opts.schedule(runFrame) → scheduleFrame() → rAF(runFrame). In a real
+ * browser rAF is ASYNC, so each new frame unwinds the stack. A naive
+ * synchronous stub (`(fn) => { fn(); }`) turns this into unbounded
+ * synchronous recursion → RangeError: Maximum call stack size exceeded.
+ *
+ * Solution: queue callbacks instead of calling inline, then drain the
+ * queue ITERATIVELY (no stack growth) up to RAF_FLUSH_CAP iterations.
+ * Each iteration may enqueue new callbacks (the next settle frame), which
+ * are processed in the same drain loop — exactly like the browser's async
+ * frame queue but without the async overhead or the recursion.
+ *
+ * RAF_FLUSH_CAP (200) is large enough to let the settle loop reach
+ * stableK=120 (converge) on a real DOM, yet small enough to terminate
+ * immediately when measure() always returns null (null-metric path).
+ * The test assertions only require that reposition was called at least
+ * once with 'settle:frame-0', which is satisfied on the very first flush.
+ *
  * Returns a restore function.
  */
+const RAF_FLUSH_CAP = 200;
+
 function makeRafSync() {
     const original = globalThis.requestAnimationFrame;
-    globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
-    return () => { globalThis.requestAnimationFrame = original; };
+    const queue = [];
+    let flushing = false;
+
+    globalThis.requestAnimationFrame = function (fn) {
+        queue.push(fn);
+        // Drain the queue iteratively on the OUTERMOST call only.
+        // Re-entrant calls (callbacks that enqueue more frames) just push
+        // to the queue and return; the outermost loop picks them up.
+        if (!flushing) {
+            flushing = true;
+            let ticks = 0;
+            while (queue.length > 0 && ticks < RAF_FLUSH_CAP) {
+                const cb = queue.shift();
+                ticks++;
+                cb();
+            }
+            flushing = false;
+        }
+        return 0;
+    };
+
+    return () => {
+        globalThis.requestAnimationFrame = original;
+    };
 }
 
 // ── Group B: settlement loop integration ─────────────────────────────────

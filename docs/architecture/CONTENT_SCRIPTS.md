@@ -12,6 +12,7 @@
 | **導航與介面模組** | SPA Navigation, Overlay Preset Selector, Empty Preset, Toast | [→ content-navigation.md](content-navigation.md) |
 | **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup | [→ content-interaction.md](content-interaction.md) |
 | **互動復原模組** | Censor Reply Restore (4 files + CSS) | [→ spec/04-features.md](../spec/04-features.md) |
+| **臨時對話模組** | Temporary Conversation（`temporary-chat-constants.js`、`temporary-chat-toggle.js` + `.css`、`temporary-chat-delete.js`） | [→ spec/04-features.md](../spec/04-features.md) |
 
 > **v4.0.0 模組化**：以下大型內容腳本已拆分為「入口檔 + 方法包」（行為不變，方法包經 `globalThis.__DS_*` 由入口檔 `Object.assign` 合併，載入順序於 `manifest.json` 強制：方法包先於入口檔）：
 >

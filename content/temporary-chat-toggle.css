@@ -1,0 +1,85 @@
+/**
+ * DS studio — Temporary Chat Toggle 樣式
+ * 所有選擇器以 .dss-temp-chat- 前綴，避免污染宿主頁面樣式。
+ */
+
+/* ── 容器列：水平置中，插入於 div.aaff8b8f 下方 38px ── */
+.dss-temp-chat-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 38px;
+    user-select: none;
+}
+
+/* ── 文字標籤 ── */
+.dss-temp-chat-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #f9fafb;
+    transition: color 0.2s ease;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.dss-temp-chat-label--on {
+    color: #679efe;
+}
+
+/* ── 開關外框 ── */
+.dss-temp-chat-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* 隱藏原生 checkbox，僅保留語意 */
+.dss-temp-chat-switch__input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+/* 軌道（track）背景 */
+.dss-temp-chat-switch__track {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.2);
+    transition: background-color 0.2s ease;
+}
+
+/* 開關 ON 狀態：軌道色 */
+.dss-temp-chat-switch__input:checked + .dss-temp-chat-switch__track {
+    background-color: #4d6bfe;
+}
+
+/* 圓形滑塊（thumb） */
+.dss-temp-chat-switch__track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: #ffffff;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* 開關 ON 狀態：滑塊位移 */
+.dss-temp-chat-switch__input:checked + .dss-temp-chat-switch__track::after {
+    transform: translateX(16px);
+}
+
+/* focus 可及性提示 */
+.dss-temp-chat-switch__input:focus-visible + .dss-temp-chat-switch__track {
+    outline: 2px solid #679efe;
+    outline-offset: 2px;
+}

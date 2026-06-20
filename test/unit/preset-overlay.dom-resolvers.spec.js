@@ -36,13 +36,45 @@ const { createPresetOverlay } = require('../../content/preset-overlay.controller
 // ── rAF synchroniser ─────────────────────────────────────────────────────────
 
 /**
- * Stub requestAnimationFrame globally to execute synchronously.
+ * Stub requestAnimationFrame with a bounded trampoline.
+ *
+ * Problem: the production settle loop reschedules itself every frame via
+ * opts.schedule(runFrame) → scheduleFrame() → rAF(runFrame). A naive
+ * synchronous stub (`(fn) => { fn(); }`) turns this into unbounded
+ * synchronous recursion → RangeError: Maximum call stack size exceeded.
+ *
+ * Solution: queue callbacks instead of calling inline, then drain the
+ * queue ITERATIVELY (no stack growth) up to RAF_FLUSH_CAP iterations.
+ * Re-entrant enqueues (next settle frame) are simply appended to the
+ * queue and consumed by the same outermost drain loop.
+ *
  * Returns a restore function.
  */
+const RAF_FLUSH_CAP = 200;
+
 function makeRafSync() {
     const original = globalThis.requestAnimationFrame;
-    globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
-    return () => { globalThis.requestAnimationFrame = original; };
+    const queue = [];
+    let flushing = false;
+
+    globalThis.requestAnimationFrame = function (fn) {
+        queue.push(fn);
+        if (!flushing) {
+            flushing = true;
+            let ticks = 0;
+            while (queue.length > 0 && ticks < RAF_FLUSH_CAP) {
+                const cb = queue.shift();
+                ticks++;
+                cb();
+            }
+            flushing = false;
+        }
+        return 0;
+    };
+
+    return () => {
+        globalThis.requestAnimationFrame = original;
+    };
 }
 
 // ── rect helper ───────────────────────────────────────────────────────────────

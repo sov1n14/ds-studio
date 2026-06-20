@@ -2,6 +2,8 @@
  * DS studio — XHR Hook (main world script)
  * Injected into the page's main world via <script src="..."> to bypass CSP.
  * Intercepts /api/v0/chat/completion and /api/v0/chat/edit_message XHR requests and parses SSE fragments.
+ * Also detects /api/v0/chat_session/create requests (XHR and fetch) and posts DSS_CHAT_CREATE_DETECTED.
+ * Detects /api/v0/chat/completion (XHR and fetch) and posts DSS_CHAT_COMPLETION_DETECTED.
  * Depends on SseParser (sse-parser.js) loaded in the same scope.
  */
 (function () {
@@ -10,9 +12,17 @@
     var originalOpen = XMLHttpRequest.prototype.open;
     var originalSend = XMLHttpRequest.prototype.send;
     var pendingStates = new Map();
+    var originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+    var lastCapturedAuth = null;
 
     // 需攔截的端點路徑清單：一般補全與訊息編輯均使用相同的 SSE 回應格式
     var INTERCEPTED_ENDPOINTS = ['/api/v0/chat/completion', '/api/v0/chat/edit_message'];
+
+    // 新對話建立 API 端點（必須與 temporary-chat-constants.js 中的值一致）
+    var CREATE_ENDPOINT = '/api/v0/chat_session/create';
+
+    // 補全 API 端點（用於雙重偵測機制，判定是否為新對話）
+    var COMPLETION_ENDPOINT = '/api/v0/chat/completion';
 
     /** 回傳 URL 所對應的端點名稱，若不在攔截清單中則回傳 null */
     function getMatchedEndpoint(url) {
@@ -25,8 +35,27 @@
         return null;
     }
 
+    /** 偵測 URL 是否為新對話建立請求；符合時發送 postMessage 通知 isolated world */
+    function maybeNotifyCreate(url) {
+        if (!url) { return; }
+        if (url.includes(CREATE_ENDPOINT)) {
+            window.postMessage({ type: 'DSS_CHAT_CREATE_DETECTED' }, '*');
+        }
+    }
+
+    /** 偵測補全請求；符合時發送 DSS_CHAT_COMPLETION_DETECTED 通知 isolated world */
+    function maybeNotifyCompletion(url) {
+        if (!url) { return; }
+        if (url.includes(COMPLETION_ENDPOINT)) {
+            window.postMessage({ type: 'DSS_CHAT_COMPLETION_DETECTED' }, '*');
+        }
+    }
+
     XMLHttpRequest.prototype.open = function (method, url) {
         this._dssUrl = typeof url === 'string' ? url : (url ? url.toString() : '');
+        // XHR open 時立即偵測建立請求（send 前即可通知，減少時序延遲）
+        maybeNotifyCreate(this._dssUrl);
+        maybeNotifyCompletion(this._dssUrl);
         return originalOpen.apply(this, arguments);
     };
 
@@ -84,5 +113,25 @@
         });
 
         return originalSend.apply(xhr, arguments);
+    };
+
+    // 攔截 setRequestHeader 以擷取 authorization token（適用於所有 XHR 請求）
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+        if (name.toLowerCase() === 'authorization' && value !== lastCapturedAuth) {
+            lastCapturedAuth = value;
+            window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization: value }, '*');
+        }
+        return originalSetRequestHeader.apply(this, arguments);
+    };
+
+    // 攔截 window.fetch 以偵測新對話建立請求與補全請求（DeepSeek 可能使用 fetch 而非 XHR）
+    var originalFetch = window.fetch;
+    window.fetch = function (resource, init) {
+        var url = typeof resource === 'string'
+            ? resource
+            : (resource && typeof resource.url === 'string' ? resource.url : '');
+        maybeNotifyCreate(url);
+        maybeNotifyCompletion(url);
+        return originalFetch.apply(this, arguments);
     };
 })();

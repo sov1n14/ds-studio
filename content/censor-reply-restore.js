@@ -300,6 +300,11 @@ const CensorReplyRestore = {
             script.src = chrome.runtime.getURL('content/censor-xhr-hook.js');
             document.documentElement.appendChild(script);
             script.remove();
+
+            var fiberScript = document.createElement('script');
+            fiberScript.src = chrome.runtime.getURL('content/temporary-chat-fiber-delete.js');
+            document.documentElement.appendChild(fiberScript);
+            fiberScript.remove();
         } catch (e) {
             return;
         }

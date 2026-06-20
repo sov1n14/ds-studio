@@ -370,17 +370,20 @@ document.addEventListener('keydown', (e) => {
 
             let textarea;
             if (isEditSendButton) {
-                let el = button.parentElement;
-                while (el && el !== document.body) {
-                    const ta = el.querySelector('textarea');
-                    if (ta) { textarea = ta; break; }
-                    el = el.parentElement;
-                }
-                // Fallback: DOM 遍歷找不到時試 activeElement 或全局查詢
-                if (!textarea) {
-                    textarea = document.activeElement?.tagName === 'TEXTAREA'
-                        ? document.activeElement
-                        : document.querySelector('textarea');
+                // 優先使用 activeElement（在 pointerdown 時焦點尚未轉移，最可靠）
+                if (document.activeElement?.tagName === 'TEXTAREA') {
+                    textarea = document.activeElement;
+                } else {
+                    // 備援：向上遍歷 DOM 找最近且非空的 textarea
+                    let el = button.parentElement;
+                    while (el && el !== document.body) {
+                        const ta = el.querySelector('textarea');
+                        if (ta && ta.value.trim() !== '') { textarea = ta; break; }
+                        el = el.parentElement;
+                    }
+                    if (!textarea) {
+                        textarea = document.querySelector('textarea');
+                    }
                 }
             } else {
                 textarea = document.querySelector('textarea');
@@ -466,7 +469,8 @@ if (typeof module !== 'undefined' && module.exports) {
             if ('currentChatUuid' in s) currentChatUuid = s.currentChatUuid;
             if ('chatPresetMap' in s) chatPresetMap = s.chatPresetMap;
             if ('pendingPresetId' in s) pendingPresetId = s.pendingPresetId;
-            if ('awaitingNewChatUuid' in s) awaitingNewChatUuid = s.awaitingNewChatUuid; },
+            if ('awaitingNewChatUuid' in s) awaitingNewChatUuid = s.awaitingNewChatUuid;
+        },
         __getState: () => ({
             isEnabled,
             promptPrefix,
