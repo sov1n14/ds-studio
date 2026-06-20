@@ -41,7 +41,7 @@ const TemporaryChatToggle = (() => {
     async function initEnabledFlagFromStorage() {
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         try {
-            const result = await chrome.storage.session.get([key]);
+            const result = await chrome.storage.local.get([key]);
             _enabledFlagCache = result[key] === true;
             console.log('[DV:TempChatToggle] initEnabledFlagFromStorage | read from storage → _enabledFlagCache:', _enabledFlagCache);
         } catch {
@@ -70,7 +70,7 @@ const TemporaryChatToggle = (() => {
         _enabledFlagCache = isEnabled;
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         try {
-            chrome.storage.session.set({ [key]: isEnabled });
+            chrome.storage.local.set({ [key]: isEnabled });
         } catch {
             // storage 不可用時靜默忽略；快取已更新，同分頁行為仍正常
         }
@@ -205,13 +205,12 @@ const TemporaryChatToggle = (() => {
     function handleNavigation(newPathname, oldPathname) {
         const isHomepage = newPathname === '/';
 
-        console.log('[DV:TempChatToggle] navigation | old:', oldPathname ?? '(unknown)', '→ new:', newPathname, '| decision:', isHomepage ? 'inject' : 'remove');
+        console.log('[DV:TempChatToggle] navigation | old:', oldPathname ?? '(unknown)', '→ new:', newPathname, '| decision:', isHomepage ? 'await-observer' : 'remove');
 
-        if (isHomepage) {
-            tryInject();
-        } else {
+        if (!isHomepage) {
             removeToggleRow();
         }
+        // 注入首頁交由 MutationObserver 負責，避免在導航完成前注入至舊頁面 DOM
     }
 
     /**
@@ -232,6 +231,7 @@ const TemporaryChatToggle = (() => {
 
             // Only attempt re-injection when on the homepage
             if (window.location.pathname === '/') {
+                if (_injectedRow && _injectedRow.isConnected) return;   // 已注入且連接中，跳過
                 tryInject();
             }
         });
@@ -307,7 +307,7 @@ const TemporaryChatToggle = (() => {
 // ── 跨分頁同步監聽器 ───────────────────────────────────────────────────────
 // 當其他分頁透過 chrome.storage.session 改變啟用旗標時，同步本分頁的快取與 UI。
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'session') return;
+    if (area !== 'local') return;
     const key =
         (typeof globalThis !== 'undefined' && globalThis['DSS_TEMP_CHAT_STORAGE_KEY']) ||
         (typeof window !== 'undefined' && window['DSS_TEMP_CHAT_STORAGE_KEY']) ||

@@ -96,7 +96,7 @@ const TemporaryChatDelete = (() => {
     async function initEnabledFlagFromStorage() {
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         try {
-            const result = await chrome.storage.session.get([key]);
+            const result = await chrome.storage.local.get([key]);
             _enabledFlagCache = result[key] === true;
             console.log('[DV:TempChatDelete] initEnabledFlagFromStorage | read from storage → _enabledFlagCache:', _enabledFlagCache);
         } catch {
@@ -107,7 +107,7 @@ const TemporaryChatDelete = (() => {
 
     // chrome.storage.onChanged：跨分頁即時同步啟用旗標
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== 'session') return;
+        if (area !== 'local') return;
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         if (!(key in changes)) return;
         const isNowEnabled = changes[key].newValue === true;
@@ -317,6 +317,7 @@ const TemporaryChatDelete = (() => {
     function handleToggleChanged(e) {
         console.log('[DV:TempChatDelete] handleToggleChanged | isEnabled:', e.detail?.isEnabled, '| _trackedTemporaryUuid:', _trackedTemporaryUuid, '| _isListening:', _isListening);
         const isEnabled = e.detail?.isEnabled === true;
+        _enabledFlagCache = isEnabled;          // 立即同步快取，確保後續 readEnabledFlag() 回傳正確值
         if (isEnabled) {
             attachListeners();
         } else {

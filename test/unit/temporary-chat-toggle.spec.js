@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// ── chrome.storage.session mock (must be set before module import) ─────────────
-const chromeStorageSessionMock = {
+// ── chrome.storage.local mock (must be set before module import) ──────────────
+const chromeStorageLocalMock = {
     _store: {},
     get(keys) {
         const result = {};
@@ -17,7 +17,7 @@ const chromeStorageSessionMock = {
 
 global.chrome = {
     storage: {
-        session: chromeStorageSessionMock,
+        local: chromeStorageLocalMock,
         onChanged: { addListener: () => {} },
     },
 };
@@ -32,7 +32,7 @@ const CHANGED_EVENT = 'dss-temporary-chat-changed';
 
 describe('A — initEnabledFlagFromStorage (via init())', () => {
     beforeEach(() => {
-        chromeStorageSessionMock._reset();
+        chromeStorageLocalMock._reset();
         document.body.innerHTML = '';
         window.history.replaceState({}, '', '/non-homepage');
     });
@@ -42,7 +42,7 @@ describe('A — initEnabledFlagFromStorage (via init())', () => {
     });
 
     it('A1: after init(), readEnabledFlag() returns true when storage has true', async () => {
-        chromeStorageSessionMock._store[STORAGE_KEY] = true;
+        chromeStorageLocalMock._store[STORAGE_KEY] = true;
         await TemporaryChatToggle.init();
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
     });
@@ -54,7 +54,7 @@ describe('A — initEnabledFlagFromStorage (via init())', () => {
     });
 
     it('A3: after init(), readEnabledFlag() returns false when storage value is false', async () => {
-        chromeStorageSessionMock._store[STORAGE_KEY] = false;
+        chromeStorageLocalMock._store[STORAGE_KEY] = false;
         await TemporaryChatToggle.init();
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
@@ -64,7 +64,7 @@ describe('A — initEnabledFlagFromStorage (via init())', () => {
 
 describe('B — readEnabledFlag', () => {
     beforeEach(() => {
-        chromeStorageSessionMock._reset();
+        chromeStorageLocalMock._reset();
         // Use writeEnabledFlag to reset cache to false
         TemporaryChatToggle.writeEnabledFlag(false);
     });
@@ -74,11 +74,11 @@ describe('B — readEnabledFlag', () => {
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('B2: returns cached value without reading chrome.storage.session', async () => {
+    it('B2: returns cached value without reading chrome.storage.local', async () => {
         // Set cache to true via writeEnabledFlag
         TemporaryChatToggle.writeEnabledFlag(true);
         // Now mutate storage to false — cache must remain true
-        chromeStorageSessionMock._store[STORAGE_KEY] = false;
+        chromeStorageLocalMock._store[STORAGE_KEY] = false;
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
     });
 });
@@ -87,7 +87,7 @@ describe('B — readEnabledFlag', () => {
 
 describe('C — writeEnabledFlag', () => {
     beforeEach(() => {
-        chromeStorageSessionMock._reset();
+        chromeStorageLocalMock._reset();
         TemporaryChatToggle.writeEnabledFlag(false);
     });
 
@@ -106,16 +106,16 @@ describe('C — writeEnabledFlag', () => {
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('C3: calls chrome.storage.session.set with the correct key and value (true)', async () => {
-        const setSpy = vi.spyOn(chromeStorageSessionMock, 'set');
+    it('C3: calls chrome.storage.local.set with the correct key and value (true)', async () => {
+        const setSpy = vi.spyOn(chromeStorageLocalMock, 'set');
         TemporaryChatToggle.writeEnabledFlag(true);
         await Promise.resolve(); // flush microtask
         expect(setSpy).toHaveBeenCalledWith({ [STORAGE_KEY]: true });
         setSpy.mockRestore();
     });
 
-    it('C4: calls chrome.storage.session.set with the correct key and value (false)', async () => {
-        const setSpy = vi.spyOn(chromeStorageSessionMock, 'set');
+    it('C4: calls chrome.storage.local.set with the correct key and value (false)', async () => {
+        const setSpy = vi.spyOn(chromeStorageLocalMock, 'set');
         TemporaryChatToggle.writeEnabledFlag(false);
         await Promise.resolve();
         expect(setSpy).toHaveBeenCalledWith({ [STORAGE_KEY]: false });
@@ -479,12 +479,13 @@ describe('K — handleNavigation (SPA-aware)', () => {
         return anchor;
     }
 
-    it('K1: handleNavigation to "/" injects toggle row when anchor exists', () => {
+    it('K1: handleNavigation to "/" does NOT inject synchronously (MutationObserver handles it)', () => {
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
 
-        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        // Injection is deferred to the MutationObserver; no row should be present yet
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
     it('K2: handleNavigation to non-"/" pathname removes the toggle row', () => {
@@ -497,47 +498,48 @@ describe('K — handleNavigation (SPA-aware)', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('K3: handleNavigation back to "/" re-injects after prior remove', () => {
+    it('K3: handleNavigation back to "/" leaves injection to MutationObserver (row absent after call)', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
         TemporaryChatToggle.handleNavigation('/a/chat/s/some-uuid', '/');
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
 
+        // handleNavigation to '/' no longer injects synchronously
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
-        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('K4: no duplicate rows when handleNavigation to "/" called twice', () => {
+    it('K4: no duplicate rows when handleNavigation to "/" called twice (MutationObserver dedupes via injectToggleRow guard)', () => {
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
         TemporaryChatToggle.handleNavigation('/', '/');
 
+        // Both calls do nothing synchronously; no row is present
         const rows = document.querySelectorAll('#dss-temp-chat-toggle-row');
-        expect(rows).toHaveLength(1);
+        expect(rows).toHaveLength(0);
     });
 
-    it('K5: re-injected row reflects cache enabled flag (true)', () => {
+    it('K5: handleNavigation to "/" is a no-op (no row; MutationObserver will inject when anchor appears)', () => {
         TemporaryChatToggle.writeEnabledFlag(true);
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/uuid');
 
-        const input = document.querySelector('.dss-temp-chat-switch__input');
-        expect(input.checked).toBe(true);
+        // No synchronous injection — MutationObserver handles it asynchronously
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('K6: re-injected row reflects cache enabled flag (false)', () => {
+    it('K6: handleNavigation to "/" does not inject (flag false, MutationObserver deferred)', () => {
         TemporaryChatToggle.writeEnabledFlag(false);
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/uuid');
 
-        const input = document.querySelector('.dss-temp-chat-switch__input');
-        expect(input.checked).toBe(false);
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
     it('K7: removal does NOT change the enabled flag cache', () => {

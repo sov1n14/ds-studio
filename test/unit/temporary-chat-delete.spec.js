@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ── chrome mocks (must be set before module import) ────────────────────────────
-const chromeStorageSessionMock = {
+const chromeStorageLocalMock = {
     _store: {},
     get(keys) {
         const result = {};
@@ -17,7 +17,7 @@ const chromeStorageSessionMock = {
 
 global.chrome = {
     storage: {
-        session: chromeStorageSessionMock,
+        local: chromeStorageLocalMock,
         onChanged: { addListener: () => {} },
     },
     runtime: {
@@ -52,17 +52,17 @@ function makeNavigateEvent({ destinationUrl, navigationType = 'push' }) {
 describe('A — initEnabledFlagFromStorage', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
-        chromeStorageSessionMock._reset();
+        chromeStorageLocalMock._reset();
     });
 
-    it('A1: reads dss-temporary-chat-enabled from chrome.storage.session', async () => {
-        chromeStorageSessionMock._store['dss-temporary-chat-enabled'] = true;
+    it('A1: reads dss-temporary-chat-enabled from chrome.storage.local', async () => {
+        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.__getState().enabledFlagCache).toBe(true);
     });
 
     it('A2: sets _enabledFlagCache to true when stored value is true', async () => {
-        chromeStorageSessionMock._store['dss-temporary-chat-enabled'] = true;
+        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
@@ -74,7 +74,7 @@ describe('A — initEnabledFlagFromStorage', () => {
     });
 
     it('A4: sets _enabledFlagCache to false when stored value is false', async () => {
-        chromeStorageSessionMock._store['dss-temporary-chat-enabled'] = false;
+        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = false;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
     });
@@ -85,7 +85,7 @@ describe('A — initEnabledFlagFromStorage', () => {
 describe('B — readEnabledFlag', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
-        chromeStorageSessionMock._reset();
+        chromeStorageLocalMock._reset();
     });
 
     it('B1: returns false when cache is not initialised (default)', () => {
@@ -97,8 +97,8 @@ describe('B — readEnabledFlag', () => {
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
 
-    it('B3: does NOT call chrome.storage.session (reads only from cache)', async () => {
-        const getSpy = vi.spyOn(chromeStorageSessionMock, 'get');
+    it('B3: does NOT call chrome.storage.local (reads only from cache)', async () => {
+        const getSpy = vi.spyOn(chromeStorageLocalMock, 'get');
         TemporaryChatDelete.__setState({ enabledFlagCache: true });
         TemporaryChatDelete.readEnabledFlag();
         expect(getSpy).not.toHaveBeenCalled();
@@ -985,6 +985,34 @@ describe('O — toggle-off still deletes tracked conversation', () => {
         expect(global.chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
         const msg = global.chrome.runtime.sendMessage.mock.calls[0][0];
         expect(msg.chatUuid).toBe(uuid);
+    });
+
+    it('O5: handleToggleChanged(true) updates _enabledFlagCache to true', () => {
+        // Arrange: cache starts false (default after __resetState)
+        TemporaryChatDelete.__resetState();
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
+
+        // Act
+        const evt = new CustomEvent('dss-temporary-chat-changed', { detail: { isEnabled: true } });
+        TemporaryChatDelete.handleToggleChanged(evt);
+
+        // Assert
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
+        expect(TemporaryChatDelete.__getState().enabledFlagCache).toBe(true);
+    });
+
+    it('O6: handleToggleChanged(false) updates _enabledFlagCache to false', () => {
+        // Arrange: cache starts true
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
+
+        // Act
+        const evt = new CustomEvent('dss-temporary-chat-changed', { detail: { isEnabled: false } });
+        TemporaryChatDelete.handleToggleChanged(evt);
+
+        // Assert
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
+        expect(TemporaryChatDelete.__getState().enabledFlagCache).toBe(false);
     });
 
     it('O4: toggle-off does NOT set _createDetected when create message arrives', () => {
