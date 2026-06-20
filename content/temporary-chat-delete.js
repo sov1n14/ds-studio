@@ -98,8 +98,10 @@ const TemporaryChatDelete = (() => {
         try {
             const result = await chrome.storage.session.get([key]);
             _enabledFlagCache = result[key] === true;
+            console.log('[DV:TempChatDelete] initEnabledFlagFromStorage | read from storage → _enabledFlagCache:', _enabledFlagCache);
         } catch {
             _enabledFlagCache = false;
+            console.log('[DV:TempChatDelete] initEnabledFlagFromStorage | storage unavailable → _enabledFlagCache: false');
         }
     }
 
@@ -109,6 +111,7 @@ const TemporaryChatDelete = (() => {
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         if (!(key in changes)) return;
         const isNowEnabled = changes[key].newValue === true;
+        console.log('[DV:TempChatDelete] chrome.storage.onChanged | area:', area, '| isNowEnabled:', isNowEnabled, '| _trackedTemporaryUuid:', _trackedTemporaryUuid);
         _enabledFlagCache = isNowEnabled;
         if (!isNowEnabled && !_trackedTemporaryUuid) {
             detachListeners();
@@ -165,6 +168,7 @@ const TemporaryChatDelete = (() => {
      * @param {{ keepalive?: boolean }} [options]
      */
     function deleteTrackedAndClear({ keepalive = false } = {}) {
+        console.log('[DV:TempChatDelete] deleteTrackedAndClear | _trackedTemporaryUuid:', _trackedTemporaryUuid, '| keepalive:', keepalive, '| readEnabledFlag():', readEnabledFlag());
         if (!_trackedTemporaryUuid) return;
         if (!_capturedAuthToken) return;
 
@@ -258,6 +262,7 @@ const TemporaryChatDelete = (() => {
         _isKeyboardRefresh = false;
 
         const fromUuid = extractUuidFromUrl();
+        console.log('[DV:TempChatDelete] handleNavigationEvent | from:', window.location.pathname, '→ dest:', new URL(event.destination?.url || 'about:blank').pathname, '| isRefresh:', isRefresh, '| fromUuid:', fromUuid, '| _trackedTemporaryUuid:', _trackedTemporaryUuid, '| _isPendingCreate:', _isPendingCreate, '| readEnabledFlag():', readEnabledFlag());
 
         // 離開臨時對話：非刷新且有追蹤 UUID 且與當前頁面 UUID 吻合
         if (!isRefresh && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
@@ -310,6 +315,7 @@ const TemporaryChatDelete = (() => {
      * @param {CustomEvent} e
      */
     function handleToggleChanged(e) {
+        console.log('[DV:TempChatDelete] handleToggleChanged | isEnabled:', e.detail?.isEnabled, '| _trackedTemporaryUuid:', _trackedTemporaryUuid, '| _isListening:', _isListening);
         const isEnabled = e.detail?.isEnabled === true;
         if (isEnabled) {
             attachListeners();
@@ -327,6 +333,7 @@ const TemporaryChatDelete = (() => {
      * 掛載所有事件監聽器（冪等：已掛載時直接返回）。
      */
     function attachListeners() {
+        console.log('[DV:TempChatDelete] attachListeners | _isListening before:', _isListening);
         if (_isListening) return;
         _isListening = true;
 
@@ -343,6 +350,7 @@ const TemporaryChatDelete = (() => {
      * 卸載所有事件監聽器（冪等：未掛載時直接返回）。
      */
     function detachListeners() {
+        console.log('[DV:TempChatDelete] detachListeners | _isListening before:', _isListening);
         if (!_isListening) return;
         _isListening = false;
 

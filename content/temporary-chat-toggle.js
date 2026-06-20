@@ -43,9 +43,11 @@ const TemporaryChatToggle = (() => {
         try {
             const result = await chrome.storage.session.get([key]);
             _enabledFlagCache = result[key] === true;
+            console.log('[DV:TempChatToggle] initEnabledFlagFromStorage | read from storage → _enabledFlagCache:', _enabledFlagCache);
         } catch {
             // storage 不可用時以 false 為預設值
             _enabledFlagCache = false;
+            console.log('[DV:TempChatToggle] initEnabledFlagFromStorage | storage unavailable → _enabledFlagCache: false');
         }
     }
 
@@ -63,6 +65,7 @@ const TemporaryChatToggle = (() => {
      * @param {boolean} isEnabled
      */
     function writeEnabledFlag(isEnabled) {
+        console.log('[DV:TempChatToggle] writeEnabledFlag | isEnabled:', isEnabled, '| caller:', new Error().stack.split('\n')[1]?.trim());
         // 先更新快取，確保同頁面行為立即生效
         _enabledFlagCache = isEnabled;
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
@@ -290,6 +293,7 @@ const TemporaryChatToggle = (() => {
          * @param {boolean} newValue
          */
         __setCacheForCrossTabSync(newValue) {
+            console.log('[DV:TempChatToggle] __setCacheForCrossTabSync | newValue:', newValue);
             _enabledFlagCache = newValue;
             if (_injectedRow) {
                 applyVisualState(_injectedRow, newValue);
@@ -310,6 +314,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
         'dss-temporary-chat-enabled';
     if (!(key in changes)) return;
     const newValue = changes[key].newValue === true;
+    console.log('[DV:TempChatToggle] chrome.storage.onChanged | area:', area, '| key:', key, '| newValue:', newValue);
     // 透過公開方法更新快取（利用 IIFE 閉包）
     TemporaryChatToggle.__setCacheForCrossTabSync(newValue);
 });
