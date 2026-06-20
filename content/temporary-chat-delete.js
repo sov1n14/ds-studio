@@ -147,6 +147,15 @@ const TemporaryChatDelete = (() => {
             _createDetected = false;
             _completionDetected = false;
             _isPendingCreate = true;
+
+            // Race-condition fix: if SPA already navigated to the new
+            // conversation before co-occurrence completed, track immediately.
+            const currentUuid = extractUuidFromUrl();
+            if (currentUuid) {
+                _trackedTemporaryUuid = currentUuid;
+                saveTrackedUuid(currentUuid);
+                _isPendingCreate = false;
+            }
             return;
         }
         if (_coOccurrenceTimer === null) {

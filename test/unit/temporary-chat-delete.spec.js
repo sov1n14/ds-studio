@@ -321,12 +321,16 @@ describe('G — handleCompletionMessage', () => {
 describe('H — checkCoOccurrence', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
+        sessionStorage.clear();
+        setPathname('/');
         vi.useFakeTimers();
     });
 
     afterEach(() => {
         vi.useRealTimers();
         vi.restoreAllMocks();
+        sessionStorage.clear();
+        setPathname('/');
     });
 
     it('H1: when only _createDetected is true → does NOT set _isPendingCreate; starts a timer', () => {
@@ -343,13 +347,14 @@ describe('H — checkCoOccurrence', () => {
         expect(TemporaryChatDelete.__getState().coOccurrenceTimer).not.toBeNull();
     });
 
-    it('H3: when both are true → sets _isPendingCreate = true, clears both flags', () => {
+    it('H3: when both are true and on homepage → sets _isPendingCreate = true, clears both flags', () => {
         TemporaryChatDelete.__setState({ createDetected: true, completionDetected: true });
         TemporaryChatDelete.checkCoOccurrence();
         const state = TemporaryChatDelete.__getState();
         expect(state.isPendingCreate).toBe(true);
         expect(state.createDetected).toBe(false);
         expect(state.completionDetected).toBe(false);
+        expect(state.trackedTemporaryUuid).toBeNull();
     });
 
     it('H4: timer expiry (1000ms) resets both flags, _isPendingCreate stays false', () => {
@@ -362,6 +367,21 @@ describe('H — checkCoOccurrence', () => {
         expect(state.createDetected).toBe(false);
         expect(state.completionDetected).toBe(false);
         expect(state.isPendingCreate).toBe(false);
+    });
+
+    it('H5: when both are true and already on chat page → tracks UUID immediately and clears _isPendingCreate', () => {
+        const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({ createDetected: true, completionDetected: true });
+        
+        TemporaryChatDelete.checkCoOccurrence();
+        
+        const state = TemporaryChatDelete.__getState();
+        expect(state.isPendingCreate).toBe(false);
+        expect(state.createDetected).toBe(false);
+        expect(state.completionDetected).toBe(false);
+        expect(state.trackedTemporaryUuid).toBe(uuid);
+        expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBe(uuid);
     });
 });
 
