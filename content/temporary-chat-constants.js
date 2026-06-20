@@ -19,6 +19,12 @@ const DSS_CHAT_CREATE_MESSAGE_TYPE = 'DSS_CHAT_CREATE_DETECTED';
 // 新對話建立 API 端點路徑片段（用於 XHR/fetch URL 比對）
 const DSS_CHAT_CREATE_ENDPOINT = '/api/v0/chat_session/create';
 
+// window.postMessage type：XHR hook 偵測到 /api/v0/chat/completion 時發送
+const DSS_CHAT_COMPLETION_MESSAGE_TYPE = 'DSS_CHAT_COMPLETION_DETECTED';
+
+// chrome.runtime.sendMessage type：content script → SW，用於分頁/瀏覽器關閉時的刪除路由
+const DSS_SW_DELETE_MESSAGE_TYPE = 'DSS_DELETE_TEMP_CHAT';
+
 // Test export（瀏覽器中為 no-op）
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -27,5 +33,7 @@ if (typeof module !== 'undefined' && module.exports) {
         DSS_TEMP_CHAT_UUID_KEY,
         DSS_CHAT_CREATE_MESSAGE_TYPE,
         DSS_CHAT_CREATE_ENDPOINT,
+        DSS_CHAT_COMPLETION_MESSAGE_TYPE,
+        DSS_SW_DELETE_MESSAGE_TYPE,
     };
 }

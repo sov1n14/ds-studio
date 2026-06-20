@@ -1,12 +1,16 @@
 /**
  * DS studio — Temporary Chat Toggle
  * 僅在首頁（pathname === '/'）注入切換開關 UI。
- * 單一職責：管理 UI 注入、使用者互動、sessionStorage 讀寫與事件 dispatch。
+ * 單一職責：管理 UI 注入、使用者互動、chrome.storage.session 讀寫與事件 dispatch。
  * 常數由 temporary-chat-constants.js 在前載入提供。
  *
  * SPA-aware: listens to Navigation API (navigate) and popstate to inject/remove
  * the toggle row whenever the pathname changes. The MutationObserver handles the
  * case where the anchor element appears asynchronously after the route settles.
+ *
+ * Cross-tab sync: uses chrome.storage.session for the enabled flag so all tabs
+ * reflect changes made in any single tab. An in-memory cache (_enabledFlagCache)
+ * keeps readEnabledFlag() synchronous after async initialisation.
  */
 
 const TemporaryChatToggle = (() => {
@@ -24,32 +28,48 @@ const TemporaryChatToggle = (() => {
     // ── 私有狀態 ──────────────────────────────────────────────────────────────
     let _mutationObserver = null;
     let _injectedRow = null;
+    // chrome.storage.session 的本地快取，使 readEnabledFlag() 保持同步
+    let _enabledFlagCache = false;
 
     // ── 純工具函式（可供測試匯出） ───────────────────────────────────────────
 
     /**
-     * 讀取 sessionStorage 中的啟用旗標；缺少或無法解析時預設回傳 false。
-     * @returns {boolean}
+     * 從 chrome.storage.session 非同步讀取啟用旗標並更新快取。
+     * 必須在 init() 最前方 await，以確保 readEnabledFlag() 可同步使用。
+     * @returns {Promise<void>}
      */
-    function readEnabledFlag() {
+    async function initEnabledFlagFromStorage() {
+        const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         try {
-            const STORAGE_KEY = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
-            return sessionStorage.getItem(STORAGE_KEY) === 'true';
+            const result = await chrome.storage.session.get([key]);
+            _enabledFlagCache = result[key] === true;
         } catch {
-            return false;
+            // storage 不可用時以 false 為預設值
+            _enabledFlagCache = false;
         }
     }
 
     /**
-     * 將啟用旗標寫入 sessionStorage。
+     * 從快取讀取啟用旗標（同步）。
+     * 快取由 initEnabledFlagFromStorage() 初始化、writeEnabledFlag() 維護。
+     * @returns {boolean}
+     */
+    function readEnabledFlag() {
+        return _enabledFlagCache;
+    }
+
+    /**
+     * 同步更新快取並非同步寫入 chrome.storage.session（fire-and-forget）。
      * @param {boolean} isEnabled
      */
     function writeEnabledFlag(isEnabled) {
+        // 先更新快取，確保同頁面行為立即生效
+        _enabledFlagCache = isEnabled;
+        const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         try {
-            const STORAGE_KEY = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
-            sessionStorage.setItem(STORAGE_KEY, isEnabled ? 'true' : 'false');
+            chrome.storage.session.set({ [key]: isEnabled });
         } catch {
-            // sessionStorage 不可用時靜默忽略
+            // storage 不可用時靜默忽略；快取已更新，同分頁行為仍正常
         }
     }
 
@@ -233,10 +253,15 @@ const TemporaryChatToggle = (() => {
     // ── 公開 API ─────────────────────────────────────────────────────────────
 
     /**
-     * 初始化模組：在首頁時立即注入；啟動 observer 與 navigation 監聽以處理 SPA 路由切換。
+     * 初始化模組：先從 chrome.storage.session 載入旗標快取，
+     * 再啟動 observer 與 navigation 監聽，最後在首頁立即注入。
+     * @returns {Promise<void>}
      */
-    function init() {
+    async function init() {
         console.log('[DV:TempChatToggle] init | pathname:', window.location.pathname);
+
+        // 先等待快取初始化，確保 readEnabledFlag() 有正確值
+        await initEnabledFlagFromStorage();
 
         // Start observer and navigation listeners regardless of current path,
         // so SPA navigations back to '/' are handled correctly
@@ -260,8 +285,34 @@ const TemporaryChatToggle = (() => {
         // New exports for unit tests (SPA-aware behavior)
         removeToggleRow,
         handleNavigation,
+        /**
+         * 供跨分頁同步監聽器與單元測試使用：直接更新快取並同步 UI。
+         * @param {boolean} newValue
+         */
+        __setCacheForCrossTabSync(newValue) {
+            _enabledFlagCache = newValue;
+            if (_injectedRow) {
+                applyVisualState(_injectedRow, newValue);
+            }
+            // 通知 TemporaryChatDelete 等其他監聽者
+            dispatchToggleEvent(newValue);
+        },
     };
 })();
+
+// ── 跨分頁同步監聽器 ───────────────────────────────────────────────────────
+// 當其他分頁透過 chrome.storage.session 改變啟用旗標時，同步本分頁的快取與 UI。
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'session') return;
+    const key =
+        (typeof globalThis !== 'undefined' && globalThis['DSS_TEMP_CHAT_STORAGE_KEY']) ||
+        (typeof window !== 'undefined' && window['DSS_TEMP_CHAT_STORAGE_KEY']) ||
+        'dss-temporary-chat-enabled';
+    if (!(key in changes)) return;
+    const newValue = changes[key].newValue === true;
+    // 透過公開方法更新快取（利用 IIFE 閉包）
+    TemporaryChatToggle.__setCacheForCrossTabSync(newValue);
+});
 
 // Auto-start（與 sidebar-auto-hide.js 相同的啟動模式）
 TemporaryChatToggle.init();

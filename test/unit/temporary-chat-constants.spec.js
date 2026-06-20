@@ -25,13 +25,23 @@ describe('temporary-chat-constants', () => {
         expect(constants.DSS_CHAT_CREATE_ENDPOINT).toBe('/api/v0/chat_session/create');
     });
 
-    it('exports exactly five constants', () => {
+    it('exports exactly seven constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(5);
+        expect(keys).toHaveLength(7);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
         expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
         expect(keys).toContain('DSS_CHAT_CREATE_MESSAGE_TYPE');
         expect(keys).toContain('DSS_CHAT_CREATE_ENDPOINT');
+        expect(keys).toContain('DSS_CHAT_COMPLETION_MESSAGE_TYPE');
+        expect(keys).toContain('DSS_SW_DELETE_MESSAGE_TYPE');
+    });
+
+    it('DSS_CHAT_COMPLETION_MESSAGE_TYPE has the exact expected value', () => {
+        expect(constants.DSS_CHAT_COMPLETION_MESSAGE_TYPE).toBe('DSS_CHAT_COMPLETION_DETECTED');
+    });
+
+    it('DSS_SW_DELETE_MESSAGE_TYPE has the exact expected value', () => {
+        expect(constants.DSS_SW_DELETE_MESSAGE_TYPE).toBe('DSS_DELETE_TEMP_CHAT');
     });
 });

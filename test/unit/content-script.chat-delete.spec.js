@@ -1,5 +1,43 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+
+// ── chrome mocks ───────────────────────────────────────────────────────────────
+// These are defined before TemporaryChatDelete is imported; the module checks for
+// global.chrome at load-time.
+if (!global.chrome) {
+    global.chrome = {};
+}
+if (!global.chrome.storage) {
+    global.chrome.storage = {};
+}
+if (!global.chrome.storage.session) {
+    global.chrome.storage.session = {
+        _store: {},
+        get(keys) {
+            const result = {};
+            keys.forEach(k => { if (k in this._store) result[k] = this._store[k]; });
+            return Promise.resolve(result);
+        },
+        set(items) {
+            Object.assign(this._store, items);
+            return Promise.resolve();
+        },
+    };
+}
+if (!global.chrome.storage.onChanged) {
+    global.chrome.storage.onChanged = { addListener: () => {} };
+}
+if (!global.chrome.runtime) {
+    global.chrome.runtime = { sendMessage: vi.fn() };
+}
+
+// ── TemporaryChatDeleteApi mock ────────────────────────────────────────────────
+global.TemporaryChatDeleteApi = {
+    deleteChatSession: vi.fn().mockResolvedValue(true),
+    deleteChatSessionWithRetry: vi.fn().mockResolvedValue(undefined),
+    showDeleteFailedToast: vi.fn(),
+};
+
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -7,93 +45,19 @@ function setPathname(path) {
     window.history.replaceState({}, '', path);
 }
 
-// ── deleteChatSession guard clauses & API shape ───────────────────────────────
-// These tests verify the delete API contract (POST shape, headers, guard clauses).
-// The dss-chat-left dispatch was REMOVED from content-script.js in this version.
-// Tests that relied on that dispatch are removed here to reflect current behavior.
-
-describe('deleteChatSession', () => {
-    beforeEach(() => {
-        TemporaryChatDelete.__resetState();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
-    });
-
-    afterEach(() => {
-        vi.restoreAllMocks();
-    });
-
-    it('returns early without calling fetch when capturedAuthToken is null', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: null });
-        await TemporaryChatDelete.deleteChatSession('some-uuid');
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('returns early without calling fetch when chatUuid is null', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token123' });
-        await TemporaryChatDelete.deleteChatSession(null);
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('returns early without calling fetch when chatUuid is an empty string', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token123' });
-        await TemporaryChatDelete.deleteChatSession('');
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('calls fetch with correct URL, method, headers, and body when token and uuid are present', async () => {
-        const token = 'Bearer test-auth-token';
-        const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        TemporaryChatDelete.__setState({ capturedAuthToken: token });
-
-        await TemporaryChatDelete.deleteChatSession(uuid);
-
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const [url, options] = global.fetch.mock.calls[0];
-        expect(url).toBe('https://chat.deepseek.com/api/v0/chat_session/delete');
-        expect(options.method).toBe('POST');
-        expect(options.headers['authorization']).toBe(token);
-        expect(options.headers['content-type']).toBe('application/json');
-        expect(options.body).toBe(JSON.stringify({ chat_session_id: uuid }));
-    });
-
-    it('passes keepalive: true when requested', async () => {
-        const token = 'Bearer keepalive-token';
-        const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        TemporaryChatDelete.__setState({ capturedAuthToken: token });
-
-        await TemporaryChatDelete.deleteChatSession(uuid, { keepalive: true });
-
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const [, options] = global.fetch.mock.calls[0];
-        expect(options.keepalive).toBe(true);
-    });
-
-    it('passes keepalive: false by default', async () => {
-        const token = 'Bearer default-token';
-        const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-        TemporaryChatDelete.__setState({ capturedAuthToken: token });
-
-        await TemporaryChatDelete.deleteChatSession(uuid);
-
-        const [, options] = global.fetch.mock.calls[0];
-        expect(options.keepalive).toBe(false);
-    });
-
-    it('swallows fetch errors silently without throwing', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer token123' });
-        global.fetch = vi.fn().mockRejectedValue(new Error('Network failure'));
-
-        await expect(TemporaryChatDelete.deleteChatSession('some-uuid')).resolves.toBeUndefined();
-    });
-});
+// ── deleteChatSession is now in TemporaryChatDeleteApi, not TemporaryChatDelete ─
+// Those tests are covered in temporary-chat-delete-api.spec.js.
 
 // ── beforeunload handler ──────────────────────────────────────────────────────
+// handleBeforeUnload now routes via chrome.runtime.sendMessage (keepalive: true path)
+// instead of calling fetch directly.
 
 describe('beforeunload handler (TemporaryChatDelete)', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        global.chrome.runtime.sendMessage.mockClear();
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
     });
 
     afterEach(() => {
@@ -102,7 +66,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         setPathname('/');
     });
 
-    it('calls deleteChatSession with keepalive when conditions are met (tracked uuid, token, on chat page)', () => {
+    it('calls chrome.runtime.sendMessage (not fetch) with keepalive payload when conditions are met', () => {
         const token = 'Bearer leave-token';
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
@@ -115,13 +79,14 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const [url, options] = global.fetch.mock.calls[0];
-        expect(url).toBe('https://chat.deepseek.com/api/v0/chat_session/delete');
-        expect(options.keepalive).toBe(true);
+        expect(global.chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+        const msg = global.chrome.runtime.sendMessage.mock.calls[0][0];
+        expect(msg.type).toBe('DSS_DELETE_TEMP_CHAT');
+        expect(msg.chatUuid).toBe(uuid);
+        expect(msg.authToken).toBe(token);
     });
 
-    it('does NOT call fetch when suppressNextUnloadDelete is true', () => {
+    it('does NOT call sendMessage when suppressNextUnloadDelete is true', () => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -132,10 +97,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('does NOT call fetch when isKeyboardRefresh is true', () => {
+    it('does NOT call sendMessage when isKeyboardRefresh is true', () => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -147,10 +112,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('does NOT call fetch when capturedAuthToken is null', () => {
+    it('does NOT call sendMessage when capturedAuthToken is null', () => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -162,10 +127,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('does NOT call fetch when URL has no chat UUID', () => {
+    it('does NOT call sendMessage when URL has no chat UUID', () => {
         setPathname('/');
         TemporaryChatDelete.__setState({
             capturedAuthToken: 'Bearer token',
@@ -176,10 +141,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('does NOT call fetch when current URL uuid does not match trackedTemporaryUuid', () => {
+    it('does NOT call sendMessage when current URL uuid does not match trackedTemporaryUuid', () => {
         const trackedUuid = 'tracked-aaaa';
         const currentUuid = 'current-bbbb';
         setPathname(`/a/chat/s/${currentUuid}`);
@@ -192,6 +157,6 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 });

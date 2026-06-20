@@ -1,4 +1,37 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// ── chrome mocks (must be set before module import) ────────────────────────────
+const chromeStorageSessionMock = {
+    _store: {},
+    get(keys) {
+        const result = {};
+        keys.forEach(k => { if (k in this._store) result[k] = this._store[k]; });
+        return Promise.resolve(result);
+    },
+    set(items) {
+        Object.assign(this._store, items);
+        return Promise.resolve();
+    },
+    _reset() { this._store = {}; },
+};
+
+global.chrome = {
+    storage: {
+        session: chromeStorageSessionMock,
+        onChanged: { addListener: () => {} },
+    },
+    runtime: {
+        sendMessage: vi.fn(),
+    },
+};
+
+// ── TemporaryChatDeleteApi mock ────────────────────────────────────────────────
+global.TemporaryChatDeleteApi = {
+    deleteChatSession: vi.fn().mockResolvedValue(true),
+    deleteChatSessionWithRetry: vi.fn().mockResolvedValue(undefined),
+    showDeleteFailedToast: vi.fn(),
+};
+
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
@@ -14,166 +47,110 @@ function makeNavigateEvent({ destinationUrl, navigationType = 'push' }) {
     };
 }
 
-// ── Group A: deleteChatSession guard clauses ──────────────────────────────────
+// ── Group A: initEnabledFlagFromStorage ───────────────────────────────────────
 
-describe('A — deleteChatSession guard clauses', () => {
+describe('A — initEnabledFlagFromStorage', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        chromeStorageSessionMock._reset();
     });
 
-    afterEach(() => {
-        vi.restoreAllMocks();
+    it('A1: reads dss-temporary-chat-enabled from chrome.storage.session', async () => {
+        chromeStorageSessionMock._store['dss-temporary-chat-enabled'] = true;
+        await TemporaryChatDelete.initEnabledFlagFromStorage();
+        expect(TemporaryChatDelete.__getState().enabledFlagCache).toBe(true);
     });
 
-    it('A1: no fetch when capturedAuthToken is null', async () => {
-        await TemporaryChatDelete.deleteChatSession('some-uuid');
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('A2: no fetch when chatUuid is null', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession(null);
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('A3: no fetch when chatUuid is empty string', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('');
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('A4: calls fetch with correct URL', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [url] = global.fetch.mock.calls[0];
-        expect(url).toBe('https://chat.deepseek.com/api/v0/chat_session/delete');
-    });
-
-    it('A5: calls fetch with method POST', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.method).toBe('POST');
-    });
-
-    it('A6: sends authorization header', async () => {
-        const token = 'Bearer header-test';
-        TemporaryChatDelete.__setState({ capturedAuthToken: token });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.headers['authorization']).toBe(token);
-    });
-
-    it('A7: sends content-type application/json header', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.headers['content-type']).toBe('application/json');
-    });
-
-    it('A8: sends body with chat_session_id', async () => {
-        const uuid = 'test-uuid-abcd';
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession(uuid);
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.body).toBe(JSON.stringify({ chat_session_id: uuid }));
-    });
-
-    it('A9: keepalive defaults to false', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.keepalive).toBe(false);
-    });
-
-    it('A10: keepalive true is passed through', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234', { keepalive: true });
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.keepalive).toBe(true);
-    });
-
-    it('A11: swallows network errors silently', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        global.fetch = vi.fn().mockRejectedValue(new Error('Network failure'));
-        await expect(TemporaryChatDelete.deleteChatSession('uuid-1234')).resolves.toBeUndefined();
-    });
-
-    it('A12: sends x-app-version header', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.headers['x-app-version']).toBe('2.0.0');
-    });
-
-    it('A13: sends x-client-platform header as web', async () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok' });
-        await TemporaryChatDelete.deleteChatSession('uuid-1234');
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.headers['x-client-platform']).toBe('web');
-    });
-});
-
-// ── Group B: sessionStorage helpers ──────────────────────────────────────────
-
-describe('B — sessionStorage helpers', () => {
-    beforeEach(() => {
-        TemporaryChatDelete.__resetState();
-        sessionStorage.clear();
-    });
-
-    afterEach(() => {
-        vi.restoreAllMocks();
-        sessionStorage.clear();
-    });
-
-    it('B1: readEnabledFlag returns false when sessionStorage key is absent', () => {
-        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
-    });
-
-    it('B2: readEnabledFlag returns false when sessionStorage key is "false"', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'false');
-        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
-    });
-
-    it('B3: readEnabledFlag returns true only when sessionStorage key is "true"', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
+    it('A2: sets _enabledFlagCache to true when stored value is true', async () => {
+        chromeStorageSessionMock._store['dss-temporary-chat-enabled'] = true;
+        await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
 
-    it('B4: loadTrackedUuid returns null when sessionStorage key is absent', () => {
+    it('A3: sets _enabledFlagCache to false when stored value is absent', async () => {
+        // store is empty
+        await TemporaryChatDelete.initEnabledFlagFromStorage();
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
+    });
+
+    it('A4: sets _enabledFlagCache to false when stored value is false', async () => {
+        chromeStorageSessionMock._store['dss-temporary-chat-enabled'] = false;
+        await TemporaryChatDelete.initEnabledFlagFromStorage();
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
+    });
+});
+
+// ── Group B: readEnabledFlag ──────────────────────────────────────────────────
+
+describe('B — readEnabledFlag', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+        chromeStorageSessionMock._reset();
+    });
+
+    it('B1: returns false when cache is not initialised (default)', () => {
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
+    });
+
+    it('B2: returns true when cache was set via __setState', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
+    });
+
+    it('B3: does NOT call chrome.storage.session (reads only from cache)', async () => {
+        const getSpy = vi.spyOn(chromeStorageSessionMock, 'get');
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
+        TemporaryChatDelete.readEnabledFlag();
+        expect(getSpy).not.toHaveBeenCalled();
+        getSpy.mockRestore();
+    });
+});
+
+// ── Group C: sessionStorage helpers ──────────────────────────────────────────
+
+describe('C — sessionStorage helpers', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+        sessionStorage.clear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        sessionStorage.clear();
+    });
+
+    it('C1: loadTrackedUuid returns null when sessionStorage key is absent', () => {
         expect(TemporaryChatDelete.loadTrackedUuid()).toBeNull();
     });
 
-    it('B5: saveTrackedUuid persists a uuid and loadTrackedUuid retrieves it', () => {
+    it('C2: saveTrackedUuid persists a uuid and loadTrackedUuid retrieves it', () => {
         TemporaryChatDelete.saveTrackedUuid('aaaa-bbbb');
         expect(TemporaryChatDelete.loadTrackedUuid()).toBe('aaaa-bbbb');
     });
 
-    it('B6: saveTrackedUuid with null removes the key', () => {
+    it('C3: saveTrackedUuid with null removes the key', () => {
         TemporaryChatDelete.saveTrackedUuid('some-uuid');
         TemporaryChatDelete.saveTrackedUuid(null);
         expect(TemporaryChatDelete.loadTrackedUuid()).toBeNull();
     });
 });
 
-// ── Group C: extractUuidFromUrl ───────────────────────────────────────────────
+// ── Group D: extractUuidFromUrl ───────────────────────────────────────────────
 
-describe('C — extractUuidFromUrl', () => {
-    it('C1: extracts uuid from /a/chat/s/<uuid> path (hex chars only)', () => {
+describe('D — extractUuidFromUrl', () => {
+    it('D1: extracts uuid from /a/chat/s/<uuid> path (hex chars only)', () => {
         expect(TemporaryChatDelete.extractUuidFromUrl('/a/chat/s/aaaa1111-bbbb-cccc-dddd-eeeeeeee0000')).toBe('aaaa1111-bbbb-cccc-dddd-eeeeeeee0000');
     });
 
-    it('C2: returns null for homepage path', () => {
+    it('D2: returns null for homepage path', () => {
         expect(TemporaryChatDelete.extractUuidFromUrl('/')).toBeNull();
     });
 
-    it('C3: returns null for unrecognised path', () => {
+    it('D3: returns null for unrecognised path', () => {
         expect(TemporaryChatDelete.extractUuidFromUrl('/a/other/path')).toBeNull();
     });
 
-    it('C4: uses window.location.pathname when no argument given (via setPathname)', () => {
+    it('D4: uses window.location.pathname when no argument given', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         window.history.replaceState({}, '', `/a/chat/s/${uuid}`);
         expect(TemporaryChatDelete.extractUuidFromUrl()).toBe(uuid);
@@ -181,9 +158,9 @@ describe('C — extractUuidFromUrl', () => {
     });
 });
 
-// ── Group D: handleAuthMessage ────────────────────────────────────────────────
+// ── Group E: handleAuthMessage ────────────────────────────────────────────────
 
-describe('D — handleAuthMessage', () => {
+describe('E — handleAuthMessage', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
     });
@@ -192,7 +169,7 @@ describe('D — handleAuthMessage', () => {
         vi.restoreAllMocks();
     });
 
-    it('D1: captures token from DSS_AUTH_CAPTURED message', () => {
+    it('E1: captures token from DSS_AUTH_CAPTURED message', () => {
         const event = new MessageEvent('message', {
             data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer abc' },
             source: window,
@@ -201,7 +178,7 @@ describe('D — handleAuthMessage', () => {
         expect(TemporaryChatDelete.__getState().capturedAuthToken).toBe('Bearer abc');
     });
 
-    it('D2: ignores messages not from window (source !== window)', () => {
+    it('E2: ignores messages not from window (source !== window)', () => {
         const event = new MessageEvent('message', {
             data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer foreign' },
             source: null,
@@ -210,7 +187,7 @@ describe('D — handleAuthMessage', () => {
         expect(TemporaryChatDelete.__getState().capturedAuthToken).toBeNull();
     });
 
-    it('D3: ignores messages with wrong type', () => {
+    it('E3: ignores messages with wrong type', () => {
         const event = new MessageEvent('message', {
             data: { type: 'SOME_OTHER_TYPE', authorization: 'Bearer wrong' },
             source: window,
@@ -219,80 +196,183 @@ describe('D — handleAuthMessage', () => {
         expect(TemporaryChatDelete.__getState().capturedAuthToken).toBeNull();
     });
 
-    it('D4: captures token regardless of toggle state (token always saved)', () => {
-        // Token capture is unconditional — toggle off should not block it
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'false');
+    it('E4: captures token regardless of toggle state (token always saved)', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: false });
         const event = new MessageEvent('message', {
             data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer unconditional' },
             source: window,
         });
         TemporaryChatDelete.handleAuthMessage(event);
         expect(TemporaryChatDelete.__getState().capturedAuthToken).toBe('Bearer unconditional');
-        sessionStorage.clear();
     });
 });
 
-// ── Group E: handleCreateMessage — creation detection → pending flag ──────────
+// ── Group F: handleCreateMessage — creation detection → co-occurrence ─────────
 
-describe('E — handleCreateMessage (creation detection)', () => {
+describe('F — handleCreateMessage (creation detection)', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
-        sessionStorage.clear();
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
-        sessionStorage.clear();
     });
 
-    it('E1: sets isPendingCreate when toggle is ON', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
+    it('F1: sets _createDetected when toggle is ON', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
         const event = new MessageEvent('message', {
             data: { type: 'DSS_CHAT_CREATE_DETECTED' },
             source: window,
         });
         TemporaryChatDelete.handleCreateMessage(event);
-        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(true);
+        expect(TemporaryChatDelete.__getState().createDetected).toBe(true);
     });
 
-    it('E2: does NOT set isPendingCreate when toggle is OFF', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'false');
+    it('F2: does NOT set _createDetected when toggle is OFF', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: false });
         const event = new MessageEvent('message', {
             data: { type: 'DSS_CHAT_CREATE_DETECTED' },
             source: window,
         });
         TemporaryChatDelete.handleCreateMessage(event);
-        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+        expect(TemporaryChatDelete.__getState().createDetected).toBe(false);
     });
 
-    it('E3: ignores messages not from window', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
+    it('F3: ignores messages not from window', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
         const event = new MessageEvent('message', {
             data: { type: 'DSS_CHAT_CREATE_DETECTED' },
             source: null,
         });
         TemporaryChatDelete.handleCreateMessage(event);
-        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+        expect(TemporaryChatDelete.__getState().createDetected).toBe(false);
     });
 
-    it('E4: ignores messages with wrong type', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
+    it('F4: ignores messages with wrong type', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
         const event = new MessageEvent('message', {
             data: { type: 'WRONG_TYPE' },
             source: window,
         });
         TemporaryChatDelete.handleCreateMessage(event);
-        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+        expect(TemporaryChatDelete.__getState().createDetected).toBe(false);
     });
 });
 
-// ── Group F: handleNavigationEvent — marking new temporary conversations ──────
+// ── Group G: handleCompletionMessage ─────────────────────────────────────────
 
-describe('F — handleNavigationEvent (marking)', () => {
+describe('G — handleCompletionMessage', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('G1: ignores messages from non-window source', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
+        const event = new MessageEvent('message', {
+            data: { type: 'DSS_CHAT_COMPLETION_DETECTED' },
+            source: null,
+        });
+        TemporaryChatDelete.handleCompletionMessage(event);
+        expect(TemporaryChatDelete.__getState().completionDetected).toBe(false);
+    });
+
+    it('G2: ignores messages with wrong type', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
+        const event = new MessageEvent('message', {
+            data: { type: 'WRONG_TYPE' },
+            source: window,
+        });
+        TemporaryChatDelete.handleCompletionMessage(event);
+        expect(TemporaryChatDelete.__getState().completionDetected).toBe(false);
+    });
+
+    it('G3: ignores when _enabledFlagCache is false', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: false });
+        const event = new MessageEvent('message', {
+            data: { type: 'DSS_CHAT_COMPLETION_DETECTED' },
+            source: window,
+        });
+        TemporaryChatDelete.handleCompletionMessage(event);
+        expect(TemporaryChatDelete.__getState().completionDetected).toBe(false);
+    });
+
+    it('G4: sets _completionDetected = true and triggers co-occurrence check (timer started)', () => {
+        vi.useFakeTimers();
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
+        const event = new MessageEvent('message', {
+            data: { type: 'DSS_CHAT_COMPLETION_DETECTED' },
+            source: window,
+        });
+        TemporaryChatDelete.handleCompletionMessage(event);
+        const state = TemporaryChatDelete.__getState();
+        // completionDetected flag should be set and a timer started (only _completionDetected, not create)
+        expect(state.completionDetected).toBe(true);
+        expect(state.coOccurrenceTimer).not.toBeNull();
+        vi.useRealTimers();
+    });
+});
+
+// ── Group H: checkCoOccurrence ────────────────────────────────────────────────
+
+describe('H — checkCoOccurrence', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('H1: when only _createDetected is true → does NOT set _isPendingCreate; starts a timer', () => {
+        TemporaryChatDelete.__setState({ createDetected: true, completionDetected: false });
+        TemporaryChatDelete.checkCoOccurrence();
+        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+        expect(TemporaryChatDelete.__getState().coOccurrenceTimer).not.toBeNull();
+    });
+
+    it('H2: when only _completionDetected is true → does NOT set _isPendingCreate; starts a timer', () => {
+        TemporaryChatDelete.__setState({ createDetected: false, completionDetected: true });
+        TemporaryChatDelete.checkCoOccurrence();
+        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+        expect(TemporaryChatDelete.__getState().coOccurrenceTimer).not.toBeNull();
+    });
+
+    it('H3: when both are true → sets _isPendingCreate = true, clears both flags', () => {
+        TemporaryChatDelete.__setState({ createDetected: true, completionDetected: true });
+        TemporaryChatDelete.checkCoOccurrence();
+        const state = TemporaryChatDelete.__getState();
+        expect(state.isPendingCreate).toBe(true);
+        expect(state.createDetected).toBe(false);
+        expect(state.completionDetected).toBe(false);
+    });
+
+    it('H4: timer expiry (1000ms) resets both flags, _isPendingCreate stays false', () => {
+        TemporaryChatDelete.__setState({ createDetected: true, completionDetected: false });
+        TemporaryChatDelete.checkCoOccurrence();
+
+        vi.advanceTimersByTime(1000);
+
+        const state = TemporaryChatDelete.__getState();
+        expect(state.createDetected).toBe(false);
+        expect(state.completionDetected).toBe(false);
+        expect(state.isPendingCreate).toBe(false);
+    });
+});
+
+// ── Group I: handleNavigationEvent — marking new temporary conversations ──────
+
+describe('I — handleNavigationEvent (marking)', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
         setPathname('/');
     });
 
@@ -302,9 +382,8 @@ describe('F — handleNavigationEvent (marking)', () => {
         setPathname('/');
     });
 
-    it('F1: marks trackedTemporaryUuid when isPendingCreate is true and destination is a chat URL', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
-        TemporaryChatDelete.__setState({ isPendingCreate: true });
+    it('I1: marks trackedTemporaryUuid when isPendingCreate is true and destination is a chat URL', () => {
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
 
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
@@ -316,9 +395,8 @@ describe('F — handleNavigationEvent (marking)', () => {
         expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
     });
 
-    it('F2: persists trackedTemporaryUuid to sessionStorage after marking', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
-        TemporaryChatDelete.__setState({ isPendingCreate: true });
+    it('I2: persists trackedTemporaryUuid to sessionStorage after marking', () => {
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
 
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
@@ -329,9 +407,8 @@ describe('F — handleNavigationEvent (marking)', () => {
         expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBe(uuid);
     });
 
-    it('F3: does NOT mark when isPendingCreate is false (historical conversation)', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
-        // isPendingCreate remains false (default)
+    it('I3: does NOT mark when isPendingCreate is false', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: true });
 
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
@@ -342,9 +419,8 @@ describe('F — handleNavigationEvent (marking)', () => {
         expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
     });
 
-    it('F4: does NOT mark when toggle is OFF at navigate time (even with pending flag)', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'false');
-        TemporaryChatDelete.__setState({ isPendingCreate: true });
+    it('I4: does NOT mark when toggle is OFF at navigate time (even with pending flag)', () => {
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: false });
 
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
@@ -355,9 +431,8 @@ describe('F — handleNavigationEvent (marking)', () => {
         expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
     });
 
-    it('F5: does NOT mark when destination URL has no chat UUID', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'true');
-        TemporaryChatDelete.__setState({ isPendingCreate: true });
+    it('I5: does NOT mark when destination URL has no chat UUID', () => {
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
 
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: 'https://chat.deepseek.com/',
@@ -365,18 +440,18 @@ describe('F — handleNavigationEvent (marking)', () => {
         }));
 
         expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
-        // isPendingCreate not cleared when destination has no UUID
         expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(true);
     });
 });
 
-// ── Group G: handleNavigationEvent — deletion on leave ───────────────────────
+// ── Group J: handleNavigationEvent — deletion on leave ───────────────────────
 
-describe('G — handleNavigationEvent (deletion on leave)', () => {
+describe('J — handleNavigationEvent (deletion on leave)', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -385,7 +460,7 @@ describe('G — handleNavigationEvent (deletion on leave)', () => {
         setPathname('/');
     });
 
-    it('G1: deletes tracked uuid when leaving to a different URL', () => {
+    it('J1: calls TemporaryChatDeleteApi.deleteChatSessionWithRetry (keepalive: false) when leaving tracked conversation', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -398,13 +473,26 @@ describe('G — handleNavigationEvent (deletion on leave)', () => {
             navigationType: 'push',
         }));
 
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.body).toBe(JSON.stringify({ chat_session_id: uuid }));
-        expect(opts.keepalive).toBe(true);
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalledWith(uuid, 'Bearer tok');
     });
 
-    it('G2: clears trackedTemporaryUuid after deletion', () => {
+    it('J2: does NOT call chrome.runtime.sendMessage on navigation (keepalive: false path)', () => {
+        const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: 'https://chat.deepseek.com/',
+            navigationType: 'push',
+        }));
+
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('J3: clears trackedTemporaryUuid after navigation deletion', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -420,7 +508,7 @@ describe('G — handleNavigationEvent (deletion on leave)', () => {
         expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
     });
 
-    it('G3: does NOT delete when leaving a NON-tracked conversation', () => {
+    it('J4: does NOT delete when leaving a NON-tracked conversation', () => {
         const trackedUuid = 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
         const currentUuid = 'bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
         setPathname(`/a/chat/s/${currentUuid}`);
@@ -434,10 +522,10 @@ describe('G — handleNavigationEvent (deletion on leave)', () => {
             navigationType: 'push',
         }));
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
     });
 
-    it('G4: does NOT delete when no tracked uuid', () => {
+    it('J5: does NOT delete when no tracked uuid', () => {
         const uuid = 'cccc3333-cccc-cccc-cccc-cccccccccccc';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -450,10 +538,10 @@ describe('G — handleNavigationEvent (deletion on leave)', () => {
             navigationType: 'push',
         }));
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
     });
 
-    it('G5: does NOT delete when no auth token', () => {
+    it('J6: does NOT delete when no auth token', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -466,17 +554,18 @@ describe('G — handleNavigationEvent (deletion on leave)', () => {
             navigationType: 'push',
         }));
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
     });
 });
 
-// ── Group H: same-URL and reload suppression ──────────────────────────────────
+// ── Group K: same-URL and reload suppression ──────────────────────────────────
 
-describe('H — same-URL / reload must NOT delete', () => {
+describe('K — same-URL / reload must NOT delete', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -485,7 +574,7 @@ describe('H — same-URL / reload must NOT delete', () => {
         setPathname('/');
     });
 
-    it('H1: navigationType reload → no deletion, suppressNextUnloadDelete set', () => {
+    it('K1: navigationType reload → no deletion, suppressNextUnloadDelete set', () => {
         const uuid = 'a1b2c3d4-1111-1111-1111-aabbccddee00';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -498,11 +587,11 @@ describe('H — same-URL / reload must NOT delete', () => {
             navigationType: 'reload',
         }));
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
     });
 
-    it('H2: same destination URL as current href → no deletion, suppressNextUnloadDelete set', () => {
+    it('K2: same destination URL as current href → no deletion, suppressNextUnloadDelete set', () => {
         const uuid = 'a1b2c3d4-2222-2222-2222-aabbccddee00';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -510,18 +599,17 @@ describe('H — same-URL / reload must NOT delete', () => {
             capturedAuthToken: 'Bearer tok',
         });
 
-        // destination === window.location.href
         const currentHref = window.location.href;
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: currentHref,
             navigationType: 'push',
         }));
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
     });
 
-    it('H3: tracked uuid persists after reload navigation (not cleared)', () => {
+    it('K3: tracked uuid persists after reload navigation (not cleared)', () => {
         const uuid = 'a1b2c3d4-3333-3333-3333-aabbccddee00';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -537,7 +625,7 @@ describe('H — same-URL / reload must NOT delete', () => {
         expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
     });
 
-    it('H4: isKeyboardRefresh true at navigate time → no deletion, suppress set', () => {
+    it('K4: isKeyboardRefresh true at navigate time → no deletion, suppress set', () => {
         const uuid = 'a1b2c3d4-4444-4444-4444-aabbccddee00';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -551,11 +639,11 @@ describe('H — same-URL / reload must NOT delete', () => {
             navigationType: 'push',
         }));
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
     });
 
-    it('H5: isKeyboardRefresh is reset to false after handleNavigationEvent', () => {
+    it('K5: isKeyboardRefresh is reset to false after handleNavigationEvent', () => {
         const uuid = 'a1b2c3d4-5555-5555-5555-aabbccddee00';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -573,9 +661,9 @@ describe('H — same-URL / reload must NOT delete', () => {
     });
 });
 
-// ── Group I: handleRefreshKeydown ─────────────────────────────────────────────
+// ── Group L: handleRefreshKeydown ─────────────────────────────────────────────
 
-describe('I — handleRefreshKeydown', () => {
+describe('L — handleRefreshKeydown', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
     });
@@ -584,44 +672,45 @@ describe('I — handleRefreshKeydown', () => {
         vi.restoreAllMocks();
     });
 
-    it('I1: F5 sets isKeyboardRefresh to true', () => {
+    it('L1: F5 sets isKeyboardRefresh to true', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'F5', ctrlKey: false, metaKey: false });
         expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('I2: Ctrl+R sets isKeyboardRefresh to true', () => {
+    it('L2: Ctrl+R sets isKeyboardRefresh to true', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'r', ctrlKey: true, metaKey: false });
         expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('I3: Ctrl+R (uppercase) sets isKeyboardRefresh to true', () => {
+    it('L3: Ctrl+R (uppercase) sets isKeyboardRefresh to true', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'R', ctrlKey: true, metaKey: false });
         expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('I4: Cmd+R sets isKeyboardRefresh to true', () => {
+    it('L4: Cmd+R sets isKeyboardRefresh to true', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'r', ctrlKey: false, metaKey: true });
         expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(true);
     });
 
-    it('I5: arbitrary key (Enter) does NOT set isKeyboardRefresh', () => {
+    it('L5: arbitrary key (Enter) does NOT set isKeyboardRefresh', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 'Enter', ctrlKey: false, metaKey: false });
         expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(false);
     });
 
-    it('I6: Ctrl+S does NOT set isKeyboardRefresh', () => {
+    it('L6: Ctrl+S does NOT set isKeyboardRefresh', () => {
         TemporaryChatDelete.handleRefreshKeydown({ key: 's', ctrlKey: true, metaKey: false });
         expect(TemporaryChatDelete.__getState().isKeyboardRefresh).toBe(false);
     });
 });
 
-// ── Group J: handleBeforeUnload (tab close) ───────────────────────────────────
+// ── Group M: handleBeforeUnload ───────────────────────────────────────────────
 
-describe('J — handleBeforeUnload (tab close)', () => {
+describe('M — handleBeforeUnload (tab close)', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -630,7 +719,7 @@ describe('J — handleBeforeUnload (tab close)', () => {
         setPathname('/');
     });
 
-    it('J1: deletes tracked conversation with keepalive=true on tab close', () => {
+    it('M1: calls chrome.runtime.sendMessage with DSS_DELETE_TEMP_CHAT on tab close', () => {
         const uuid = 'face0000-f00d-dead-beef-0123456789ab';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -642,12 +731,29 @@ describe('J — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.keepalive).toBe(true);
+        expect(global.chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+        const msg = global.chrome.runtime.sendMessage.mock.calls[0][0];
+        expect(msg.type).toBe('DSS_DELETE_TEMP_CHAT');
+        expect(msg.chatUuid).toBe(uuid);
+        expect(msg.authToken).toBe('Bearer tok');
     });
 
-    it('J2: does NOT delete when suppressNextUnloadDelete is true', () => {
+    it('M2: does NOT call TemporaryChatDeleteApi.deleteChatSessionWithRetry (keepalive path)', () => {
+        const uuid = 'face0000-f00d-dead-beef-0123456789ab';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+            suppressNextUnloadDelete: false,
+            isKeyboardRefresh: false,
+        });
+
+        TemporaryChatDelete.handleBeforeUnload();
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+    });
+
+    it('M3: does NOT delete when suppressNextUnloadDelete is true', () => {
         const uuid = 'face0001-f00d-dead-beef-0123456789ab';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -658,10 +764,10 @@ describe('J — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('J3: does NOT delete when isKeyboardRefresh is true', () => {
+    it('M4: does NOT delete when isKeyboardRefresh is true', () => {
         const uuid = 'face0002-f00d-dead-beef-0123456789ab';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -673,10 +779,10 @@ describe('J — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('J4: does NOT delete when current URL uuid !== tracked uuid', () => {
+    it('M5: does NOT delete when current URL uuid !== tracked uuid', () => {
         const trackedUuid = 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
         const currentUuid = 'bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
         setPathname(`/a/chat/s/${currentUuid}`);
@@ -689,10 +795,10 @@ describe('J — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('J5: does NOT delete when URL has no chat uuid', () => {
+    it('M6: does NOT delete when URL has no chat uuid', () => {
         setPathname('/');
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: 'face0006-f00d-dead-beef-0123456789ab',
@@ -703,10 +809,10 @@ describe('J — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('J6: does NOT delete when no auth token', () => {
+    it('M7: does NOT delete when no auth token', () => {
         const uuid = 'face0003-f00d-dead-beef-0123456789ab';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -718,17 +824,118 @@ describe('J — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 });
 
-// ── Group K: toggle-off with active tracked conversation ─────────────────────
+// ── Group N: deleteTrackedAndClear ─────────────────────────────────────────────
 
-describe('K — toggle-off still deletes tracked conversation', () => {
+describe('N — deleteTrackedAndClear', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        sessionStorage.clear();
+    });
+
+    it('N1: navigation (keepalive: false) — calls TemporaryChatDeleteApi.deleteChatSessionWithRetry with uuid and token', () => {
+        const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalledWith(uuid, 'Bearer tok');
+    });
+
+    it('N2: navigation (keepalive: false) — does NOT call chrome.runtime.sendMessage', () => {
+        const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
+
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('N3: tab close (keepalive: true) — calls chrome.runtime.sendMessage with correct payload', () => {
+        const uuid = 'dede0002-dead-dead-dead-deaddeaddead';
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer close',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
+
+        expect(global.chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+        const msg = global.chrome.runtime.sendMessage.mock.calls[0][0];
+        expect(msg.type).toBe('DSS_DELETE_TEMP_CHAT');
+        expect(msg.chatUuid).toBe(uuid);
+        expect(msg.authToken).toBe('Bearer close');
+    });
+
+    it('N4: tab close (keepalive: true) — does NOT call TemporaryChatDeleteApi.deleteChatSessionWithRetry', () => {
+        const uuid = 'dede0002-dead-dead-dead-deaddeaddead';
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer close',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+    });
+
+    it('N5: clears _trackedTemporaryUuid and saves null to sessionStorage', () => {
+        const uuid = 'dede0003-dead-dead-dead-deaddeaddead';
+        sessionStorage.setItem('dss-temporary-chat-uuid', uuid);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
+
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+        expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBeNull();
+    });
+
+    it('N6: is a no-op when trackedTemporaryUuid is null', () => {
+        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok', trackedTemporaryUuid: null });
+
+        TemporaryChatDelete.deleteTrackedAndClear();
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('N7: is a no-op when capturedAuthToken is null', () => {
+        TemporaryChatDelete.__setState({ trackedTemporaryUuid: 'dede0004-dead-dead-dead-deaddeaddead', capturedAuthToken: null });
+
+        TemporaryChatDelete.deleteTrackedAndClear();
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    });
+});
+
+// ── Group O: toggle-off with active tracked conversation ──────────────────────
+
+describe('O — toggle-off still deletes tracked conversation', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+        sessionStorage.clear();
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -737,7 +944,7 @@ describe('K — toggle-off still deletes tracked conversation', () => {
         setPathname('/');
     });
 
-    it('K1: handleToggleChanged(false) with a tracked uuid keeps listeners attached (_isListening true)', () => {
+    it('O1: handleToggleChanged(false) with a tracked uuid keeps listeners attached', () => {
         const uuid = 'face0005-f00d-dead-beef-0123456789ab';
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: uuid,
@@ -747,11 +954,10 @@ describe('K — toggle-off still deletes tracked conversation', () => {
         const evt = new CustomEvent('dss-temporary-chat-changed', { detail: { isEnabled: false } });
         TemporaryChatDelete.handleToggleChanged(evt);
 
-        // Listeners stay attached because there is still a tracked uuid to delete
         expect(TemporaryChatDelete.__getState().isListening).toBe(true);
     });
 
-    it('K2: handleToggleChanged(false) without tracked uuid detaches listeners', () => {
+    it('O2: handleToggleChanged(false) without tracked uuid detaches listeners', () => {
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: null,
             isListening: true,
@@ -763,125 +969,66 @@ describe('K — toggle-off still deletes tracked conversation', () => {
         expect(TemporaryChatDelete.__getState().isListening).toBe(false);
     });
 
-    it('K3: after toggle off, leaving tracked conversation still calls deleteChatSession', () => {
+    it('O3: after toggle off, leaving tracked conversation still calls deleteTrackedAndClear (keepalive: true)', () => {
         const uuid = 'face0004-f00d-dead-beef-0123456789ab';
         setPathname(`/a/chat/s/${uuid}`);
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'false');
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
+            enabledFlagCache: false,
             suppressNextUnloadDelete: false,
             isKeyboardRefresh: false,
         });
 
-        // Simulate tab close on a tracked conversation even though toggle is off
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        const [, opts] = global.fetch.mock.calls[0];
-        expect(opts.body).toBe(JSON.stringify({ chat_session_id: uuid }));
+        expect(global.chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+        const msg = global.chrome.runtime.sendMessage.mock.calls[0][0];
+        expect(msg.chatUuid).toBe(uuid);
     });
 
-    it('K4: toggle-off does NOT set isPendingCreate when create message arrives', () => {
-        sessionStorage.setItem('dss-temporary-chat-enabled', 'false');
+    it('O4: toggle-off does NOT set _createDetected when create message arrives', () => {
+        TemporaryChatDelete.__setState({ enabledFlagCache: false });
         const event = new MessageEvent('message', {
             data: { type: 'DSS_CHAT_CREATE_DETECTED' },
             source: window,
         });
         TemporaryChatDelete.handleCreateMessage(event);
-        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+        expect(TemporaryChatDelete.__getState().createDetected).toBe(false);
     });
 });
 
-// ── Group L: listener lifecycle (attachListeners / detachListeners) ───────────
+// ── Group P: listener lifecycle ────────────────────────────────────────────────
 
-describe('L — listener lifecycle', () => {
+describe('P — listener lifecycle', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
     });
 
     afterEach(() => {
-        // Ensure listeners are detached after each test
         TemporaryChatDelete.detachListeners();
         vi.restoreAllMocks();
     });
 
-    it('L1: attachListeners sets isListening to true', () => {
+    it('P1: attachListeners sets isListening to true', () => {
         TemporaryChatDelete.attachListeners();
         expect(TemporaryChatDelete.__getState().isListening).toBe(true);
     });
 
-    it('L2: attachListeners is idempotent (calling twice does not double-register)', () => {
+    it('P2: attachListeners is idempotent (calling twice does not double-register)', () => {
         TemporaryChatDelete.attachListeners();
         TemporaryChatDelete.attachListeners();
         expect(TemporaryChatDelete.__getState().isListening).toBe(true);
     });
 
-    it('L3: detachListeners sets isListening to false', () => {
+    it('P3: detachListeners sets isListening to false', () => {
         TemporaryChatDelete.attachListeners();
         TemporaryChatDelete.detachListeners();
         expect(TemporaryChatDelete.__getState().isListening).toBe(false);
     });
 
-    it('L4: detachListeners is idempotent (calling when already detached is safe)', () => {
+    it('P4: detachListeners is idempotent (calling when already detached is safe)', () => {
         expect(() => TemporaryChatDelete.detachListeners()).not.toThrow();
         expect(TemporaryChatDelete.__getState().isListening).toBe(false);
-    });
-});
-
-// ── Group M: deleteTrackedAndClear ────────────────────────────────────────────
-
-describe('M — deleteTrackedAndClear', () => {
-    beforeEach(() => {
-        TemporaryChatDelete.__resetState();
-        sessionStorage.clear();
-        global.fetch = vi.fn().mockResolvedValue({ ok: true });
-    });
-
-    afterEach(() => {
-        vi.restoreAllMocks();
-        sessionStorage.clear();
-    });
-
-    it('M1: calls fetch and clears trackedTemporaryUuid', () => {
-        const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
-        TemporaryChatDelete.__setState({
-            trackedTemporaryUuid: uuid,
-            capturedAuthToken: 'Bearer tok',
-        });
-
-        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
-
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
-    });
-
-    it('M2: removes tracked uuid from sessionStorage', () => {
-        const uuid = 'dede0002-dead-dead-dead-deaddeaddead';
-        sessionStorage.setItem('dss-temporary-chat-uuid', uuid);
-        TemporaryChatDelete.__setState({
-            trackedTemporaryUuid: uuid,
-            capturedAuthToken: 'Bearer tok',
-        });
-
-        TemporaryChatDelete.deleteTrackedAndClear();
-
-        expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBeNull();
-    });
-
-    it('M3: is a no-op when trackedTemporaryUuid is null', () => {
-        TemporaryChatDelete.__setState({ capturedAuthToken: 'Bearer tok', trackedTemporaryUuid: null });
-
-        TemporaryChatDelete.deleteTrackedAndClear();
-
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('M4: is a no-op when capturedAuthToken is null', () => {
-        TemporaryChatDelete.__setState({ trackedTemporaryUuid: 'dede0003-dead-dead-dead-deaddeaddead', capturedAuthToken: null });
-
-        TemporaryChatDelete.deleteTrackedAndClear();
-
-        expect(global.fetch).not.toHaveBeenCalled();
     });
 });

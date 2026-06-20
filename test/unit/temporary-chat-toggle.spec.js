@@ -1,81 +1,186 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// ── chrome.storage.session mock (must be set before module import) ─────────────
+const chromeStorageSessionMock = {
+    _store: {},
+    get(keys) {
+        const result = {};
+        keys.forEach(k => { if (k in this._store) result[k] = this._store[k]; });
+        return Promise.resolve(result);
+    },
+    set(items) {
+        Object.assign(this._store, items);
+        return Promise.resolve();
+    },
+    _reset() { this._store = {}; },
+};
+
+global.chrome = {
+    storage: {
+        session: chromeStorageSessionMock,
+        onChanged: { addListener: () => {} },
+    },
+};
+
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
 const STORAGE_KEY = 'dss-temporary-chat-enabled';
 const CHANGED_EVENT = 'dss-temporary-chat-changed';
 
-// ── Group A: readEnabledFlag ──────────────────────────────────────────────────
+// ── Group A: initEnabledFlagFromStorage (via init) ───────────────────────────
+// initEnabledFlagFromStorage is private; test its effects via init() which awaits it.
 
-describe('A — readEnabledFlag', () => {
+describe('A — initEnabledFlagFromStorage (via init())', () => {
     beforeEach(() => {
-        sessionStorage.clear();
+        chromeStorageSessionMock._reset();
+        document.body.innerHTML = '';
+        window.history.replaceState({}, '', '/non-homepage');
     });
 
     afterEach(() => {
-        sessionStorage.clear();
+        document.body.innerHTML = '';
     });
 
-    it('A1: returns false when key is absent', () => {
+    it('A1: after init(), readEnabledFlag() returns true when storage has true', async () => {
+        chromeStorageSessionMock._store[STORAGE_KEY] = true;
+        await TemporaryChatToggle.init();
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+    });
+
+    it('A2: after init(), readEnabledFlag() returns false when storage key is absent', async () => {
+        // store is empty
+        await TemporaryChatToggle.init();
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('A2: returns false when key is "false"', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'false');
+    it('A3: after init(), readEnabledFlag() returns false when storage value is false', async () => {
+        chromeStorageSessionMock._store[STORAGE_KEY] = false;
+        await TemporaryChatToggle.init();
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
+    });
+});
+
+// ── Group B: readEnabledFlag ──────────────────────────────────────────────────
+
+describe('B — readEnabledFlag', () => {
+    beforeEach(() => {
+        chromeStorageSessionMock._reset();
+        // Use writeEnabledFlag to reset cache to false
+        TemporaryChatToggle.writeEnabledFlag(false);
+    });
+
+    it('B1: returns false when cache was set to false', () => {
+        TemporaryChatToggle.writeEnabledFlag(false);
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('A3: returns false when key is "0"', () => {
-        sessionStorage.setItem(STORAGE_KEY, '0');
-        expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
-    });
-
-    it('A4: returns false when key is empty string', () => {
-        sessionStorage.setItem(STORAGE_KEY, '');
-        expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
-    });
-
-    it('A5: returns true only when key is exactly "true"', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
+    it('B2: returns cached value without reading chrome.storage.session', async () => {
+        // Set cache to true via writeEnabledFlag
+        TemporaryChatToggle.writeEnabledFlag(true);
+        // Now mutate storage to false — cache must remain true
+        chromeStorageSessionMock._store[STORAGE_KEY] = false;
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
     });
 });
 
-// ── Group B: writeEnabledFlag ─────────────────────────────────────────────────
+// ── Group C: writeEnabledFlag ─────────────────────────────────────────────────
 
-describe('B — writeEnabledFlag', () => {
+describe('C — writeEnabledFlag', () => {
     beforeEach(() => {
-        sessionStorage.clear();
-    });
-
-    afterEach(() => {
-        sessionStorage.clear();
-    });
-
-    it('B1: writes "true" when called with true', () => {
-        TemporaryChatToggle.writeEnabledFlag(true);
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('true');
-    });
-
-    it('B2: writes "false" when called with false', () => {
+        chromeStorageSessionMock._reset();
         TemporaryChatToggle.writeEnabledFlag(false);
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('false');
     });
 
-    it('B3: overwrites existing value', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
-        TemporaryChatToggle.writeEnabledFlag(false);
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('false');
-    });
-});
-
-// ── Group C: dispatchToggleEvent ──────────────────────────────────────────────
-
-describe('C — dispatchToggleEvent', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('C1: dispatches dss-temporary-chat-changed with isEnabled true', () => {
+    it('C1: updates cache immediately to true', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+    });
+
+    it('C2: updates cache immediately to false', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
+        TemporaryChatToggle.writeEnabledFlag(false);
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
+    });
+
+    it('C3: calls chrome.storage.session.set with the correct key and value (true)', async () => {
+        const setSpy = vi.spyOn(chromeStorageSessionMock, 'set');
+        TemporaryChatToggle.writeEnabledFlag(true);
+        await Promise.resolve(); // flush microtask
+        expect(setSpy).toHaveBeenCalledWith({ [STORAGE_KEY]: true });
+        setSpy.mockRestore();
+    });
+
+    it('C4: calls chrome.storage.session.set with the correct key and value (false)', async () => {
+        const setSpy = vi.spyOn(chromeStorageSessionMock, 'set');
+        TemporaryChatToggle.writeEnabledFlag(false);
+        await Promise.resolve();
+        expect(setSpy).toHaveBeenCalledWith({ [STORAGE_KEY]: false });
+        setSpy.mockRestore();
+    });
+});
+
+// ── Group D: __setCacheForCrossTabSync ────────────────────────────────────────
+
+describe('D — __setCacheForCrossTabSync', () => {
+    beforeEach(() => {
+        TemporaryChatToggle.writeEnabledFlag(false);
+        document.body.innerHTML = '';
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        document.body.innerHTML = '';
+    });
+
+    it('D1: updates cache to the new value', () => {
+        TemporaryChatToggle.__setCacheForCrossTabSync(true);
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+    });
+
+    it('D2: dispatches the toggle event with the new value', () => {
+        const received = [];
+        const handler = (e) => received.push(e.detail);
+        window.addEventListener(CHANGED_EVENT, handler);
+
+        TemporaryChatToggle.__setCacheForCrossTabSync(true);
+
+        window.removeEventListener(CHANGED_EVENT, handler);
+        expect(received).toHaveLength(1);
+        expect(received[0].isEnabled).toBe(true);
+    });
+
+    it('D3: calls applyVisualState on injected row when one exists', () => {
+        // Inject a row so _injectedRow is set
+        const parent = document.createElement('div');
+        const anchor = document.createElement('div');
+        anchor.className = 'aaff8b8f';
+        parent.appendChild(anchor);
+        document.body.appendChild(parent);
+        TemporaryChatToggle.injectToggleRow(anchor);
+
+        TemporaryChatToggle.__setCacheForCrossTabSync(true);
+
+        const input = document.querySelector('.dss-temp-chat-switch__input');
+        expect(input.checked).toBe(true);
+    });
+
+    it('D4: does NOT throw when no row is injected', () => {
+        expect(() => TemporaryChatToggle.__setCacheForCrossTabSync(false)).not.toThrow();
+    });
+});
+
+// ── Group E: dispatchToggleEvent ──────────────────────────────────────────────
+
+describe('E — dispatchToggleEvent', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('E1: dispatches dss-temporary-chat-changed with isEnabled true', () => {
         const received = [];
         const handler = (e) => received.push(e.detail);
         window.addEventListener(CHANGED_EVENT, handler);
@@ -87,7 +192,7 @@ describe('C — dispatchToggleEvent', () => {
         expect(received[0].isEnabled).toBe(true);
     });
 
-    it('C2: dispatches dss-temporary-chat-changed with isEnabled false', () => {
+    it('E2: dispatches dss-temporary-chat-changed with isEnabled false', () => {
         const received = [];
         const handler = (e) => received.push(e.detail);
         window.addEventListener(CHANGED_EVENT, handler);
@@ -100,21 +205,19 @@ describe('C — dispatchToggleEvent', () => {
     });
 });
 
-// ── Group D: homepage-only guard ──────────────────────────────────────────────
+// ── Group F: homepage-only guard ──────────────────────────────────────────────
 
-describe('D — homepage-only guard in init()', () => {
+describe('F — homepage-only guard in init()', () => {
     afterEach(() => {
         vi.restoreAllMocks();
-        // Clean up any injected rows
         document.getElementById('dss-temp-chat-toggle-row')?.remove();
         document.body.innerHTML = '';
     });
 
-    it('D1: init() does nothing when pathname is not "/"', () => {
+    it('F1: init() does nothing when pathname is not "/"', () => {
         window.history.replaceState({}, '', '/a/chat/s/some-uuid');
         const tryInjectSpy = vi.spyOn(TemporaryChatToggle, 'injectToggleRow');
 
-        // Create an anchor so injection would be possible if guard were absent
         const anchor = document.createElement('div');
         anchor.className = 'aaff8b8f';
         document.body.appendChild(anchor);
@@ -125,16 +228,15 @@ describe('D — homepage-only guard in init()', () => {
     });
 });
 
-// ── Group E: injectToggleRow & createToggleRow ────────────────────────────────
+// ── Group G: injectToggleRow & createToggleRow ────────────────────────────────
 
-describe('E — injectToggleRow', () => {
+describe('G — injectToggleRow', () => {
     beforeEach(() => {
-        sessionStorage.clear();
+        TemporaryChatToggle.writeEnabledFlag(false);
         document.body.innerHTML = '';
     });
 
     afterEach(() => {
-        sessionStorage.clear();
         document.body.innerHTML = '';
     });
 
@@ -147,7 +249,7 @@ describe('E — injectToggleRow', () => {
         return anchor;
     }
 
-    it('E1: injects a row element after the anchor', () => {
+    it('G1: injects a row element after the anchor', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
@@ -156,7 +258,7 @@ describe('E — injectToggleRow', () => {
         expect(anchor.nextSibling).toBe(row);
     });
 
-    it('E2: does not inject duplicate row on second call', () => {
+    it('G2: does not inject duplicate row on second call', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
         TemporaryChatToggle.injectToggleRow(anchor);
@@ -165,8 +267,8 @@ describe('E — injectToggleRow', () => {
         expect(rows).toHaveLength(1);
     });
 
-    it('E3: checkbox is unchecked by default (OFF state)', () => {
-        sessionStorage.removeItem(STORAGE_KEY);
+    it('G3: checkbox is unchecked by default (cache is false)', () => {
+        TemporaryChatToggle.writeEnabledFlag(false);
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
@@ -174,8 +276,9 @@ describe('E — injectToggleRow', () => {
         expect(input.checked).toBe(false);
     });
 
-    it('E4: checkbox is checked when sessionStorage is "true"', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
+    it('G4: checkbox is checked when cache is true', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
+
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
@@ -184,60 +287,58 @@ describe('E — injectToggleRow', () => {
     });
 });
 
-// ── Group F: applyVisualState ─────────────────────────────────────────────────
+// ── Group H: applyVisualState ─────────────────────────────────────────────────
 
-describe('F — applyVisualState', () => {
+describe('H — applyVisualState', () => {
     function makeRow(isEnabled) {
         return TemporaryChatToggle.createToggleRow(isEnabled);
     }
 
-    it('F1: adds --on class to label when enabled', () => {
+    it('H1: adds --on class to label when enabled', () => {
         const row = makeRow(false);
         TemporaryChatToggle.applyVisualState(row, true);
         const label = row.querySelector('.dss-temp-chat-label');
         expect(label.classList.contains('dss-temp-chat-label--on')).toBe(true);
     });
 
-    it('F2: removes --on class from label when disabled', () => {
+    it('H2: removes --on class from label when disabled', () => {
         const row = makeRow(true);
         TemporaryChatToggle.applyVisualState(row, false);
         const label = row.querySelector('.dss-temp-chat-label');
         expect(label.classList.contains('dss-temp-chat-label--on')).toBe(false);
     });
 
-    it('F3: sets input.checked to true when enabled', () => {
+    it('H3: sets input.checked to true when enabled', () => {
         const row = makeRow(false);
         TemporaryChatToggle.applyVisualState(row, true);
         const input = row.querySelector('.dss-temp-chat-switch__input');
         expect(input.checked).toBe(true);
     });
 
-    it('F4: sets input.checked to false when disabled', () => {
+    it('H4: sets input.checked to false when disabled', () => {
         const row = makeRow(true);
         TemporaryChatToggle.applyVisualState(row, false);
         const input = row.querySelector('.dss-temp-chat-switch__input');
         expect(input.checked).toBe(false);
     });
 
-    it('F5: is a no-op when row is null', () => {
-        // Should not throw
+    it('H5: is a no-op when row is null', () => {
         expect(() => TemporaryChatToggle.applyVisualState(null, true)).not.toThrow();
     });
 });
 
-// ── Group G: toggle interaction (change event) ────────────────────────────────
+// ── Group I: toggle interaction (change event) ────────────────────────────────
 
-describe('G — toggle interaction writes storage and dispatches event', () => {
+describe('I — toggle interaction writes storage and dispatches event', () => {
     beforeEach(() => {
-        sessionStorage.clear();
+        TemporaryChatToggle.writeEnabledFlag(false);
     });
 
     afterEach(() => {
-        sessionStorage.clear();
         vi.restoreAllMocks();
     });
 
-    it('G1: toggling ON writes "true" to sessionStorage', () => {
+    it('I1: toggling ON updates cache to true', () => {
         const row = TemporaryChatToggle.createToggleRow(false);
         document.body.appendChild(row);
 
@@ -245,12 +346,12 @@ describe('G — toggle interaction writes storage and dispatches event', () => {
         input.checked = true;
         input.dispatchEvent(new Event('change'));
 
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('true');
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
         document.body.removeChild(row);
     });
 
-    it('G2: toggling OFF writes "false" to sessionStorage', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
+    it('I2: toggling OFF updates cache to false', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
         const row = TemporaryChatToggle.createToggleRow(true);
         document.body.appendChild(row);
 
@@ -258,11 +359,11 @@ describe('G — toggle interaction writes storage and dispatches event', () => {
         input.checked = false;
         input.dispatchEvent(new Event('change'));
 
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('false');
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
         document.body.removeChild(row);
     });
 
-    it('G3: toggling ON dispatches dss-temporary-chat-changed with isEnabled=true', () => {
+    it('I3: toggling ON dispatches dss-temporary-chat-changed with isEnabled=true', () => {
         const row = TemporaryChatToggle.createToggleRow(false);
         document.body.appendChild(row);
 
@@ -281,7 +382,8 @@ describe('G — toggle interaction writes storage and dispatches event', () => {
         expect(received[0].isEnabled).toBe(true);
     });
 
-    it('G4: toggling OFF dispatches dss-temporary-chat-changed with isEnabled=false', () => {
+    it('I4: toggling OFF dispatches dss-temporary-chat-changed with isEnabled=false', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
         const row = TemporaryChatToggle.createToggleRow(true);
         document.body.appendChild(row);
 
@@ -301,16 +403,15 @@ describe('G — toggle interaction writes storage and dispatches event', () => {
     });
 });
 
-// ── Group H: removeToggleRow ──────────────────────────────────────────────────
+// ── Group J: removeToggleRow ──────────────────────────────────────────────────
 
-describe('H — removeToggleRow', () => {
+describe('J — removeToggleRow', () => {
     beforeEach(() => {
-        sessionStorage.clear();
+        TemporaryChatToggle.writeEnabledFlag(false);
         document.body.innerHTML = '';
     });
 
     afterEach(() => {
-        sessionStorage.clear();
         document.body.innerHTML = '';
     });
 
@@ -323,7 +424,7 @@ describe('H — removeToggleRow', () => {
         return anchor;
     }
 
-    it('H1: removeToggleRow removes the injected row from DOM', () => {
+    it('J1: removeToggleRow removes the injected row from DOM', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
         expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
@@ -333,21 +434,21 @@ describe('H — removeToggleRow', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('H2: removeToggleRow is a no-op when row does not exist', () => {
+    it('J2: removeToggleRow is a no-op when row does not exist', () => {
         expect(() => TemporaryChatToggle.removeToggleRow()).not.toThrow();
     });
 
-    it('H3: removeToggleRow does NOT modify sessionStorage enabled flag', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
+    it('J3: removeToggleRow does NOT modify the enabled cache', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
         TemporaryChatToggle.removeToggleRow();
 
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('true');
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
     });
 
-    it('H4: removeToggleRow is idempotent (calling twice does not throw)', () => {
+    it('J4: removeToggleRow is idempotent (calling twice does not throw)', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
         TemporaryChatToggle.removeToggleRow();
@@ -355,17 +456,16 @@ describe('H — removeToggleRow', () => {
     });
 });
 
-// ── Group I: handleNavigation (SPA-aware inject/remove) ───────────────────────
+// ── Group K: handleNavigation (SPA-aware inject/remove) ──────────────────────
 
-describe('I — handleNavigation (SPA-aware)', () => {
+describe('K — handleNavigation (SPA-aware)', () => {
     beforeEach(() => {
-        sessionStorage.clear();
+        TemporaryChatToggle.writeEnabledFlag(false);
         document.body.innerHTML = '';
         window.history.replaceState({}, '', '/');
     });
 
     afterEach(() => {
-        sessionStorage.clear();
         document.body.innerHTML = '';
         window.history.replaceState({}, '', '/');
     });
@@ -379,7 +479,7 @@ describe('I — handleNavigation (SPA-aware)', () => {
         return anchor;
     }
 
-    it('I1: handleNavigation to "/" injects toggle row when anchor exists', () => {
+    it('K1: handleNavigation to "/" injects toggle row when anchor exists', () => {
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
@@ -387,7 +487,7 @@ describe('I — handleNavigation (SPA-aware)', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
     });
 
-    it('I2: handleNavigation to non-"/" pathname removes the toggle row', () => {
+    it('K2: handleNavigation to non-"/" pathname removes the toggle row', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
         expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
@@ -397,7 +497,7 @@ describe('I — handleNavigation (SPA-aware)', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('I3: handleNavigation back to "/" re-injects after prior remove', () => {
+    it('K3: handleNavigation back to "/" re-injects after prior remove', () => {
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
@@ -408,7 +508,7 @@ describe('I — handleNavigation (SPA-aware)', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
     });
 
-    it('I4: no duplicate rows when handleNavigation to "/" called twice', () => {
+    it('K4: no duplicate rows when handleNavigation to "/" called twice', () => {
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/', '/a/chat/s/some-uuid');
@@ -418,8 +518,8 @@ describe('I — handleNavigation (SPA-aware)', () => {
         expect(rows).toHaveLength(1);
     });
 
-    it('I5: re-injected row reflects persisted enabled flag (true)', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
+    it('K5: re-injected row reflects cache enabled flag (true)', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
@@ -429,8 +529,8 @@ describe('I — handleNavigation (SPA-aware)', () => {
         expect(input.checked).toBe(true);
     });
 
-    it('I6: re-injected row reflects persisted enabled flag (false)', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'false');
+    it('K6: re-injected row reflects cache enabled flag (false)', () => {
+        TemporaryChatToggle.writeEnabledFlag(false);
         createAnchorInDOM();
 
         TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
@@ -440,13 +540,13 @@ describe('I — handleNavigation (SPA-aware)', () => {
         expect(input.checked).toBe(false);
     });
 
-    it('I7: removal does NOT change the sessionStorage enabled flag', () => {
-        sessionStorage.setItem(STORAGE_KEY, 'true');
+    it('K7: removal does NOT change the enabled flag cache', () => {
+        TemporaryChatToggle.writeEnabledFlag(true);
         const anchor = createAnchorInDOM();
         TemporaryChatToggle.injectToggleRow(anchor);
 
         TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
 
-        expect(sessionStorage.getItem(STORAGE_KEY)).toBe('true');
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
     });
 });
