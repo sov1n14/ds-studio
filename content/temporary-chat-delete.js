@@ -194,8 +194,43 @@ const TemporaryChatDelete = (() => {
                 authToken: tokenSnapshot,
             });
         } else {
-            // 導航觸發：在 content script 重試，失敗時顯示 toast
-            TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+            // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
+            const FIBER_REQ = _getConst('DSS_FIBER_DELETE_MESSAGE_TYPE', 'DSS_FIBER_DELETE_SESSION');
+            const FIBER_RES = _getConst('DSS_FIBER_DELETE_RESULT_TYPE', 'DSS_FIBER_DELETE_RESULT');
+            
+            let fallbackTriggered = false;
+            let timeoutId = null;
+
+            const fallbackToApi = () => {
+                if (fallbackTriggered) return;
+                fallbackTriggered = true;
+                window.removeEventListener('message', resultListener);
+                if (timeoutId) clearTimeout(timeoutId);
+                console.log('[DV:TempChatDelete] Fiber delete failed or timeout, falling back to API.');
+                TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+            };
+
+            const resultListener = (e) => {
+                if (e.source !== window) return;
+                if (e.data?.type !== FIBER_RES) return;
+                if (e.data?.sessionId !== uuidToDelete) return;
+
+                if (e.data.success) {
+                    console.log('[DV:TempChatDelete] Fiber delete succeeded for', uuidToDelete);
+                    if (timeoutId) clearTimeout(timeoutId);
+                    window.removeEventListener('message', resultListener);
+                } else {
+                    fallbackToApi();
+                }
+            };
+
+            window.addEventListener('message', resultListener);
+            timeoutId = setTimeout(fallbackToApi, 3000);
+
+            window.postMessage({
+                type: FIBER_REQ,
+                sessionId: uuidToDelete
+            }, '*');
         }
 
         if (!readEnabledFlag()) {

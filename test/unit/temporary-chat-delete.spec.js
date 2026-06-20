@@ -480,7 +480,7 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
         setPathname('/');
     });
 
-    it('J1: calls TemporaryChatDeleteApi.deleteChatSessionWithRetry (keepalive: false) when leaving tracked conversation', () => {
+    it('J1: posts DSS_FIBER_DELETE_SESSION message (keepalive: false) when leaving tracked conversation', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -488,12 +488,19 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
             capturedAuthToken: 'Bearer tok',
         });
 
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: 'https://chat.deepseek.com/',
             navigationType: 'push',
         }));
 
-        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalledWith(uuid, 'Bearer tok');
+        expect(postMessageSpy).toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid
+        }, '*');
+
+        postMessageSpy.mockRestore();
     });
 
     it('J2: does NOT call chrome.runtime.sendMessage on navigation (keepalive: false path)', () => {
@@ -863,19 +870,27 @@ describe('N — deleteTrackedAndClear', () => {
         sessionStorage.clear();
     });
 
-    it('N1: navigation (keepalive: false) — calls TemporaryChatDeleteApi.deleteChatSessionWithRetry with uuid and token', () => {
+    it('N1: navigation (keepalive: false) — posts DSS_FIBER_DELETE_SESSION message', () => {
         const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
         });
 
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
 
-        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalledWith(uuid, 'Bearer tok');
+        expect(postMessageSpy).toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid
+        }, '*');
+
+        postMessageSpy.mockRestore();
     });
 
-    it('N2: navigation (keepalive: false) — does NOT call chrome.runtime.sendMessage', () => {
+    it('N2: navigation (keepalive: false) — falls back to API if fiber delete fails', () => {
+        vi.useFakeTimers();
         const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: uuid,
@@ -884,7 +899,54 @@ describe('N — deleteTrackedAndClear', () => {
 
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
 
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        // Simulate failure response
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'DSS_FIBER_DELETE_RESULT', sessionId: uuid, success: false },
+            source: window
+        }));
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalledWith(uuid, 'Bearer tok');
+        vi.useRealTimers();
+    });
+
+    it('N8: navigation (keepalive: false) — falls back to API on timeout', () => {
+        vi.useFakeTimers();
+        const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
+
+        // Fast-forward 3 seconds
+        vi.advanceTimersByTime(3000);
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalledWith(uuid, 'Bearer tok');
+        vi.useRealTimers();
+    });
+
+    it('N9: navigation (keepalive: false) — does NOT fallback to API if fiber delete succeeds', () => {
+        vi.useFakeTimers();
+        const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
+
+        // Simulate success response
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'DSS_FIBER_DELETE_RESULT', sessionId: uuid, success: true },
+            source: window
+        }));
+
+        // Fast-forward 3 seconds
+        vi.advanceTimersByTime(3000);
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        vi.useRealTimers();
     });
 
     it('N3: tab close (keepalive: true) — calls chrome.runtime.sendMessage with correct payload', () => {
