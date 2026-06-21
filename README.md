@@ -42,6 +42,7 @@ For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
 | Document | Language | Description |
 |-|-|-|
 | [Feature Guide](docs/en/FEATURES.md) | English | Complete usage instructions and feature introduction |
+| [Privacy Policy](PRIVACY.md) | English | Data handling and privacy practices |
 | [Specification](docs/SPEC.md) | Chinese | Technical specification and module index |
 | [Architecture](docs/ARCHITECTURE.md) | Chinese | Architecture design and data flow |
 | [Changelog](docs/CHANGELOG.md) | Chinese | Version history |
@@ -49,3 +50,7 @@ For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
 ## Development Technologies
 
 This project is built with **Manifest V3**, complying with Chrome extension official security standards. All DOM interception logic runs within Content Scripts to ensure injected content properly triggers target site state updates. Supports `chrome.storage.sync` for cross-device synchronization, with built-in conflict detection and smart merge mechanisms.
+
+---
+
+> **Disclaimer:** This extension is provided "as is", without warranty of any kind. It is a personal project maintained on a best-effort basis. The developer assumes no responsibility for any issues arising from its use. By installing or using this extension, you acknowledge and accept these terms.
