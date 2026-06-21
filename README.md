@@ -1,6 +1,8 @@
 # DS studio
 
-DS studio is a Chrome extension designed to enhance the experience of using `chat.deepseek.com`. You can create multiple prompt groups, automatically inject selected prompts into your input before sending messages, and quickly switch between different scenarios.
+> **[📖 繁體中文版說明](docs/README.md)**
+
+DS studio is a **Chrome extension** that enhances the experience of using **[chat.deepseek.com](https://chat.deepseek.com/)**. Create multiple prompt groups, automatically inject selected prompts before sending messages, and quickly switch between different scenarios — all from an intuitive in-page overlay or popup menu.
 
 ## Feature Overview
 
@@ -17,7 +19,7 @@ DS studio is a Chrome extension designed to enhance the experience of using `cha
 | **JSON Backup & Restore** | Full backup and restore of prompt groups, settings, and censored reply recovery records |
 | **Mobile Support** | Sidebar swipe gesture to solve the lack of quick sidebar switching on mobile |
 
-For detailed feature guide, see [FEATURES.md](FEATURES.md).
+For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
 
 ## Installation
 
@@ -37,11 +39,13 @@ For detailed feature guide, see [FEATURES.md](FEATURES.md).
 
 ## Related Documents
 
-- [Detailed Feature Guide](FEATURES.md) — Complete usage instructions and feature introduction
-- [Specification](<../SPEC.md>) — Technical specification and module index (Chinese)
-- [Architecture](<../ARCHITECTURE.md>) — Architecture design and data flow (Chinese)
-- [Changelog](<../CHANGELOG.md>) — Version history (Chinese)
+| Document | Language | Description |
+|-|-|-|
+| [Feature Guide](docs/en/FEATURES.md) | English | Complete usage instructions and feature introduction |
+| [Specification](docs/SPEC.md) | Chinese | Technical specification and module index |
+| [Architecture](docs/ARCHITECTURE.md) | Chinese | Architecture design and data flow |
+| [Changelog](docs/CHANGELOG.md) | Chinese | Version history |
 
 ## Development Technologies
 
-This project is built with Manifest V3, complying with Chrome extension official security standards. All DOM interception logic runs within Content Scripts to ensure injected content properly triggers target site state updates. Supports `chrome.storage.sync` for cross-device synchronization, with built-in conflict detection and smart merge mechanisms.
+This project is built with **Manifest V3**, complying with Chrome extension official security standards. All DOM interception logic runs within Content Scripts to ensure injected content properly triggers target site state updates. Supports `chrome.storage.sync` for cross-device synchronization, with built-in conflict detection and smart merge mechanisms.

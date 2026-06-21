@@ -1,25 +1,27 @@
 # DS studio Feature Guide
 
-> [English README](README.md) › Detailed feature documentation
-
 ## Table of Contents
 
-- [Managing Prompt Groups](#managing-prompt-groups)
-- [Global Default Prompt](#global-default-prompt)
-- [Using Prompt Injection](#using-prompt-injection)
-- [Conversation-Bound Prompt Groups](#conversation-bound-prompt-groups)
-- [In-Page Quick Switch Overlay](#in-page-quick-switch-overlay)
-- [UI Adjustment Features](#ui-adjustment-features)
-- [Back to Top Button](#back-to-top-button)
-- [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
-- [Exporting Conversations](#exporting-conversations)
-- [Quote Reply](#quote-reply)
-- [System Time Injection](#system-time-injection)
-- [Restoring Censored Replies](#restoring-censored-replies)
-- [Backup & Restore Settings](#backup--restore-settings)
-- [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
-- [Master Switch Linkage](#master-switch-linkage)
-- [Legacy Data Migration](#legacy-data-migration)
+- [DS studio Feature Guide](#ds-studio-feature-guide)
+  - [Table of Contents](#table-of-contents)
+  - [Managing Prompt Groups](#managing-prompt-groups)
+  - [Global Default Prompt](#global-default-prompt)
+  - [Using Prompt Injection](#using-prompt-injection)
+    - [Using No Prompt Group](#using-no-prompt-group)
+  - [Conversation-Bound Prompt Groups](#conversation-bound-prompt-groups)
+  - [In-Page Quick Switch Overlay](#in-page-quick-switch-overlay)
+  - [UI Adjustment Features](#ui-adjustment-features)
+  - [Back to Top Button](#back-to-top-button)
+  - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
+  - [Exporting Conversations](#exporting-conversations)
+    - [Export Options](#export-options)
+  - [Quote Reply](#quote-reply)
+  - [System Time Injection](#system-time-injection)
+  - [Restoring Censored Replies](#restoring-censored-replies)
+  - [Backup \& Restore Settings](#backup--restore-settings)
+  - [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
+  - [Master Switch Linkage](#master-switch-linkage)
+  - [Legacy Data Migration](#legacy-data-migration)
 
 ---
 
@@ -204,4 +206,4 @@ When upgrading from an older version, existing prompt content is automatically m
 
 ---
 
-> [Back to README](README.md) | [Specification](../SPEC.md) (Chinese) | [Architecture](../ARCHITECTURE.md) (Chinese) | [Changelog](../CHANGELOG.md) (Chinese)
+> [Back to README](../README.md) | [Specification](../SPEC.md) (Chinese) | [Architecture](../ARCHITECTURE.md) (Chinese) | [Changelog](../CHANGELOG.md) (Chinese)
