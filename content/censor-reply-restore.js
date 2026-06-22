@@ -301,6 +301,12 @@ const CensorReplyRestore = {
             document.documentElement.appendChild(script);
             script.remove();
 
+            // 注入 history navigation hook，補強 Navigation API 不穩定的 SPA 導航偵測
+            var historyHookScript = document.createElement('script');
+            historyHookScript.src = chrome.runtime.getURL('content/temporary-chat-history-hook.js');
+            document.documentElement.appendChild(historyHookScript);
+            historyHookScript.remove();
+
             var fiberScript = document.createElement('script');
             fiberScript.src = chrome.runtime.getURL('content/temporary-chat-fiber-delete.js');
             document.documentElement.appendChild(fiberScript);
