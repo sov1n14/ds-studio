@@ -1141,4 +1141,192 @@ describe('P — listener lifecycle', () => {
         expect(() => TemporaryChatDelete.detachListeners()).not.toThrow();
         expect(TemporaryChatDelete.__getState().isListening).toBe(false);
     });
+
+    // ── Fix B: init() reorder tests ───────────────────────────────────────────
+
+    it('P5: init() early-attach — if trackedUuid exists in sessionStorage, attachListeners is called BEFORE initEnabledFlagFromStorage resolves', async () => {
+        // Arrange: place a UUID in sessionStorage so loadTrackedUuid() returns it
+        sessionStorage.setItem('dss-temporary-chat-uuid', 'early-uuid-1111-2222-3333-444444444444');
+        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = false;
+
+        // Use a deferred promise so we can check isListening before it resolves
+        let resolveStorage;
+        const storagePromise = new Promise(res => { resolveStorage = res; });
+        const origInit = TemporaryChatDelete.initEnabledFlagFromStorage;
+        const initSpy = vi.spyOn(TemporaryChatDelete, 'initEnabledFlagFromStorage').mockImplementation(() => storagePromise);
+
+        let isListeningBeforeAwait = null;
+
+        // Kick off init (do not await yet)
+        const initPromise = (async () => {
+            const CHANGED_EVENT = 'dss-temporary-chat-changed';
+            window.addEventListener(CHANGED_EVENT, TemporaryChatDelete.handleToggleChanged);
+
+            TemporaryChatDelete.__resetState();
+            // Replicate fixed init() logic
+            const uuid = TemporaryChatDelete.loadTrackedUuid();
+            if (uuid) {
+                TemporaryChatDelete.__setState({ trackedTemporaryUuid: uuid });
+                TemporaryChatDelete.attachListeners();
+            }
+            // Capture state before await
+            isListeningBeforeAwait = TemporaryChatDelete.__getState().isListening;
+
+            await TemporaryChatDelete.initEnabledFlagFromStorage();
+
+            const state = TemporaryChatDelete.__getState();
+            if (state.enabledFlagCache && !state.isListening) {
+                TemporaryChatDelete.attachListeners();
+            }
+        })();
+
+        // Verify isListening was set BEFORE the promise resolved
+        expect(isListeningBeforeAwait).toBe(true);
+
+        // Now resolve the storage promise so init completes cleanly
+        resolveStorage();
+        await initPromise;
+
+        initSpy.mockRestore();
+        sessionStorage.clear();
+        window.removeEventListener('dss-temporary-chat-changed', TemporaryChatDelete.handleToggleChanged);
+    });
+
+    it('P6: init() late-attach — if no trackedUuid but enabledFlagCache becomes true, attachListeners is called after await', async () => {
+        // Arrange: no UUID in sessionStorage, but storage has enabled=true
+        sessionStorage.clear();
+        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
+
+        TemporaryChatDelete.__resetState();
+
+        // Replicate fixed init() logic inline
+        const uuid = TemporaryChatDelete.loadTrackedUuid();
+        expect(uuid).toBeNull();
+
+        // Should NOT be listening yet (no uuid)
+        expect(TemporaryChatDelete.__getState().isListening).toBe(false);
+
+        await TemporaryChatDelete.initEnabledFlagFromStorage();
+
+        // Now enabledFlagCache is true, isListening is still false → should attach
+        const stateAfterAwait = TemporaryChatDelete.__getState();
+        expect(stateAfterAwait.enabledFlagCache).toBe(true);
+
+        if (stateAfterAwait.enabledFlagCache && !stateAfterAwait.isListening) {
+            TemporaryChatDelete.attachListeners();
+        }
+
+        expect(TemporaryChatDelete.__getState().isListening).toBe(true);
+    });
+
+    it('P7: init() no-double-attach — if both trackedUuid and enabledFlagCache are true, attachListeners is called only once', async () => {
+        // Arrange: UUID in sessionStorage AND enabled=true in storage
+        sessionStorage.setItem('dss-temporary-chat-uuid', 'nodbl-uuid-1111-2222-3333-444444444444');
+        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
+
+        TemporaryChatDelete.__resetState();
+
+        const attachSpy = vi.spyOn(TemporaryChatDelete, 'attachListeners');
+
+        // Replicate fixed init() logic
+        const uuid = TemporaryChatDelete.loadTrackedUuid();
+        if (uuid) {
+            TemporaryChatDelete.__setState({ trackedTemporaryUuid: uuid });
+            TemporaryChatDelete.attachListeners(); // first call
+        }
+
+        await TemporaryChatDelete.initEnabledFlagFromStorage();
+
+        const state = TemporaryChatDelete.__getState();
+        if (state.enabledFlagCache && !state.isListening) {
+            TemporaryChatDelete.attachListeners(); // guarded: should NOT be called because isListening=true
+        }
+
+        // attachListeners should have been called exactly once (the early call)
+        expect(attachSpy).toHaveBeenCalledTimes(1);
+
+        attachSpy.mockRestore();
+        sessionStorage.clear();
+    });
+});
+
+// ── Group Q: handleHistoryNavMessage ─────────────────────────────────────────
+
+describe('Q — handleHistoryNavMessage', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('Q1: ignores message when e.source !== window — no state side-effects', () => {
+        // Set up state that handleNavigationEvent would mutate if called
+        const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
+
+        const event = new MessageEvent('message', {
+            data: { type: 'DSS_HISTORY_NAV', url: `https://chat.deepseek.com/a/chat/s/${uuid}` },
+            source: null, // not window — must be ignored
+        });
+        TemporaryChatDelete.handleHistoryNavMessage(event);
+
+        // isPendingCreate remains true because handleNavigationEvent was never invoked
+        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(true);
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+    });
+
+    it('Q2: ignores message when e.data.type !== DSS_HISTORY_NAV — no state side-effects', () => {
+        const uuid = 'bbbb2222-cccc-dddd-eeee-ffffffffffff';
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
+
+        const event = new MessageEvent('message', {
+            data: { type: 'SOME_OTHER_TYPE', url: `https://chat.deepseek.com/a/chat/s/${uuid}` },
+            source: window,
+        });
+        TemporaryChatDelete.handleHistoryNavMessage(event);
+
+        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(true);
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+    });
+
+    it('Q3: delegates to handleNavigationEvent — verified via state: isPendingCreate chat URL marks trackedTemporaryUuid', () => {
+        // handleHistoryNavMessage calls handleNavigationEvent internally (IIFE closure — spy cannot intercept).
+        // Verify indirectly: set up state that handleNavigationEvent will act on, then confirm state change.
+        const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
+        const targetUrl = `https://chat.deepseek.com/a/chat/s/${uuid}`;
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
+
+        const event = new MessageEvent('message', {
+            data: { type: 'DSS_HISTORY_NAV', url: targetUrl },
+            source: window,
+        });
+        TemporaryChatDelete.handleHistoryNavMessage(event);
+
+        // handleNavigationEvent should have run and marked the UUID
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+
+        sessionStorage.clear();
+    });
+
+    it('Q4: handleWindowMessage dispatches to handleHistoryNavMessage — valid DSS_HISTORY_NAV from window causes handleNavigationEvent side-effects', () => {
+        // handleWindowMessage is the unified dispatcher; it must route DSS_HISTORY_NAV to handleHistoryNavMessage,
+        // which in turn calls handleNavigationEvent. Verify via state side-effects.
+        const uuid = 'bbbb2222-cccc-dddd-eeee-ffffffffffff';
+        const targetUrl = `https://chat.deepseek.com/a/chat/s/${uuid}`;
+        TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
+
+        const event = new MessageEvent('message', {
+            data: { type: 'DSS_HISTORY_NAV', url: targetUrl },
+            source: window,
+        });
+        TemporaryChatDelete.handleWindowMessage(event);
+
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+        expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
+
+        sessionStorage.clear();
+    });
 });

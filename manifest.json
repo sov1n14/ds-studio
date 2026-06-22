@@ -25,6 +25,7 @@
     "resources": [
       "content/sse-parser.js",
       "content/censor-xhr-hook.js",
+      "content/temporary-chat-history-hook.js",
       "content/prevent-auto-scroll.js",
       "content/temporary-chat-fiber-delete.js"
     ],

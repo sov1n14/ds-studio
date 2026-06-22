@@ -272,6 +272,22 @@ const TemporaryChatDelete = (() => {
     }
 
     /**
+     * 處理來自 MAIN world history hook 的 SPA 導航訊息（DSS_HISTORY_NAV）。
+     * 建構合成的 NavigateEvent 物件並委派給 handleNavigationEvent。
+     * @param {MessageEvent} e
+     */
+    function handleHistoryNavMessage(e) {
+        if (e.source !== window) return;
+        if (e.data?.type !== 'DSS_HISTORY_NAV') return;
+        // 建構合成事件，使 handleNavigationEvent 可直接重用
+        const syntheticEvent = {
+            destination: { url: e.data.url },
+            navigationType: 'push',
+        };
+        handleNavigationEvent(syntheticEvent);
+    }
+
+    /**
      * 統一處理所有 postMessage（根據 type 路由至對應處理器）。
      * @param {MessageEvent} e
      */
@@ -279,6 +295,7 @@ const TemporaryChatDelete = (() => {
         handleAuthMessage(e);
         handleCreateMessage(e);
         handleCompletionMessage(e);
+        handleHistoryNavMessage(e);
     }
 
     /**
@@ -409,11 +426,18 @@ const TemporaryChatDelete = (() => {
         const CHANGED_EVENT = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
         window.addEventListener(CHANGED_EVENT, handleToggleChanged);
 
-        await initEnabledFlagFromStorage();
-
+        // 先恢復追蹤 UUID，再掛載監聽器，確保 handleWindowMessage（含 auth token 擷取）
+        // 在 await 之前即已就緒，避免 DSS_AUTH_CAPTURED 訊息在等待儲存時遺失
         _trackedTemporaryUuid = loadTrackedUuid();
 
-        if (_enabledFlagCache || _trackedTemporaryUuid) {
+        if (_trackedTemporaryUuid) {
+            attachListeners();
+        }
+
+        await initEnabledFlagFromStorage();
+
+        // await 返回後，若啟用旗標為 true 且監聽器尚未掛載，補充掛載
+        if (_enabledFlagCache && !_isListening) {
             attachListeners();
         }
     }
@@ -429,6 +453,7 @@ const TemporaryChatDelete = (() => {
         handleAuthMessage,
         handleCreateMessage,
         handleCompletionMessage,
+        handleHistoryNavMessage,
         handleWindowMessage,
         handleBeforeUnload,
         handleNavigationEvent,
