@@ -65,6 +65,7 @@ const StorageManager = {
         INPUT_WIDTH_ENABLED: 'dsInputWidthEnabled',
         SYNC_INITIALIZED: 'syncInitialized',
         SYNC_CONFLICT_PENDING: 'syncConflictPending',
+        PRESET_ORDER_META: 'dsPresetOrderMeta',
         RESTORED_MESSAGES: 'restored_messages',
     },
 
@@ -89,6 +90,7 @@ const StorageManager = {
         dsInputWidthEnabled: false,
         syncInitialized: false,
         syncConflictPending: false,
+        dsPresetOrderMeta: { order: [], orderUpdatedAt: 0 },
         restored_messages: {},
     },
 
@@ -197,16 +199,24 @@ const StorageManager = {
 
     /**
      * Internal getter that prioritizes sync, then falls back to local.
+     * NOTE: File exceeds 450-line threshold. Net additions kept minimal; see chatmap.js split.
      */
     async _get(keys) {
         const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING, this.KEYS.LOCAL_AUTHORITATIVE]);
         const isConflictPending = localStatus[this.KEYS.SYNC_CONFLICT_PENDING] === true;
         const localAuth = localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || [];
 
-        // Capture lastError inside the sync callback before it's cleared
+        // 請求 PRESET_INDEX 時一併附帶 PRESET_ORDER_META，確保順序時戳比較資料完整
+        let effectiveKeys = Array.isArray(keys) ? [...keys] : keys;
+        if (Array.isArray(effectiveKeys)
+            && effectiveKeys.includes(this.KEYS.PRESET_INDEX)
+            && !effectiveKeys.includes(this.KEYS.PRESET_ORDER_META)) {
+            effectiveKeys = [...effectiveKeys, this.KEYS.PRESET_ORDER_META];
+        }
+
         const { sData, hasError } = await new Promise((resolve) => {
             try {
-                chrome.storage.sync.get(keys, (syncData) => {
+                chrome.storage.sync.get(effectiveKeys, (syncData) => {
                     resolve({ sData: syncData || {}, hasError: chrome.runtime.lastError });
                 });
             } catch (e) {
@@ -214,21 +224,45 @@ const StorageManager = {
             }
         });
 
-        const lData = await this._safeGet('local', keys);
+        const lData = await this._safeGet('local', effectiveKeys);
 
-        // If sync failed, just use local
         if (hasError) return lData;
-
-        // If conflict is pending, strictly return local data to avoid silent overwrite
         if (isConflictPending) return lData;
 
-        // Merge: sync overrides local, but if sync is missing a key, local is used
         const merged = { ...lData, ...sData };
 
-        // Plan A: Re-apply local values for keys that failed to sync previously
+        // === 以 orderUpdatedAt 時戳決定 PRESET_INDEX 勝者 ===
+        if (Array.isArray(effectiveKeys) && effectiveKeys.includes(this.KEYS.PRESET_INDEX)) {
+            const localOrderMeta = lData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
+            const syncOrderMeta = sData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
+            const winner = this._pickPresetOrderByRecency(localOrderMeta, syncOrderMeta);
+            if (winner) {
+                merged[this.KEYS.PRESET_INDEX] = winner.order;
+                merged[this.KEYS.PRESET_ORDER_META] = winner.meta;
+            }
+        }
+
+        // === dsLocalAuth 精確 pinning：依資料類型選擇性覆寫 ===
         if (localAuth.length > 0) {
-            for (const key of keys) {
-                if (localAuth.includes(key) && lData[key] !== undefined) {
+            const localOrderMeta = lData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
+            const syncOrderMeta = sData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
+
+            for (const key of (Array.isArray(effectiveKeys) ? effectiveKeys : Object.keys(sData))) {
+                if (!localAuth.includes(key) || lData[key] === undefined) continue;
+
+                if (key === this.KEYS.PRESET_INDEX) {
+                    // 僅在本地順序至少與同步端同新時才 pin 本地順序
+                    if ((localOrderMeta.orderUpdatedAt || 0) >= (syncOrderMeta.orderUpdatedAt || 0)) {
+                        merged[key] = lData[key];
+                    }
+                } else if (key.startsWith('dsPreset_')) {
+                    // 僅在本地 preset 至少與同步端同新時才 pin
+                    const localPreset = lData[key];
+                    const syncPreset = sData[key];
+                    if (!syncPreset || (localPreset && (localPreset.updatedAt || 0) >= (syncPreset.updatedAt || 0))) {
+                        merged[key] = lData[key];
+                    }
+                } else {
                     merged[key] = lData[key];
                 }
             }
@@ -337,26 +371,12 @@ const StorageManager = {
         if (!syncInitialized) {
             const syncRaw = await this._safeGet('sync', null);
             const localRaw = await this._safeGet('local', null);
+            const conflictType = this._detectSyncConflict(syncRaw, localRaw);
 
-            const hasCloudData = syncRaw[this.KEYS.PRESET_INDEX] !== undefined;
-
-            if (hasCloudData) {
-                // Compare IDs first — preset content may be local-only (quota fallback),
-                // so comparing resolved objects would show both sides as empty and miss the conflict.
-                const syncIds = (syncRaw[this.KEYS.PRESET_INDEX] || []).slice().sort();
-                const localIds = (localRaw[this.KEYS.PRESET_INDEX] || []).slice().sort();
-                const idsDiffer = JSON.stringify(syncIds) !== JSON.stringify(localIds);
-
-                // Also compare content for cases where IDs match but values differ
-                const syncPresets = this._getPresetsFromRawStorage(syncRaw);
-                const localPresets = this._getPresetsFromRawStorage(localRaw);
-                const contentDiffers = JSON.stringify(syncPresets) !== JSON.stringify(localPresets);
-
-                if (idsDiffer || contentDiffers) {
-                    await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
-                } else {
-                    await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
-                }
+            if (conflictType === 'manual') {
+                await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
+            } else if (conflictType === 'auto') {
+                await this.resolveSyncConflict();
             } else {
                 await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
             }
@@ -531,7 +551,8 @@ const StorageManager = {
         root.__DS_StorageManager_chunking || {},
         root.__DS_StorageManager_lock     || {},
         root.__DS_StorageManager_sync     || {},
-        root.__DS_StorageManager_presets  || {}
+        root.__DS_StorageManager_presets  || {},
+        root.__DS_StorageManager_chatmap  || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 

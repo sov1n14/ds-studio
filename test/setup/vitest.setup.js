@@ -14,6 +14,7 @@ import '../../utils/storage-manager.chunking.js';
 import '../../utils/storage-manager.lock.js';
 import '../../utils/storage-manager.sync.js';
 import '../../utils/storage-manager.presets.js';
+import '../../utils/storage-manager.chatmap.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.storage.js';

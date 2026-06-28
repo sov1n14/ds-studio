@@ -76,14 +76,14 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
     });
 
     describe('sync conflict detection — 11.x', () => {
-        it('sets syncConflictPending when local and sync differ on first sync', async () => {
+        it('auto-resolves divergence with clearly different updatedAt on first sync', async () => {
             await seedAllDefaults({
                 [K.PRESET_INDEX]: ['p1', 'p2'],
                 dsPreset_p1: { id: 'p1', name: 'Local', content: 'local', createdAt: 1, updatedAt: 1 },
                 dsPreset_p2: { id: 'p2', name: 'Both', content: 'old', createdAt: 1, updatedAt: 50 },
+                [K.SYNC_INITIALIZED]: false,
             });
 
-            // Sync has a different version of p2 but also a new p3
             await chrome.storage.sync.set({
                 [K.PRESET_INDEX]: ['p2', 'p3'],
                 dsPreset_p2: { id: 'p2', name: 'Both', content: 'new', createdAt: 1, updatedAt: 200 },
@@ -92,8 +92,48 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
 
             await StorageManager.initialize();
 
+            // Should auto-resolve (not show conflict modal)
+            const pending = await StorageManager.checkSyncConflictPending();
+            expect(pending).toBe(false);
+
+            // Merged presets should be accessible
+            const settings = await StorageManager.getSettings();
+            const p2 = settings.promptPresets.find(p => p.id === 'p2');
+            expect(p2?.content).toBe('new'); // sync wins (updatedAt 200 > 50)
+        });
+
+        it('sets syncConflictPending only for manual conflicts (equal updatedAt, different content)', async () => {
+            await seedAllDefaults({
+                [K.PRESET_INDEX]: ['p1'],
+                dsPreset_p1: { id: 'p1', name: 'LocalName', content: 'local content', createdAt: 1, updatedAt: 100 },
+                [K.SYNC_INITIALIZED]: false,
+            });
+
+            // Sync has same preset with same updatedAt but different content — true conflict
+            await chrome.storage.sync.set({
+                [K.PRESET_INDEX]: ['p1'],
+                dsPreset_p1: { id: 'p1', name: 'SyncName', content: 'sync content', createdAt: 1, updatedAt: 100 },
+            });
+
+            await StorageManager.initialize();
+
             const state = await chrome.storage.local.get([K.SYNC_CONFLICT_PENDING]);
             expect(state[K.SYNC_CONFLICT_PENDING]).toBe(true);
+        });
+
+        it('dsLocalAuth pin releases when cloud preset is newer', async () => {
+            // Local has a stale preset in dsLocalAuth, but cloud has a newer version
+            await chrome.storage.local.set({
+                dsPreset_p1: { id: 'p1', name: 'OldLocal', content: 'old', createdAt: 1, updatedAt: 50 },
+                [K.LOCAL_AUTHORITATIVE]: ['dsPreset_p1'],
+            });
+            await chrome.storage.sync.set({
+                dsPreset_p1: { id: 'p1', name: 'NewSync', content: 'new', createdAt: 1, updatedAt: 200 },
+            });
+
+            const result = await StorageManager._get(['dsPreset_p1']);
+            // Cloud is newer → local pin should release → sync value wins
+            expect(result.dsPreset_p1.name).toBe('NewSync');
         });
 
         it('does not set conflict when local and sync are identical on first sync', async () => {

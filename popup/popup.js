@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         onReorder: async (newPresets) => {
             presets = newPresets;
-            await StorageManager.savePromptPresets(newPresets);
+            await StorageManager.savePromptPresets(newPresets, { order: newPresets.map(p => p.id), orderUpdatedAt: Date.now() });
             await refreshSyncStatus();
             customSelect.render();
         },
