@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { reorderPresets } from '../../popup/popup-utils.js';
+import StorageManager from '../../utils/storage-manager.js';
 
 const A = { id: 'a', name: 'Alpha' };
 const B = { id: 'b', name: 'Beta' };
@@ -46,5 +47,19 @@ describe('reorderPresets()', () => {
     it('不存在的 srcId 時回傳原陣列（防衛）', () => {
         const result = reorderPresets([A, B], 'invalid', B.id, true);
         expect(result.map(p => p.id)).toEqual(['a', 'b']);
+    });
+});
+
+describe('savePromptPresets orderMeta integration', () => {
+    it('receives orderMeta as second argument when order changes', async () => {
+        const spy = vi.spyOn(StorageManager, 'savePromptPresets').mockResolvedValue(undefined);
+        const presets = [
+            { id: 'b', name: 'B', content: '', createdAt: 1, updatedAt: 1 },
+            { id: 'a', name: 'A', content: '', createdAt: 2, updatedAt: 2 },
+        ];
+        const orderMeta = { order: ['b', 'a'], orderUpdatedAt: Date.now() };
+        await StorageManager.savePromptPresets(presets, orderMeta);
+        expect(spy).toHaveBeenCalledWith(presets, orderMeta);
+        spy.mockRestore();
     });
 });

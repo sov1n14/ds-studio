@@ -109,4 +109,54 @@ describe('StorageManager.mergePresets() (11.x merge scenarios)', () => {
         // Base stays because incoming does not have strictly greater updatedAt
         expect(result[0].name).toBe('X');
     });
+
+    // ----------------------------------------------------------------
+    // 4-param order meta tests
+    // ----------------------------------------------------------------
+
+    it('4-param: incOrderMeta newer → output follows incoming order', () => {
+        const base = [older('a', 1), older('b', 2)];
+        const inc  = [older('c', 3)];
+        const baseMeta = { order: ['a', 'b'], orderUpdatedAt: 100 };
+        const incMeta  = { order: ['b', 'a'], orderUpdatedAt: 200 };
+        const result = StorageManager.mergePresets(base, inc, baseMeta, incMeta);
+        // surviving: a, b, c. chosen = ['b','a'], head = ['b','a'], tail = ['c']
+        expect(result.map(p => p.id)).toEqual(['b', 'a', 'c']);
+    });
+
+    it('4-param: baseOrderMeta newer → output follows base order', () => {
+        const base = [older('a', 1), older('b', 2)];
+        const inc  = [older('c', 3)];
+        const baseMeta = { order: ['b', 'a'], orderUpdatedAt: 300 };
+        const incMeta  = { order: ['a', 'b', 'c'], orderUpdatedAt: 100 };
+        const result = StorageManager.mergePresets(base, inc, baseMeta, incMeta);
+        // surviving: a, b, c. chosen = ['b','a'], head = ['b','a'], tail = ['c']
+        expect(result.map(p => p.id)).toEqual(['b', 'a', 'c']);
+    });
+
+    it('4-param: ids deleted from merged result are excluded from head', () => {
+        const base = [older('a', 1), older('b', 2)];
+        const inc  = [newer('a', 200)]; // b is in base only
+        // merged has a (inc wins), b (base only).
+        // chosen = incMeta.order = ['a'], head = ['a'], tail = ['b']
+        const baseMeta = { order: ['a', 'b'], orderUpdatedAt: 50 };
+        const incMeta  = { order: ['a'], orderUpdatedAt: 200 };
+        const result = StorageManager.mergePresets(base, inc, baseMeta, incMeta);
+        expect(result.map(p => p.id)).toEqual(['a', 'b']);
+        expect(result[0].name).toBe('New-a');
+    });
+
+    it('createdAt tiebreak: when updatedAt equal, earlier createdAt wins', () => {
+        const base = [{ id: 'x', name: 'Later', content: 'later', createdAt: 200, updatedAt: 100 }];
+        const inc  = [{ id: 'x', name: 'Earlier', content: 'earlier', createdAt: 50, updatedAt: 100 }];
+        const result = StorageManager.mergePresets(base, inc);
+        expect(result[0].name).toBe('Earlier'); // createdAt 50 < 200, incoming wins
+    });
+
+    it('2-param backward compat: base-first order preserved', () => {
+        const base = [older('b', 1), older('a', 2)];
+        const inc  = [older('c', 3)];
+        const result = StorageManager.mergePresets(base, inc);
+        expect(result.map(p => p.id)).toEqual(['b', 'a', 'c']);
+    });
 });

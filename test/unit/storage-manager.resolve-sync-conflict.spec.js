@@ -171,6 +171,60 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
     });
 
     // ----------------------------------------------------------------
+    // Order meta propagation
+    // ----------------------------------------------------------------
+    describe('order meta propagation in resolveSyncConflict()', () => {
+        it('applies newer sync order after resolve', async () => {
+            await populateDefaults();
+
+            // Local has order [a, b], sync has order [b, a] with newer timestamp
+            const tsNow = Date.now();
+            await chrome.storage.local.set({
+                [K.SYNC_CONFLICT_PENDING]: true,
+                [K.PRESET_INDEX]: ['a', 'b'],
+                dsPreset_a: { id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 },
+                dsPreset_b: { id: 'b', name: 'B', content: 'b', createdAt: 2, updatedAt: 100 },
+                [K.PRESET_ORDER_META]: { order: ['a', 'b'], orderUpdatedAt: tsNow - 1000 },
+            });
+            await chrome.storage.sync.set({
+                [K.PRESET_INDEX]: ['b', 'a'],
+                dsPreset_a: { id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 },
+                dsPreset_b: { id: 'b', name: 'B', content: 'b', createdAt: 2, updatedAt: 100 },
+                [K.PRESET_ORDER_META]: { order: ['b', 'a'], orderUpdatedAt: tsNow },
+            });
+
+            await StorageManager.resolveSyncConflict();
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.promptPresets.map(p => p.id)).toEqual(['b', 'a']);
+        });
+
+        it('PRESET_ORDER_META is NOT overwritten by the raw updates spread', async () => {
+            await populateDefaults();
+            // Local starts with empty index so that savePromptPresets will detect
+            // a change ([] → ['a']) and write PRESET_ORDER_META
+            await chrome.storage.local.set({
+                [K.SYNC_CONFLICT_PENDING]: true,
+                [K.PRESET_INDEX]: [],
+                dsPreset_a: { id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 },
+            });
+            await chrome.storage.sync.set({
+                [K.PRESET_INDEX]: ['a'],
+                dsPreset_a: { id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 },
+            });
+
+            await StorageManager.resolveSyncConflict();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            // PRESET_ORDER_META should be written by savePromptPresets, NOT by the raw spread
+            // Verify it is present and has a valid structure
+            expect(syncAfter[K.PRESET_ORDER_META]).toBeDefined();
+            expect(Array.isArray(syncAfter[K.PRESET_ORDER_META].order)).toBe(true);
+            expect(typeof syncAfter[K.PRESET_ORDER_META].orderUpdatedAt).toBe('number');
+        });
+    });
+
+    // ----------------------------------------------------------------
     // No restored_messages: the delete line is a harmless no-op when
     // the key does not exist in the merged updates.  Normal merge
     // proceeds without issues.
