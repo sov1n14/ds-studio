@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.6.2](changelog/v4.md#462---2026-06-28) | 修復跨裝置雲同步：提示詞組順序（dsPresetOrderMeta 時間戳）與內容（dsLocalAuth 精確 pinning）現可正確同步；初始化衝突偵測改為 auto/manual 分類；手動同步改為推+拉；chatmap 模組獨立拆分 |
+| [4.6.1](changelog/v4.md#461---2026-06-22) | 修復行動版編輯訊息發送按鈕 textarea 解析順序 |
+| [4.6.0](changelog/v4.md#460---2026-06-20) | 整合 React Fiber 原生對話刪除機制 |
 | [4.5.1](changelog/v4.md#451---2026-06-18) | 修正「臨時對話」：僅刪除（呼叫 create API）新建的對話、歷史對話永不刪除；離開首頁移除開關、回首頁重注入；網址列輸入目前網址／重整不刪除；關閉開關仍刪除已標記對話 |
 | [4.5.0](changelog/v4.md#450---2026-06-18) | 新增「臨時對話」功能：首頁開關控制，開啟時離開對話自動呼叫刪除 API（重新整理／導向當前網址不刪除），狀態存於 sessionStorage |
 | [4.3.0](changelog/v4.md#430---2026-06-14) | 系統時間注入新增時區偏移顯示 — 格式從 `yyyy/mm/dd hh:mm:ss` 改為 `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` |
