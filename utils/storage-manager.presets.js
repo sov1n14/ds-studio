@@ -32,18 +32,25 @@
                     if (incUpdated > baseUpdated) {
                         // incoming 較新，取代
                         mergedMap.set(p.id, { ...p });
+                        window.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'use-sync', localTs: baseUpdated, syncTs: incUpdated });
                     } else if (incUpdated === baseUpdated) {
                         // 時間戳相同，內容有差異時以 createdAt 較早者為準（穩定 tiebreak）
                         const contentDiffers = JSON.stringify(p) !== JSON.stringify(existing);
                         if (contentDiffers && (p.createdAt || 0) < (existing.createdAt || 0)) {
                             mergedMap.set(p.id, { ...p });
+                            window.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'tiebreak', localTs: baseUpdated, syncTs: incUpdated });
+                        } else {
+                            window.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'keep-local', localTs: baseUpdated, syncTs: incUpdated });
                         }
                         // 否則 base 保持不變
+                    } else {
+                        window.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'keep-local', localTs: baseUpdated, syncTs: incUpdated });
                     }
                     // incUpdated < baseUpdated：base 較新，不取代
                 } else {
                     // base 中沒有此 preset，直接加入
                     mergedMap.set(p.id, { ...p });
+                    window.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'add-new', localTs: 0, syncTs: p.updatedAt || 0 });
                 }
             });
 
@@ -60,8 +67,10 @@
             const head = chosen ? chosen.filter(id => survivingSet.has(id)) : [];
             const headSet = new Set(head);
             const tail = survivingIds.filter(id => !headSet.has(id));
+            const finalIds = [...head, ...tail];
+            window.__DS_Logger?.sync('merge:order', { winner: incTs > baseTs ? 'sync' : baseTs > incTs ? 'local' : 'insertion-order', finalIds });
 
-            return [...head, ...tail].map(id => mergedMap.get(id));
+            return finalIds.map(id => mergedMap.get(id));
         },
 
         /**
@@ -121,8 +130,8 @@
         _pickPresetOrderByRecency(localMeta, syncMeta) {
             const lTs = (localMeta && localMeta.orderUpdatedAt) || 0;
             const sTs = (syncMeta && syncMeta.orderUpdatedAt) || 0;
-            if (sTs > lTs) return { order: syncMeta.order, meta: syncMeta };
-            if (lTs > sTs) return { order: localMeta.order, meta: localMeta };
+            if (sTs > lTs) { window.__DS_Logger?.sync('order:pick', { localTs: lTs, syncTs: sTs, winner: 'sync' }); return { order: syncMeta.order, meta: syncMeta }; }
+            if (lTs > sTs) { window.__DS_Logger?.sync('order:pick', { localTs: lTs, syncTs: sTs, winner: 'local' }); return { order: localMeta.order, meta: localMeta }; }
             return null;
         },
     };

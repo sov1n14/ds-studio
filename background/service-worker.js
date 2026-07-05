@@ -64,6 +64,17 @@ async function scheduleRetryAlarm() {
     chrome.alarms.create(RETRY_ALARM_NAME, { delayInMinutes: RETRY_DELAY_MINUTES });
 }
 
+// 監聽來自各情境轉發的診斷記錄（__dsSyncLog），在 Service Worker console 統一輸出
+// 獨立 listener，與現有刪除訊息處理完全隔離
+chrome.runtime.onMessage.addListener((message) => {
+    if (!message || message.__dsSyncLog !== true) return false;
+    // 根據層級選擇 console 方法，並附加來源標籤
+    const printer = message.level === 'warn' ? console.warn : console.log;
+    printer('[DS-Sync][' + message.source + ']', message.event, message.data);
+    // 同步處理完成，不保持訊息通道開啟
+    return false;
+});
+
 // 監聽來自 content script 的刪除請求
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type !== 'DSS_DELETE_TEMP_CHAT') return false;
