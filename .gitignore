@@ -2,12 +2,14 @@
 *.py
 *.rar
 *.zip
-.claude/
+.claude/agent-memory/
+.claude/memory/
+.claude/screenshots/
+.claude/settings.local.json
 .cursor/
 .ignore/
 .venv/
 .vitest-cache/
-CLAUDE.md
 coverage/
 node_modules/
 pack-for-chrome.*
