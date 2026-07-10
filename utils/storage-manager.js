@@ -7,7 +7,9 @@
  *   2. storage-manager.lock.js
  *   3. storage-manager.sync.js
  *   4. storage-manager.presets.js
- *   5. storage-manager.js  （本檔）
+ *   5. storage-manager.chatmap.js
+ *   6. storage-manager.syncnow.js
+ *   7. storage-manager.js  （本檔）
  */
 
 // === 錯誤類別（供 instanceof 檢查） ===
@@ -232,6 +234,10 @@ const StorageManager = {
         const merged = { ...lData, ...sData };
         globalThis.__DS_Logger?.sync('pull:merge', { source: 'sync-wins', keys: Object.keys(sData) });
 
+        // 用於收集本次判定為「遠端較新」的項目，稍後一次性持久化回 chrome.storage.local，
+        // 確保回傳值與本機持久化狀態一致（避免僅存在於記憶體中的合併結果）。
+        const remoteWinsToPersist = {};
+
         // === 逐筆 preset 依 updatedAt 挑最新版本，避免 Chrome 同步收斂時以較舊版本覆蓋較新編輯 ===
         for (const key of Object.keys(merged)) {
             if (!key.startsWith('dsPreset_')) continue;
@@ -242,6 +248,10 @@ const StorageManager = {
             if (winner === localPreset && merged[key] !== localPreset) {
                 merged[key] = localPreset;
                 globalThis.__DS_Logger?.sync('pull:recency-local', { key, localTs: localPreset.updatedAt || 0, syncTs: syncPreset.updatedAt || 0 });
+            } else if (winner === syncPreset && localPreset !== syncPreset) {
+                // 遠端較新：merged[key] 已經是 sData[key]（sync-wins 合併的預設行為），
+                // 但本機儲存仍保有舊值，需一併持久化，避免離線讀取或下次啟動時看到過期資料。
+                remoteWinsToPersist[key] = syncPreset;
             }
         }
 
@@ -282,6 +292,17 @@ const StorageManager = {
                     merged[key] = lData[key];
                 }
             }
+        }
+
+        // 將「遠端較新」的最終結果持久化回 chrome.storage.local。
+        // 需在 dsLocalAuth pin 邏輯之後才執行，因為 pin 有可能將 merged[key] 改回本機值，
+        // 此時就不應該用遠端值覆寫本機儲存。
+        const keysToPersist = Object.keys(remoteWinsToPersist).filter((key) => merged[key] === remoteWinsToPersist[key]);
+        if (keysToPersist.length > 0) {
+            const persistPayload = {};
+            keysToPersist.forEach((key) => { persistPayload[key] = remoteWinsToPersist[key]; });
+            await this._safeSet('local', persistPayload);
+            globalThis.__DS_Logger?.sync('pull:persist-remote', { keys: keysToPersist });
         }
 
         return merged;
@@ -571,7 +592,8 @@ const StorageManager = {
         root.__DS_StorageManager_lock     || {},
         root.__DS_StorageManager_sync     || {},
         root.__DS_StorageManager_presets  || {},
-        root.__DS_StorageManager_chatmap  || {}
+        root.__DS_StorageManager_chatmap  || {},
+        root.__DS_StorageManager_syncnow  || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 

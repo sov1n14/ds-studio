@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4.7.1] - 2026-07-11
+
+### Added
+- Unified sync entry point `StorageManager.syncNow()` (`utils/storage-manager.syncnow.js`), called on popup open and on `chat.deepseek.com` load, replacing direct `getSettings()` calls at those two trigger points
+
+### Fixed
+- `_get()` now persists the winning remote value back to `chrome.storage.local` when remote is newer than local, instead of only returning it in memory — prevents a stale local copy from lingering after a `syncNow()` pass
+
 ## [4.6.2] - 2026-06-28
 
 ### Fixed

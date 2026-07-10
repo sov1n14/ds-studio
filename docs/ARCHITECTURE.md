@@ -57,6 +57,8 @@ ds-studio/
 │   ├── storage-manager.lock.js      ─  Cross-context advisory lock bundle
 │   ├── storage-manager.sync.js      ─  Cloud sync / conflict / restore bundle
 │   ├── storage-manager.presets.js   ─  Preset CRUD & chat-binding bundle
+│   ├── storage-manager.chatmap.js   ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
+│   ├── storage-manager.syncnow.js   ─  Unified syncNow() entry point (v4.7.0)
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
 ├── samples/                 ─  DOM reference HTML samples
 └── test/                    ─  Unit tests (Vitest only; integration tests removed v2.8.2)

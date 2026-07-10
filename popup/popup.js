@@ -183,7 +183,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await refreshSyncStatus();
-    const settings = await StorageManager.getSettings();
+    // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
+    const settings = await StorageManager.syncNow();
 
     presets        = settings.promptPresets;
     activePresetId = settings.activePresetId;

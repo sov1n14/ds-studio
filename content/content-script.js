@@ -51,7 +51,8 @@ var removeOverlayStyles = __overlayFactory.removeOverlayStyles;
 // 設定初始化
 async function initSettings() {
     // StorageManager 由 manifest.json 在本腳本之前注入
-    const settings = await StorageManager.getSettings();
+    // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
+    const settings = await StorageManager.syncNow();
     isEnabled = settings.isEnabled;
     globalDefaultPrompt = settings.globalDefaultPrompt ?? '';
     isGlobalPromptEnabled = settings.globalPromptEnabled ?? true;

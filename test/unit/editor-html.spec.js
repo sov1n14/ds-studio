@@ -18,8 +18,8 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 10 script tags', () => {
-        expect(scriptSrcs).toHaveLength(10);
+    it('has exactly 11 script tags', () => {
+        expect(scriptSrcs).toHaveLength(11);
     });
 
     it('loads logger.js first', () => {
@@ -46,20 +46,24 @@ describe('editor.html script tag structure', () => {
         expect(scriptSrcs[5]).toBe('../../utils/storage-manager.chatmap.js');
     });
 
-    it('loads storage-manager.js seventh', () => {
-        expect(scriptSrcs[6]).toBe('../../utils/storage-manager.js');
+    it('loads storage-manager.syncnow.js seventh', () => {
+        expect(scriptSrcs[6]).toBe('../../utils/storage-manager.syncnow.js');
     });
 
-    it('loads messaging.js eighth', () => {
-        expect(scriptSrcs[7]).toBe('../../utils/messaging.js');
+    it('loads storage-manager.js eighth', () => {
+        expect(scriptSrcs[7]).toBe('../../utils/storage-manager.js');
     });
 
-    it('loads i18n.js ninth (between messaging.js and editor.js)', () => {
-        expect(scriptSrcs[8]).toBe('../../utils/i18n.js');
+    it('loads messaging.js ninth', () => {
+        expect(scriptSrcs[8]).toBe('../../utils/messaging.js');
     });
 
-    it('loads editor.js last (tenth)', () => {
-        expect(scriptSrcs[9]).toBe('editor.js');
+    it('loads i18n.js tenth (between messaging.js and editor.js)', () => {
+        expect(scriptSrcs[9]).toBe('../../utils/i18n.js');
+    });
+
+    it('loads editor.js last (eleventh)', () => {
+        expect(scriptSrcs[10]).toBe('editor.js');
     });
 
     it('ensures logger.js loads before the storage-manager bundle', () => {

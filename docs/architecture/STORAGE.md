@@ -5,6 +5,8 @@
 > **相關規格**：[資料儲存規格](../spec/05-data-storage.md) · [提示詞系統規格](../spec/01-prompt-system.md)
 >
 > **v4.0.0 模組化**：`StorageManager` 已拆分為入口檔 `utils/storage-manager.js`（API、`getSettings`、`initialize`、共享狀態）加四個方法包：`storage-manager.chunking.js`（分塊）、`storage-manager.lock.js`（跨 context 鎖）、`storage-manager.sync.js`（雲端同步/衝突/還原）、`storage-manager.presets.js`（提示詞 CRUD 與對話綁定）。入口檔以 `Object.assign` 合併方法包，對外 API 與行為完全不變；本文件描述的所有機制仍然適用。
+>
+> **v4.7.0/4.7.1 統一同步進入點**：新增 `StorageManager.syncNow()`（`utils/storage-manager.syncnow.js`），在 popup 開啟與 `chat.deepseek.com` 頁面載入時呼叫，取代原先直接呼叫 `getSettings()` 的作法。`syncNow()` 內部呼叫 `retrySync()` 後再呼叫 `getSettings()`。v4.7.1 修正了一個缺陷：`_get()` 在判定 remote 較新時，原本只在記憶體中回傳合併結果，未把覆寫值持久化回 `chrome.storage.local`；現已在 remote 勝出的分支透過既有的 `_safeSet('local', ...)` 補寫回本機，避免裝置重新開啟後又讀到舊的本機殘留值。
 
 ## State Management
 
@@ -53,7 +55,7 @@ interface PromptPreset {
 `StorageManager` uses a dual-storage strategy with per-preset key isolation and local-authoritative tracking:
 
 - **Per-Preset Key Isolation**: To bypass the `QUOTA_BYTES_PER_ITEM` (8KB) limit of `chrome.storage.sync`, each prompt preset is stored under its own key (`dsPreset_<id>`). An index key (`dsPresetIndex`) maintains the order and list of active presets.
-- **Read path** (`_get()`): Attempts `chrome.storage.sync.get()` first, then `chrome.storage.local.get()`. Normally, sync data overrides local data. However, if a key is present in `dsLocalAuth`, the local value is prioritized to ensure that data saved locally during a sync failure is not lost. During a pending conflict (`syncConflictPending === true`), it strictly returns local data.
+- **Read path** (`_get()`): Attempts `chrome.storage.sync.get()` first, then `chrome.storage.local.get()`. Normally, sync data overrides local data. However, if a key is present in `dsLocalAuth`, the local value is prioritized to ensure that data saved locally during a sync failure is not lost. During a pending conflict (`syncConflictPending === true`), it strictly returns local data. (v4.7.1) When the remote/sync side wins the per-item recency comparison, the winning value is also persisted back to `chrome.storage.local` via `_safeSet('local', ...)` — not just returned in-memory — so a stale local copy doesn't linger after a `syncNow()` pass.
 - **Write path** (`_set()`): Tries `chrome.storage.sync.set()` first.
   - **On Success**: The keys are removed from `dsLocalAuth` in local storage, and a backup is written to local.
   - **On Failure** (e.g., quota exceeded): The keys are added to `dsLocalAuth` in local storage, and the data is written to local storage. This ensures the extension remains functional even when sync limits are reached.
