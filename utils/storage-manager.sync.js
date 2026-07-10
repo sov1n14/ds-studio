@@ -171,6 +171,9 @@
                 syncOrderMeta = sMeta[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
             }
 
+            // 收集已與雲端一致（reconciled）的 dsPreset_ 金鑰，供迴圈結束後統一從 dsLocalAuth 移除
+            const reconciledPresetKeys = [];
+
             for (const key of pendingKeys) {
                 const localData = await this._safeGet('local', [key]);
                 if (localData[key] !== undefined) {
@@ -183,11 +186,14 @@
                         shouldPush = localOrderTs >= syncOrderTs;
                         globalThis.__DS_Logger?.sync('push:order-cmp', { localOrderTs, syncOrderTs, shouldPush });
                     } else if (key.startsWith('dsPreset_')) {
-                        // 僅在本機 preset 至少與雲端同新時才推送
+                        // 使用與其他同步流程一致的「較新者優先」共用規則判斷是否推送
                         const localPreset = localData[key];
                         const syncPreset = syncSnapshot[key];
-                        if (syncPreset && (syncPreset.updatedAt || 0) > (localPreset.updatedAt || 0)) {
+                        const winner = this._pickNewerPreset(localPreset, syncPreset);
+                        if (syncPreset !== undefined && winner !== localPreset) {
+                            // 雲端版本已勝出（較新或內容相同），不需推送，且視為已與雲端調和
                             shouldPush = false;
+                            reconciledPresetKeys.push(key);
                         }
                         globalThis.__DS_Logger?.sync('push:preset-cmp', { id: key, localTs: localPreset?.updatedAt || 0, syncTs: syncPreset?.updatedAt || 0, shouldPush });
                     }
@@ -202,6 +208,13 @@
                     const newArr = (current[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => k !== key);
                     await this._safeSet('local', { [this.KEYS.LOCAL_AUTHORITATIVE]: newArr });
                 }
+            }
+
+            // 將已調和（雲端已勝出）的 dsPreset_ 金鑰從 dsLocalAuth 移除，避免下次重試時再度誤判為待推送
+            if (reconciledPresetKeys.length > 0) {
+                const current = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE]);
+                const newArr = (current[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !reconciledPresetKeys.includes(k));
+                await this._safeSet('local', { [this.KEYS.LOCAL_AUTHORITATIVE]: newArr });
             }
 
             // 推送完成後，若雲端有較新變更則從雲端拉取

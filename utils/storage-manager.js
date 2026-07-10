@@ -274,7 +274,7 @@ const StorageManager = {
                     // 僅在本地 preset 至少與同步端同新時才 pin
                     const localPreset = lData[key];
                     const syncPreset = sData[key];
-                    if (!syncPreset || (localPreset && (localPreset.updatedAt || 0) >= (syncPreset.updatedAt || 0))) {
+                    if (this._shouldPinLocalPreset(localPreset, syncPreset)) {
                         merged[key] = lData[key];
                         globalThis.__DS_Logger?.sync('pull:pin-local', { key, localTs: (localPreset && localPreset.updatedAt) || 0, syncTs: (syncPreset && syncPreset.updatedAt) || 0, reason: syncPreset ? 'local-newer-or-equal' : 'sync-missing' });
                     }
@@ -300,7 +300,7 @@ const StorageManager = {
                     resolve(chrome.runtime.lastError || null);
                 });
             } catch (e) {
-                resolve(null); // Context invalidated — treat as silent success, local backup below
+                resolve(e); // Context invalidated — fall through to local-write fallback below
             }
         });
 

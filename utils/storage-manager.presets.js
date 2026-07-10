@@ -109,8 +109,14 @@
             }
 
             // 3. 逐一寫入每個 preset，超大 preset 只落到本機，不拖累其他 preset 或 index
+            //    先批次讀取雲端現況，僅在本機版本應該勝出時才寫入，避免結構性操作（排序/刪除/重命名）
+            //    無條件覆寫每個 preset 內容，錯誤地覆蓋掉雲端較新的版本。
+            const syncPresets = (await this._safeGet('sync', presets.map(p => this._presetKey(p.id)))) || {};
             for (const p of presets) {
-                await this._set({ [this._presetKey(p.id)]: p });
+                const key = this._presetKey(p.id);
+                if (this._shouldPushPreset(p, syncPresets[key])) {
+                    await this._set({ [key]: p });
+                }
             }
 
             // 4. 清理已刪除的 presets
@@ -154,6 +160,30 @@
             // updatedAt 相同：內容相同則維持預設（sync）；內容不同則 createdAt 較早者勝
             if (JSON.stringify(localPreset.content) === JSON.stringify(syncPreset.content)) return syncPreset;
             return (localPreset.createdAt || 0) < (syncPreset.createdAt || 0) ? localPreset : syncPreset;
+        },
+
+        /**
+         * 純函式：寫入路徑守衛，判斷是否需要將本機 preset 推送至雲端。
+         * @param {Object} preset - 本機 preset
+         * @param {Object|undefined} syncPreset - 目前雲端上的 preset（若尚未存在則為 undefined）
+         * @returns {boolean} true 表示應該推送
+         */
+        _shouldPushPreset(preset, syncPreset) {
+            if (syncPreset === undefined) return true;
+            if (JSON.stringify(preset) === JSON.stringify(syncPreset)) return false;
+            return this._pickNewerPreset(preset, syncPreset) === preset;
+        },
+
+        /**
+         * 純函式：接收路徑決策，判斷是否應保留本機 preset 而不被雲端覆蓋。
+         * @param {Object|null} localPreset
+         * @param {Object|null} syncPreset
+         * @returns {boolean} true 表示應保留本機版本
+         */
+        _shouldPinLocalPreset(localPreset, syncPreset) {
+            if (!syncPreset) return true;
+            if (!localPreset) return false;
+            return this._pickNewerPreset(localPreset, syncPreset) === localPreset;
         },
     };
 
