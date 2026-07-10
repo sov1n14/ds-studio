@@ -3,12 +3,12 @@
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
 // 注意：不載入 utils/i18n.js 與 utils/logger.js，避免觸碰 window / 選用性 __DS_Logger 之外的載入期副作用
 importScripts(
-    'utils/storage-manager.chunking.js',
-    'utils/storage-manager.lock.js',
-    'utils/storage-manager.sync.js',
-    'utils/storage-manager.presets.js',
-    'utils/storage-manager.chatmap.js',
-    'utils/storage-manager.js'
+    '../utils/storage-manager.chunking.js',
+    '../utils/storage-manager.lock.js',
+    '../utils/storage-manager.sync.js',
+    '../utils/storage-manager.presets.js',
+    '../utils/storage-manager.chatmap.js',
+    '../utils/storage-manager.js'
 );
 
 // 待刪除對話的 storage 鍵名
