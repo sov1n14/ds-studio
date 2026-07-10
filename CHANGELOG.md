@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4.8.0] - 2026-07-11
+
+### Added
+- Popup live sync: `popup/popup.live-sync.js` registers a `chrome.storage.onChanged` listener so settings, toggles, sliders, and prompt-preset changes made from another device, tab, or the standalone editor window reflect immediately in an already-open popup, without requiring the user to reopen it
+
 ## [4.7.4] - 2026-07-11
 
 ### Fixed

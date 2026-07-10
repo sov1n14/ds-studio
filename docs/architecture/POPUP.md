@@ -168,6 +168,7 @@ In `popup.html`, the script tags appear in this order:
 <script src="popup.modal.js"></script>
 <script src="popup.preset-manager.js"></script>
 <script src="popup.backup-manager.js"></script>
+<script src="popup.live-sync.js"></script>
 <script src="popup.js"></script>
 ```
 
@@ -176,6 +177,7 @@ In `popup.html`, the script tags appear in this order:
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js for the `ACTIVE_PRESET_CHANGED` broadcast).
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
+- `popup.live-sync.js` (v4.8.0) registers `window.__DS_PopupLiveSync`, exposing `createLiveSyncListener(ctx)` — see the Live Sync Listener section below.
 - `popup.js` (entry) loads last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 
 The editor window (`popup/editor/editor.html`) loads the four `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, then `editor.js` — all classic scripts, no inline JS (MV3 CSP-safe). `popup-utils.js` is an ES module (top-level `export`) and is deliberately NOT loaded as a classic script anywhere; `editor.js` carries its own local `debounce` copy for this reason.
@@ -200,6 +202,22 @@ storage-manager.js (chrome.storage wrapper)
 4. popup.js executes the storage operation, then calls `customSelect.render()` to sync the UI to the new state.
 
 This one-way data flow (DOM → component → callback → storage → re-render) keeps state management predictable and testable.
+
+## Live Sync Listener (popup.live-sync.js, v4.8.0)
+
+The popup previously only read storage once at open time (via `StorageManager.syncNow()`, v4.7.0) — changes made from another device, tab, or the standalone editor window while the popup stayed open were not reflected until the popup was closed and reopened. `popup.live-sync.js` closes this gap by registering a single `chrome.storage.onChanged` listener, modeled on the equivalent listener already used by `content/content-script.js`.
+
+**Factory pattern**: `createLiveSyncListener(ctx)` returns `{ start() }`. `ctx` carries the `StorageManager` reference, a `dom` map of the elements to keep in sync, `applyMasterSwitchUI`/`updateEditPresetBtnState` callbacks, and getter/setter pairs for `presets`, `activePresetId`, and `chatPresetMap` (mirroring the ctx-factory pattern already used by `popup.preset-manager.js`/`popup.backup-manager.js`). `popup.js` constructs this context and calls `.start()` once, right after the custom-select is created.
+
+**Coverage**:
+- `isEnabled` / `globalPromptEnabled` (local-only, v4.7.3) → toggle checkbox + `applyMasterSwitchUI()`.
+- `includeThinking`, `includeReferences`, `dsSidebarAutoHide`, `dsHideThinking`, `dsShowSystemTime` → matching toggle checkbox.
+- `dsChatWidth`/`dsChatWidthEnabled` and `dsInputWidth`/`dsInputWidthEnabled` → slider value, label text, and collapsed-container class.
+- `dsPresetIndex` / preset order meta / any `dsPreset_<id>` key → re-fetches `StorageManager.getSettings()` and re-renders the custom select (preset add/rename/delete/reorder/content edit from elsewhere).
+- ChatPresetMap chunk/meta keys → re-fetches `StorageManager.getChatPresetMap()`.
+- `activePresetId` → re-renders only when the incoming value differs from the popup's own in-memory value (guards against a redundant re-render echo of the popup's own write).
+
+**No feedback loop**: every DOM write is idempotent (`applyToggle`/`applySlider` only assign when the value actually differs), and the module never calls any `StorageManager.save*` itself — so a change the popup itself just wrote flows back through `onChanged` as a same-value no-op rather than a loop.
 
 ## Standalone Prompt Editor Window (v3.0.0)
 

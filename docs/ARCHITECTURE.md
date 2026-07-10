@@ -48,6 +48,7 @@ ds-studio/
 │   ├── popup.modal.js       ─  Modal + Toast components
 │   ├── popup.preset-manager.js  ─  Preset CRUD helpers (createPresetManager ctx factory)
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
+│   ├── popup.live-sync.js   ─  chrome.storage.onChanged reactivity for the open popup (createLiveSyncListener ctx factory, v4.8.0)
 │   └── editor/              ─  Standalone 1280×720 prompt editor (v3.0.0)
 │       ├── editor.html / editor.css
 │       └── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast

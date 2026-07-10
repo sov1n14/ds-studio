@@ -1,7 +1,8 @@
 /**
  * DS studio — Popup Controller（入口）
- * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）
- * 需在本檔案之前以 <script> 載入上述兩個模組。
+ * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
+ *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）
+ * 需在本檔案之前以 <script> 載入上述模組。
  */
 
 // ────────────────────────────────────────────
@@ -301,6 +302,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     customSelect.render();
     updateEditPresetBtnState();
     sendActivePresetToContentScript();
+
+    // --- 啟動 Live Sync：即時反映其他裝置/分頁/視窗所做的設定變更 ---
+    const liveSync = window.__DS_PopupLiveSync.createLiveSyncListener({
+        StorageManager,
+        dom: {
+            enableToggle, includeThinkingToggle, includeReferencesToggle,
+            showSystemTimeToggle, globalPromptToggle,
+            sidebarAutoHideToggle, hideThinkingToggle,
+            chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
+            inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
+        },
+        applyMasterSwitchUI,
+        updateEditPresetBtnState,
+        getPresets:        () => presets,
+        setPresets:        (v) => { presets = v; },
+        getActivePresetId: () => activePresetId,
+        setActivePresetId: (v) => { activePresetId = v; },
+        getChatPresetMap:  () => chatPresetMap,
+        setChatPresetMap:  (v) => { chatPresetMap = v; },
+        getCustomSelect:   () => customSelect,
+    });
+    liveSync.start();
 
     // ────────────────────────────────────────────
     // 按鈕 & 開關事件綁定
