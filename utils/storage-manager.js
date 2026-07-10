@@ -8,8 +8,10 @@
  *   3. storage-manager.sync.js
  *   4. storage-manager.presets.js
  *   5. storage-manager.chatmap.js
- *   6. storage-manager.syncnow.js
- *   7. storage-manager.js  （本檔）
+ *   6. storage-manager.local.js
+ *   7. storage-manager.init.js
+ *   8. storage-manager.syncnow.js
+ *   9. storage-manager.js  （本檔）
  */
 
 // === 錯誤類別（供 instanceof 檢查） ===
@@ -328,173 +330,11 @@ const StorageManager = {
     _byteLen(obj) { return JSON.stringify(obj).length; },
 
     /**
-     * 安裝 chunk 快取失效監聽器。
-     * 其他 context 修改分塊時，自動將 _chunkIndexCache 與 _metaCache 設為 null。
-     */
-    _installChunkCacheInvalidator() {
-        chrome.storage.onChanged.addListener((changes) => {
-            const keys = Object.keys(changes);
-            const touched = keys.some(k =>
-                k === StorageManager.KEYS.CHAT_PRESET_MAP_META ||
-                k.startsWith(StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX)
-            );
-            if (touched) {
-                StorageManager._chunkIndexCache = null;
-                StorageManager._metaCache = null;
-            }
-        });
-    },
-
-    /**
-     * Initialize default values if not present, migrate old data if needed
-     */
-    async initialize() {
-        // Cross-context/re-init defense: 強制清除物件層級快取，避免讀取到過期資料
-        this._metaCache = null;
-        this._chunkIndexCache = null;
-
-        const keysToFetch = Object.values(this.KEYS);
-
-        // Check local initialization state
-        const localState = await this._safeGet('local', [this.KEYS.SYNC_INITIALIZED, this.KEYS.SYNC_CONFLICT_PENDING]);
-        const syncInitialized = localState[this.KEYS.SYNC_INITIALIZED] === true;
-
-        // Fetch current data (including potential old promptPresets for migration)
-        const data = await this._get(keysToFetch);
-        const updates = {};
-
-        // 1. Migration from v1.6.x (single promptPresets key) to v1.7.0 (per-preset keys)
-        if (data[this.KEYS.PROMPT_PRESETS] !== undefined) {
-            const oldPresets = data[this.KEYS.PROMPT_PRESETS] || [];
-            if (oldPresets.length > 0) {
-                await this.savePromptPresets(oldPresets);
-            }
-            // Remove the old key from both storages
-            await this._safeRemove('sync', this.KEYS.PROMPT_PRESETS);
-            await this._safeRemove('local', this.KEYS.PROMPT_PRESETS);
-            // Refresh data after migration
-            return this.initialize();
-        }
-
-        // 2. Detect Sync Conflict on first sync run
-        if (!syncInitialized) {
-            const syncRaw = await this._safeGet('sync', null);
-            const localRaw = await this._safeGet('local', null);
-            const conflictType = this._detectSyncConflict(syncRaw, localRaw);
-
-            if (conflictType === 'manual') {
-                await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
-            } else if (conflictType === 'auto') {
-                await this.resolveSyncConflict();
-            } else {
-                await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
-            }
-        }
-
-        // 2.5. Migration: legacy chatPresetMap → 分塊式佈局
-        const legacySync = await this._safeGet('sync', [this.KEYS.CHAT_PRESET_MAP]);
-        const legacyLocal = await this._safeGet('local', [this.KEYS.CHAT_PRESET_MAP]);
-        const legacy = legacySync[this.KEYS.CHAT_PRESET_MAP] ?? legacyLocal[this.KEYS.CHAT_PRESET_MAP];
-        const metaCheck = await this._safeGet('sync', [this.KEYS.CHAT_PRESET_MAP_META]);
-        const metaExists = metaCheck[this.KEYS.CHAT_PRESET_MAP_META] !== undefined;
-
-        if (legacy !== undefined) {
-            await this._withChatPresetMapLock(async () => {
-                if (!metaExists) {
-                    // 完整遷移：mutator 將 legacy 寫入分塊；鎖由上層保護
-                    await this.mutateChatPresetMap(() => legacy);
-                }
-                // 清除舊金鑰 (崩潰復原：若 meta 已存在則只需清除；idempotent operation)
-                await this._safeRemove('sync', this.KEYS.CHAT_PRESET_MAP);
-                await this._safeRemove('local', this.KEYS.CHAT_PRESET_MAP);
-                delete data[this.KEYS.CHAT_PRESET_MAP];
-            });
-        }
-
-        // 3. Migration from v1.2.x (promptPrefix) to v1.7.0
-        if (data[this.KEYS.PRESET_INDEX] === undefined) {
-            const oldData = await this._safeGet('local', 'promptPrefix');
-            if (oldData && oldData.promptPrefix !== undefined && oldData.promptPrefix !== '') {
-                const migratedPreset = {
-                    id: 'preset-migrated-' + Date.now(),
-                    name: dsI18n.t('migratedPresetName'),
-                    content: oldData.promptPrefix,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                };
-                await this.savePromptPresets([migratedPreset]);
-                updates[this.KEYS.ACTIVE_PRESET_ID] = migratedPreset.id;
-            } else {
-                updates[this.KEYS.PRESET_INDEX] = this.DEFAULTS.dsPresetIndex;
-                updates[this.KEYS.ACTIVE_PRESET_ID] = this.DEFAULTS.activePresetId;
-            }
-        }
-
-        // 4. Fill other defaults
-        for (const key of keysToFetch) {
-            if (key === this.KEYS.PROMPT_PRESETS) continue; // 跳過已退役的金鑰
-            if (key === this.KEYS.CHAT_PRESET_MAP) continue; // 跳過已分塊處理的金鑰
-            if (data[key] === undefined && this.DEFAULTS[key] !== undefined) {
-                updates[key] = this.DEFAULTS[key];
-            }
-        }
-
-        if (Object.keys(updates).length > 0) {
-            await this._set(updates);
-        } else if (syncInitialized) {
-            // Ensure sync has what local has (migration push)
-            const syncData = await this._safeGet('sync', keysToFetch);
-            const missingInSync = {};
-            for (const key of keysToFetch) {
-                if (key === this.KEYS.PROMPT_PRESETS
-                 || key === this.KEYS.CHAT_PRESET_MAP
-                 || key === this.KEYS.RESTORED_MESSAGES) continue;
-                if (syncData[key] === undefined && data[key] !== undefined) {
-                    missingInSync[key] = data[key];
-                }
-            }
-
-            // Also check individual presets
-            const localIds = data[this.KEYS.PRESET_INDEX] || [];
-            for (const id of localIds) {
-                const pKey = this._presetKey(id);
-                if (syncData[pKey] === undefined) {
-                    const pData = await this._safeGet('local', pKey);
-                    if (pData[pKey]) missingInSync[pKey] = pData[pKey];
-                }
-            }
-
-            if (Object.keys(missingInSync).length > 0) {
-                await this._set(missingInSync);
-            }
-        }
-
-        // 註冊 chunk 快取失效監聽器（此後其他 context 修改分塊時自動重載）
-        this._installChunkCacheInvalidator();
-    },
-
-    /**
      * Save the active preset ID
      * @param {string} id
      */
     async saveActivePresetId(id) {
         return this._set({ [this.KEYS.ACTIVE_PRESET_ID]: id });
-    },
-
-    /**
-     * Save the enabled state
-     * @param {boolean} isEnabled
-     */
-    async saveEnabledState(isEnabled) {
-        return this._set({ [this.KEYS.IS_ENABLED]: isEnabled });
-    },
-
-    /**
-     * 儲存全域預設提示詞啟用狀態
-     * @param {boolean} enabled
-     */
-    async saveGlobalPromptEnabled(enabled) {
-        return this._set({ [this.KEYS.GLOBAL_PROMPT_ENABLED]: enabled });
     },
 
     /**
@@ -529,14 +369,6 @@ const StorageManager = {
         return this._set({ [this.KEYS.SHOW_SYSTEM_TIME]: enabled });
     },
 
-    getRestoredMessages() {
-        return this._safeGet('local', this.KEYS.RESTORED_MESSAGES);
-    },
-
-    saveRestoredMessages(messages) {
-        return this._safeSet('local', { [this.KEYS.RESTORED_MESSAGES]: messages });
-    },
-
     async saveChatWidth(percent) {
         return this._set({ [this.KEYS.CHAT_WIDTH]: percent });
     },
@@ -562,6 +394,8 @@ const StorageManager = {
         root.__DS_StorageManager_sync     || {},
         root.__DS_StorageManager_presets  || {},
         root.__DS_StorageManager_chatmap  || {},
+        root.__DS_StorageManager_local    || {},
+        root.__DS_StorageManager_init     || {},
         root.__DS_StorageManager_syncnow  || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);

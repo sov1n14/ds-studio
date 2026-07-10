@@ -75,11 +75,15 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
         });
 
         it('_set success branch removes saved keys from dsLocalAuth', async () => {
-            await chrome.storage.local.set({ [K.LOCAL_AUTHORITATIVE]: ['isEnabled'], isEnabled: false });
-            await StorageManager.saveEnabledState(true);
+            // isEnabled is local-only (report.md §4.3 Step 3) and is written via
+            // _safeSet('local', …), never via _set() — so it can no longer be used
+            // to probe _set()'s dsLocalAuth-removal branch. Use chatWidth instead,
+            // which still routes through _set() and the sync path.
+            await chrome.storage.local.set({ [K.LOCAL_AUTHORITATIVE]: [K.CHAT_WIDTH], [K.CHAT_WIDTH]: 50 });
+            await StorageManager.saveChatWidth(90);
             const data = await chrome.storage.local.get([K.LOCAL_AUTHORITATIVE]);
             const auth = data[K.LOCAL_AUTHORITATIVE] || [];
-            expect(auth).not.toContain('isEnabled');
+            expect(auth).not.toContain(K.CHAT_WIDTH);
         });
 
         it('dsLocalAuth does not affect keys not in the list', async () => {
@@ -241,6 +245,17 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
         });
 
         it('with mergePresetsOnly=false, overwrites UI settings', async () => {
+            await StorageManager.saveChatWidth(90);
+
+            await StorageManager.restoreSettings({
+                chatWidth: 30,
+            }, false);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.chatWidth).toBe(30);
+        });
+
+        it('with mergePresetsOnly=false, does NOT overwrite isEnabled (report.md §4.3 Step 3 — local-only, excluded from import)', async () => {
             await StorageManager.saveEnabledState(true);
 
             await StorageManager.restoreSettings({
@@ -248,7 +263,7 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
             }, false);
 
             const settings = await StorageManager.getSettings();
-            expect(settings.isEnabled).toBe(false);
+            expect(settings.isEnabled).toBe(true);
         });
     });
 

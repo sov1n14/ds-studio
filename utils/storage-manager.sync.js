@@ -121,6 +121,11 @@
             // restored_messages 僅存本機且可能超過 8KB 同步配額，排除以避免失敗
             delete updates[this.KEYS.RESTORED_MESSAGES];
 
+            // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
+            // 不應被雲端版本覆寫，故排除於合併結果之外。
+            delete updates[this.KEYS.IS_ENABLED];
+            delete updates[this.KEYS.GLOBAL_PROMPT_ENABLED];
+
             updates[this.KEYS.SYNC_INITIALIZED] = true;
             updates[this.KEYS.SYNC_CONFLICT_PENDING] = false;
 
@@ -256,7 +261,8 @@
             // 其餘設定直接覆寫，除非 mergePresetsOnly 為 true
             if (!mergePresetsOnly) {
                 if (importedSettings.activePresetId !== undefined) updates[this.KEYS.ACTIVE_PRESET_ID] = importedSettings.activePresetId;
-                if (importedSettings.isEnabled !== undefined) updates[this.KEYS.IS_ENABLED] = importedSettings.isEnabled;
+                // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
+                // 匯入備份不應覆寫當前裝置的開關狀態，故不從 importedSettings 還原。
                 if (importedSettings.includeThinking !== undefined) updates[this.KEYS.INCLUDE_THINKING] = importedSettings.includeThinking;
                 if (importedSettings.includeReferences !== undefined) updates[this.KEYS.INCLUDE_REFERENCES] = importedSettings.includeReferences;
                 if (importedSettings.globalDefaultPrompt !== undefined) updates[this.KEYS.GLOBAL_DEFAULT_PROMPT] = importedSettings.globalDefaultPrompt;
@@ -267,7 +273,6 @@
                 if (importedSettings.chatWidthEnabled !== undefined) updates[this.KEYS.CHAT_WIDTH_ENABLED] = importedSettings.chatWidthEnabled;
                 if (importedSettings.inputWidth !== undefined) updates[this.KEYS.INPUT_WIDTH] = importedSettings.inputWidth;
                 if (importedSettings.inputWidthEnabled !== undefined) updates[this.KEYS.INPUT_WIDTH_ENABLED] = importedSettings.inputWidthEnabled;
-                if (importedSettings.globalPromptEnabled !== undefined) updates[this.KEYS.GLOBAL_PROMPT_ENABLED] = importedSettings.globalPromptEnabled;
             }
 
             if (Object.keys(updates).length > 0) {
@@ -280,10 +285,16 @@
          * @returns {Promise<Object>} Object containing all settings
          */
         async getSettings() {
-            // 排除非使用者設定的內部金鑰，避免不必要的儲存讀取與記憶體開銷
+            // 排除非使用者設定的內部金鑰，避免不必要的儲存讀取與記憶體開銷；
+            // isEnabled / globalPromptEnabled 為 local-only 金鑰，一併排除於 sync 讀取路徑，
+            // 改由下方直接讀取本機資料補齊。
             const keysToFetch = Object.values(this.KEYS)
-                .filter(k => k !== this.KEYS.RESTORED_MESSAGES && k !== this.KEYS.PRESET_ORDER_META);
+                .filter(k => k !== this.KEYS.RESTORED_MESSAGES
+                    && k !== this.KEYS.PRESET_ORDER_META
+                    && k !== this.KEYS.IS_ENABLED
+                    && k !== this.KEYS.GLOBAL_PROMPT_ENABLED);
             const data = await this._get(keysToFetch);
+            const localOnlyData = await this._safeGet('local', [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED]);
 
             // Fetch individual presets based on index
             const presetIds = data[this.KEYS.PRESET_INDEX] || [];
@@ -295,6 +306,16 @@
                 // 跳過內部專用金鑰，不納入使用者設定回傳值
                 if (storageKey === this.KEYS.RESTORED_MESSAGES) continue;
                 if (storageKey === this.KEYS.PRESET_ORDER_META) continue;
+
+                // isEnabled / globalPromptEnabled 為 local-only 金鑰，直接取本機值，不走 sync 合併資料
+                if (storageKey === this.KEYS.IS_ENABLED) {
+                    settings.isEnabled = localOnlyData[storageKey] ?? this.DEFAULTS[storageKey];
+                    continue;
+                }
+                if (storageKey === this.KEYS.GLOBAL_PROMPT_ENABLED) {
+                    settings.globalPromptEnabled = localOnlyData[storageKey] ?? this.DEFAULTS[storageKey];
+                    continue;
+                }
 
                 // Special handling for presets array
                 if (storageKey === this.KEYS.PROMPT_PRESETS) {

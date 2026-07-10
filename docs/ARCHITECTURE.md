@@ -52,12 +52,14 @@ ds-studio/
 │       ├── editor.html / editor.css
 │       └── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
-│   ├── storage-manager.js   ─  Entry: storage API, getSettings, initialize (v4.0.0 split)
+│   ├── storage-manager.js   ─  Entry: storage API, getSettings (v4.0.0 split; initialize() moved out in v4.7.3)
 │   ├── storage-manager.chunking.js  ─  ChatPresetMap chunked read/write bundle
 │   ├── storage-manager.lock.js      ─  Cross-context advisory lock bundle
 │   ├── storage-manager.sync.js      ─  Cloud sync / conflict / restore bundle
 │   ├── storage-manager.presets.js   ─  Preset CRUD & chat-binding bundle
 │   ├── storage-manager.chatmap.js   ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
+│   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, globalPromptEnabled, restored_messages (v4.7.3 split)
+│   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
 │   ├── storage-manager.syncnow.js   ─  Unified syncNow() entry point (v4.7.0)
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
 ├── samples/                 ─  DOM reference HTML samples

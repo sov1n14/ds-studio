@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4.7.4] - 2026-07-11
+
+### Fixed
+- File-split closure regression: `_installChunkCacheInvalidator()`'s `onChanged` listener referenced the bare `StorageManager` global instead of `this`, which after the v4.7.3 module split could invalidate the wrong context's chunk cache in a multi-tab scenario, causing appended chunks to silently disappear from a stale-cached context
+
+## [4.7.3] - 2026-07-11
+
+### Changed
+- `isEnabled` (master toggle) and `globalPromptEnabled` (global-prompt toggle) are now local-only, device-scoped settings — excluded from sync, `resolveSyncConflict()`, and `restoreSettings()` import. `globalDefaultPrompt` (the prompt content itself) still syncs normally
+- Split `utils/storage-manager.js` (was over the 600-line hard limit) into two new bundles: `storage-manager.local.js` (local-only settings) and `storage-manager.init.js` (`initialize()` + chunk-cache invalidator) — entry file now 411 lines
+
 ## [4.7.2] - 2026-07-11
 
 ### Fixed

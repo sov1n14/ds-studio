@@ -7,6 +7,8 @@
 > **v4.0.0 模組化**：`StorageManager` 已拆分為入口檔 `utils/storage-manager.js`（API、`getSettings`、`initialize`、共享狀態）加四個方法包：`storage-manager.chunking.js`（分塊）、`storage-manager.lock.js`（跨 context 鎖）、`storage-manager.sync.js`（雲端同步/衝突/還原）、`storage-manager.presets.js`（提示詞 CRUD 與對話綁定）。入口檔以 `Object.assign` 合併方法包，對外 API 與行為完全不變；本文件描述的所有機制仍然適用。
 >
 > **v4.7.0/4.7.1 統一同步進入點**：新增 `StorageManager.syncNow()`（`utils/storage-manager.syncnow.js`），在 popup 開啟與 `chat.deepseek.com` 頁面載入時呼叫，取代原先直接呼叫 `getSettings()` 的作法。`syncNow()` 內部呼叫 `retrySync()` 後再呼叫 `getSettings()`。v4.7.1 修正了一個缺陷：`_get()` 在判定 remote 較新時，原本只在記憶體中回傳合併結果，未把覆寫值持久化回 `chrome.storage.local`；現已在 remote 勝出的分支透過既有的 `_safeSet('local', ...)` 補寫回本機，避免裝置重新開啟後又讀到舊的本機殘留值。
+>
+> **v4.7.3 本地化設定 + 拆檔**：`isEnabled`／`globalPromptEnabled` 改為本地專用（見下表)。入口檔 `utils/storage-manager.js` 因此次改動一度超過 600 行絕對上限，已拆出 `utils/storage-manager.local.js`（本地專用設定：`saveEnabledState`／`getEnabledState`／`saveGlobalPromptEnabled`／`getGlobalPromptEnabled`／`getRestoredMessages`／`saveRestoredMessages`)與 `utils/storage-manager.init.js`（`initialize()` 與 `_installChunkCacheInvalidator`),入口檔現為 411 行。v4.7.4 修正拆檔造成的閉包回歸：`_installChunkCacheInvalidator()` 的 `onChanged` 監聽器原本裸寫 `StorageManager.xxx`，拆檔前靠模組內詞法作用域恰好指向自身 context 的實例；拆檔後裸寫識別字會落到全域 `window.StorageManager`（多 context 情境下永遠指向「最後載入」的那個 context),導致另一 context 的 chunk cache 永遠不會被正確失效。已改為在安裝時 `const self = this` 並在監聽器中使用 `self.xxx`。
 
 ## State Management
 
@@ -17,11 +19,11 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `dsPresetIndex` | `string[]` | `[]` | Ordered array of prompt preset IDs. |
 | `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. |
 | `activePresetId` | string | `""` | The ID of the currently active preset. |
-| `isEnabled` | boolean | `false` | Whether prompt injection is active (master switch). |
+| `isEnabled` | boolean | `false` | Whether prompt injection is active (master switch). (v4.7.3) Local-only, device-scoped — excluded from sync, `resolveSyncConflict()`, and `restoreSettings()` import. |
 | `includeThinking` | boolean | `true` | Include AI thinking process in exported MD. |
 | `includeReferences` | boolean | `true` | Include citation reference links in exported MD. |
 | `globalDefaultPrompt` | string | `''` | A global prompt prepended before the per-preset prompt in every conversation. |
-| `globalPromptEnabled` | boolean | `true` | Whether the global default prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. |
+| `globalPromptEnabled` | boolean | `true` | Whether the global default prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. (v4.7.3) Local-only, device-scoped, same exclusions as `isEnabled` — note `globalDefaultPrompt` (the prompt *content*) still syncs normally; only this toggle is local-only. |
 | `chatPresetMap` | object | `{}` | Maps chat UUIDs (`/a/chat/s/{uuid}`) to preset IDs, enabling per-conversation preset binding. *Replaced in v2.4.0 by chunked keys (see Physical Chunking section).* |
 | `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, chunkCount:0, chunkSizes:[] }` | Index key for chunk discovery and write-target selection (v2.4.0+). |
 | `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | Physical chunks, each <= 7KB, holding a subset of the chatPresetMap entries (v2.4.0+). |

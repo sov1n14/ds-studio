@@ -15,6 +15,8 @@ import '../../utils/storage-manager.lock.js';
 import '../../utils/storage-manager.sync.js';
 import '../../utils/storage-manager.presets.js';
 import '../../utils/storage-manager.chatmap.js';
+import '../../utils/storage-manager.local.js';
+import '../../utils/storage-manager.init.js';
 import '../../utils/storage-manager.syncnow.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';

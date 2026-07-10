@@ -140,8 +140,9 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
             await chrome.storage.local.set({
                 [K.RESTORED_MESSAGES]: 'x'.repeat(10240),
                 [K.SYNC_CONFLICT_PENDING]: true,
+                [K.INCLUDE_THINKING]: true,
             });
-            await chrome.storage.sync.set({ [K.IS_ENABLED]: true });
+            await chrome.storage.sync.set({ [K.INCLUDE_THINKING]: true });
             chrome.storage.sync.setQuotaError(true);
 
             // Act
@@ -152,18 +153,25 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
             const syncAfter = await chrome.storage.sync.get(null);
 
             // UI setting preserved in local despite sync failure
-            expect(localAfter[K.IS_ENABLED]).toBe(true);
+            expect(localAfter[K.INCLUDE_THINKING]).toBe(true);
 
             // Keys that failed to sync are registered as LOCAL_AUTHORITATIVE
             const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
-            expect(authList).toContain(K.IS_ENABLED);
+            expect(authList).toContain(K.INCLUDE_THINKING);
 
             // restored_messages is NOT in LOCAL_AUTHORITATIVE (it was
             // excluded from updates and never reached _set)
             expect(authList).not.toContain(K.RESTORED_MESSAGES);
 
+            // Regression guard (report.md §4.3 Step 3): isEnabled/globalPromptEnabled
+            // are deleted from resolveSyncConflict's updates payload before it ever
+            // reaches _set(), so a sync quota error can never mark them
+            // LOCAL_AUTHORITATIVE via this path.
+            expect(authList).not.toContain(K.IS_ENABLED);
+            expect(authList).not.toContain(K.GLOBAL_PROMPT_ENABLED);
+
             // Sync was NOT updated (quota error prevented the write)
-            expect(syncAfter[K.IS_ENABLED]).toBe(true);  // unchanged from initial
+            expect(syncAfter[K.INCLUDE_THINKING]).toBe(true);  // unchanged from initial
 
             // restored_messages is still NOT in sync
             expect(syncAfter).not.toHaveProperty(K.RESTORED_MESSAGES);

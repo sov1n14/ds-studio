@@ -8,8 +8,10 @@ const K = StorageManager.KEYS;
  * default-fill step in initialize() sees nothing to do and falls through
  * to the migration push branch.
  *
- * RESTORED_MESSAGES is only written to local (it is a local-only key and
- * should never be in sync).
+ * RESTORED_MESSAGES, IS_ENABLED, and GLOBAL_PROMPT_ENABLED are only written
+ * to local — they are local-only keys (report.md §4.3 Step 3 made the latter
+ * two local-only, joining the pre-existing RESTORED_MESSAGES pattern) and
+ * should never be in sync.
  */
 async function populateDefaults() {
     const localDefaults = {
@@ -32,9 +34,11 @@ async function populateDefaults() {
         [K.PRESET_ORDER_META]: { order: [], orderUpdatedAt: 0 },
         [K.RESTORED_MESSAGES]: {},
     };
-    // Sync gets the same values except RESTORED_MESSAGES (local-only).
+    // Sync gets the same values except the local-only keys.
     const syncDefaults = { ...localDefaults };
     delete syncDefaults[K.RESTORED_MESSAGES];
+    delete syncDefaults[K.IS_ENABLED];
+    delete syncDefaults[K.GLOBAL_PROMPT_ENABLED];
 
     await chrome.storage.local.set(localDefaults);
     await chrome.storage.sync.set(syncDefaults);
@@ -60,13 +64,15 @@ describe('StorageManager migration push regression', () => {
         it('does not push restored_messages to sync (local-only key)', async () => {
             await populateDefaults();
 
-            // Arrange: local has isEnabled=true and a large restored_messages.
-            // Sync is missing both isEnabled and restored_messages.
+            // Arrange: local has includeThinking=false and a large restored_messages.
+            // Sync is missing both includeThinking and restored_messages.
+            // (Note: isEnabled/globalPromptEnabled are ALSO local-only per report.md
+            // §4.3 Step 3, so includeThinking is used here as the synced probe key.)
             await chrome.storage.local.set({
-                [K.IS_ENABLED]: true,
+                [K.INCLUDE_THINKING]: false,
                 [K.RESTORED_MESSAGES]: 'x'.repeat(10240), // >8KB simulation
             });
-            await chrome.storage.sync.remove(K.IS_ENABLED);
+            await chrome.storage.sync.remove(K.INCLUDE_THINKING);
 
             // Act: must NOT reject (regression guard)
             await expect(StorageManager.initialize()).resolves.toBeUndefined();
@@ -78,11 +84,16 @@ describe('StorageManager migration push regression', () => {
             // restored_messages must NOT appear in sync
             expect(syncAfter).not.toHaveProperty(K.RESTORED_MESSAGES);
 
-            // isEnabled should have been pushed to sync normally
-            expect(syncAfter[K.IS_ENABLED]).toBe(true);
+            // includeThinking should have been pushed to sync normally
+            expect(syncAfter[K.INCLUDE_THINKING]).toBe(false);
 
             // restored_messages stays intact in local
             expect(localAfter[K.RESTORED_MESSAGES]).toBe('x'.repeat(10240));
+
+            // Regression guard (report.md §4.3 Step 3): isEnabled must NEVER be
+            // pushed to sync during migration push, even though it was present
+            // in local with a non-default value.
+            expect(syncAfter).not.toHaveProperty(K.IS_ENABLED);
         });
     });
 
@@ -96,18 +107,18 @@ describe('StorageManager migration push regression', () => {
         it('does not reject when sync quota is exceeded during migration push', async () => {
             await populateDefaults();
 
-            await chrome.storage.local.set({ [K.IS_ENABLED]: true });
-            await chrome.storage.sync.remove(K.IS_ENABLED);
+            await chrome.storage.local.set({ [K.INCLUDE_THINKING]: false });
+            await chrome.storage.sync.remove(K.INCLUDE_THINKING);
             chrome.storage.sync.setQuotaError(true);
 
             await expect(StorageManager.initialize()).resolves.toBeUndefined();
         });
 
-        it('writes isEnabled to local and marks it as LOCAL_AUTHORITATIVE on quota error', async () => {
+        it('writes includeThinking to local and marks it as LOCAL_AUTHORITATIVE on quota error', async () => {
             await populateDefaults();
 
-            await chrome.storage.local.set({ [K.IS_ENABLED]: true });
-            await chrome.storage.sync.remove(K.IS_ENABLED);
+            await chrome.storage.local.set({ [K.INCLUDE_THINKING]: false });
+            await chrome.storage.sync.remove(K.INCLUDE_THINKING);
             chrome.storage.sync.setQuotaError(true);
 
             await StorageManager.initialize();
@@ -122,14 +133,19 @@ describe('StorageManager migration push regression', () => {
             expect(warnMsg).toContain('quota');
 
             // Key value is preserved in local
-            expect(localAfter[K.IS_ENABLED]).toBe(true);
+            expect(localAfter[K.INCLUDE_THINKING]).toBe(false);
 
             // Key is registered as local-authoritative
             const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
-            expect(authList).toContain(K.IS_ENABLED);
+            expect(authList).toContain(K.INCLUDE_THINKING);
 
             // Key is NOT in sync (quota error prevented the write)
-            expect(syncAfter).not.toHaveProperty(K.IS_ENABLED);
+            expect(syncAfter).not.toHaveProperty(K.INCLUDE_THINKING);
+
+            // Regression guard (report.md §4.3 Step 3): isEnabled must never be
+            // marked LOCAL_AUTHORITATIVE by the migration-push quota path — it
+            // never attempts a sync write for this key in the first place.
+            expect(authList).not.toContain(K.IS_ENABLED);
         });
     });
 
@@ -140,8 +156,8 @@ describe('StorageManager migration push regression', () => {
         it('pushes missing keys to sync and does not mark them as LOCAL_AUTHORITATIVE', async () => {
             await populateDefaults();
 
-            await chrome.storage.local.set({ [K.IS_ENABLED]: true });
-            await chrome.storage.sync.remove(K.IS_ENABLED);
+            await chrome.storage.local.set({ [K.INCLUDE_THINKING]: false });
+            await chrome.storage.sync.remove(K.INCLUDE_THINKING);
 
             await expect(StorageManager.initialize()).resolves.toBeUndefined();
 
@@ -149,12 +165,24 @@ describe('StorageManager migration push regression', () => {
             const syncAfter = await chrome.storage.sync.get(null);
             const localAfter = await chrome.storage.local.get(null);
 
-            // isEnabled appears in sync
-            expect(syncAfter[K.IS_ENABLED]).toBe(true);
+            // includeThinking appears in sync
+            expect(syncAfter[K.INCLUDE_THINKING]).toBe(false);
 
-            // dsLocalAuth either does not exist or does not include isEnabled
+            // dsLocalAuth either does not exist or does not include includeThinking
             const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
-            expect(authList).not.toContain(K.IS_ENABLED);
+            expect(authList).not.toContain(K.INCLUDE_THINKING);
+        });
+
+        it('regression guard (report.md §4.3 Step 3): never pushes isEnabled/globalPromptEnabled to sync, even when missing from sync and present in local', async () => {
+            await populateDefaults();
+
+            await chrome.storage.local.set({ [K.IS_ENABLED]: true, [K.GLOBAL_PROMPT_ENABLED]: false });
+
+            await expect(StorageManager.initialize()).resolves.toBeUndefined();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            expect(syncAfter).not.toHaveProperty(K.IS_ENABLED);
+            expect(syncAfter).not.toHaveProperty(K.GLOBAL_PROMPT_ENABLED);
         });
     });
 });
