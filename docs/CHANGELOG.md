@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.8.4](changelog/v4.md#484---2026-07-11) | 移除純診斷用日誌轉發子系統（logger.js sync 機制、孤兒除錯檔 diagnostic-sidebar-log.js、temp-chat 系列除錯 log），保留告警類 console.warn/error；不影響任何使用者可見功能 |
 | [4.8.3](changelog/v4.md#483---2026-07-11) | 新增提示詞組刪除墓碑（Tombstone）機制，修復跨裝置同步時「已刪除提示詞組復活」的缺陷；同時修正 sync 勝出索引未落盤本機的缺口 |
 | [4.6.2](changelog/v4.md#462---2026-06-28) | 修復跨裝置雲同步：提示詞組順序（dsPresetOrderMeta 時間戳）與內容（dsLocalAuth 精確 pinning）現可正確同步；初始化衝突偵測改為 auto/manual 分類；手動同步改為推+拉；chatmap 模組獨立拆分 |
 | [4.6.1](changelog/v4.md#461---2026-06-22) | 修復行動版編輯訊息發送按鈕 textarea 解析順序 |

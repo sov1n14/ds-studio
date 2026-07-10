@@ -121,25 +121,6 @@ describe('StorageManager._get preset recency reconciliation (dsPreset_<id> in bo
         expect(result.dsPreset_onlyLocal.name).toBe('OnlyLocal');
     });
 
-    it('emits a pull:recency-local diagnostic log when local wins over sync', async () => {
-        await chrome.storage.local.set({
-            dsPreset_p1: { id: 'p1', name: 'Local', content: 'local', createdAt: 1, updatedAt: 200 },
-        });
-        await chrome.storage.sync.set({
-            dsPreset_p1: { id: 'p1', name: 'Sync', content: 'sync', createdAt: 1, updatedAt: 100 },
-        });
-
-        const syncLogSpy = vi.fn();
-        globalThis.__DS_Logger = { ...(globalThis.__DS_Logger || {}), sync: syncLogSpy };
-
-        await StorageManager._get(['dsPreset_p1']);
-
-        expect(syncLogSpy).toHaveBeenCalledWith(
-            'pull:recency-local',
-            expect.objectContaining({ key: 'dsPreset_p1', localTs: 200, syncTs: 100 })
-        );
-    });
-
     it('dsLocalAuth pin path is unaffected by preset recency reconciliation', async () => {
         await chrome.storage.local.set({
             dsPreset_p1: { id: 'p1', name: 'OldLocal', content: 'old', createdAt: 1, updatedAt: 50 },

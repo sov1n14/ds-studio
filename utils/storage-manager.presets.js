@@ -26,7 +26,6 @@
             // 先加入所有 base presets，但排除已被 tombstone 判定為刪除者
             (basePresets || []).forEach(p => {
                 if (this._isTombstonedAway(tombstoneMap, p.id, p.updatedAt)) {
-                    globalThis.__DS_Logger?.sync('merge:tombstone-drop', { id: p.id, side: 'base', updatedAt: p.updatedAt || 0, deletedAt: tombstoneMap[p.id] });
                     return;
                 }
                 mergedMap.set(p.id, { ...p });
@@ -36,7 +35,6 @@
             (newPresets || []).forEach(p => {
                 if (this._isTombstonedAway(tombstoneMap, p.id, p.updatedAt)) {
                     // tombstone 較新（或同新）：即使 base 側仍留有此 id，也一併移除，墓碑必須蓋過陳舊資料
-                    globalThis.__DS_Logger?.sync('merge:tombstone-drop', { id: p.id, side: 'incoming', updatedAt: p.updatedAt || 0, deletedAt: tombstoneMap[p.id] });
                     mergedMap.delete(p.id);
                     return;
                 }
@@ -48,25 +46,18 @@
                     if (incUpdated > baseUpdated) {
                         // incoming 較新，取代
                         mergedMap.set(p.id, { ...p });
-                        globalThis.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'use-sync', localTs: baseUpdated, syncTs: incUpdated });
                     } else if (incUpdated === baseUpdated) {
                         // 時間戳相同，內容有差異時以 createdAt 較早者為準（穩定 tiebreak）
                         const contentDiffers = JSON.stringify(p) !== JSON.stringify(existing);
                         if (contentDiffers && (p.createdAt || 0) < (existing.createdAt || 0)) {
                             mergedMap.set(p.id, { ...p });
-                            globalThis.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'tiebreak', localTs: baseUpdated, syncTs: incUpdated });
-                        } else {
-                            globalThis.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'keep-local', localTs: baseUpdated, syncTs: incUpdated });
                         }
                         // 否則 base 保持不變
-                    } else {
-                        globalThis.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'keep-local', localTs: baseUpdated, syncTs: incUpdated });
                     }
                     // incUpdated < baseUpdated：base 較新，不取代
                 } else {
                     // base 中沒有此 preset，直接加入
                     mergedMap.set(p.id, { ...p });
-                    globalThis.__DS_Logger?.sync('merge:preset', { id: p.id, decision: 'add-new', localTs: 0, syncTs: p.updatedAt || 0 });
                 }
             });
 
@@ -84,7 +75,6 @@
             const headSet = new Set(head);
             const tail = survivingIds.filter(id => !headSet.has(id));
             const finalIds = [...head, ...tail];
-            globalThis.__DS_Logger?.sync('merge:order', { winner: incTs > baseTs ? 'sync' : baseTs > incTs ? 'local' : 'insertion-order', finalIds });
 
             return finalIds.map(id => mergedMap.get(id));
         },
@@ -155,8 +145,8 @@
         _pickPresetOrderByRecency(localMeta, syncMeta) {
             const lTs = (localMeta && localMeta.orderUpdatedAt) || 0;
             const sTs = (syncMeta && syncMeta.orderUpdatedAt) || 0;
-            if (sTs > lTs) { globalThis.__DS_Logger?.sync('order:pick', { localTs: lTs, syncTs: sTs, winner: 'sync' }); return { order: syncMeta.order, meta: syncMeta }; }
-            if (lTs > sTs) { globalThis.__DS_Logger?.sync('order:pick', { localTs: lTs, syncTs: sTs, winner: 'local' }); return { order: localMeta.order, meta: localMeta }; }
+            if (sTs > lTs) { return { order: syncMeta.order, meta: syncMeta }; }
+            if (lTs > sTs) { return { order: localMeta.order, meta: localMeta }; }
             return null;
         },
 

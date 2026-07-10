@@ -1,14 +1,15 @@
 /**
  * Unit tests for utils/logger.js
  *
- * 診斷記錄器已移除 dsDebugSync 旗閘（gate）：sync() 一律轉發至 Service Worker
- * console（透過 chrome.runtime.sendMessage），毋須任何開關。本測試據此驗證。
+ * 診斷記錄器已移除純診斷用的跨情境記錄轉發子系統（sync() / _forward() /
+ * _detectSource()）。__DS_Logger 現僅保留 warn(event, data)，且僅呼叫本地
+ * console.warn('[DS-Sync]', event, data)，不再與 chrome.runtime.sendMessage
+ * 有任何互動。本測試據此驗證。
  *
  * Coverage groups:
- *   A. sync() 一律透過 chrome.runtime.sendMessage 轉發（payload 內容與邊界值）
- *   B. warn() 一律 console.warn，並額外轉發
- *   C. Fail-safe — chrome / chrome.runtime.sendMessage 不可用時不拋出、為 no-op
- *   D. 來源標籤（source）隨附於每筆轉發訊息
+ *   A. warn() calls console.warn with [DS-Sync] prefix, event and data
+ *   B. Fail-safe — warn() never throws and still logs when chrome is unavailable
+ *   C. Regression guard — sync()/_forward()/_detectSource() no longer exist
  *
  * Loading strategy:
  *   logger.js is a plain script (not an ES module) that exports via
@@ -36,133 +37,70 @@ function loadFreshLogger() {
 }
 
 // ---------------------------------------------------------------------------
-// Group A — sync() always forwards via chrome.runtime.sendMessage
+// Group A — warn() fires console.warn locally
 // ---------------------------------------------------------------------------
 
-describe('A. sync() always forwards via chrome.runtime.sendMessage', () => {
+describe('A. warn() fires console.warn with [DS-Sync] prefix', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('A.1 sync() forwards a message with __dsSyncLog flag, level=log, event and data', () => {
+    it('A.1 warn() calls console.warn with [DS-Sync] prefix, event and data', () => {
         const logger = loadFreshLogger();
-        const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-        logger.sync('PUSH', { key: 'v1' });
-        expect(spy).toHaveBeenCalledOnce();
-        expect(spy).toHaveBeenCalledWith(expect.objectContaining({
-            __dsSyncLog: true,
-            level: 'log',
-            event: 'PUSH',
-            data: { key: 'v1' },
-        }));
-    });
-
-    it('A.2 sync() never writes to console.log directly (channel is the SW forward)', () => {
-        const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-        logger.sync('EVENT', 'data');
-        expect(logSpy).not.toHaveBeenCalled();
-    });
-
-    it('A.3 sync() passes empty string as data when data argument is omitted', () => {
-        const logger = loadFreshLogger();
-        const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-        logger.sync('EVENT_ONLY');
-        expect(spy).toHaveBeenCalledWith(expect.objectContaining({
-            event: 'EVENT_ONLY',
-            data: '',
-        }));
-    });
-
-    it('A.4 sync() forwards falsy data values (0, null, false) verbatim', () => {
-        const logger = loadFreshLogger();
-        const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-
-        logger.sync('ZERO', 0);
-        expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ event: 'ZERO', data: 0 }));
-
-        logger.sync('NULL', null);
-        expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ event: 'NULL', data: null }));
-
-        logger.sync('FALSE', false);
-        expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ event: 'FALSE', data: false }));
-    });
-
-    it('A.5 sync() swallows a rejected sendMessage promise (no unhandled rejection)', () => {
-        const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => Promise.reject(new Error('Receiving end does not exist')));
-        expect(() => logger.sync('EVENT', 'data')).not.toThrow();
-    });
-});
-
-// ---------------------------------------------------------------------------
-// Group B — warn() always fires console.warn and forwards
-// ---------------------------------------------------------------------------
-
-describe('B. warn() always fires console.warn and forwards', () => {
-    afterEach(() => {
-        vi.restoreAllMocks();
-    });
-
-    it('B.1 warn() calls console.warn with [DS-Sync] prefix, event and data', () => {
-        const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
         const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         logger.warn('QUOTA_EXCEEDED', { bytes: 1024 });
         expect(spy).toHaveBeenCalledOnce();
         expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'QUOTA_EXCEEDED', { bytes: 1024 });
     });
 
-    it('B.2 warn() also forwards to the Service Worker with level=warn', () => {
+    it('A.2 warn() with no data argument passes empty string to console.warn', () => {
         const logger = loadFreshLogger();
-        const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
-        logger.warn('SYNC_FAILED', 'network error');
-        expect(spy).toHaveBeenCalledWith(expect.objectContaining({
-            __dsSyncLog: true,
-            level: 'warn',
-            event: 'SYNC_FAILED',
-            data: 'network error',
-        }));
-    });
-
-    it('B.3 warn() with no data argument passes empty string to console.warn', () => {
-        const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
         const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         logger.warn('EVENT_NO_DATA');
         expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'EVENT_NO_DATA', '');
     });
 
-    it('B.4 warn() does NOT call console.log', () => {
+    it('A.3 warn() forwards falsy data values (0, null, false) verbatim', () => {
         const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
+        const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        logger.warn('ZERO', 0);
+        expect(spy).toHaveBeenLastCalledWith('[DS-Sync]', 'ZERO', 0);
+
+        logger.warn('NULL', null);
+        expect(spy).toHaveBeenLastCalledWith('[DS-Sync]', 'NULL', null);
+
+        logger.warn('FALSE', false);
+        expect(spy).toHaveBeenLastCalledWith('[DS-Sync]', 'FALSE', false);
+    });
+
+    it('A.4 warn() does NOT call console.log', () => {
+        const logger = loadFreshLogger();
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
         logger.warn('WARN_EVENT', 'x');
         expect(logSpy).not.toHaveBeenCalled();
     });
 
-    it('B.5 sync() does NOT call console.warn (wrong channel)', () => {
+    it('A.5 warn() never touches chrome.runtime.sendMessage', () => {
         const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        logger.sync('CHECK', 'data');
-        expect(warnSpy).not.toHaveBeenCalled();
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const sendSpy = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
+        logger.warn('SYNC_FAILED', 'network error');
+        expect(sendSpy).not.toHaveBeenCalled();
     });
 });
 
 // ---------------------------------------------------------------------------
-// Group C — Fail-safe: chrome / sendMessage unavailable
+// Group B — Fail-safe: chrome unavailable
 // ---------------------------------------------------------------------------
 
-describe('C. Fail-safe — chrome / sendMessage unavailable', () => {
+describe('B. Fail-safe — warn() works without chrome API interaction', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('C.1 loading logger does NOT throw when chrome is undefined', () => {
+    it('B.1 loading logger does NOT throw when chrome is undefined', () => {
         const savedChrome = globalThis.chrome;
         globalThis.chrome = undefined;
         try {
@@ -172,54 +110,47 @@ describe('C. Fail-safe — chrome / sendMessage unavailable', () => {
         }
     });
 
-    it('C.2 sync() is a silent no-op when chrome is undefined', () => {
+    it('B.2 warn() does not throw and still logs correctly when chrome is undefined', () => {
         const savedChrome = globalThis.chrome;
         globalThis.chrome = undefined;
         let logger;
         try {
             logger = loadFreshLogger();
-            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-            expect(() => logger.sync('no-chrome', 'test')).not.toThrow();
-            expect(logSpy).not.toHaveBeenCalled();
+            const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            expect(() => logger.warn('no-chrome', 'test')).not.toThrow();
+            expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'no-chrome', 'test');
         } finally {
             globalThis.chrome = savedChrome;
         }
     });
-
-    it('C.3 sync() swallows a synchronously-throwing sendMessage (context invalidated)', () => {
-        const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {
-            throw new Error('Extension context invalidated');
-        });
-        expect(() => logger.sync('boom', 'test')).not.toThrow();
-    });
-
-    it('C.4 warn() still writes to console.warn even when sendMessage throws', () => {
-        const logger = loadFreshLogger();
-        vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {
-            throw new Error('Extension context invalidated');
-        });
-        const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        expect(() => logger.warn('QUOTA', { bytes: 1 })).not.toThrow();
-        expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'QUOTA', { bytes: 1 });
-    });
 });
 
 // ---------------------------------------------------------------------------
-// Group D — Source tagging
+// Group C — Regression guard: removed forwarding subsystem stays removed
 // ---------------------------------------------------------------------------
 
-describe('D. Source tag accompanies every forwarded message', () => {
+describe('C. Regression guard — removed forwarding subsystem', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('D.1 forwarded message carries a non-empty string source label', () => {
+    it('C.1 __DS_Logger.sync is undefined (sync() no longer exists)', () => {
         const logger = loadFreshLogger();
-        const spy = vi.spyOn(chrome.runtime, 'sendMessage').mockImplementation(() => {});
-        logger.sync('EVENT', 'data');
-        const payload = spy.mock.calls[0][0];
-        expect(typeof payload.source).toBe('string');
-        expect(payload.source.length).toBeGreaterThan(0);
+        expect(logger.sync).toBeUndefined();
+    });
+
+    it('C.2 __DS_Logger._forward is undefined (_forward() no longer exists)', () => {
+        const logger = loadFreshLogger();
+        expect(logger._forward).toBeUndefined();
+    });
+
+    it('C.3 __DS_Logger._detectSource is undefined (_detectSource() no longer exists)', () => {
+        const logger = loadFreshLogger();
+        expect(logger._detectSource).toBeUndefined();
+    });
+
+    it('C.4 __DS_Logger only exposes the warn() method', () => {
+        const logger = loadFreshLogger();
+        expect(Object.keys(logger)).toEqual(['warn']);
     });
 });

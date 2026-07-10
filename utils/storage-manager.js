@@ -243,7 +243,6 @@ const StorageManager = {
         if (isConflictPending) return lData;
 
         const merged = { ...lData, ...sData };
-        globalThis.__DS_Logger?.sync('pull:merge', { source: 'sync-wins', keys: Object.keys(sData) });
 
         // 用於收集本次判定為「遠端較新」的項目，稍後一次性持久化回 chrome.storage.local，
         // 確保回傳值與本機持久化狀態一致（避免僅存在於記憶體中的合併結果）。
@@ -258,7 +257,6 @@ const StorageManager = {
             const winner = this._pickNewerPreset(localPreset, syncPreset);
             if (winner === localPreset && merged[key] !== localPreset) {
                 merged[key] = localPreset;
-                globalThis.__DS_Logger?.sync('pull:recency-local', { key, localTs: localPreset.updatedAt || 0, syncTs: syncPreset.updatedAt || 0 });
             } else if (winner === syncPreset && localPreset !== syncPreset) {
                 // 遠端較新：merged[key] 已經是 sData[key]（sync-wins 合併的預設行為），
                 // 但本機儲存仍保有舊值，需一併持久化，避免離線讀取或下次啟動時看到過期資料。
@@ -282,7 +280,6 @@ const StorageManager = {
                 if (winner.meta === syncOrderMeta) {
                     remoteWinsToPersist[this.KEYS.PRESET_INDEX] = winner.order;
                     remoteWinsToPersist[this.KEYS.PRESET_ORDER_META] = winner.meta;
-                    globalThis.__DS_Logger?.sync('order:persist-winner', { winner: 'sync', target: 'local' });
                 }
             }
         }
@@ -293,7 +290,6 @@ const StorageManager = {
             const persistPayload = {};
             keysToPersist.forEach((key) => { persistPayload[key] = remoteWinsToPersist[key]; });
             await this._safeSet('local', persistPayload);
-            globalThis.__DS_Logger?.sync('pull:persist-remote', { keys: keysToPersist });
         }
 
         return merged;
@@ -309,8 +305,6 @@ const StorageManager = {
         const keysWritten = Object.keys(items);
         const oversizedKeys = keysWritten.filter(k => this._byteLen({ [k]: items[k] }) > this.QUOTA_BYTES_PER_ITEM);
         const normalKeys = keysWritten.filter(k => !oversizedKeys.includes(k));
-
-        globalThis.__DS_Logger?.sync('push:attempt', { keys: normalKeys, bytes: this._byteLen(items) });
 
         const localStatus = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE, this.KEYS.OVERSIZED_KEYS]);
         let localAuth = (localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !oversizedKeys.includes(k));
@@ -358,7 +352,6 @@ const StorageManager = {
             localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = localAuth;
             return this._safeSet('local', localUpdates);
         } else {
-            globalThis.__DS_Logger?.sync('push:ok', { keys: normalKeys });
             // Sync success: remove these keys from local authoritative list
             const newLocalAuth = localAuth.filter(k => !normalKeys.includes(k));
             if (newLocalAuth.length !== localAuth.length) {

@@ -67,11 +67,6 @@
             deletedIds.forEach(id => { tombstones[id] = now; });
 
             const pruned = this._pruneTombstones(tombstones, now);
-            globalThis.__DS_Logger?.sync('tombstone:create', {
-                ids: deletedIds,
-                deletedAt: now,
-                totalCount: Object.keys(pruned).length,
-            });
 
             await this._set({ [this.KEYS.PRESET_TOMBSTONES]: pruned });
         },

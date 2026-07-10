@@ -412,28 +412,6 @@ describe('StorageManager._get() — sync-wins PRESET_INDEX/PRESET_ORDER_META per
         expect(localAfter[K.PRESET_ORDER_META]).toEqual({ order: ['b'], orderUpdatedAt: now });
     });
 
-    it('emits an order:persist-winner diagnostic log when sync wins and is persisted', async () => {
-        const now = Date.now();
-        await chrome.storage.local.set({
-            [K.PRESET_INDEX]: ['a'],
-            [K.PRESET_ORDER_META]: { order: ['a'], orderUpdatedAt: now - (1 * DAY_MS) },
-        });
-        await chrome.storage.sync.set({
-            [K.PRESET_INDEX]: ['a', 'c'],
-            [K.PRESET_ORDER_META]: { order: ['a', 'c'], orderUpdatedAt: now },
-        });
-
-        const syncLogSpy = vi.fn();
-        globalThis.__DS_Logger = { ...(globalThis.__DS_Logger || {}), sync: syncLogSpy };
-
-        await StorageManager._get([K.PRESET_INDEX]);
-
-        expect(syncLogSpy).toHaveBeenCalledWith(
-            'order:persist-winner',
-            expect.objectContaining({ winner: 'sync', target: 'local' })
-        );
-    });
-
     it('does NOT persist to local when local already wins (no unnecessary write)', async () => {
         const now = Date.now();
         await chrome.storage.local.set({

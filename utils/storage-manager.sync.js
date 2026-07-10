@@ -42,13 +42,10 @@
 
                 if (syncTs === localTs) {
                     const isSameContent = JSON.stringify(syncPreset) === JSON.stringify(localPreset);
-                    globalThis.__DS_Logger?.sync('conflict:preset', { id, syncTs, localTs, sameContent: isSameContent });
                     if (!isSameContent) {
-                        globalThis.__DS_Logger?.sync('conflict:result', { type: 'manual', reason: 'same-ts-diff-content' });
                         return 'manual';
                     }
                 } else {
-                    globalThis.__DS_Logger?.sync('conflict:preset', { id, syncTs, localTs, sameContent: false });
                     hasAnyDivergence = true;
                 }
             }
@@ -60,7 +57,6 @@
             }
 
             const conflictResult = hasAnyDivergence ? 'auto' : 'none';
-            globalThis.__DS_Logger?.sync('conflict:result', { type: conflictResult, reason: 'divergence-scan' });
             return conflictResult;
         },
 
@@ -91,10 +87,8 @@
             const localTombstones = localRaw[this.KEYS.PRESET_TOMBSTONES] || {};
             const syncTombstones = syncRaw[this.KEYS.PRESET_TOMBSTONES] || {};
             const mergedTombstones = this._pruneTombstones(this._mergeTombstones(localTombstones, syncTombstones));
-            globalThis.__DS_Logger?.sync('merge:tombstones', { localCount: Object.keys(localTombstones).length, syncCount: Object.keys(syncTombstones).length, mergedCount: Object.keys(mergedTombstones).length });
 
             const mergedPresets = this.mergePresets(localPresets, syncPresets, localOrderMeta, syncOrderMeta, mergedTombstones);
-            globalThis.__DS_Logger?.sync('merge:summary', { localCount: localPresets.length, syncCount: syncPresets.length, mergedCount: mergedPresets.length, mergedOrderUpdatedAt: Math.max(localOrderMeta.orderUpdatedAt || 0, syncOrderMeta.orderUpdatedAt || 0) });
 
             // 計算合併後的 order meta：取雙側時間戳最大值，至少為當下時間
             const mergedMeta = {
@@ -212,7 +206,6 @@
                         const localOrderTs = localOrderMeta.orderUpdatedAt || 0;
                         const syncOrderTs = syncOrderMeta.orderUpdatedAt || 0;
                         shouldPush = localOrderTs >= syncOrderTs;
-                        globalThis.__DS_Logger?.sync('push:order-cmp', { localOrderTs, syncOrderTs, shouldPush });
                     } else if (key.startsWith('dsPreset_')) {
                         // 使用與其他同步流程一致的「較新者優先」共用規則判斷是否推送
                         const localPreset = localData[key];
@@ -223,7 +216,6 @@
                             shouldPush = false;
                             reconciledPresetKeys.push(key);
                         }
-                        globalThis.__DS_Logger?.sync('push:preset-cmp', { id: key, localTs: localPreset?.updatedAt || 0, syncTs: syncPreset?.updatedAt || 0, shouldPush });
                     }
 
                     if (shouldPush) {

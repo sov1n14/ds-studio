@@ -33,6 +33,7 @@ async function populateDefaults() {
         [K.SHOW_SYSTEM_TIME]: false,
         [K.PRESET_ORDER_META]: { order: [], orderUpdatedAt: 0 },
         [K.RESTORED_MESSAGES]: {},
+        [K.PRESET_TOMBSTONES]: {},
     };
     // Sync gets the same values except the local-only keys.
     const syncDefaults = { ...localDefaults };
