@@ -115,7 +115,6 @@
                     <div class="card-title">Backup & Restore</div>
                     <div class="card-title-actions">
                         <button id="clearRestoredBtn" class="btn btn-outline btn-xs" data-i18n="clearRestoredRecordsButton">清除所有已還原紀錄</button>
-                        <button id="forceSyncBtn" class="btn btn-outline btn-xs" data-i18n="manualSyncButton">手動同步</button>
                     </div>
                 </div>
                 <div class="input-group input-group--row">
@@ -239,10 +238,16 @@
         </div>
     </div>
 
+    <script src="../utils/logger.js"></script>
     <script src="../utils/storage-manager.chunking.js"></script>
     <script src="../utils/storage-manager.lock.js"></script>
     <script src="../utils/storage-manager.sync.js"></script>
     <script src="../utils/storage-manager.presets.js"></script>
+    <script src="../utils/storage-manager.tombstones.js"></script>
+    <script src="../utils/storage-manager.chatmap.js"></script>
+    <script src="../utils/storage-manager.local.js"></script>
+    <script src="../utils/storage-manager.init.js"></script>
+    <script src="../utils/storage-manager.syncnow.js"></script>
     <script src="../utils/storage-manager.js"></script>
     <script src="../utils/messaging.js"></script>
     <script src="../utils/i18n.js"></script>
@@ -250,6 +255,7 @@
     <script src="popup.modal.js"></script>
     <script src="popup.preset-manager.js"></script>
     <script src="popup.backup-manager.js"></script>
+    <script src="popup.live-sync.js"></script>
     <script src="popup.js"></script>
     <script src="popup.locale.js"></script>
 </body>

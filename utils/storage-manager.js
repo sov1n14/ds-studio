@@ -7,7 +7,12 @@
  *   2. storage-manager.lock.js
  *   3. storage-manager.sync.js
  *   4. storage-manager.presets.js
- *   5. storage-manager.js  （本檔）
+ *   5. storage-manager.tombstones.js
+ *   6. storage-manager.chatmap.js
+ *   7. storage-manager.local.js
+ *   8. storage-manager.init.js
+ *   9. storage-manager.syncnow.js
+ *  10. storage-manager.js  （本檔）
  */
 
 // === 錯誤類別（供 instanceof 檢查） ===
@@ -47,6 +52,7 @@ const StorageManager = {
         PROMPT_PRESETS: 'promptPresets',       // migration detection only
         PRESET_INDEX: 'dsPresetIndex',         // new: ordered ID list
         LOCAL_AUTHORITATIVE: 'dsLocalAuth',    // new: Plan A tracking
+        OVERSIZED_KEYS: 'dsOversizedKeys',     // keys permanently blocked from sync (> QUOTA_BYTES_PER_ITEM)
         ACTIVE_PRESET_ID: 'activePresetId',
         IS_ENABLED: 'isEnabled',
         GLOBAL_PROMPT_ENABLED: 'globalPromptEnabled',
@@ -65,6 +71,8 @@ const StorageManager = {
         INPUT_WIDTH_ENABLED: 'dsInputWidthEnabled',
         SYNC_INITIALIZED: 'syncInitialized',
         SYNC_CONFLICT_PENDING: 'syncConflictPending',
+        PRESET_ORDER_META: 'dsPresetOrderMeta',
+        PRESET_TOMBSTONES: 'dsPresetTombstones', // new: 刪除墓碑記錄，防止跨裝置合併時復活已刪除項目
         RESTORED_MESSAGES: 'restored_messages',
     },
 
@@ -89,6 +97,8 @@ const StorageManager = {
         dsInputWidthEnabled: false,
         syncInitialized: false,
         syncConflictPending: false,
+        dsPresetOrderMeta: { order: [], orderUpdatedAt: 0 },
+        dsPresetTombstones: {},
         restored_messages: {},
     },
 
@@ -99,6 +109,12 @@ const StorageManager = {
         LockAcquireTimeoutError,
         WriteReconciliationExhaustedError,
     },
+
+    /**
+     * chrome.storage.sync 單一項目的位元組上限。超過此大小的寫入永久無法成功，
+     * 必須在送出前攔截，避免污染 dsLocalAuth 重試佇列（見 _set()）。
+     */
+    QUOTA_BYTES_PER_ITEM: 8192,
 
     // === 提升至物件的私有狀態 ===
 
@@ -197,16 +213,23 @@ const StorageManager = {
 
     /**
      * Internal getter that prioritizes sync, then falls back to local.
+     * NOTE: File exceeds 450-line threshold. Net additions kept minimal; see chatmap.js split.
      */
     async _get(keys) {
-        const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING, this.KEYS.LOCAL_AUTHORITATIVE]);
+        const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING]);
         const isConflictPending = localStatus[this.KEYS.SYNC_CONFLICT_PENDING] === true;
-        const localAuth = localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || [];
 
-        // Capture lastError inside the sync callback before it's cleared
+        // 請求 PRESET_INDEX 時一併附帶 PRESET_ORDER_META，確保順序時戳比較資料完整
+        let effectiveKeys = Array.isArray(keys) ? [...keys] : keys;
+        if (Array.isArray(effectiveKeys)
+            && effectiveKeys.includes(this.KEYS.PRESET_INDEX)
+            && !effectiveKeys.includes(this.KEYS.PRESET_ORDER_META)) {
+            effectiveKeys = [...effectiveKeys, this.KEYS.PRESET_ORDER_META];
+        }
+
         const { sData, hasError } = await new Promise((resolve) => {
             try {
-                chrome.storage.sync.get(keys, (syncData) => {
+                chrome.storage.sync.get(effectiveKeys, (syncData) => {
                     resolve({ sData: syncData || {}, hasError: chrome.runtime.lastError });
                 });
             } catch (e) {
@@ -214,24 +237,59 @@ const StorageManager = {
             }
         });
 
-        const lData = await this._safeGet('local', keys);
+        const lData = await this._safeGet('local', effectiveKeys);
 
-        // If sync failed, just use local
         if (hasError) return lData;
-
-        // If conflict is pending, strictly return local data to avoid silent overwrite
         if (isConflictPending) return lData;
 
-        // Merge: sync overrides local, but if sync is missing a key, local is used
         const merged = { ...lData, ...sData };
 
-        // Plan A: Re-apply local values for keys that failed to sync previously
-        if (localAuth.length > 0) {
-            for (const key of keys) {
-                if (localAuth.includes(key) && lData[key] !== undefined) {
-                    merged[key] = lData[key];
+        // 用於收集本次判定為「遠端較新」的項目，稍後一次性持久化回 chrome.storage.local，
+        // 確保回傳值與本機持久化狀態一致（避免僅存在於記憶體中的合併結果）。
+        const remoteWinsToPersist = {};
+
+        // === 逐筆 preset 依 updatedAt 挑最新版本，避免 Chrome 同步收斂時以較舊版本覆蓋較新編輯 ===
+        for (const key of Object.keys(merged)) {
+            if (!key.startsWith('dsPreset_')) continue;
+            const localPreset = lData[key];
+            const syncPreset = sData[key];
+            if (localPreset === undefined || syncPreset === undefined) continue; // 僅在兩端都存在時比較
+            const winner = this._pickNewerPreset(localPreset, syncPreset);
+            if (winner === localPreset && merged[key] !== localPreset) {
+                merged[key] = localPreset;
+            } else if (winner === syncPreset && localPreset !== syncPreset) {
+                // 遠端較新：merged[key] 已經是 sData[key]（sync-wins 合併的預設行為），
+                // 但本機儲存仍保有舊值，需一併持久化，避免離線讀取或下次啟動時看到過期資料。
+                remoteWinsToPersist[key] = syncPreset;
+            }
+        }
+
+        // === 以 orderUpdatedAt 時戳決定 PRESET_INDEX 勝者 ===
+        if (Array.isArray(effectiveKeys) && effectiveKeys.includes(this.KEYS.PRESET_INDEX)) {
+            const localOrderMeta = lData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
+            const syncOrderMeta = sData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
+            const winner = this._pickPresetOrderByRecency(localOrderMeta, syncOrderMeta);
+            if (winner) {
+                merged[this.KEYS.PRESET_INDEX] = winner.order;
+                merged[this.KEYS.PRESET_ORDER_META] = winner.meta;
+
+                // 若 sync 勝出，本機快照仍停留在舊（可能含已刪除 id 的）index，
+                // 必須比照上方 dsPreset_* 的做法一併持久化回 local，
+                // 否則 popup 重開時 retrySync()/resolveSyncConflict() 會讀到陳舊本機 index，
+                // 誤將已刪除項目判定為「本機仍存在」而在合併時復活（見 tombstone 機制）。
+                if (winner.meta === syncOrderMeta) {
+                    remoteWinsToPersist[this.KEYS.PRESET_INDEX] = winner.order;
+                    remoteWinsToPersist[this.KEYS.PRESET_ORDER_META] = winner.meta;
                 }
             }
+        }
+
+        // 將「遠端較新」的最終結果持久化回 chrome.storage.local。
+        const keysToPersist = Object.keys(remoteWinsToPersist).filter((key) => merged[key] === remoteWinsToPersist[key]);
+        if (keysToPersist.length > 0) {
+            const persistPayload = {};
+            keysToPersist.forEach((key) => { persistPayload[key] = remoteWinsToPersist[key]; });
+            await this._safeSet('local', persistPayload);
         }
 
         return merged;
@@ -239,37 +297,63 @@ const StorageManager = {
 
     /**
      * Internal setter that tries sync first, falls back to local if quota exceeded.
+     * 寫入前先依 QUOTA_BYTES_PER_ITEM 逐鍵分流：永久超量的項目直接攔截，
+     * 只落地本機並標記於 dsOversizedKeys，絕不進入 chrome.storage.sync.set()
+     * 或 dsLocalAuth 重試佇列（重試永久超量的項目永遠不會成功）。
      */
     async _set(items) {
         const keysWritten = Object.keys(items);
+        const oversizedKeys = keysWritten.filter(k => this._byteLen({ [k]: items[k] }) > this.QUOTA_BYTES_PER_ITEM);
+        const normalKeys = keysWritten.filter(k => !oversizedKeys.includes(k));
+
+        const localStatus = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE, this.KEYS.OVERSIZED_KEYS]);
+        let localAuth = (localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !oversizedKeys.includes(k));
+        const originalOversizedAuth = localStatus[this.KEYS.OVERSIZED_KEYS] || [];
+        const oversizedAuth = originalOversizedAuth.filter(k => !normalKeys.includes(k));
+
+        oversizedKeys.forEach(k => {
+            globalThis.__DS_Logger?.warn('push:oversized', { key: k, bytes: this._byteLen({ [k]: items[k] }) });
+            if (!oversizedAuth.includes(k)) oversizedAuth.push(k);
+        });
+
+        const localUpdates = { ...items };
+        if (JSON.stringify(oversizedAuth) !== JSON.stringify(originalOversizedAuth)) {
+            localUpdates[this.KEYS.OVERSIZED_KEYS] = oversizedAuth;
+        }
+
+        if (normalKeys.length === 0) {
+            // 整批鍵皆永久超量：完全不呼叫 chrome.storage.sync.set()，只落地本機。
+            localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = localAuth;
+            return this._safeSet('local', localUpdates);
+        }
+
+        const normalItems = {};
+        normalKeys.forEach(k => { normalItems[k] = items[k]; });
 
         const syncError = await new Promise((resolve) => {
             try {
-                chrome.storage.sync.set(items, () => {
+                chrome.storage.sync.set(normalItems, () => {
                     resolve(chrome.runtime.lastError || null);
                 });
             } catch (e) {
-                resolve(null); // Context invalidated — treat as silent success, local backup below
+                resolve(e); // Context invalidated — fall through to local-write fallback below
             }
         });
 
-        const localStatus = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE]);
-        let localAuth = localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || [];
-
         if (syncError) {
             console.warn('Sync storage failed (possibly quota exceeded), falling back to local storage:', syncError?.message ?? 'Unknown error');
+            globalThis.__DS_Logger?.warn('push:quota-fail', { keys: normalKeys, error: syncError?.message ?? 'Unknown error' });
 
-            // Add these keys to local authoritative list
-            keysWritten.forEach(k => {
+            // Add these keys to local authoritative list (transient failure — retry-eligible)
+            normalKeys.forEach(k => {
                 if (!localAuth.includes(k)) localAuth.push(k);
             });
 
-            return this._safeSet('local', { ...items, [this.KEYS.LOCAL_AUTHORITATIVE]: localAuth });
+            localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = localAuth;
+            return this._safeSet('local', localUpdates);
         } else {
             // Sync success: remove these keys from local authoritative list
-            const newLocalAuth = localAuth.filter(k => !keysWritten.includes(k));
-
-            const localUpdates = { ...items };
+            const newLocalAuth = localAuth.filter(k => !normalKeys.includes(k));
             if (newLocalAuth.length !== localAuth.length) {
                 localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = newLocalAuth;
             }
@@ -280,169 +364,10 @@ const StorageManager = {
     },
 
     /**
-     * 計算 JSON 序列化後的位元組長度（用於分塊大小估算）。
+     * 計算 JSON 序列化後的實際 UTF-8 位元組長度（用於分塊大小估算與 8KB 超量判定）。
+     * 使用 TextEncoder 而非 .length，避免中文等多位元組字元被低估位元組數。
      */
-    _byteLen(obj) { return JSON.stringify(obj).length; },
-
-    /**
-     * 安裝 chunk 快取失效監聽器。
-     * 其他 context 修改分塊時，自動將 _chunkIndexCache 與 _metaCache 設為 null。
-     */
-    _installChunkCacheInvalidator() {
-        chrome.storage.onChanged.addListener((changes) => {
-            const keys = Object.keys(changes);
-            const touched = keys.some(k =>
-                k === StorageManager.KEYS.CHAT_PRESET_MAP_META ||
-                k.startsWith(StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX)
-            );
-            if (touched) {
-                StorageManager._chunkIndexCache = null;
-                StorageManager._metaCache = null;
-            }
-        });
-    },
-
-    /**
-     * Initialize default values if not present, migrate old data if needed
-     */
-    async initialize() {
-        // Cross-context/re-init defense: 強制清除物件層級快取，避免讀取到過期資料
-        this._metaCache = null;
-        this._chunkIndexCache = null;
-
-        const keysToFetch = Object.values(this.KEYS);
-
-        // Check local initialization state
-        const localState = await this._safeGet('local', [this.KEYS.SYNC_INITIALIZED, this.KEYS.SYNC_CONFLICT_PENDING]);
-        const syncInitialized = localState[this.KEYS.SYNC_INITIALIZED] === true;
-
-        // Fetch current data (including potential old promptPresets for migration)
-        const data = await this._get(keysToFetch);
-        const updates = {};
-
-        // 1. Migration from v1.6.x (single promptPresets key) to v1.7.0 (per-preset keys)
-        if (data[this.KEYS.PROMPT_PRESETS] !== undefined) {
-            const oldPresets = data[this.KEYS.PROMPT_PRESETS] || [];
-            if (oldPresets.length > 0) {
-                await this.savePromptPresets(oldPresets);
-            }
-            // Remove the old key from both storages
-            await this._safeRemove('sync', this.KEYS.PROMPT_PRESETS);
-            await this._safeRemove('local', this.KEYS.PROMPT_PRESETS);
-            // Refresh data after migration
-            return this.initialize();
-        }
-
-        // 2. Detect Sync Conflict on first sync run
-        if (!syncInitialized) {
-            const syncRaw = await this._safeGet('sync', null);
-            const localRaw = await this._safeGet('local', null);
-
-            const hasCloudData = syncRaw[this.KEYS.PRESET_INDEX] !== undefined;
-
-            if (hasCloudData) {
-                // Compare IDs first — preset content may be local-only (quota fallback),
-                // so comparing resolved objects would show both sides as empty and miss the conflict.
-                const syncIds = (syncRaw[this.KEYS.PRESET_INDEX] || []).slice().sort();
-                const localIds = (localRaw[this.KEYS.PRESET_INDEX] || []).slice().sort();
-                const idsDiffer = JSON.stringify(syncIds) !== JSON.stringify(localIds);
-
-                // Also compare content for cases where IDs match but values differ
-                const syncPresets = this._getPresetsFromRawStorage(syncRaw);
-                const localPresets = this._getPresetsFromRawStorage(localRaw);
-                const contentDiffers = JSON.stringify(syncPresets) !== JSON.stringify(localPresets);
-
-                if (idsDiffer || contentDiffers) {
-                    await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
-                } else {
-                    await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
-                }
-            } else {
-                await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
-            }
-        }
-
-        // 2.5. Migration: legacy chatPresetMap → 分塊式佈局
-        const legacySync = await this._safeGet('sync', [this.KEYS.CHAT_PRESET_MAP]);
-        const legacyLocal = await this._safeGet('local', [this.KEYS.CHAT_PRESET_MAP]);
-        const legacy = legacySync[this.KEYS.CHAT_PRESET_MAP] ?? legacyLocal[this.KEYS.CHAT_PRESET_MAP];
-        const metaCheck = await this._safeGet('sync', [this.KEYS.CHAT_PRESET_MAP_META]);
-        const metaExists = metaCheck[this.KEYS.CHAT_PRESET_MAP_META] !== undefined;
-
-        if (legacy !== undefined) {
-            await this._withChatPresetMapLock(async () => {
-                if (!metaExists) {
-                    // 完整遷移：mutator 將 legacy 寫入分塊；鎖由上層保護
-                    await this.mutateChatPresetMap(() => legacy);
-                }
-                // 清除舊金鑰 (崩潰復原：若 meta 已存在則只需清除；idempotent operation)
-                await this._safeRemove('sync', this.KEYS.CHAT_PRESET_MAP);
-                await this._safeRemove('local', this.KEYS.CHAT_PRESET_MAP);
-                delete data[this.KEYS.CHAT_PRESET_MAP];
-            });
-        }
-
-        // 3. Migration from v1.2.x (promptPrefix) to v1.7.0
-        if (data[this.KEYS.PRESET_INDEX] === undefined) {
-            const oldData = await this._safeGet('local', 'promptPrefix');
-            if (oldData && oldData.promptPrefix !== undefined && oldData.promptPrefix !== '') {
-                const migratedPreset = {
-                    id: 'preset-migrated-' + Date.now(),
-                    name: dsI18n.t('migratedPresetName'),
-                    content: oldData.promptPrefix,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                };
-                await this.savePromptPresets([migratedPreset]);
-                updates[this.KEYS.ACTIVE_PRESET_ID] = migratedPreset.id;
-            } else {
-                updates[this.KEYS.PRESET_INDEX] = this.DEFAULTS.dsPresetIndex;
-                updates[this.KEYS.ACTIVE_PRESET_ID] = this.DEFAULTS.activePresetId;
-            }
-        }
-
-        // 4. Fill other defaults
-        for (const key of keysToFetch) {
-            if (key === this.KEYS.PROMPT_PRESETS) continue; // 跳過已退役的金鑰
-            if (key === this.KEYS.CHAT_PRESET_MAP) continue; // 跳過已分塊處理的金鑰
-            if (data[key] === undefined && this.DEFAULTS[key] !== undefined) {
-                updates[key] = this.DEFAULTS[key];
-            }
-        }
-
-        if (Object.keys(updates).length > 0) {
-            await this._set(updates);
-        } else if (syncInitialized) {
-            // Ensure sync has what local has (migration push)
-            const syncData = await this._safeGet('sync', keysToFetch);
-            const missingInSync = {};
-            for (const key of keysToFetch) {
-                if (key === this.KEYS.PROMPT_PRESETS
-                 || key === this.KEYS.CHAT_PRESET_MAP
-                 || key === this.KEYS.RESTORED_MESSAGES) continue;
-                if (syncData[key] === undefined && data[key] !== undefined) {
-                    missingInSync[key] = data[key];
-                }
-            }
-
-            // Also check individual presets
-            const localIds = data[this.KEYS.PRESET_INDEX] || [];
-            for (const id of localIds) {
-                const pKey = this._presetKey(id);
-                if (syncData[pKey] === undefined) {
-                    const pData = await this._safeGet('local', pKey);
-                    if (pData[pKey]) missingInSync[pKey] = pData[pKey];
-                }
-            }
-
-            if (Object.keys(missingInSync).length > 0) {
-                await this._set(missingInSync);
-            }
-        }
-
-        // 註冊 chunk 快取失效監聽器（此後其他 context 修改分塊時自動重載）
-        this._installChunkCacheInvalidator();
-    },
+    _byteLen(obj) { return new TextEncoder().encode(JSON.stringify(obj)).length; },
 
     /**
      * Save the active preset ID
@@ -450,22 +375,6 @@ const StorageManager = {
      */
     async saveActivePresetId(id) {
         return this._set({ [this.KEYS.ACTIVE_PRESET_ID]: id });
-    },
-
-    /**
-     * Save the enabled state
-     * @param {boolean} isEnabled
-     */
-    async saveEnabledState(isEnabled) {
-        return this._set({ [this.KEYS.IS_ENABLED]: isEnabled });
-    },
-
-    /**
-     * 儲存全域預設提示詞啟用狀態
-     * @param {boolean} enabled
-     */
-    async saveGlobalPromptEnabled(enabled) {
-        return this._set({ [this.KEYS.GLOBAL_PROMPT_ENABLED]: enabled });
     },
 
     /**
@@ -500,14 +409,6 @@ const StorageManager = {
         return this._set({ [this.KEYS.SHOW_SYSTEM_TIME]: enabled });
     },
 
-    getRestoredMessages() {
-        return this._safeGet('local', this.KEYS.RESTORED_MESSAGES);
-    },
-
-    saveRestoredMessages(messages) {
-        return this._safeSet('local', { [this.KEYS.RESTORED_MESSAGES]: messages });
-    },
-
     async saveChatWidth(percent) {
         return this._set({ [this.KEYS.CHAT_WIDTH]: percent });
     },
@@ -531,7 +432,12 @@ const StorageManager = {
         root.__DS_StorageManager_chunking || {},
         root.__DS_StorageManager_lock     || {},
         root.__DS_StorageManager_sync     || {},
-        root.__DS_StorageManager_presets  || {}
+        root.__DS_StorageManager_presets  || {},
+        root.__DS_StorageManager_tombstones || {},
+        root.__DS_StorageManager_chatmap  || {},
+        root.__DS_StorageManager_local    || {},
+        root.__DS_StorageManager_init     || {},
+        root.__DS_StorageManager_syncnow  || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 

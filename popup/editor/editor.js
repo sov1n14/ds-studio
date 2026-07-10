@@ -7,7 +7,7 @@
  *
  * 自動儲存策略：
  *   1. input 事件設定 isDirty flag
- *   2. input 事件觸發防抖儲存（600ms）
+ *   2. input 事件觸發防抖儲存（500ms）
  *   3. blur / visibilitychange(hidden) / pagehide 立即儲存
  */
 
@@ -249,8 +249,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 防抖儲存（600ms）
-    const debouncedSave = debounce(performSave, 600);
+    // 防抖儲存（500ms）
+    const debouncedSave = debounce(performSave, 500);
 
     // input 事件：設定 dirty + 觸發防抖儲存
     textareaEl.addEventListener('input', () => {

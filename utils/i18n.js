@@ -53,11 +53,11 @@
     importJsonSettingsButton: '擴充設定',
     importRestoredBackupButton: '已復原信息',
     clearRestoredRecordsButton: '清除所有已還原紀錄',
-    manualSyncButton: '手動同步',
 
     // ---- Popup: Sync Status ----
     syncStatusSynced: '雲端同步',
     syncStatusUnsynced: '未同步',
+    syncStatusOversized: '內容過大，僅存本機',
 
     // ---- Popup: Sync Conflict Dialog ----
     syncConflictTitle: '雲端同步衝突',
@@ -78,8 +78,7 @@
     notOnDeepseekMessage: '請在 chat.deepseek.com 頁面使用此功能。',
     exportFailedRefreshToast: '匯出失敗，請重整頁面後再試',
 
-    // ---- Popup: Manual Sync ----
-    syncingButtonText: '同步中…',
+    // ---- Popup: Sync Toasts ----
     syncCompleteToast: '已同步完成',
     syncRemainingToast: '仍有 {count} 項未同步',
     syncFailedToast: '同步失敗',
@@ -218,11 +217,11 @@
     importJsonSettingsButton: 'Extension Settings',
     importRestoredBackupButton: 'Restored Messages',
     clearRestoredRecordsButton: 'Clear All Restored Messages',
-    manualSyncButton: 'Manual Sync',
 
     // ---- Popup: Sync Status ----
     syncStatusSynced: 'Cloud Synced',
     syncStatusUnsynced: 'Not Synced',
+    syncStatusOversized: 'Too Large — Local Only',
 
     // ---- Popup: Sync Conflict Dialog ----
     syncConflictTitle: 'Cloud Sync Conflict',
@@ -243,8 +242,7 @@
     notOnDeepseekMessage: 'Please use this feature on the chat.deepseek.com page.',
     exportFailedRefreshToast: 'Export failed, please refresh the page and try again',
 
-    // ---- Popup: Manual Sync ----
-    syncingButtonText: 'Syncing…',
+    // ---- Popup: Sync Toasts ----
     syncCompleteToast: 'Sync completed',
     syncRemainingToast: '{count} item(s) not synced',
     syncFailedToast: 'Sync failed',

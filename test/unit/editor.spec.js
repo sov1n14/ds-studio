@@ -265,6 +265,43 @@ describe('debounce', () => {
 });
 
 // ─────────────────────────────────────────────
+// Auto-save debounce wiring — must be 500ms, not 600ms
+//
+// performSave/debouncedSave live inside the DOMContentLoaded closure and are not
+// exported via __DSSEditor, so we assert the literal wiring in source. This is
+// paired with the generic `debounce()` timing tests above (which prove the
+// debounce implementation itself delays/collapses correctly) to fully cover the
+// "auto-save now fires at 500ms" requirement.
+// ─────────────────────────────────────────────
+
+describe('editor.js auto-save debounce wiring — source assertion', () => {
+    it('wires debouncedSave = debounce(performSave, 500) — not 600ms', async () => {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, resolve } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
+
+        expect(code).toContain('const debouncedSave = debounce(performSave, 500);');
+        expect(code).not.toContain('debounce(performSave, 600)');
+    });
+
+    it('textarea "input" handler sets isDirty and calls the debounced save (not performSave directly)', async () => {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, resolve } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
+
+        const inputBlockMatch = code.match(/textareaEl\.addEventListener\('input', \(\) => \{[\s\S]*?\}\);/);
+        expect(inputBlockMatch).not.toBeNull();
+        expect(inputBlockMatch[0]).toContain('isDirty = true');
+        expect(inputBlockMatch[0]).toContain('debouncedSave()');
+        expect(inputBlockMatch[0]).not.toContain('performSave()');
+    });
+});
+
+// ─────────────────────────────────────────────
 // renderDisabledState
 // ─────────────────────────────────────────────
 

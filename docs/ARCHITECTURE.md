@@ -48,15 +48,21 @@ ds-studio/
 │   ├── popup.modal.js       ─  Modal + Toast components
 │   ├── popup.preset-manager.js  ─  Preset CRUD helpers (createPresetManager ctx factory)
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
+│   ├── popup.live-sync.js   ─  chrome.storage.onChanged reactivity for the open popup (createLiveSyncListener ctx factory, v4.8.0)
 │   └── editor/              ─  Standalone 1280×720 prompt editor (v3.0.0)
 │       ├── editor.html / editor.css
 │       └── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
-│   ├── storage-manager.js   ─  Entry: storage API, getSettings, initialize (v4.0.0 split)
+│   ├── storage-manager.js   ─  Entry: storage API, getSettings (v4.0.0 split; initialize() moved out in v4.7.3)
 │   ├── storage-manager.chunking.js  ─  ChatPresetMap chunked read/write bundle
 │   ├── storage-manager.lock.js      ─  Cross-context advisory lock bundle
 │   ├── storage-manager.sync.js      ─  Cloud sync / conflict / restore bundle
 │   ├── storage-manager.presets.js   ─  Preset CRUD & chat-binding bundle
+│   ├── storage-manager.chatmap.js   ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
+│   ├── storage-manager.tombstones.js ─  Preset deletion-tombstone merge/prune bundle (v4.8.3)
+│   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, globalPromptEnabled, restored_messages (v4.7.3 split)
+│   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
+│   ├── storage-manager.syncnow.js   ─  Unified syncNow() entry point (v4.7.0)
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
 ├── samples/                 ─  DOM reference HTML samples
 └── test/                    ─  Unit tests (Vitest only; integration tests removed v2.8.2)

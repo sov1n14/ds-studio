@@ -1,8 +1,32 @@
 /**
  * DS studio — Popup Controller（入口）
- * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）
- * 需在本檔案之前以 <script> 載入上述兩個模組。
+ * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
+ *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）
+ * 需在本檔案之前以 <script> 載入上述模組。
  */
+
+// ────────────────────────────────────────────
+// 防抖工具（與 popup-utils.js 邏輯一致，
+// 因 popup-utils.js 採用 ES module export 無法
+// 在 classic script 環境下直接取用，故於此複製）
+// ────────────────────────────────────────────
+
+/**
+ * 建立防抖包裝函式。
+ * @param {Function} fn - 要延遲執行的函式
+ * @param {number} delayMs - 延遲毫秒數
+ * @returns {Function} 防抖後的函式
+ */
+function debounce(fn, delayMs) {
+    let timer = null;
+    return function (...args) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, args);
+        }, delayMs);
+    };
+}
 
 // ────────────────────────────────────────────
 // Main popup logic
@@ -32,7 +56,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthSlider          = document.getElementById('inputWidthSlider');
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
-    const forceSyncBtn              = document.getElementById('forceSyncBtn');
     const syncStatusEl              = document.getElementById('syncStatus');
 
     let saveTimeout;
@@ -74,10 +97,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function refreshSyncStatus() {
         try {
             const isSynced = await StorageManager.isSyncedWithCloud();
+            const isOversized = await StorageManager.hasOversizedItems();
             const el = document.getElementById('syncStatus');
-            el.classList.toggle('synced',   isSynced);
-            el.classList.toggle('unsynced', !isSynced);
-            el.textContent = isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced');
+            el.classList.toggle('synced',   isSynced && !isOversized);
+            el.classList.toggle('unsynced', !isSynced || isOversized);
+            el.textContent = isOversized
+                ? dsI18n.t('syncStatusOversized')
+                : (isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced'));
         } catch (e) { /* 靜默忽略 — 僅為 UI 提示 */ }
     }
 
@@ -183,7 +209,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await refreshSyncStatus();
-    const settings = await StorageManager.getSettings();
+    // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
+    const settings = await StorageManager.syncNow();
 
     presets        = settings.promptPresets;
     activePresetId = settings.activePresetId;
@@ -289,7 +316,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         onReorder: async (newPresets) => {
             presets = newPresets;
-            await StorageManager.savePromptPresets(newPresets);
+            await StorageManager.savePromptPresets(newPresets, { order: newPresets.map(p => p.id), orderUpdatedAt: Date.now() });
             await refreshSyncStatus();
             customSelect.render();
         },
@@ -300,6 +327,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     customSelect.render();
     updateEditPresetBtnState();
     sendActivePresetToContentScript();
+
+    // --- 啟動 Live Sync：即時反映其他裝置/分頁/視窗所做的設定變更 ---
+    const liveSync = window.__DS_PopupLiveSync.createLiveSyncListener({
+        StorageManager,
+        dom: {
+            enableToggle, includeThinkingToggle, includeReferencesToggle,
+            showSystemTimeToggle, globalPromptToggle,
+            sidebarAutoHideToggle, hideThinkingToggle,
+            chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
+            inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
+        },
+        applyMasterSwitchUI,
+        updateEditPresetBtnState,
+        getPresets:        () => presets,
+        setPresets:        (v) => { presets = v; },
+        getActivePresetId: () => activePresetId,
+        setActivePresetId: (v) => { activePresetId = v; },
+        getChatPresetMap:  () => chatPresetMap,
+        setChatPresetMap:  (v) => { chatPresetMap = v; },
+        getCustomSelect:   () => customSelect,
+    });
+    liveSync.start();
 
     // ────────────────────────────────────────────
     // 按鈕 & 開關事件綁定
@@ -437,14 +486,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSaveStatus();
         });
     }
+    // 防抖儲存對話區域寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
+    const debouncedSaveChatWidth = debounce(async (widthValue) => {
+        await StorageManager.saveChatWidth(widthValue);
+        await refreshSyncStatus();
+        showSaveStatus();
+    }, 500);
+
     if (chatWidthSlider && chatWidthValue) {
         chatWidthSlider.addEventListener('input', () => {
             chatWidthValue.textContent = chatWidthSlider.value + '%';
         });
-        chatWidthSlider.addEventListener('change', async () => {
-            await StorageManager.saveChatWidth(parseInt(chatWidthSlider.value, 10));
-            await refreshSyncStatus();
-            showSaveStatus();
+        chatWidthSlider.addEventListener('change', () => {
+            debouncedSaveChatWidth(parseInt(chatWidthSlider.value, 10));
         });
     }
 
@@ -458,14 +512,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSaveStatus();
         });
     }
+    // 防抖儲存編輯輸入框寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
+    const debouncedSaveInputWidth = debounce(async (widthValue) => {
+        await StorageManager.saveInputWidth(widthValue);
+        await refreshSyncStatus();
+        showSaveStatus();
+    }, 500);
+
     if (inputWidthSlider && inputWidthValue) {
         inputWidthSlider.addEventListener('input', () => {
             inputWidthValue.textContent = inputWidthSlider.value + '%';
         });
-        inputWidthSlider.addEventListener('change', async () => {
-            await StorageManager.saveInputWidth(parseInt(inputWidthSlider.value, 10));
-            await refreshSyncStatus();
-            showSaveStatus();
+        inputWidthSlider.addEventListener('change', () => {
+            debouncedSaveInputWidth(parseInt(inputWidthSlider.value, 10));
         });
     }
 
@@ -512,26 +571,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('importRestoredInput')
     );
     backupManager.bindClearRestored(document.getElementById('clearRestoredBtn'));
-
-    if (forceSyncBtn) {
-        forceSyncBtn.addEventListener('click', async () => {
-            const original = forceSyncBtn.textContent;
-            forceSyncBtn.disabled = true;
-            forceSyncBtn.textContent = dsI18n.t('syncingButtonText');
-            try {
-                const result = await StorageManager.retrySync();
-                if (result.success) {
-                    Toast.show(dsI18n.t('syncCompleteToast'));
-                } else {
-                    Toast.show(dsI18n.t('syncRemainingToast', { count: result.remainingUnsyncedCount }));
-                }
-            } catch (e) {
-                Toast.show(dsI18n.t('syncFailedToast'));
-            } finally {
-                forceSyncBtn.disabled = false;
-                forceSyncBtn.textContent = original;
-                await refreshSyncStatus();
-            }
-        });
-    }
 });

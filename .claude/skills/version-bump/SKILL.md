@@ -17,8 +17,8 @@ description: Mandatory version bump standards for Chrome Extensions — MUST con
 
 - Follow `major.minor.patch` semantic versioning (e.g., `2.5.9`).
 - **Major:** Breaking changes or significant architectural overhauls.
-- **Minor:** New features, enhancements, or non-breaking additions. Requirements from `to-do\to-implement`
-- **Patch:** Bug fixes, performance improvements, and minor tweaks. Requirements from `to-do\to-fix`
+- **Minor:** New features, enhancements, or non-breaking additions.
+- **Patch:** Bug fixes, performance improvements, and minor tweaks.
 
 ## Scope
 
