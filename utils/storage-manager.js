@@ -230,7 +230,7 @@ const StorageManager = {
         if (isConflictPending) return lData;
 
         const merged = { ...lData, ...sData };
-        window.__DS_Logger?.sync('pull:merge', { source: 'sync-wins', keys: Object.keys(sData) });
+        globalThis.__DS_Logger?.sync('pull:merge', { source: 'sync-wins', keys: Object.keys(sData) });
 
         // === 以 orderUpdatedAt 時戳決定 PRESET_INDEX 勝者 ===
         if (Array.isArray(effectiveKeys) && effectiveKeys.includes(this.KEYS.PRESET_INDEX)) {
@@ -255,7 +255,7 @@ const StorageManager = {
                     // 僅在本地順序至少與同步端同新時才 pin 本地順序
                     if ((localOrderMeta.orderUpdatedAt || 0) >= (syncOrderMeta.orderUpdatedAt || 0)) {
                         merged[key] = lData[key];
-                        window.__DS_Logger?.sync('pull:pin-local', { key, localTs: localOrderMeta.orderUpdatedAt, syncTs: syncOrderMeta.orderUpdatedAt });
+                        globalThis.__DS_Logger?.sync('pull:pin-local', { key, localTs: localOrderMeta.orderUpdatedAt, syncTs: syncOrderMeta.orderUpdatedAt });
                     }
                 } else if (key.startsWith('dsPreset_')) {
                     // 僅在本地 preset 至少與同步端同新時才 pin
@@ -263,6 +263,7 @@ const StorageManager = {
                     const syncPreset = sData[key];
                     if (!syncPreset || (localPreset && (localPreset.updatedAt || 0) >= (syncPreset.updatedAt || 0))) {
                         merged[key] = lData[key];
+                        globalThis.__DS_Logger?.sync('pull:pin-local', { key, localTs: (localPreset && localPreset.updatedAt) || 0, syncTs: (syncPreset && syncPreset.updatedAt) || 0, reason: syncPreset ? 'local-newer-or-equal' : 'sync-missing' });
                     }
                 } else {
                     merged[key] = lData[key];
@@ -278,7 +279,7 @@ const StorageManager = {
      */
     async _set(items) {
         const keysWritten = Object.keys(items);
-        window.__DS_Logger?.sync('push:attempt', { keys: keysWritten, bytes: this._byteLen(items) });
+        globalThis.__DS_Logger?.sync('push:attempt', { keys: keysWritten, bytes: this._byteLen(items) });
 
         const syncError = await new Promise((resolve) => {
             try {
@@ -295,7 +296,7 @@ const StorageManager = {
 
         if (syncError) {
             console.warn('Sync storage failed (possibly quota exceeded), falling back to local storage:', syncError?.message ?? 'Unknown error');
-            window.__DS_Logger?.warn('push:quota-fail', { keys: keysWritten, error: syncError?.message ?? 'Unknown error' });
+            globalThis.__DS_Logger?.warn('push:quota-fail', { keys: keysWritten, error: syncError?.message ?? 'Unknown error' });
 
             // Add these keys to local authoritative list
             keysWritten.forEach(k => {
@@ -304,7 +305,7 @@ const StorageManager = {
 
             return this._safeSet('local', { ...items, [this.KEYS.LOCAL_AUTHORITATIVE]: localAuth });
         } else {
-            window.__DS_Logger?.sync('push:ok', { keys: keysWritten });
+            globalThis.__DS_Logger?.sync('push:ok', { keys: keysWritten });
             // Sync success: remove these keys from local authoritative list
             const newLocalAuth = localAuth.filter(k => !keysWritten.includes(k));
 

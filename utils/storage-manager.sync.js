@@ -42,13 +42,13 @@
 
                 if (syncTs === localTs) {
                     const isSameContent = JSON.stringify(syncPreset) === JSON.stringify(localPreset);
-                    window.__DS_Logger?.sync('conflict:preset', { id, syncTs, localTs, sameContent: isSameContent });
+                    globalThis.__DS_Logger?.sync('conflict:preset', { id, syncTs, localTs, sameContent: isSameContent });
                     if (!isSameContent) {
-                        window.__DS_Logger?.sync('conflict:result', { type: 'manual', reason: 'same-ts-diff-content' });
+                        globalThis.__DS_Logger?.sync('conflict:result', { type: 'manual', reason: 'same-ts-diff-content' });
                         return 'manual';
                     }
                 } else {
-                    window.__DS_Logger?.sync('conflict:preset', { id, syncTs, localTs, sameContent: false });
+                    globalThis.__DS_Logger?.sync('conflict:preset', { id, syncTs, localTs, sameContent: false });
                     hasAnyDivergence = true;
                 }
             }
@@ -60,7 +60,7 @@
             }
 
             const conflictResult = hasAnyDivergence ? 'auto' : 'none';
-            window.__DS_Logger?.sync('conflict:result', { type: conflictResult, reason: 'divergence-scan' });
+            globalThis.__DS_Logger?.sync('conflict:result', { type: conflictResult, reason: 'divergence-scan' });
             return conflictResult;
         },
 
@@ -87,7 +87,7 @@
             const syncOrderMeta = syncRaw[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
 
             const mergedPresets = this.mergePresets(localPresets, syncPresets, localOrderMeta, syncOrderMeta);
-            window.__DS_Logger?.sync('merge:summary', { localCount: localPresets.length, syncCount: syncPresets.length, mergedCount: mergedPresets.length, mergedOrderUpdatedAt: Math.max(localOrderMeta.orderUpdatedAt || 0, syncOrderMeta.orderUpdatedAt || 0) });
+            globalThis.__DS_Logger?.sync('merge:summary', { localCount: localPresets.length, syncCount: syncPresets.length, mergedCount: mergedPresets.length, mergedOrderUpdatedAt: Math.max(localOrderMeta.orderUpdatedAt || 0, syncOrderMeta.orderUpdatedAt || 0) });
 
             // 計算合併後的 order meta：取雙側時間戳最大值，至少為當下時間
             const mergedMeta = {
@@ -181,7 +181,7 @@
                         const localOrderTs = localOrderMeta.orderUpdatedAt || 0;
                         const syncOrderTs = syncOrderMeta.orderUpdatedAt || 0;
                         shouldPush = localOrderTs >= syncOrderTs;
-                        window.__DS_Logger?.sync('push:order-cmp', { localOrderTs, syncOrderTs, shouldPush });
+                        globalThis.__DS_Logger?.sync('push:order-cmp', { localOrderTs, syncOrderTs, shouldPush });
                     } else if (key.startsWith('dsPreset_')) {
                         // 僅在本機 preset 至少與雲端同新時才推送
                         const localPreset = localData[key];
@@ -189,7 +189,7 @@
                         if (syncPreset && (syncPreset.updatedAt || 0) > (localPreset.updatedAt || 0)) {
                             shouldPush = false;
                         }
-                        window.__DS_Logger?.sync('push:preset-cmp', { id: key, localTs: localPreset?.updatedAt || 0, syncTs: syncPreset?.updatedAt || 0, shouldPush });
+                        globalThis.__DS_Logger?.sync('push:preset-cmp', { id: key, localTs: localPreset?.updatedAt || 0, syncTs: syncPreset?.updatedAt || 0, shouldPush });
                     }
 
                     if (shouldPush) {

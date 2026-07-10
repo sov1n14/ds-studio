@@ -29,6 +29,7 @@ async function populateDefaults() {
         [K.SYNC_INITIALIZED]: true,
         [K.SYNC_CONFLICT_PENDING]: false,
         [K.SHOW_SYSTEM_TIME]: false,
+        [K.PRESET_ORDER_META]: { order: [], orderUpdatedAt: 0 },
         [K.RESTORED_MESSAGES]: {},
     };
     // Sync gets the same values except RESTORED_MESSAGES (local-only).
