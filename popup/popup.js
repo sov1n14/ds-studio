@@ -98,10 +98,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function refreshSyncStatus() {
         try {
             const isSynced = await StorageManager.isSyncedWithCloud();
+            const isOversized = await StorageManager.hasOversizedItems();
             const el = document.getElementById('syncStatus');
-            el.classList.toggle('synced',   isSynced);
-            el.classList.toggle('unsynced', !isSynced);
-            el.textContent = isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced');
+            el.classList.toggle('synced',   isSynced && !isOversized);
+            el.classList.toggle('unsynced', !isSynced || isOversized);
+            el.textContent = isOversized
+                ? dsI18n.t('syncStatusOversized')
+                : (isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced'));
         } catch (e) { /* 靜默忽略 — 僅為 UI 提示 */ }
     }
 

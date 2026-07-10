@@ -420,3 +420,84 @@ describe('retrySync() — forceSyncBtn integration scenarios', () => {
         expect(result.remainingUnsyncedCount).toBeGreaterThan(0);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// refreshSyncStatus() — hasOversizedItems() precedence (8KB guard, report.md §6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildRefreshSyncStatus() {
+    const match = popupCode.match(
+        /async function refreshSyncStatus\(\)\s*\{[\s\S]*?\n    \}/
+    );
+    if (!match) throw new Error('Could not extract refreshSyncStatus from popup.js');
+
+    const factory = new Function(
+        'StorageManager', 'dsI18n',
+        `
+        ${match[0].replace('async function refreshSyncStatus', 'var refreshSyncStatus = async function')}
+        return refreshSyncStatus;
+        `
+    );
+    return factory(StorageManager, globalThis.dsI18n);
+}
+
+describe('refreshSyncStatus() — oversized status precedence', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '<span id="syncStatus"></span>';
+    });
+
+    afterEach(() => {
+        chrome.storage.sync.setQuotaError(false);
+        delete chrome.runtime.lastError;
+        vi.restoreAllMocks();
+    });
+
+    it('shows the oversized text and "unsynced" styling when hasOversizedItems() is true, even if isSyncedWithCloud() is true', async () => {
+        vi.spyOn(StorageManager, 'isSyncedWithCloud').mockResolvedValue(true);
+        vi.spyOn(StorageManager, 'hasOversizedItems').mockResolvedValue(true);
+
+        const refreshSyncStatus = buildRefreshSyncStatus();
+        await refreshSyncStatus();
+
+        const el = document.getElementById('syncStatus');
+        expect(el.textContent).toBe(dsI18n.t('syncStatusOversized'));
+        expect(el.classList.contains('unsynced')).toBe(true);
+        expect(el.classList.contains('synced')).toBe(false);
+    });
+
+    it('shows the normal "synced" text when hasOversizedItems() is false and isSyncedWithCloud() is true', async () => {
+        vi.spyOn(StorageManager, 'isSyncedWithCloud').mockResolvedValue(true);
+        vi.spyOn(StorageManager, 'hasOversizedItems').mockResolvedValue(false);
+
+        const refreshSyncStatus = buildRefreshSyncStatus();
+        await refreshSyncStatus();
+
+        const el = document.getElementById('syncStatus');
+        expect(el.textContent).toBe(dsI18n.t('syncStatusSynced'));
+        expect(el.classList.contains('synced')).toBe(true);
+        expect(el.classList.contains('unsynced')).toBe(false);
+    });
+
+    it('shows the normal "unsynced" text when hasOversizedItems() is false and isSyncedWithCloud() is false', async () => {
+        vi.spyOn(StorageManager, 'isSyncedWithCloud').mockResolvedValue(false);
+        vi.spyOn(StorageManager, 'hasOversizedItems').mockResolvedValue(false);
+
+        const refreshSyncStatus = buildRefreshSyncStatus();
+        await refreshSyncStatus();
+
+        const el = document.getElementById('syncStatus');
+        expect(el.textContent).toBe(dsI18n.t('syncStatusUnsynced'));
+        expect(el.classList.contains('unsynced')).toBe(true);
+    });
+
+    it('reflects the oversized state end-to-end after a real oversized _set() write (no mocking)', async () => {
+        await StorageManager._set({ hugeKey: 'x'.repeat(9000) });
+
+        const refreshSyncStatus = buildRefreshSyncStatus();
+        await refreshSyncStatus();
+
+        const el = document.getElementById('syncStatus');
+        expect(el.textContent).toBe(dsI18n.t('syncStatusOversized'));
+        expect(el.classList.contains('unsynced')).toBe(true);
+    });
+});

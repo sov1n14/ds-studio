@@ -143,6 +143,17 @@
         },
 
         /**
+         * 回傳 true 表示存在因永久超過 8KB 而被攔截、無法同步至雲端的項目。
+         * 與 isSyncedWithCloud() 的「待重試」狀態互斥判斷，供 UI 呈現不同的警示。
+         * @returns {Promise<boolean>}
+         */
+        async hasOversizedItems() {
+            const data = await this._safeGet('local', [this.KEYS.OVERSIZED_KEYS]);
+            const arr = data[this.KEYS.OVERSIZED_KEYS] || [];
+            return arr.length > 0;
+        },
+
+        /**
          * 重試將所有本機授權金鑰寫回 sync storage。
          * 推送前先比對雲端時間戳，避免以舊本機資料覆蓋較新的雲端資料。
          * @returns {Promise<{ success: boolean, remainingUnsyncedCount: number }>}

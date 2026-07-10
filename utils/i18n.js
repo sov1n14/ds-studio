@@ -58,6 +58,7 @@
     // ---- Popup: Sync Status ----
     syncStatusSynced: '雲端同步',
     syncStatusUnsynced: '未同步',
+    syncStatusOversized: '內容過大，僅存本機',
 
     // ---- Popup: Sync Conflict Dialog ----
     syncConflictTitle: '雲端同步衝突',
@@ -223,6 +224,7 @@
     // ---- Popup: Sync Status ----
     syncStatusSynced: 'Cloud Synced',
     syncStatusUnsynced: 'Not Synced',
+    syncStatusOversized: 'Too Large — Local Only',
 
     // ---- Popup: Sync Conflict Dialog ----
     syncConflictTitle: 'Cloud Sync Conflict',

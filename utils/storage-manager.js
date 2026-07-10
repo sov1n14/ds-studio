@@ -51,6 +51,7 @@ const StorageManager = {
         PROMPT_PRESETS: 'promptPresets',       // migration detection only
         PRESET_INDEX: 'dsPresetIndex',         // new: ordered ID list
         LOCAL_AUTHORITATIVE: 'dsLocalAuth',    // new: Plan A tracking
+        OVERSIZED_KEYS: 'dsOversizedKeys',     // keys permanently blocked from sync (> QUOTA_BYTES_PER_ITEM)
         ACTIVE_PRESET_ID: 'activePresetId',
         IS_ENABLED: 'isEnabled',
         GLOBAL_PROMPT_ENABLED: 'globalPromptEnabled',
@@ -105,6 +106,12 @@ const StorageManager = {
         LockAcquireTimeoutError,
         WriteReconciliationExhaustedError,
     },
+
+    /**
+     * chrome.storage.sync 單一項目的位元組上限。超過此大小的寫入永久無法成功，
+     * 必須在送出前攔截，避免污染 dsLocalAuth 重試佇列（見 _set()）。
+     */
+    QUOTA_BYTES_PER_ITEM: 8192,
 
     // === 提升至物件的私有狀態 ===
 
@@ -281,14 +288,44 @@ const StorageManager = {
 
     /**
      * Internal setter that tries sync first, falls back to local if quota exceeded.
+     * 寫入前先依 QUOTA_BYTES_PER_ITEM 逐鍵分流：永久超量的項目直接攔截，
+     * 只落地本機並標記於 dsOversizedKeys，絕不進入 chrome.storage.sync.set()
+     * 或 dsLocalAuth 重試佇列（重試永久超量的項目永遠不會成功）。
      */
     async _set(items) {
         const keysWritten = Object.keys(items);
-        globalThis.__DS_Logger?.sync('push:attempt', { keys: keysWritten, bytes: this._byteLen(items) });
+        const oversizedKeys = keysWritten.filter(k => this._byteLen({ [k]: items[k] }) > this.QUOTA_BYTES_PER_ITEM);
+        const normalKeys = keysWritten.filter(k => !oversizedKeys.includes(k));
+
+        globalThis.__DS_Logger?.sync('push:attempt', { keys: normalKeys, bytes: this._byteLen(items) });
+
+        const localStatus = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE, this.KEYS.OVERSIZED_KEYS]);
+        let localAuth = (localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !oversizedKeys.includes(k));
+        const originalOversizedAuth = localStatus[this.KEYS.OVERSIZED_KEYS] || [];
+        const oversizedAuth = originalOversizedAuth.filter(k => !normalKeys.includes(k));
+
+        oversizedKeys.forEach(k => {
+            globalThis.__DS_Logger?.warn('push:oversized', { key: k, bytes: this._byteLen({ [k]: items[k] }) });
+            if (!oversizedAuth.includes(k)) oversizedAuth.push(k);
+        });
+
+        const localUpdates = { ...items };
+        if (JSON.stringify(oversizedAuth) !== JSON.stringify(originalOversizedAuth)) {
+            localUpdates[this.KEYS.OVERSIZED_KEYS] = oversizedAuth;
+        }
+
+        if (normalKeys.length === 0) {
+            // 整批鍵皆永久超量：完全不呼叫 chrome.storage.sync.set()，只落地本機。
+            localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = localAuth;
+            return this._safeSet('local', localUpdates);
+        }
+
+        const normalItems = {};
+        normalKeys.forEach(k => { normalItems[k] = items[k]; });
 
         const syncError = await new Promise((resolve) => {
             try {
-                chrome.storage.sync.set(items, () => {
+                chrome.storage.sync.set(normalItems, () => {
                     resolve(chrome.runtime.lastError || null);
                 });
             } catch (e) {
@@ -296,25 +333,21 @@ const StorageManager = {
             }
         });
 
-        const localStatus = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE]);
-        let localAuth = localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || [];
-
         if (syncError) {
             console.warn('Sync storage failed (possibly quota exceeded), falling back to local storage:', syncError?.message ?? 'Unknown error');
-            globalThis.__DS_Logger?.warn('push:quota-fail', { keys: keysWritten, error: syncError?.message ?? 'Unknown error' });
+            globalThis.__DS_Logger?.warn('push:quota-fail', { keys: normalKeys, error: syncError?.message ?? 'Unknown error' });
 
-            // Add these keys to local authoritative list
-            keysWritten.forEach(k => {
+            // Add these keys to local authoritative list (transient failure — retry-eligible)
+            normalKeys.forEach(k => {
                 if (!localAuth.includes(k)) localAuth.push(k);
             });
 
-            return this._safeSet('local', { ...items, [this.KEYS.LOCAL_AUTHORITATIVE]: localAuth });
+            localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = localAuth;
+            return this._safeSet('local', localUpdates);
         } else {
-            globalThis.__DS_Logger?.sync('push:ok', { keys: keysWritten });
+            globalThis.__DS_Logger?.sync('push:ok', { keys: normalKeys });
             // Sync success: remove these keys from local authoritative list
-            const newLocalAuth = localAuth.filter(k => !keysWritten.includes(k));
-
-            const localUpdates = { ...items };
+            const newLocalAuth = localAuth.filter(k => !normalKeys.includes(k));
             if (newLocalAuth.length !== localAuth.length) {
                 localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = newLocalAuth;
             }
@@ -325,9 +358,10 @@ const StorageManager = {
     },
 
     /**
-     * 計算 JSON 序列化後的位元組長度（用於分塊大小估算）。
+     * 計算 JSON 序列化後的實際 UTF-8 位元組長度（用於分塊大小估算與 8KB 超量判定）。
+     * 使用 TextEncoder 而非 .length，避免中文等多位元組字元被低估位元組數。
      */
-    _byteLen(obj) { return JSON.stringify(obj).length; },
+    _byteLen(obj) { return new TextEncoder().encode(JSON.stringify(obj)).length; },
 
     /**
      * Save the active preset ID

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4.8.2] - 2026-07-11
+
+### Fixed
+- `dsLocalAuth` retry queue could permanently trap an oversized (>8KB) key, retrying a write that can never succeed. `_set()` now measures each key's UTF-8 byte size before writing; oversized keys are diverted to local-only storage and tracked in `dsOversizedKeys` (never queued for retry), while the popup surfaces a distinct "content too large, local only" status.
+
 ## [4.8.1] - 2026-07-11
 
 ### Changed
