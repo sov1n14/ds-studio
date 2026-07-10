@@ -6,6 +6,29 @@
  */
 
 // ────────────────────────────────────────────
+// 防抖工具（與 popup-utils.js 邏輯一致，
+// 因 popup-utils.js 採用 ES module export 無法
+// 在 classic script 環境下直接取用，故於此複製）
+// ────────────────────────────────────────────
+
+/**
+ * 建立防抖包裝函式。
+ * @param {Function} fn - 要延遲執行的函式
+ * @param {number} delayMs - 延遲毫秒數
+ * @returns {Function} 防抖後的函式
+ */
+function debounce(fn, delayMs) {
+    let timer = null;
+    return function (...args) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, args);
+        }, delayMs);
+    };
+}
+
+// ────────────────────────────────────────────
 // Main popup logic
 // ────────────────────────────────────────────
 
@@ -461,14 +484,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSaveStatus();
         });
     }
+    // 防抖儲存對話區域寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
+    const debouncedSaveChatWidth = debounce(async (widthValue) => {
+        await StorageManager.saveChatWidth(widthValue);
+        await refreshSyncStatus();
+        showSaveStatus();
+    }, 500);
+
     if (chatWidthSlider && chatWidthValue) {
         chatWidthSlider.addEventListener('input', () => {
             chatWidthValue.textContent = chatWidthSlider.value + '%';
         });
-        chatWidthSlider.addEventListener('change', async () => {
-            await StorageManager.saveChatWidth(parseInt(chatWidthSlider.value, 10));
-            await refreshSyncStatus();
-            showSaveStatus();
+        chatWidthSlider.addEventListener('change', () => {
+            debouncedSaveChatWidth(parseInt(chatWidthSlider.value, 10));
         });
     }
 
@@ -482,14 +510,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSaveStatus();
         });
     }
+    // 防抖儲存編輯輸入框寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
+    const debouncedSaveInputWidth = debounce(async (widthValue) => {
+        await StorageManager.saveInputWidth(widthValue);
+        await refreshSyncStatus();
+        showSaveStatus();
+    }, 500);
+
     if (inputWidthSlider && inputWidthValue) {
         inputWidthSlider.addEventListener('input', () => {
             inputWidthValue.textContent = inputWidthSlider.value + '%';
         });
-        inputWidthSlider.addEventListener('change', async () => {
-            await StorageManager.saveInputWidth(parseInt(inputWidthSlider.value, 10));
-            await refreshSyncStatus();
-            showSaveStatus();
+        inputWidthSlider.addEventListener('change', () => {
+            debouncedSaveInputWidth(parseInt(inputWidthSlider.value, 10));
         });
     }
 

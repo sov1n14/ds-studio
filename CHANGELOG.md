@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4.8.1] - 2026-07-11
+
+### Changed
+- Aligned debounce timings to 500ms: the standalone editor's auto-save debounce (was 600ms), and the popup's `chatWidthSlider`/`inputWidthSlider` storage writes (previously undebounced) now both use a 500ms trailing debounce. Live percentage-label updates on `input` remain synchronous and untouched.
+
 ## [4.8.0] - 2026-07-11
 
 ### Added
