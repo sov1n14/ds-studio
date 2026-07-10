@@ -173,18 +173,6 @@
             if (JSON.stringify(preset) === JSON.stringify(syncPreset)) return false;
             return this._pickNewerPreset(preset, syncPreset) === preset;
         },
-
-        /**
-         * 純函式：接收路徑決策，判斷是否應保留本機 preset 而不被雲端覆蓋。
-         * @param {Object|null} localPreset
-         * @param {Object|null} syncPreset
-         * @returns {boolean} true 表示應保留本機版本
-         */
-        _shouldPinLocalPreset(localPreset, syncPreset) {
-            if (!syncPreset) return true;
-            if (!localPreset) return false;
-            return this._pickNewerPreset(localPreset, syncPreset) === localPreset;
-        },
     };
 
     root.__DS_StorageManager_presets = bundle;

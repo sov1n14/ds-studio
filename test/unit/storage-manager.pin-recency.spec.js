@@ -1,11 +1,11 @@
 /**
- * StorageManager — pin recency fix (resilience fix)
+ * StorageManager — pin-on-read removal (sync refactor Step 2, report.md §4.2)
  *
- * Covers:
- *   - _shouldPinLocalPreset() pure matrix
- *   - _get() dsPreset pin now uses _shouldPinLocalPreset instead of a bare
- *     equal-ts-biased `>=` comparison, so a strictly-newer sync copy wins
- *     even while the key is parked in dsLocalAuth.
+ * `_shouldPinLocalPreset()` has been deleted (dead code, zero callers) as part
+ * of removing the dsLocalAuth pin-on-read override layer from `_get()`.
+ * `_get()` now follows pure per-item `updatedAt` recency (via `_pickNewerPreset`)
+ * regardless of whether a key is parked in dsLocalAuth. Parking only matters to
+ * `_set()`'s retry-queue path (see storage-manager.sync-conflict.spec.js).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
@@ -23,53 +23,7 @@ function makePreset(overrides = {}) {
     };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _shouldPinLocalPreset — pure matrix
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('StorageManager._shouldPinLocalPreset (pure helper)', () => {
-    it('returns true when syncPreset is missing (nothing to compare against)', () => {
-        const local = makePreset();
-        expect(StorageManager._shouldPinLocalPreset(local, null)).toBe(true);
-        expect(StorageManager._shouldPinLocalPreset(local, undefined)).toBe(true);
-    });
-
-    it('returns false when localPreset is missing', () => {
-        const sync = makePreset();
-        expect(StorageManager._shouldPinLocalPreset(null, sync)).toBe(false);
-        expect(StorageManager._shouldPinLocalPreset(undefined, sync)).toBe(false);
-    });
-
-    it('returns true when local is strictly newer', () => {
-        const local = makePreset({ updatedAt: 300 });
-        const sync = makePreset({ updatedAt: 100 });
-        expect(StorageManager._shouldPinLocalPreset(local, sync)).toBe(true);
-    });
-
-    it('returns false when sync is strictly newer', () => {
-        const local = makePreset({ updatedAt: 100 });
-        const sync = makePreset({ updatedAt: 300 });
-        expect(StorageManager._shouldPinLocalPreset(local, sync)).toBe(false);
-    });
-
-    it('equal updatedAt, differing content → createdAt tiebreak (local earlier wins)', () => {
-        const local = makePreset({ updatedAt: 100, createdAt: 1, content: 'l' });
-        const sync = makePreset({ updatedAt: 100, createdAt: 5, content: 's' });
-        expect(StorageManager._shouldPinLocalPreset(local, sync)).toBe(true);
-    });
-
-    it('equal updatedAt, differing content → createdAt tiebreak (sync earlier wins, pin false)', () => {
-        const local = makePreset({ updatedAt: 100, createdAt: 5, content: 'l' });
-        const sync = makePreset({ updatedAt: 100, createdAt: 1, content: 's' });
-        expect(StorageManager._shouldPinLocalPreset(local, sync)).toBe(false);
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _get() receiver-side pin behavior
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('StorageManager._get() — parked dsPreset pin recency', () => {
+describe('StorageManager._get() — dsPreset recency is independent of dsLocalAuth parking', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         delete chrome.runtime.lastError;
@@ -88,9 +42,10 @@ describe('StorageManager._get() — parked dsPreset pin recency', () => {
         expect(result.dsPreset_p1.name).toBe('NewerSync');
     });
 
-    it('parked + equal-ts + differing content → earlier-createdAt copy wins (behavior change)', async () => {
-        // Local has LATER createdAt than sync — old code's bare `>=` on updatedAt
-        // would have pinned local regardless; new code applies the createdAt tiebreak.
+    it('parked + equal-ts + differing content → earlier-createdAt copy wins (pure recency, no pin)', async () => {
+        // Local has LATER createdAt than sync. A pin-on-read layer would have
+        // ignored this and kept local just because it's parked; pure recency
+        // (via _pickNewerPreset's createdAt tiebreak) picks sync instead.
         await chrome.storage.local.set({
             dsPreset_p1: makePreset({ name: 'Local', content: 'local', updatedAt: 100, createdAt: 5 }),
             [K.LOCAL_AUTHORITATIVE]: ['dsPreset_p1'],
@@ -104,7 +59,11 @@ describe('StorageManager._get() — parked dsPreset pin recency', () => {
         expect(result.dsPreset_p1.name).toBe('Sync');
     });
 
-    it('parked + sync missing → local is pinned', async () => {
+    it('parked + sync missing → local is returned (nothing to compare against, not a pin)', async () => {
+        // _get() only reconciles a key when BOTH local and sync have a value
+        // for it (`if (localPreset === undefined || syncPreset === undefined) continue;`).
+        // With no sync copy at all, merged already equals local — this passes
+        // because there's nothing to override it with, not because of any pin.
         await chrome.storage.local.set({
             dsPreset_p1: makePreset({ name: 'OnlyLocal', content: 'local-only', updatedAt: 10 }),
             [K.LOCAL_AUTHORITATIVE]: ['dsPreset_p1'],

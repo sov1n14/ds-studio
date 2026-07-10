@@ -35,7 +35,7 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `syncInitialized` | boolean | `false` | Whether initial sync has been performed (local-only). |
 | `syncConflictPending` | boolean | `false` | Whether a sync conflict needs user resolution (local-only). |
 | `restored_messages` | object | `{}` | Stores censor-restored messages keyed by message ID (local-only, excluded from sync). |
-| `dsLocalAuth` | `string[]` | `[]` | List of keys where local storage is authoritative over sync (local-only, used for Plan A fallback). |
+| `dsLocalAuth` | `string[]` | `[]` | (v4.7.2) Pending-retry queue of keys whose sync write failed and fell back to local. No longer used to pin/override reads — `retrySync()` drains it. |
 | `promptPresets` | `PromptPreset[]` | — | *Retired as a storage key in v1.7.0*: Replaced by `dsPresetIndex` + `dsPreset_<id>` per-key format. Still composed as a runtime property in `getSettings()` return value. |
 
 ### PromptPreset Interface
@@ -55,7 +55,7 @@ interface PromptPreset {
 `StorageManager` uses a dual-storage strategy with per-preset key isolation and local-authoritative tracking:
 
 - **Per-Preset Key Isolation**: To bypass the `QUOTA_BYTES_PER_ITEM` (8KB) limit of `chrome.storage.sync`, each prompt preset is stored under its own key (`dsPreset_<id>`). An index key (`dsPresetIndex`) maintains the order and list of active presets.
-- **Read path** (`_get()`): Attempts `chrome.storage.sync.get()` first, then `chrome.storage.local.get()`. Normally, sync data overrides local data. However, if a key is present in `dsLocalAuth`, the local value is prioritized to ensure that data saved locally during a sync failure is not lost. During a pending conflict (`syncConflictPending === true`), it strictly returns local data. (v4.7.1) When the remote/sync side wins the per-item recency comparison, the winning value is also persisted back to `chrome.storage.local` via `_safeSet('local', ...)` — not just returned in-memory — so a stale local copy doesn't linger after a `syncNow()` pass.
+- **Read path** (`_get()`): Attempts `chrome.storage.sync.get()` first, then `chrome.storage.local.get()`. Sync data overrides local data by default; `dsPreset_*` keys and the preset order meta are reconciled per-item via pure `updatedAt` recency (`_pickNewerPreset` / `_pickPresetOrderByRecency`) regardless of write-failure history. During a pending conflict (`syncConflictPending === true`), it strictly returns local data. (v4.7.1) When the remote/sync side wins the per-item recency comparison, the winning value is also persisted back to `chrome.storage.local` via `_safeSet('local', ...)` — not just returned in-memory — so a stale local copy doesn't linger after a `syncNow()` pass. (v4.7.2) `_get()` no longer reads `dsLocalAuth` at all — the previous "pin-on-read" override (a parked key's local value unconditionally beating a newer sync value) was removed, since it allowed a stale local edit that once failed to sync to permanently shadow genuinely newer cloud data. `dsLocalAuth` is now exclusively a write-failure retry queue, drained by `retrySync()`; it no longer influences what `_get()` returns.
 - **Write path** (`_set()`): Tries `chrome.storage.sync.set()` first.
   - **On Success**: The keys are removed from `dsLocalAuth` in local storage, and a backup is written to local.
   - **On Failure** (e.g., quota exceeded): The keys are added to `dsLocalAuth` in local storage, and the data is written to local storage. This ensures the extension remains functional even when sync limits are reached.

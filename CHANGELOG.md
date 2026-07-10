@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4.7.2] - 2026-07-11
+
+### Fixed
+- `_get()` no longer pins a parked (write-failed) local value over a genuinely newer cloud value — `dsLocalAuth` is now purely a write-failure retry queue drained by `retrySync()`, never a read-time override. Previously a stale local edit that once failed to sync could permanently shadow newer cloud data.
+
+### Removed
+- Dead `_shouldPinLocalPreset` helper (no remaining callers after the pin-on-read removal)
+
 ## [4.7.1] - 2026-07-11
 
 ### Added

@@ -204,9 +204,8 @@ const StorageManager = {
      * NOTE: File exceeds 450-line threshold. Net additions kept minimal; see chatmap.js split.
      */
     async _get(keys) {
-        const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING, this.KEYS.LOCAL_AUTHORITATIVE]);
+        const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING]);
         const isConflictPending = localStatus[this.KEYS.SYNC_CONFLICT_PENDING] === true;
-        const localAuth = localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || [];
 
         // 請求 PRESET_INDEX 時一併附帶 PRESET_ORDER_META，確保順序時戳比較資料完整
         let effectiveKeys = Array.isArray(keys) ? [...keys] : keys;
@@ -266,37 +265,7 @@ const StorageManager = {
             }
         }
 
-        // === dsLocalAuth 精確 pinning：依資料類型選擇性覆寫 ===
-        if (localAuth.length > 0) {
-            const localOrderMeta = lData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
-            const syncOrderMeta = sData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
-
-            for (const key of (Array.isArray(effectiveKeys) ? effectiveKeys : Object.keys(sData))) {
-                if (!localAuth.includes(key) || lData[key] === undefined) continue;
-
-                if (key === this.KEYS.PRESET_INDEX) {
-                    // 僅在本地順序至少與同步端同新時才 pin 本地順序
-                    if ((localOrderMeta.orderUpdatedAt || 0) >= (syncOrderMeta.orderUpdatedAt || 0)) {
-                        merged[key] = lData[key];
-                        globalThis.__DS_Logger?.sync('pull:pin-local', { key, localTs: localOrderMeta.orderUpdatedAt, syncTs: syncOrderMeta.orderUpdatedAt });
-                    }
-                } else if (key.startsWith('dsPreset_')) {
-                    // 僅在本地 preset 至少與同步端同新時才 pin
-                    const localPreset = lData[key];
-                    const syncPreset = sData[key];
-                    if (this._shouldPinLocalPreset(localPreset, syncPreset)) {
-                        merged[key] = lData[key];
-                        globalThis.__DS_Logger?.sync('pull:pin-local', { key, localTs: (localPreset && localPreset.updatedAt) || 0, syncTs: (syncPreset && syncPreset.updatedAt) || 0, reason: syncPreset ? 'local-newer-or-equal' : 'sync-missing' });
-                    }
-                } else {
-                    merged[key] = lData[key];
-                }
-            }
-        }
-
         // 將「遠端較新」的最終結果持久化回 chrome.storage.local。
-        // 需在 dsLocalAuth pin 邏輯之後才執行，因為 pin 有可能將 merged[key] 改回本機值，
-        // 此時就不應該用遠端值覆寫本機儲存。
         const keysToPersist = Object.keys(remoteWinsToPersist).filter((key) => merged[key] === remoteWinsToPersist[key]);
         if (keysToPersist.length > 0) {
             const persistPayload = {};
