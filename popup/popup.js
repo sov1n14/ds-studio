@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthSlider          = document.getElementById('inputWidthSlider');
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
-    const forceSyncBtn              = document.getElementById('forceSyncBtn');
     const syncStatusEl              = document.getElementById('syncStatus');
 
     let saveTimeout;
@@ -572,26 +571,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('importRestoredInput')
     );
     backupManager.bindClearRestored(document.getElementById('clearRestoredBtn'));
-
-    if (forceSyncBtn) {
-        forceSyncBtn.addEventListener('click', async () => {
-            const original = forceSyncBtn.textContent;
-            forceSyncBtn.disabled = true;
-            forceSyncBtn.textContent = dsI18n.t('syncingButtonText');
-            try {
-                const result = await StorageManager.retrySync();
-                if (result.success) {
-                    Toast.show(dsI18n.t('syncCompleteToast'));
-                } else {
-                    Toast.show(dsI18n.t('syncRemainingToast', { count: result.remainingUnsyncedCount }));
-                }
-            } catch (e) {
-                Toast.show(dsI18n.t('syncFailedToast'));
-            } finally {
-                forceSyncBtn.disabled = false;
-                forceSyncBtn.textContent = original;
-                await refreshSyncStatus();
-            }
-        });
-    }
 });

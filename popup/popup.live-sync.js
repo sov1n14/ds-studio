@@ -2,7 +2,7 @@
  * DS studio — Popup Live Sync 模組
  * 監聽 chrome.storage.onChanged（local + sync 兩個 area），
  * 讓其他裝置／分頁／視窗所做的設定變更即時反映到目前開啟的 popup UI，
- * 不需使用者重新開啟 popup 或手動按下「手動同步」。
+ * 不需使用者重新開啟 popup 即可自動取得最新設定。
  *
  * 設計原則（冪等更新，避免 jank / 無限迴圈）：
  *   - 僅在新值與目前 DOM 狀態不同時才更動 DOM（checked/value/textContent 賦值本身已是冪等操作）。

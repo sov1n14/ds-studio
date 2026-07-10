@@ -365,10 +365,10 @@ describe('Dirty-flag logic — observable storage outcomes', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// retrySync — forceSyncBtn behavior
+// retrySync() behavior
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('retrySync() — forceSyncBtn integration scenarios', () => {
+describe('retrySync() behavior', () => {
     afterEach(() => {
         chrome.storage.sync.setQuotaError(false);
         delete chrome.runtime.lastError;
