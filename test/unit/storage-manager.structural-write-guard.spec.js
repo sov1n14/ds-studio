@@ -155,6 +155,16 @@ describe('StorageManager.savePromptPresets() — structural write guard', () => 
         const metaCalls = setSpy.mock.calls.filter(c => K.PRESET_ORDER_META in c[0]);
         expect(indexCalls.length).toBeGreaterThan(0);
         expect(metaCalls.length).toBeGreaterThan(0);
+
+        // Tombstone-aware deletion sync fix (v4.8.x): a tombstone for the
+        // deleted id must be recorded to both storages, otherwise a stale
+        // local index on another device would resurrect it on next merge.
+        const tombstoneCalls = setSpy.mock.calls.filter(c => K.PRESET_TOMBSTONES in c[0]);
+        expect(tombstoneCalls.length).toBeGreaterThan(0);
+        const localTombstones = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncTombstones = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+        expect(localTombstones[K.PRESET_TOMBSTONES]).toHaveProperty('b');
+        expect(syncTombstones[K.PRESET_TOMBSTONES]).toHaveProperty('b');
     });
 
     it('add: new id absent from sync → its body is pushed', async () => {

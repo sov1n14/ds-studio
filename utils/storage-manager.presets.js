@@ -14,16 +14,32 @@
          * @param {Array} newPresets
          * @param {Object} [baseOrderMeta] - { order: string[], orderUpdatedAt: number }
          * @param {Object} [incOrderMeta]  - { order: string[], orderUpdatedAt: number }
+         * @param {Object} [tombstones] - { [id]: deletedAt } 已合併雙側的刪除墓碑記錄；
+         *   任一 id 若被 tombstone 判定為刪除（deletedAt >= 該 id 的 updatedAt），一律排除於合併結果，
+         *   避免陳舊一側「仍存在」的資料被當成新增項目而復活已刪除的 preset。
          * @returns {Array} 合併後的 preset 陣列
          */
-        mergePresets(basePresets, newPresets, baseOrderMeta, incOrderMeta) {
+        mergePresets(basePresets, newPresets, baseOrderMeta, incOrderMeta, tombstones) {
             const mergedMap = new Map();
+            const tombstoneMap = tombstones || {};
 
-            // 先加入所有 base presets
-            (basePresets || []).forEach(p => mergedMap.set(p.id, { ...p }));
+            // 先加入所有 base presets，但排除已被 tombstone 判定為刪除者
+            (basePresets || []).forEach(p => {
+                if (this._isTombstonedAway(tombstoneMap, p.id, p.updatedAt)) {
+                    globalThis.__DS_Logger?.sync('merge:tombstone-drop', { id: p.id, side: 'base', updatedAt: p.updatedAt || 0, deletedAt: tombstoneMap[p.id] });
+                    return;
+                }
+                mergedMap.set(p.id, { ...p });
+            });
 
             // 合併 incoming presets — updatedAt 較新者勝；同 updatedAt 但內容不同時 createdAt 較早者勝
             (newPresets || []).forEach(p => {
+                if (this._isTombstonedAway(tombstoneMap, p.id, p.updatedAt)) {
+                    // tombstone 較新（或同新）：即使 base 側仍留有此 id，也一併移除，墓碑必須蓋過陳舊資料
+                    globalThis.__DS_Logger?.sync('merge:tombstone-drop', { id: p.id, side: 'incoming', updatedAt: p.updatedAt || 0, deletedAt: tombstoneMap[p.id] });
+                    mergedMap.delete(p.id);
+                    return;
+                }
                 if (mergedMap.has(p.id)) {
                     const existing = mergedMap.get(p.id);
                     const incUpdated = p.updatedAt || 0;
@@ -119,11 +135,14 @@
                 }
             }
 
-            // 4. 清理已刪除的 presets
+            // 4. 清理已刪除的 presets，並記錄刪除墓碑（tombstone），
+            //    確保刪除意圖能跨裝置傳播，而不只是在本機移除 —— 否則其他裝置的
+            //    陳舊本機快照仍持有該 id，下次合併時會被當成「新增項目」而復活。
             if (deletedIds.length > 0) {
                 const keysToRemove = deletedIds.map(id => this._presetKey(id));
                 await this._safeRemove('sync', keysToRemove);
                 await this._safeRemove('local', keysToRemove);
+                await this.recordPresetTombstones(deletedIds);
             }
         },
 

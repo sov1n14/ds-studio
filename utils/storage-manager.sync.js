@@ -86,7 +86,14 @@
             const localOrderMeta = localRaw[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
             const syncOrderMeta = syncRaw[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
 
-            const mergedPresets = this.mergePresets(localPresets, syncPresets, localOrderMeta, syncOrderMeta);
+            // 合併雙側 tombstone（同 id 取較新刪除時間戳）並清除過期記錄，
+            // 供 mergePresets() 判斷哪些 id 應被視為「已刪除」而排除於合併結果之外。
+            const localTombstones = localRaw[this.KEYS.PRESET_TOMBSTONES] || {};
+            const syncTombstones = syncRaw[this.KEYS.PRESET_TOMBSTONES] || {};
+            const mergedTombstones = this._pruneTombstones(this._mergeTombstones(localTombstones, syncTombstones));
+            globalThis.__DS_Logger?.sync('merge:tombstones', { localCount: Object.keys(localTombstones).length, syncCount: Object.keys(syncTombstones).length, mergedCount: Object.keys(mergedTombstones).length });
+
+            const mergedPresets = this.mergePresets(localPresets, syncPresets, localOrderMeta, syncOrderMeta, mergedTombstones);
             globalThis.__DS_Logger?.sync('merge:summary', { localCount: localPresets.length, syncCount: syncPresets.length, mergedCount: mergedPresets.length, mergedOrderUpdatedAt: Math.max(localOrderMeta.orderUpdatedAt || 0, syncOrderMeta.orderUpdatedAt || 0) });
 
             // 計算合併後的 order meta：取雙側時間戳最大值，至少為當下時間
@@ -102,6 +109,10 @@
             // 1. 儲存合併後的 presets 與解決後的 order meta
             await this.savePromptPresets(mergedPresets, mergedMeta);
 
+            // 1.5 持久化合併後的 tombstones 至兩側 storage，供跨裝置刪除傳播使用
+            //     （經由既有 _set() 的 8KB 守衛與重試佇列邏輯，不重新實作寫入守衛）
+            await this._set({ [this.KEYS.PRESET_TOMBSTONES]: mergedTombstones });
+
             // 2. 解決其他設定：雲端設定覆寫本機 UI 設定
             const updates = { ...localRaw, ...syncRaw };
 
@@ -112,6 +123,7 @@
             const presetIds = mergedPresets.map(p => p.id);
             delete updates[this.KEYS.PRESET_INDEX];
             delete updates[this.KEYS.PRESET_ORDER_META]; // savePromptPresets 已正確寫入此金鑰
+            delete updates[this.KEYS.PRESET_TOMBSTONES]; // 已於上方寫入合併後的版本，避免被 raw data 覆蓋
             presetIds.forEach(id => delete updates[this._presetKey(id)]);
             // 同時移除 raw data 中殘留的 dsPreset_ 金鑰
             Object.keys(updates).forEach(k => {
@@ -302,6 +314,7 @@
             const keysToFetch = Object.values(this.KEYS)
                 .filter(k => k !== this.KEYS.RESTORED_MESSAGES
                     && k !== this.KEYS.PRESET_ORDER_META
+                    && k !== this.KEYS.PRESET_TOMBSTONES
                     && k !== this.KEYS.IS_ENABLED
                     && k !== this.KEYS.GLOBAL_PROMPT_ENABLED);
             const data = await this._get(keysToFetch);
@@ -317,6 +330,7 @@
                 // 跳過內部專用金鑰，不納入使用者設定回傳值
                 if (storageKey === this.KEYS.RESTORED_MESSAGES) continue;
                 if (storageKey === this.KEYS.PRESET_ORDER_META) continue;
+                if (storageKey === this.KEYS.PRESET_TOMBSTONES) continue;
 
                 // isEnabled / globalPromptEnabled 為 local-only 金鑰，直接取本機值，不走 sync 合併資料
                 if (storageKey === this.KEYS.IS_ENABLED) {

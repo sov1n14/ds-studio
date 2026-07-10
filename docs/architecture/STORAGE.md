@@ -9,6 +9,8 @@
 > **v4.7.0/4.7.1 統一同步進入點**：新增 `StorageManager.syncNow()`（`utils/storage-manager.syncnow.js`），在 popup 開啟與 `chat.deepseek.com` 頁面載入時呼叫，取代原先直接呼叫 `getSettings()` 的作法。`syncNow()` 內部呼叫 `retrySync()` 後再呼叫 `getSettings()`。v4.7.1 修正了一個缺陷：`_get()` 在判定 remote 較新時，原本只在記憶體中回傳合併結果，未把覆寫值持久化回 `chrome.storage.local`；現已在 remote 勝出的分支透過既有的 `_safeSet('local', ...)` 補寫回本機，避免裝置重新開啟後又讀到舊的本機殘留值。
 >
 > **v4.7.3 本地化設定 + 拆檔**：`isEnabled`／`globalPromptEnabled` 改為本地專用（見下表)。入口檔 `utils/storage-manager.js` 因此次改動一度超過 600 行絕對上限，已拆出 `utils/storage-manager.local.js`（本地專用設定：`saveEnabledState`／`getEnabledState`／`saveGlobalPromptEnabled`／`getGlobalPromptEnabled`／`getRestoredMessages`／`saveRestoredMessages`)與 `utils/storage-manager.init.js`（`initialize()` 與 `_installChunkCacheInvalidator`),入口檔現為 411 行。v4.7.4 修正拆檔造成的閉包回歸：`_installChunkCacheInvalidator()` 的 `onChanged` 監聽器原本裸寫 `StorageManager.xxx`，拆檔前靠模組內詞法作用域恰好指向自身 context 的實例；拆檔後裸寫識別字會落到全域 `window.StorageManager`（多 context 情境下永遠指向「最後載入」的那個 context),導致另一 context 的 chunk cache 永遠不會被正確失效。已改為在安裝時 `const self = this` 並在監聽器中使用 `self.xxx`。
+>
+> **v4.8.3 刪除墓碑（Tombstone）機制**：修復跨裝置同步下「已刪除提示詞組復活」的缺陷。新增 `utils/storage-manager.tombstones.js`，提供 `_mergeTombstones`／`_pruneTombstones`（30 天保留期）／`_isTombstonedAway` 與 `recordPresetTombstones()`，並新增儲存鍵 `dsPresetTombstones`（`{ [presetId]: deletedAt }`，見下表）。`savePromptPresets()` 刪除提示詞組時會同時寫入墓碑（本地與同步兩端）。`mergePresets()` 新增可選的 `tombstones` 參數：合併時若某 id 於任一側的 `updatedAt` 不晚於其墓碑的 `deletedAt`，該 id 會被排除、不再復活；若該 id 之後有更新的編輯（`updatedAt` 較墓碑更新），仍會保留。`resolveSyncConflict()` 會讀取並合併雙邊墓碑再傳入 `mergePresets()`，並將合併後的墓碑寫回。同時修正 `_get()` 的另一個缺口：先前 sync 端 `dsPresetIndex`／`dsPresetOrderMeta` 因較新而勝出時，只在記憶體中回傳、從未持久化回 `chrome.storage.local`；現已比照既有 `dsPreset_*` 的 remote-wins-persist 機制，一併寫回本機，避免下次重新讀取時又看到舊索引。
 
 ## State Management
 
@@ -39,6 +41,7 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `restored_messages` | object | `{}` | Stores censor-restored messages keyed by message ID (local-only, excluded from sync). |
 | `dsLocalAuth` | `string[]` | `[]` | (v4.7.2) Pending-retry queue of keys whose sync write failed and fell back to local. No longer used to pin/override reads — `retrySync()` drains it. (v4.8.2) Never contains a permanently-oversized key — those are filtered out by the 8KB guard before reaching this queue. |
 | `dsOversizedKeys` | `string[]` | `[]` | (v4.8.2) Local-only tracking list of keys whose serialized value exceeds `QUOTA_BYTES_PER_ITEM` (8192 bytes) and can therefore never sync. Self-healing: a key is removed the next time it's written at a size at or under the limit. |
+| `dsPresetTombstones` | `Object<id, deletedAt>` | `{}` | (v4.8.3) Deletion tombstone map for prompt presets, synced to both `local` and `sync`. Consulted by `mergePresets()` so a preset deleted on one device is not resurrected by a stale copy still present on another device during conflict-resolution merge. Merged (keeping the newer `deletedAt` per id) and pruned (30-day retention) inside `resolveSyncConflict()`. |
 | `promptPresets` | `PromptPreset[]` | — | *Retired as a storage key in v1.7.0*: Replaced by `dsPresetIndex` + `dsPreset_<id>` per-key format. Still composed as a runtime property in `getSettings()` return value. |
 
 ### PromptPreset Interface
@@ -200,11 +203,11 @@ Chrome enforces `MAX_WRITE_OPERATIONS_PER_MINUTE = 120`. To avoid exhausting thi
 
 ### Sync Conflict Logic
 
-On the first run after upgrade, the extension compares `promptPresets` between local and sync. If they differ, it sets `syncConflictPending = true` (local-only). In this state, `StorageManager._get()` strictly returns local data to avoid silent overwrite. The popup then shows a resolution modal where the user can choose to merge cloud presets with local ones via `StorageManager.mergePresets()`. Once resolved, `syncInitialized` and `syncConflictPending` are updated.
+On the first run after upgrade, the extension compares `promptPresets` between local and sync. If they differ, it sets `syncConflictPending = true` (local-only). In this state, `StorageManager._get()` strictly returns local data to avoid silent overwrite. The popup then shows a resolution modal where the user can choose to merge cloud presets with local ones via `StorageManager.mergePresets()`. Once resolved, `syncInitialized` and `syncConflictPending` are updated. (v4.8.3) Before merging, `resolveSyncConflict()` also reads, merges, and prunes `dsPresetTombstones` from both local and sync, and passes the merged tombstone map into `mergePresets()` so deleted presets are not resurrected by the conflict-resolution merge; the merged tombstones are persisted back to both storage areas.
 
 ### Preset Merging (`mergePresets`)
 
-Both sync conflict resolution and JSON import use `mergePresets()`: a Map-based deduplication by `id`. For each preset in both arrays, the one with the newer `updatedAt` timestamp is kept. Presets with new IDs (not in the base array) are appended. This prevents data loss when merging from multiple sources.
+Both sync conflict resolution and JSON import use `mergePresets(basePresets, newPresets, baseOrderMeta, incOrderMeta, tombstones)`: a Map-based deduplication by `id`. For each preset in both arrays, the one with the newer `updatedAt` timestamp is kept. Presets with new IDs (not in the base array) are appended. This prevents data loss when merging from multiple sources. (v4.8.3) Before the recency-based merge runs, any id that is "tombstoned away" (`_isTombstonedAway`: the id has a tombstone whose `deletedAt` is not older than that side's `updatedAt`) is dropped from both sides — this is what prevents a preset deleted on one device from being silently resurrected by a stale copy still present on another device or in a JSON import/backup.
 
 ### Content Script Runtime State
 

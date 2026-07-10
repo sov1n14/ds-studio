@@ -7,11 +7,12 @@
  *   2. storage-manager.lock.js
  *   3. storage-manager.sync.js
  *   4. storage-manager.presets.js
- *   5. storage-manager.chatmap.js
- *   6. storage-manager.local.js
- *   7. storage-manager.init.js
- *   8. storage-manager.syncnow.js
- *   9. storage-manager.js  （本檔）
+ *   5. storage-manager.tombstones.js
+ *   6. storage-manager.chatmap.js
+ *   7. storage-manager.local.js
+ *   8. storage-manager.init.js
+ *   9. storage-manager.syncnow.js
+ *  10. storage-manager.js  （本檔）
  */
 
 // === 錯誤類別（供 instanceof 檢查） ===
@@ -71,6 +72,7 @@ const StorageManager = {
         SYNC_INITIALIZED: 'syncInitialized',
         SYNC_CONFLICT_PENDING: 'syncConflictPending',
         PRESET_ORDER_META: 'dsPresetOrderMeta',
+        PRESET_TOMBSTONES: 'dsPresetTombstones', // new: 刪除墓碑記錄，防止跨裝置合併時復活已刪除項目
         RESTORED_MESSAGES: 'restored_messages',
     },
 
@@ -96,6 +98,7 @@ const StorageManager = {
         syncInitialized: false,
         syncConflictPending: false,
         dsPresetOrderMeta: { order: [], orderUpdatedAt: 0 },
+        dsPresetTombstones: {},
         restored_messages: {},
     },
 
@@ -271,6 +274,16 @@ const StorageManager = {
             if (winner) {
                 merged[this.KEYS.PRESET_INDEX] = winner.order;
                 merged[this.KEYS.PRESET_ORDER_META] = winner.meta;
+
+                // 若 sync 勝出，本機快照仍停留在舊（可能含已刪除 id 的）index，
+                // 必須比照上方 dsPreset_* 的做法一併持久化回 local，
+                // 否則 popup 重開時 retrySync()/resolveSyncConflict() 會讀到陳舊本機 index，
+                // 誤將已刪除項目判定為「本機仍存在」而在合併時復活（見 tombstone 機制）。
+                if (winner.meta === syncOrderMeta) {
+                    remoteWinsToPersist[this.KEYS.PRESET_INDEX] = winner.order;
+                    remoteWinsToPersist[this.KEYS.PRESET_ORDER_META] = winner.meta;
+                    globalThis.__DS_Logger?.sync('order:persist-winner', { winner: 'sync', target: 'local' });
+                }
             }
         }
 
@@ -427,6 +440,7 @@ const StorageManager = {
         root.__DS_StorageManager_lock     || {},
         root.__DS_StorageManager_sync     || {},
         root.__DS_StorageManager_presets  || {},
+        root.__DS_StorageManager_tombstones || {},
         root.__DS_StorageManager_chatmap  || {},
         root.__DS_StorageManager_local    || {},
         root.__DS_StorageManager_init     || {},
