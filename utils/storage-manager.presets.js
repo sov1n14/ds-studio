@@ -134,6 +134,27 @@
             if (lTs > sTs) { globalThis.__DS_Logger?.sync('order:pick', { localTs: lTs, syncTs: sTs, winner: 'local' }); return { order: localMeta.order, meta: localMeta }; }
             return null;
         },
+
+        /**
+         * 純函式：依 updatedAt 挑選較新的單一 preset 版本。
+         * 同 updatedAt 時，內容不同則以 createdAt 較早者為準（與 mergePresets 的 tiebreak 規則一致）。
+         * @param {Object|null} localPreset
+         * @param {Object|null} syncPreset
+         * @returns {Object|null} 較新（或應保留）的 preset
+         */
+        _pickNewerPreset(localPreset, syncPreset) {
+            if (syncPreset == null) return localPreset;
+            if (localPreset == null) return syncPreset;
+
+            const lTs = localPreset.updatedAt || 0;
+            const sTs = syncPreset.updatedAt || 0;
+            if (lTs > sTs) return localPreset;
+            if (sTs > lTs) return syncPreset;
+
+            // updatedAt 相同：內容相同則維持預設（sync）；內容不同則 createdAt 較早者勝
+            if (JSON.stringify(localPreset.content) === JSON.stringify(syncPreset.content)) return syncPreset;
+            return (localPreset.createdAt || 0) < (syncPreset.createdAt || 0) ? localPreset : syncPreset;
+        },
     };
 
     root.__DS_StorageManager_presets = bundle;

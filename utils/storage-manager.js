@@ -232,6 +232,19 @@ const StorageManager = {
         const merged = { ...lData, ...sData };
         globalThis.__DS_Logger?.sync('pull:merge', { source: 'sync-wins', keys: Object.keys(sData) });
 
+        // === 逐筆 preset 依 updatedAt 挑最新版本，避免 Chrome 同步收斂時以較舊版本覆蓋較新編輯 ===
+        for (const key of Object.keys(merged)) {
+            if (!key.startsWith('dsPreset_')) continue;
+            const localPreset = lData[key];
+            const syncPreset = sData[key];
+            if (localPreset === undefined || syncPreset === undefined) continue; // 僅在兩端都存在時比較
+            const winner = this._pickNewerPreset(localPreset, syncPreset);
+            if (winner === localPreset && merged[key] !== localPreset) {
+                merged[key] = localPreset;
+                globalThis.__DS_Logger?.sync('pull:recency-local', { key, localTs: localPreset.updatedAt || 0, syncTs: syncPreset.updatedAt || 0 });
+            }
+        }
+
         // === 以 orderUpdatedAt 時戳決定 PRESET_INDEX 勝者 ===
         if (Array.isArray(effectiveKeys) && effectiveKeys.includes(this.KEYS.PRESET_INDEX)) {
             const localOrderMeta = lData[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
