@@ -151,6 +151,7 @@ const TemporaryChatDelete = (() => {
             if (currentUuid) {
                 _trackedTemporaryUuid = currentUuid;
                 saveTrackedUuid(currentUuid);
+                TemporaryChatPendingStore.trackForDeletion(currentUuid);
                 _isPendingCreate = false;
             }
             return;
@@ -182,27 +183,39 @@ const TemporaryChatDelete = (() => {
         _trackedTemporaryUuid = null;
         saveTrackedUuid(null);
 
+        // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
+        // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
+        TemporaryChatPendingStore.removeOpenUuid(uuidToDelete);
+
         if (keepalive) {
-            // 分頁/瀏覽器關閉：透過 Service Worker 執行 keepalive fetch
-            chrome.runtime.sendMessage({
-                type: _getConst('DSS_SW_DELETE_MESSAGE_TYPE', 'DSS_DELETE_TEMP_CHAT'),
-                chatUuid: uuidToDelete,
-                authToken: tokenSnapshot,
-            });
+            // 分頁/瀏覽器關閉：直接以 keepalive fetch 執行刪除，確認成功後才移除待刪佇列項目
+            TemporaryChatDeleteApi.deleteChatSession(uuidToDelete, tokenSnapshot, { keepalive: true })
+                .then((isOk) => { if (isOk) TemporaryChatPendingStore.removePendingDelete(uuidToDelete); })
+                .catch(() => {});
+            // teardown 期間 .then 可能不執行 → 項目留在 sync 佇列，交由 onStartup 補救（confirmed-deletion invariant）
         } else {
             // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
             const FIBER_REQ = _getConst('DSS_FIBER_DELETE_MESSAGE_TYPE', 'DSS_FIBER_DELETE_SESSION');
             const FIBER_RES = _getConst('DSS_FIBER_DELETE_RESULT_TYPE', 'DSS_FIBER_DELETE_RESULT');
-            
+
             let fallbackTriggered = false;
             let timeoutId = null;
 
-            const fallbackToApi = () => {
+            const fallbackToApi = async () => {
                 if (fallbackTriggered) return;
                 fallbackTriggered = true;
                 window.removeEventListener('message', resultListener);
                 if (timeoutId) clearTimeout(timeoutId);
-                TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+                const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+                if (isOk) {
+                    TemporaryChatPendingStore.removePendingDelete(uuidToDelete);
+                } else {
+                    // 情境存活但重試耗盡 → 保留佇列項目，請 SW 排程 alarm 重試
+                    chrome.runtime.sendMessage({
+                        type: _getConst('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE', 'DSS_SCHEDULE_DELETE_RETRY'),
+                        chatUuid: uuidToDelete,
+                    });
+                }
             };
 
             const resultListener = (e) => {
@@ -213,6 +226,7 @@ const TemporaryChatDelete = (() => {
                 if (e.data.success) {
                     if (timeoutId) clearTimeout(timeoutId);
                     window.removeEventListener('message', resultListener);
+                    TemporaryChatPendingStore.removePendingDelete(uuidToDelete);
                 } else {
                     fallbackToApi();
                 }
@@ -243,6 +257,7 @@ const TemporaryChatDelete = (() => {
         if (e.source !== window) return;
         if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
         _capturedAuthToken = e.data.authorization || null;
+        if (e.data.authorization) TemporaryChatPendingStore.setLastAuthToken(e.data.authorization);
     }
 
     /**
@@ -329,6 +344,7 @@ const TemporaryChatDelete = (() => {
             if (destinationUuid) {
                 _trackedTemporaryUuid = destinationUuid;
                 saveTrackedUuid(destinationUuid);
+                TemporaryChatPendingStore.trackForDeletion(destinationUuid);
                 _isPendingCreate = false;
             }
         }
@@ -359,7 +375,7 @@ const TemporaryChatDelete = (() => {
         if (currentUuid !== _trackedTemporaryUuid) return;
         if (!_capturedAuthToken) return;
 
-        // keepalive: true → 透過 SW 發送，確保分頁關閉後請求仍送出
+        // keepalive: true → 直接發送 keepalive fetch，確保分頁關閉後請求仍送出
         deleteTrackedAndClear({ keepalive: true });
     }
 

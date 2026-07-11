@@ -114,6 +114,24 @@ describe('B — deleteChatSessionWithRetry', () => {
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
+    it('B1b: returns true when first attempt succeeds', async () => {
+        global.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+        const result = await TemporaryChatDeleteApi.deleteChatSessionWithRetry('uuid-1', 'Bearer tok');
+
+        expect(result).toBe(true);
+    });
+
+    it('B2b: returns false after all retry attempts fail', async () => {
+        global.fetch = vi.fn().mockResolvedValue({ ok: false });
+
+        const promise = TemporaryChatDeleteApi.deleteChatSessionWithRetry('uuid-2', 'Bearer tok');
+        await vi.advanceTimersByTimeAsync(60001);
+        const result = await promise;
+
+        expect(result).toBe(false);
+    });
+
     it('B2: calls fetch up to 3 times on repeated failure', async () => {
         global.fetch = vi.fn().mockResolvedValue({ ok: false });
 

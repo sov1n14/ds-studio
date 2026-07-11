@@ -29,6 +29,7 @@ function flushMicrotasks() {
 }
 
 let storageManagerStub;
+let pendingStoreStub;
 
 beforeAll(async () => {
     globalThis.importScripts = vi.fn();
@@ -38,6 +39,19 @@ beforeAll(async () => {
     };
     globalThis.StorageManager = storageManagerStub;
 
+    // service-worker.js's onStartup listener now also calls TemporaryChatPendingStore
+    // (clearOpenUuids + remediatePendingDeletes via getPendingDeletes/getLastAuthToken).
+    // Stub it so the listener does not throw; pending-delete behaviour itself is
+    // covered by service-worker.pending-delete.spec.js.
+    pendingStoreStub = {
+        getPendingDeletes: vi.fn().mockResolvedValue([]),
+        savePendingDeletes: vi.fn().mockResolvedValue(undefined),
+        getOpenUuids: vi.fn().mockResolvedValue([]),
+        clearOpenUuids: vi.fn().mockResolvedValue(undefined),
+        getLastAuthToken: vi.fn().mockResolvedValue(null),
+    };
+    globalThis.TemporaryChatPendingStore = pendingStoreStub;
+
     // Import once; top-level chrome.runtime.onStartup / onInstalled / alarms.onAlarm
     // registrations happen here.
     await import('../../background/service-worker.js');
@@ -46,6 +60,11 @@ beforeAll(async () => {
 beforeEach(() => {
     storageManagerStub.isSyncedWithCloud.mockReset().mockResolvedValue(true);
     storageManagerStub.retrySync.mockReset().mockResolvedValue({ success: true, remainingUnsyncedCount: 0 });
+    pendingStoreStub.getPendingDeletes.mockReset().mockResolvedValue([]);
+    pendingStoreStub.savePendingDeletes.mockReset().mockResolvedValue(undefined);
+    pendingStoreStub.getOpenUuids.mockReset().mockResolvedValue([]);
+    pendingStoreStub.clearOpenUuids.mockReset().mockResolvedValue(undefined);
+    pendingStoreStub.getLastAuthToken.mockReset().mockResolvedValue(null);
     chrome.alarms.create.mockClear?.();
 });
 

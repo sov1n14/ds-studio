@@ -1,119 +1,136 @@
-# 暫時對話刪除機制：修正行動計劃
+# Temporary Conversation Deletion Mechanism: Corrective Action Plan
 
-> 本文件記錄針對暫時對話（Temporary Conversation）功能的問題分析、修正方案，以及因瀏覽器擴充套件技術限制而必須明確說明的已知行為邊界。
+> This document records the problem analysis and remediation approach for the Temporary Conversation feature, along with known behavioral boundaries that must be explicitly documented due to browser extension technical limitations.
 >
-> **本次核心目標**：修復「切換開啟狀態下，暫時對話在某些離開情境中**沒有被刪除（殘留）**」的問題——具體為**直接關閉分頁、直接關閉瀏覽器、直接關機**三種情境。
+> **Core objective of this iteration**: Fix the issue where, with the toggle enabled, temporary conversations are **not deleted (left dangling)** in certain departure scenarios — specifically the three scenarios of **directly closing the tab, directly closing the browser, and directly shutting down the machine**.
+>
+> **Cross-device sync of the pending-delete list**: The pending-delete list lives exclusively in `chrome.storage.sync` as a single cross-device source of truth (no separate per-device local copy), so that if the same DeepSeek account is closed abruptly on computer A, restarting the extension on computer B (signed into the same Chrome account) can still remediate the dangling entries — with no local/sync reconciliation needed.
+>
+> **Confirmed-deletion invariant**: An entry is removed from the pending-delete queue **only after the delete API call returns confirmed success** — never speculatively, and never before. This applies uniformly whether the removal happens on the originating device (real-time path) or a remediating device (`onStartup` path).
 
 ---
 
-## 問題清單
+## Issue List
 
-| 編號 | 問題描述 | 性質 | 方向 | 優先級 |
+| ID | Description | Nature | Direction | Priority |
 |-|-|-|-|-|
-| CAP-01 | 直接關閉分頁時，刪除請求經由 `sendMessage` 轉送 SW，因 tab teardown 期間 IPC 競態而不可靠 | 設計缺陷 | 刪不掉（殘留） | 高 |
-| CAP-02 | 直接關閉瀏覽器 / 強制關機時，刪除無法即時完成，且缺乏開機後的補救機制 | 設計缺陷 + 技術限制 | 刪不掉（殘留） | 高 |
-| CAP-03 | 網址列輸入相同 URL 導航時，可能誤判為離開並刪除對話 | 待驗證 | **過度刪除（方向相反）** | 中 |
+| CAP-01 | When directly closing a tab, the delete request is relayed to the SW via `sendMessage`, which is unreliable due to IPC race conditions during tab teardown | Design flaw | Deletion fails (dangling) | High |
+| CAP-02 | When directly closing the browser / forced shutdown, deletion cannot complete in real time, and there is no post-startup remediation mechanism | Design flaw + technical limitation | Deletion fails (dangling) | High |
 
-> CAP-01／CAP-02 是本次主線（殘留問題）。CAP-03 與主線方向相反（屬「不該刪卻刪了」），**且原方案機制不成立**，本次改為「實測優先」處理（見後）。
+> CAP-01/CAP-02 are the main line of this iteration (the dangling issue).
 
 ---
 
-## 核心架構修正：職責分層
+## Core Architectural Fix: Separation of Responsibilities
 
-這是 CAP-01 與 CAP-02 的共同根本解法。修正的關鍵不是讓 SW 更快，而是**釐清誰該做什麼**。
+This is the shared root-cause fix for both CAP-01 and CAP-02. The key to the fix is not making the SW faster, but **clarifying who should do what**.
 
-### 設計原則
+### Design Principle
 
-> **Content script 負責所有即時刪除**（SPA 導航、tab／瀏覽器關閉，直接打 API）。
-> **Service Worker 只負責崩潰／關機後的補救**，且**僅在瀏覽器重新啟動（`onStartup`）時觸發**。
-> 兩條路徑完全獨立，互不依賴。
+> **The content script is responsible for all real-time deletion** (SPA navigation, tab/browser closing — calling the API directly).
+> **The Service Worker is responsible only for remediation after a crash/shutdown**, and **is triggered only on browser restart (`onStartup`)**.
+> The two paths are completely independent and do not depend on each other.
 
-現有架構的根本問題是讓 SW 夾在 `beforeunload` 路徑的中間，引入了一個不必要的非同步躍點（`chrome.runtime.sendMessage`）。SW 不是速度慢，而是根本就不該出現在這條即時路徑上——tab teardown 期間該 IPC 無法保證送達。
+The fundamental problem with the existing architecture is that it places the SW in the middle of the `beforeunload` path, introducing an unnecessary asynchronous hop (`chrome.runtime.sendMessage`). The SW isn't slow — it simply shouldn't be on this real-time path at all, since that IPC call cannot be guaranteed to arrive during tab teardown.
 
-### 新架構：兩層分離
+### New Architecture: Two-Layer Separation
 
 ```mermaid
 flowchart TD
     subgraph Layer1["Layer 1：Content Script（即時路徑）"]
-        A[對話被追蹤] --> B["寫入 chrome.storage.local 待刪清單<br/>（標記即寫入，不通知 SW）"]
+        A[對話被追蹤] --> B["寫入 chrome.storage.sync 待刪清單<br/>（單一事實來源，標記即寫入，不通知 SW）"]
 
         D{使用者如何離開？} -->|SPA 內導航| E["Fiber / API 刪除<br/>（情境存活，可重試）"]
         D -->|關閉分頁 / 瀏覽器| F["beforeunload<br/>直接 fetch keepalive:true"]
 
-        E --> G{成功？}
+        E --> G{API 回應確認成功？}
         F --> G
-        G -->|是| H[從 storage 移除待刪項目]
+        G -->|是| H[從 storage.sync 移除待刪項目<br/>（僅確認成功後才移除）]
         G -->|否，情境存活| I["排程 Alarm 重試<br/>（僅 SPA 導航失敗）"]
-        G -->|否，情境已銷毀| J[項目留在 storage<br/>交給 Layer 2]
+        G -->|否，情境已銷毀| J[項目留在 storage.sync<br/>交給 Layer 2]
     end
 
-    subgraph Layer2["Layer 2：Service Worker（補救路徑，onStartup-only）"]
-        K[onStartup：瀏覽器重新啟動] --> L["讀取待刪清單<br/>逐筆補刪（已放棄，刪除安全）"]
+    subgraph Layer2["Layer 2：Service Worker（補救路徑，onStartup-only，跨裝置共用）"]
+        K[onStartup：瀏覽器重新啟動] --> L["讀取 storage.sync 待刪清單<br/>以本機 dss-last-auth-token 逐筆補刪"]
+        L --> P{刪除確認成功？}
+        P -->|是| Q[移除該項目]
+        P -->|否| R[保留項目並累加 attemptCount]
         M[onAlarm：SPA 導航失敗重試] --> N[重試清單中項目]
     end
 
-    J -.->|下次瀏覽器啟動| K
+    J -.->|任一裝置下次啟動| K
 ```
 
-### 標記即寫入：在追蹤時就寫入，而非在刪除時
+### Write-on-Mark: Written at Tracking Time, Not at Deletion Time
 
-`chrome.storage.local` 的寫入必須在對話被追蹤時立刻完成，不能等到 `beforeunload`。這樣無論分頁／瀏覽器何時被關閉、甚至 OS 強制關機，待刪清單都已在磁碟上，下次開機即可補救。
+The write to `chrome.storage.sync` must happen immediately when a conversation is tracked — it cannot wait until `beforeunload`. Because the queue lives in `chrome.storage.sync` from the moment of tracking, it is simultaneously the local record and the cross-device record: no matter when the tab/browser is closed, or even if the OS forces a shutdown, the pending-delete entry is already persisted and visible to every device signed into the same Chrome account, and remediation can happen on the next startup of **any** of them — not just the originating device.
 
-| 時機 | Content Script 動作 | Service Worker 動作 |
+| Timing | Content Script Action | Service Worker Action |
 |-|-|-|
-| 對話 UUID 首次被追蹤 | 直接寫入 `chrome.storage.local` 待刪清單 | **不參與**（不通知、不排 Alarm） |
-| SPA 導航刪除成功 | 直接從 `chrome.storage.local` 移除 | 不參與 |
-| SPA 導航刪除失敗（情境存活） | `sendMessage` 請 SW 排程重試 Alarm | 排程 Alarm（情境存活，IPC 可靠） |
-| beforeunload（關分頁／瀏覽器） | `fetch(keepalive:true)` 直接打 API；成功則 best-effort 移除清單 | 不參與 |
-| 瀏覽器重新啟動 | 不參與 | `onStartup` 讀取清單並逐筆補刪 |
+| Conversation UUID tracked for the first time | Write directly to the `chrome.storage.sync` pending-delete queue (single source of truth — no separate local copy) | **Not involved** (no notification, no alarm scheduled) |
+| SPA navigation deletion succeeds (API confirms success) | Remove directly from `chrome.storage.sync` | Not involved |
+| SPA navigation deletion fails (execution context alive) | `sendMessage` asks SW to schedule a retry alarm | Schedules alarm (context alive, IPC reliable) |
+| beforeunload (closing tab/browser) | `fetch(keepalive:true)` calls the API directly; entry is removed from `chrome.storage.sync` **only if the response is confirmed successful** | Not involved |
+| Browser restart (any device signed into the account) | Not involved | `onStartup` reads the shared queue and retroactively deletes each entry using this device's own `dss-last-auth-token`; an entry is removed **only on confirmed API success** |
 
-> ⚠️ **關鍵安全修正（相對前一版計畫）**：前一版計畫在「對話被追蹤的當下」就請 SW 排程 Alarm。由於 `chrome.alarms` 最短約 1 分鐘後即觸發，而此時使用者**很可能仍在該對話中**，補刪會把**使用者正在進行的對話刪掉**。
+> **Removal invariant**: Never remove an entry from the queue speculatively (e.g., "assume the keepalive fetch probably worked" or "assume another device already handled it"). Removal happens strictly after an explicit success confirmation from the delete API — on any other outcome (network failure, non-2xx response, no response received), the entry stays in the queue with `attemptCount` incremented, ready for the next remediation attempt by whichever device starts up next.
+
+> ⚠️ **Critical safety fix (relative to the previous plan)**: The previous plan had the SW schedule an alarm **at the moment a conversation was tracked**. Since `chrome.alarms` fires at the earliest after about 1 minute, and the user is **very likely still in that conversation** at that point, the retroactive deletion would **delete a conversation the user is actively having**.
 >
-> 因此本版規定：**追蹤時只寫入待刪清單、絕不在追蹤時排程 Alarm**。針對「追蹤但尚未離開」的項目，補救**只交給 `onStartup`**——瀏覽器重新啟動代表該對話確實已被放棄，此時刪除才安全。Alarm 僅保留給「已確認離開、但刪除失敗」且**執行情境仍存活**的 SPA 導航重試。
+> Therefore, this version mandates: **at tracking time, only write to the pending-delete list — never schedule an alarm at tracking time**. For entries that are "tracked but not yet left," remediation is handled **solely by `onStartup`** — a browser restart means the conversation has genuinely been abandoned, and deletion is safe at that point. Alarms are reserved only for SPA navigation retries where deletion has been confirmed to have failed **and the execution context is still alive**.
 
 ---
 
-## Service Worker 的正確定位
+## Correct Positioning of the Service Worker
 
-SW 不是常駐行程，閒置約 30 秒後自動終止，有事件進來時按需喚醒。修正後，**SW 完全退出即時刪除路徑**，只處理 content script 沒有機會執行的情境。
+The SW is not a persistent process — it terminates automatically after about 30 seconds of idleness and wakes on demand when an event arrives. After the fix, **the SW is completely removed from the real-time deletion path** and handles only scenarios the content script has no opportunity to execute.
 
-> ⚠️ **現況提醒**：目前 `background/service-worker.js` **只有 `onMessage` 與 `onAlarm` 監聽器，並沒有 `onStartup` 監聽器**。Layer 2 的崩潰／關機復原**完全依賴 `onStartup`**，因此本次必須**新增**此監聽器——這是新功能，不是「保留既有邏輯」。
+> ⚠️ **Current state reminder**: `background/service-worker.js` **already has an `onStartup` listener** (currently used for cloud-preset sync remediation), alongside `onMessage` and `onAlarm`. Layer 2's crash/shutdown recovery **depends on `onStartup`**, so this iteration must **extend the existing `onStartup` listener** with pending-delete remediation logic — it must not assume the listener is absent, nor register a duplicate that clobbers the existing cloud-preset behavior.
 
-### 喚醒觸發條件
+### Wake Trigger Conditions
 
-| 觸發事件 | 可靠性 | 本次角色 |
+| Trigger Event | Reliability | Role in This Iteration |
 |-|-|-|
-| `chrome.runtime.onStartup` | 高 | **（新增）** 瀏覽器正常啟動時觸發，涵蓋關機／崩潰／關閉瀏覽器後重新開機——本次補救主力。 |
-| `chrome.alarms.onAlarm` | 極高 | 持久化於 Chrome profile。僅用於「SPA 導航刪除失敗」的重試，**不在追蹤時排程**。 |
-| content script `sendMessage` | 中 | 僅在 SPA 導航刪除失敗、情境仍存活時用來請 SW 排程重試 Alarm。 |
+| `chrome.runtime.onStartup` | High | **(Extended — listener already exists for cloud-preset sync)** Fires on a normal browser startup, covering shutdown/crash/browser-close followed by restart — the primary remediation mechanism for this iteration. |
+| `chrome.storage.onChanged` (sync area) | High | **(Optional safeguard)** Fires when the synced pending-delete queue changes (e.g., another device wrote a new entry after the cloud hydrates). Triggers a remediation sweep to mitigate the `onStartup` cold-start hydration race — deleting queued entries **except the conversation currently open in this browser** (see "Sync-Change Safeguard" below). |
+| `chrome.alarms.onAlarm` | Extremely high | Persisted in the Chrome profile. Used only for retrying "SPA navigation deletion failure," **not scheduled at tracking time**. |
+| Content script `sendMessage` | Medium | Used only when SPA navigation deletion fails and the context is still alive, to ask the SW to schedule a retry alarm. |
 
-### Alarm 的角色澄清
+### Clarifying the Role of Alarms
 
-`chrome.alarms` 最短觸發間隔約 1 分鐘（Chrome MV3 規範），設定更短的值會被自動夾高。因此 Alarm **不適合作為即時刪除機制**，也**不可在追蹤時排程**（會誤刪進行中對話），只適合作為「已確認離開但刪除失敗」的補救重試觸發器。
+`chrome.alarms` has a minimum trigger interval of about 1 minute (per the Chrome MV3 spec); setting a shorter value is automatically clamped up. Therefore, alarms are **not suitable as a real-time deletion mechanism**, and **must not be scheduled at tracking time** (doing so would risk deleting an in-progress conversation) — they are only suitable as a remediation retry trigger for "confirmed departure but deletion failed."
 
-Content script 直接 `fetch(keepalive:true)` 才是分頁／瀏覽器關閉時的即時刪除手段，不受 1 分鐘限制。
+Content scripts calling `fetch(keepalive:true)` directly is the real-time deletion mechanism for tab/browser closure, and is not subject to the 1-minute limit.
 
-### 補刪的時間視窗
+### Sync-Change Safeguard (mitigating the `onStartup` hydration race)
 
-| 情境 | 補刪發生時機 |
+`chrome.runtime.onStartup` may fire before `chrome.storage.sync` has finished hydrating from the cloud on a cold start, so a freshly-started device could read a stale (empty or incomplete) queue and miss entries another device just wrote. This is considered a rare, extreme case; as a lightweight mitigation (not a full solution), the remediation sweep is **also** triggered whenever the synced queue changes — i.e., on a `chrome.storage.onChanged` event for the `sync` area, which fires when cloud data arrives after hydration or when any device writes a new marker.
+
+> ⚠️ **Required guard**: A sync-change sweep must **never** delete the conversation currently open in this browser. Because write-on-mark writes to `chrome.storage.sync`, the `onChanged` event also fires **locally on the originating device** — without this guard, the device would immediately delete the very conversation the user just started (a guaranteed break, not an edge case). The sweep therefore deletes every queued entry **except** the UUID currently tracked/open in a live tab on this device (`_trackedTemporaryUuid` / the current URL's UUID). Leaving the currently-open conversation remains the job of the real-time path (SPA navigation / `beforeunload`).
+
+This narrows but does not fully close the hydration-race window, and it does not change the accepted cross-device "in-use" limitation documented under "Known Limitations."
+
+### Remediation Timing Windows
+
+| Scenario | Timing of Remediation |
 |-|-|
-| 正常 SPA 導航離開 | 立即（content script Fiber／API 刪除） |
-| 關閉分頁（瀏覽器仍開啟） | 立即（`keepalive` fetch）；若失敗，殘留至下次瀏覽器啟動由 `onStartup` 補刪 |
-| 關閉整個瀏覽器 | 嘗試即時 `keepalive` fetch；無論成敗，下次啟動 `onStartup` 補刪確保不殘留 |
-| 強制關機 / 瀏覽器崩潰 | 下次啟動時 `onStartup` 立即補刪（待刪清單已於追蹤時持久化） |
-| 長時間不開啟瀏覽器 | 延遲至下次開啟瀏覽器 |
+| Normal SPA navigation away | Immediate (content script Fiber/API deletion) |
+| Closing a tab (browser still open) | Immediate (`keepalive` fetch); on failure, remains dangling until the next browser startup, when `onStartup` performs remediation |
+| Closing the entire browser | Attempts immediate `keepalive` fetch; regardless of success or failure, `onStartup` on the next startup ensures no dangling entries remain |
+| Forced shutdown / browser crash | `onStartup` performs remediation immediately on next startup (the pending-delete list was already persisted at tracking time) |
+| Browser not opened for a long time | Delayed until the browser is next opened |
 
 ---
 
-## CAP-01：分頁關閉時刪除請求不可靠
+## CAP-01: Delete Request Unreliable on Tab Close
 
-### 根本原因
+### Root Cause
 
-現有 `beforeunload` → `chrome.runtime.sendMessage` → SW → `fetch(keepalive:true)` 的鏈，在「SW 接收訊息」這一環存在競態條件。Content script 在 tab teardown 期間無法保證非同步 IPC 送達 SW（SW 可能正在喚醒，訊息通道就被拆除）。**這是分頁關閉時最常見的殘留來源。**
+The existing chain of `beforeunload` → `chrome.runtime.sendMessage` → SW → `fetch(keepalive:true)` has a race condition at the "SW receives the message" step. During tab teardown, the content script cannot guarantee that the asynchronous IPC call reaches the SW (the SW may be waking up just as the message channel is torn down). **This is the most common source of dangling conversations when closing a tab.**
 
-### 修正方案
+### Fix
 
-移除 `beforeunload` 路徑對 SW 的依賴，改由 content script 直接發送 `keepalive` 請求。keepalive fetch 由瀏覽器網路行程接手，能存活於頁面銷毀之後（與 `navigator.sendBeacon` 同原理）：
+Remove the `beforeunload` path's dependency on the SW; have the content script send the `keepalive` request directly instead. A keepalive fetch is handed off to the browser's network process and can survive page teardown (the same principle as `navigator.sendBeacon`):
 
 ```javascript
 // handleBeforeUnload 修改後（content/temporary-chat-delete.js）
@@ -136,177 +153,207 @@ function handleBeforeUnload() {
         headers: { 'authorization': _capturedAuthToken, 'content-type': 'application/json' },
         body: JSON.stringify({ chat_session_id: uuidToDelete }),
     }).then(r => {
-        // best-effort：teardown 期間 .then 可能不執行，殘留項目交給 onStartup 清理
+        // 僅在 API 明確回傳成功時才移除待刪項目；teardown 期間 .then 可能不執行，殘留項目交給 onStartup 清理
         if (r.ok) removeFromPendingStorage(uuidToDelete);
     }).catch(() => {});
 }
 ```
 
-> **冪等性依賴**：tab 關閉時上述 `.then` callback 可能因執行情境已銷毀而不執行，導致待刪項目殘留。`onStartup` 會對殘留項目重新呼叫刪除 API；對「已刪除的對話」重複刪除應為冪等（伺服器回非 ok 後靜默放棄）。此行為需在實作時確認。
+> **Idempotency (verified)**: When a tab closes, the `.then` callback above may not execute because the execution context has already been destroyed, leaving the pending-delete entry in the queue. `onStartup` re-invokes the delete API for such entries. Repeated deletion of an already-deleted conversation has been **verified to be a safe no-op**: the DeepSeek delete API returns **HTTP 200** with body `{ "code": 0, "msg": "", "data": { "biz_code": 0, "biz_msg": "", "biz_data": null } }` even for an already-deleted session. A re-deletion is therefore treated as confirmed success (the entry is safely removed), never as a failure — so there is no risk of a still-pending entry being wrongly retried/dropped on this account.
 
-**具體變更：**
+> **To verify during implementation (CSP / same-origin)**: The `beforeunload` `fetch` runs in the content script's context against `https://chat.deepseek.com/...`. Because the request targets the **same origin** as the page the content script is injected into, it is expected not to be blocked by the page's `connect-src` CSP — but this assumption must be **verified in a real browser** before relying on it; the exact CSP the DeepSeek page ships has not been confirmed within this plan.
 
-1. **`content/temporary-chat-delete.js`**：`deleteTrackedAndClear({ keepalive: true })` 改為直接 `fetch(keepalive: true)`，移除 `chrome.runtime.sendMessage` 呼叫。
-2. **`content/temporary-chat-delete.js`**：新增 `writeToPendingStorage` 與 `removeFromPendingStorage` 工具函式（直接操作 `chrome.storage.local`，content script 具此權限）。
-3. **`content/temporary-chat-delete.js`**：在「標記對話為臨時」時（`checkCoOccurrence` 與 `handleNavigationEvent` 標記分支）呼叫 `writeToPendingStorage`，落實「標記即寫入」。
-4. **`background/service-worker.js`**：移除 `onMessage` 中 `DSS_DELETE_TEMP_CHAT` 的即時刪除邏輯（即時路徑不再經 SW）；保留 Alarm 重試。
+**Specific changes:**
+
+1. **`content/temporary-chat-delete.js`**: Change `deleteTrackedAndClear({ keepalive: true })` to a direct `fetch(keepalive: true)`, removing the `chrome.runtime.sendMessage` call.
+2. **`content/temporary-chat-delete.js`**: Add `writeToPendingStorage` and `removeFromPendingStorage` utility functions, operating directly on `chrome.storage.sync` (the single cross-device pending-delete queue; the content script needs the `storage` permission but not a full round-trip through the SW to read/write it). `removeFromPendingStorage` must only be called after a confirmed-success response.
+3. **`content/temporary-chat-delete.js`**: Call `writeToPendingStorage` when "marking a conversation as temporary" (in the `checkCoOccurrence` and `handleNavigationEvent` marking branches), implementing "write-on-mark."
+4. **`background/service-worker.js`**: Remove the real-time deletion logic for `DSS_DELETE_TEMP_CHAT` in `onMessage` (the real-time path no longer goes through the SW); keep the alarm retry logic.
 
 ---
 
-## CAP-02：關閉瀏覽器 / 強制關機導致對話殘留
+## CAP-02: Conversations Dangling on Browser Close / Forced Shutdown
 
-### 根本原因
+### Root Cause
 
-- **關閉整個瀏覽器**：每個分頁的 `beforeunload` 雖會觸發，但與 CAP-01 同樣的 IPC 競態，且 SW 本身也正被關閉，即時刪除更不可靠。
-- **強制關機 / 崩潰**：OS 直接終止瀏覽器行程，`beforeunload` 完全不觸發，任何「離開當下才執行」的清理均無效。
+- **Closing the entire browser**: Each tab's `beforeunload` does fire, but suffers from the same IPC race condition as CAP-01, and the SW itself is also being shut down, making real-time deletion even less reliable.
+- **Forced shutdown / crash**: The OS terminates the browser process directly, `beforeunload` never fires at all, and any cleanup that relies on "executing at the moment of leaving" is ineffective.
 
-兩者共通缺口：**缺乏一個「瀏覽器重新啟動後」的補救機制**。
+The common gap in both cases: **the lack of a remediation mechanism that runs after the browser restarts**.
 
-### 修正方案
+### Fix
 
-1. **標記即寫入**：對話被追蹤時就把 `{ chatUuid, authToken }` 寫入 `chrome.storage.local` 待刪清單，確保關機／崩潰前資料已落地。
-2. **新增 `onStartup` 補刪**：瀏覽器重新啟動時，SW 讀取待刪清單並逐筆呼叫刪除 API。此時這些對話**必然已被放棄**（瀏覽器是全新工作階段），因此刪除是安全的。
+1. **Write-on-mark, directly to `chrome.storage.sync`**: When a conversation is tracked, immediately write `{ chatUuid, attemptCount: 0 }` to the shared `dss-pending-deletes-sync` queue, ensuring the data is persisted — and already visible to every device signed into the same Chrome account — before any shutdown/crash.
+2. **Add `onStartup` remediation**: On browser restart (on **any** device, not just the one that tracked the conversation), the SW reads the shared queue and calls the delete API for each entry using this device's own locally captured token. At this point these conversations **must have already been abandoned** (the browser is a brand-new session), so deletion is safe.
 
 ```javascript
-// background/service-worker.js 新增
+// background/service-worker.js：擴充現有的 onStartup listener（目前用於 cloud-preset sync），
+// 於同一個 listener 內追加待刪佇列補救；切勿另註冊第二個 onStartup 而覆蓋既有邏輯。
 chrome.runtime.onStartup.addListener(() => {
     (async () => {
-        const pending = await getPendingDeletes();
+        const pending = await getPendingDeletesSync(); // chrome.storage.sync — single cross-device queue
         if (pending.length === 0) return;
+
+        const token = await getLastKnownAuthToken(); // chrome.storage.local — this device's own captured token
+        if (!token) return; // this device has never captured a token for this account — leave for another device
 
         const stillPending = [];
         for (const item of pending) {
-            const ok = await performDeleteFetch(item.chatUuid, item.authToken);
-            if (!ok && (item.attemptCount ?? 0) < MAX_ATTEMPTS) {
+            const ok = await performDeleteFetch(item.chatUuid, token);
+            if (ok) continue; // confirmed success — drop from queue
+            if ((item.attemptCount ?? 0) < MAX_ATTEMPTS) {
                 stillPending.push({ ...item, attemptCount: (item.attemptCount ?? 0) + 1 });
             }
         }
-        await savePendingDeletes(stillPending);
+        await savePendingDeletesSync(stillPending);
         if (stillPending.length > 0) await scheduleRetryAlarm();
     })();
 });
 ```
 
-> **降級行為**：自關機／崩潰至下次開啟瀏覽器之間，對話會殘留。這是瀏覽器擴充套件無法消除的固有邊界（見「已知限制」），屬可接受的降級。
+Because the queue is a single shared list from the moment of tracking, there is no separate "local list" to reconcile against a "sync mirror" — whichever device wakes up first simply works through the same queue with its own token, and only removes an entry once the delete API confirms success.
 
-**影響檔案：**
+> **Degraded behavior**: Between the shutdown/crash and the next browser launch (on any device), the conversation will remain dangling. This is an inherent boundary that a browser extension cannot eliminate (see "Known Limitations"), and is an acceptable degradation.
 
-- `background/service-worker.js`：新增 `chrome.runtime.onStartup` 監聽器（**目前不存在**）。
-- `content/temporary-chat-delete.js`：標記即寫入（與 CAP-01 變更共用）。
+**Affected files:**
 
----
-
-## CAP-03：相同 URL 導航誤刪對話（待驗證，實測優先）
-
-> CAP-03 與本次主線方向相反（屬「過度刪除」）。前一版計畫提出的 `PerformanceNavigationTiming` 方案**機制不成立**，本次先以實測釐清真實行為，再決定修法。
-
-### 為什麼前一版的 `PerformanceNavigationTiming` 方案不成立
-
-前一版計畫在 `handleBeforeUnload` 中以 `performance.getEntriesByType('navigation')[0].type === 'reload'` 作為防線。問題在於：
-
-> **`PerformanceNavigationTiming.type` 反映的是「當前頁面當初是如何載入的」，是頁面生命週期內的固定值，與「使用者現在要不要離開、要導航去哪裡」完全無關。**
-
-「使用者於網址列輸入相同 URL + Enter」這個**尚未發生的新導航**，不會改變當前頁面的這個值。實際後果：
-
-- 若當前頁是以 reload 載入 → 之後**任何**離開（含真的該刪的正常導航）都會被誤判抑制 → **該刪的反而沒刪**。
-- 若當前頁是以 navigate 載入 → 同 URL 重新進入時 `type` 仍是 navigate，guard 不觸發 → **照樣誤刪**，CAP-03 沒被修掉。
-
-換言之，此 guard 的行為只取決於頁面當初怎麼載入，與要解決的問題正交。**此方案應捨棄。**
-
-### 待驗證的關鍵問題
-
-CAP-03 的真正難點是：`beforeunload` 當下**無法取得目的地 URL**，因此難以在該時點判斷「同 URL 重新導航」。現有 `handleNavigationEvent` 其實已有 `isSameUrl` 判斷並設定 `_suppressNextUnloadDelete`，前提是 Navigation API 的 `navigate` 事件**有觸發且早於 `beforeunload`**。
-
-因此需先實測釐清：
-
-1. 在 Chrome 中，「網址列輸入相同 URL + Enter」是否會觸發 `window.navigation` 的 `navigate` 事件？（規範上跨文件導航也會觸發 `navigate`，只是 `canIntercept` 為 false）
-2. 若觸發，其相對於 `beforeunload` 的順序為何？
-3. `event.navigationType` 與 `event.destination.url` 在此情境下的實際值為何？
-
-### 依實測結果的修法分支
-
-| 實測結果 | 修法 |
-|-|-|
-| `navigate` 事件**有觸發且早於 `beforeunload`** | 既有 `isSameUrl` 邏輯已足夠；確認 handler 確實執行並正確設定 `_suppressNextUnloadDelete` 即可，可能無需新增程式碼。 |
-| `navigate` 事件**未觸發或晚於 `beforeunload`** | 需另尋 `beforeunload` 當下可用的可靠訊號；若無，則將「同 URL 重新導航誤刪」記錄為**已知限制**，不強行以不可靠訊號修補。 |
-
-**影響檔案（依分支而定）：**
-
-- `content/temporary-chat-delete.js`：可能調整 `handleNavigationEvent` / `handleBeforeUnload` 的判斷。
-- `test/unit/temporary-chat-delete.spec.js`：新增「相同 URL 導航」場景測試（依確定的修法撰寫）。
+- `background/service-worker.js`: Extend the **existing** `chrome.runtime.onStartup` listener (currently handles cloud-preset sync) with pending-delete remediation; optionally add a `chrome.storage.onChanged` (sync area) handler for the hydration-race safeguard.
+- `content/temporary-chat-delete.js`: Write-on-mark (shared with the CAP-01 change).
 
 ---
 
-## 已知限制與文件化建議
+## Layer 3: Cross-Device Synchronization of the Pending-Delete List
 
-> 本擴充套件為瀏覽器擴充套件（Browser Extension），而非原生 Web 應用程式。在 OS 層級的行程管理面前，擴充套件無法取得與原生應用程式同等的生命週期控制權。以下限制是技術架構層面的固有邊界，無論如何優化都無法完全消除。
+> **Goal**: If computer A is force-closed or crashes while a temporary conversation is still tracked, computer B — signed into the same Chrome account with sync enabled — must be able to remediate (delete) that dangling conversation the next time it starts up. Achieved by making `chrome.storage.sync` the **only** place the pending-delete queue is stored (see CAP-02's `Fix` above) — there is no local-only duplicate to keep in sync.
 
-### 無法根治的限制
+### Design Principle
 
-| 場景 | 行為 | 原因 |
+> **`authToken` must never leave local storage.** `chrome.storage.sync` data is transmitted through Google's sync infrastructure; `PRIVACY.md` explicitly promises that session/sensitive data stays local-only. Therefore the shared queue carries only the non-sensitive `chatUuid` (plus `attemptCount` for bookkeeping) — never the bearer token.
+> **Remediation always uses the *local* device's own captured token.** Since the delete API only requires `{ chatUuid, authToken }` and any valid session token for the same DeepSeek account can delete any of that account's conversations, any device can remediate any entry in the shared queue — including one it never tracked itself — as long as it has *its own* recently captured `authToken` for that account (i.e., the user has opened `chat.deepseek.com` logged in on that device at least once). This applies uniformly; there is no special-casing of "entries I tracked" vs. "entries another device tracked."
+
+### Data Model
+
+| Storage | Key | Shape | Contains `authToken`? | Purpose |
+|-|-|-|-|-|
+| `chrome.storage.sync` | `dss-pending-deletes-sync` | `{ chatUuid, attemptCount }` | **No** | The single, cross-device pending-delete queue — the only copy, written directly at tracking time |
+| `chrome.storage.local` | `dss-last-auth-token` | `string` (raw bearer token) | Yes | **(New)** The most recently captured valid token on *this* device, used to remediate any queue entry on `onStartup`, whether tracked locally or on another device |
+
+### Write / Remove Flow
+
+| Event | `chrome.storage.sync` queue (`dss-pending-deletes-sync`) | `chrome.storage.local` token cache (`dss-last-auth-token`) |
 |-|-|-|
-| 強制關機（電源鍵、斷電） | 對話殘留至下次開啟瀏覽器 | OS 殺行程，`beforeunload` 不觸發；靠 `onStartup` 補救 |
-| 瀏覽器崩潰（非正常關閉） | 對話殘留至下次開啟瀏覽器 | 同上 |
-| 長時間不開啟瀏覽器 | 對話持續殘留至開啟為止 | SW 未被喚醒，`onStartup` 補刪未執行 |
-| Auth token 在補刪前過期 | 補刪失敗，對話永久殘留 | Token 有效期由 DeepSeek 伺服器決定，擴充套件無法控制 |
+| Conversation tracked for the first time (write-on-mark) | Write `{ chatUuid, attemptCount: 0 }` directly — this is the only write, no local duplicate | Not applicable |
+| Deletion succeeds (SPA nav, `beforeunload` keepalive, or `onStartup` remediation, on any device) | Remove entry — **only after the delete API confirms success** | Not applicable |
+| Valid token captured/refreshed on this device | Not applicable | Overwrite with the newly captured token |
 
-### 建議的使用者文件說明
+> **Race tolerance**: `chrome.storage.sync` propagation across devices is not instantaneous and has no delivery guarantee at a fixed time. Two devices may attempt to remediate the same entry near-simultaneously; the second attempt must be treated as an idempotent no-op (consistent with the existing CAP-01 idempotency note), not an error.
 
-以下內容應加入 `docs/FEATURES.md` 或 `docs/spec/04-features.md`：
+### Quota Considerations
+
+`chrome.storage.sync` enforces both a size quota and a write-rate quota. Since write-on-mark now writes directly to `chrome.storage.sync` (rather than to unlimited `chrome.storage.local`), the write-rate quota is worth noting, but analysis shows it is **not a practical constraint** for this feature:
+
+| Quota | Limit | Impact |
+|-|-|-|
+| `QUOTA_BYTES_PER_ITEM` | 8,192 bytes | Each queue entry is only tens of bytes (`chatUuid` ~36 chars + `attemptCount`), far below the cap — not a practical concern |
+| `QUOTA_BYTES` (total) | ~100KB | Bounds how many conversations can be pending at once; not a practical concern at expected scale |
+| `MAX_WRITE_OPERATIONS_PER_MINUTE` | 120 | Not a practical concern: reaching it requires sustaining ~2 tracking writes per second, which manual operation cannot realistically produce (creating and abandoning a conversation is a deliberate, multi-second user action) |
+| `MAX_WRITE_OPERATIONS_PER_HOUR` | 1,800 | Same category; also not reachable through normal manual operation |
+
+**No debounce is needed.** An earlier draft proposed debouncing/coalescing write-on-mark calls to protect the write-rate quota; this is unnecessary because manual conversation creation/abandonment cannot approach ~2 writes/second, so immediate write-on-mark is retained (which also preserves the "persist at tracking time" guarantee — debouncing would delay persistence and reintroduce the CAP-02 dangling window on a sudden shutdown). As a purely defensive measure, a throttled `chrome.storage.sync.set` (should one ever occur) is treated as a retryable failure — logged, not silently dropped — rather than assuming every write succeeds.
+
+Reuse the existing quota-checked write path in `utils/storage-manager.js` (the same guard used by `utils/storage-manager.sync.js` for preset sync) rather than calling `chrome.storage.sync.set` directly, so oversized-item handling stays consistent project-wide. **Note:** that path currently guards item **size** only (`QUOTA_BYTES_PER_ITEM`, oversized-item interception, sync→local fallback); it does **not** implement write-rate throttling — which, per the analysis above, is not a practical concern here.
+
+**Affected files:**
+
+- `content/temporary-chat-delete.js`: Write-on-mark / removal write directly to `dss-pending-deletes-sync`; persist `dss-last-auth-token` whenever a token is captured.
+- `background/service-worker.js`: `onStartup` reads the shared queue and remediates every entry using `dss-last-auth-token` (see CAP-02's `Fix` above — this is the same code path, not a separate extension).
+- `PRIVACY.md`: Document that `chatUuid` and `attemptCount` (non-sensitive) may sync via `chrome.storage.sync` for cross-device cleanup, while `authToken` never leaves local storage.
 
 ---
 
-**暫時對話（Temporary Conversation）的隱私保證範圍**
+## Known Limitations and Documentation Recommendations
 
-暫時對話功能會在您離開對話後，自動從 DeepSeek 伺服器刪除該對話記錄。本功能在以下情境中**保證有效**：
+> This extension is a browser extension, not a native web application. In the face of OS-level process management, an extension cannot obtain the same lifecycle control as a native application. The following limitations are inherent boundaries at the technical architecture level and cannot be fully eliminated no matter how much optimization is applied.
 
-- 在瀏覽器內正常導航至其他頁面或對話
-- 正常關閉瀏覽器分頁或視窗（包含關閉整個瀏覽器）
+### Limitations That Cannot Be Fully Resolved
 
-在以下情境中，刪除將**延遲**至下次開啟瀏覽器時執行：
+| Scenario | Behavior | Reason |
+|-|-|-|
+| Forced shutdown (power button, power loss) | Conversation remains dangling until the browser is next opened | The OS kills the process; `beforeunload` does not fire; relies on `onStartup` for remediation |
+| Browser crash (abnormal close) | Conversation remains dangling until the browser is next opened | Same as above |
+| Browser not opened for a long time | Conversation remains dangling until opened | SW is not woken; `onStartup` remediation does not run |
+| Auth token expires before remediation | Remediation fails, conversation dangles permanently | Token validity is determined by the DeepSeek server; the extension has no control over it |
+| Computer B has never logged into the same DeepSeek account | Cross-device remediation cannot occur on computer B; the entry stays in the shared queue until a device with a valid token for that account starts up | Remediation requires the local device's own captured `authToken`; the token itself is never synced |
+| Chrome sync is disabled, or computers are not signed into the same Chrome account | Cross-device remediation does not occur at all; each device only remediates what it tracked itself | `chrome.storage.sync` requires Chrome sync to be enabled and signed into the same account — this is a user/browser-level prerequisite outside the extension's control |
+| The same DeepSeek account is **actively in use** on device A (conversation still open, not yet left) while device B — signed into the same Chrome account — restarts or receives a sync change | Device B's remediation may delete a conversation that is still open and in use on device A | The heuristic "a fresh browser session / new sync entry means the conversation was abandoned" holds per-device but not across devices; B cannot know A is still using the conversation. **Accepted as an extreme, rare case** for personal single-user usage — deliberately not mitigated. The sync-change guard only protects the conversation open on the *same* device, not one open on another device |
+| A queue entry fails remediation `MAX_ATTEMPTS` times (persistent network failure or server error) | The entry is dropped from the queue and the conversation dangles permanently, with no user-visible notice | Bounded retry is a deliberate trade-off to avoid an ever-growing queue; surfacing a notification is out of scope for this iteration |
+| Browsing in Incognito / a non-syncing profile | `chrome.storage.sync` may be unavailable or isolated in that context, so cross-device remediation — and even same-profile persistence — may not behave as in a normal profile | Incognito storage semantics differ by design; not specially handled |
+| Many temporary conversations tracked/untracked within a very short window (theoretical: ~2+ per second, sustained) | Some write-on-mark calls could in principle be throttled by the write-rate quota | `MAX_WRITE_OPERATIONS_PER_MINUTE` (120) — not reachable through normal manual operation; listed for completeness only, no debounce implemented |
 
-- 電腦強制關機（長按電源鍵、斷電）
-- 瀏覽器崩潰或被作業系統強制終止
+### Recommended User-Facing Documentation
 
-本擴充套件以瀏覽器擴充套件的方式運作，無法取得超出瀏覽器本身的系統控制權。若需要最高等級的隱私保證，建議在關閉電腦前先正常關閉瀏覽器。
+The following content should be added to `docs/FEATURES.md` or `docs/spec/04-features.md`:
 
 ---
 
-## 修正優先順序與依賴關係
+**Scope of the Privacy Guarantee for Temporary Conversations**
+
+The Temporary Conversation feature automatically deletes the conversation record from the DeepSeek server after you leave the conversation. This feature is **guaranteed to work** in the following scenarios:
+
+- Normal in-browser navigation to another page or conversation
+- Normally closing a browser tab or window (including closing the entire browser)
+
+In the following scenarios, deletion will be **delayed** until the next time the browser is opened:
+
+- The computer is forcibly shut down (holding the power button, power loss)
+- The browser crashes or is forcibly terminated by the operating system
+
+This extension operates as a browser extension and cannot obtain system-level control beyond the browser itself. If you require the highest level of privacy guarantee, it is recommended to close the browser normally before shutting down the computer.
+
+---
+
+## Fix Priority and Dependencies
 
 ```mermaid
 flowchart TD
     CS["Content Script 直接刪除<br/>核心架構變更"]
-    MW["標記即寫入<br/>追蹤時寫入 storage（不排 Alarm）"]
-    OS["新增 onStartup 補刪<br/>service-worker.js"]
+    MW["標記即寫入<br/>直接寫入 chrome.storage.sync<br/>（單一事實來源，不含 authToken，不排 Alarm）"]
+    TOKEN["本機 token 快取<br/>dss-last-auth-token（chrome.storage.local）"]
+    OS["新增 onStartup 補刪<br/>service-worker.js，讀取共用 sync 清單<br/>以本機 token 逐筆補刪，僅確認成功才移除"]
 
     CS --> CAP01["CAP-01 修正<br/>beforeunload 改用直接 fetch"]
     CS --> MW
     MW --> OS
+    TOKEN --> OS
     OS --> CAP02["CAP-02 修正<br/>關瀏覽器／關機後開機補刪"]
-
-    VERIFY["CAP-03 實測<br/>Navigation API 行為"] --> CAP03["CAP-03 依結果處理<br/>修補或記為已知限制"]
+    OS --> CROSSDEVICE["跨裝置補刪<br/>任一裝置皆可用自身 token 補刪共用佇列中的項目"]
 ```
 
-**建議實作順序：**
+**Recommended implementation order:**
 
-1. **PR-A（主線，殘留問題）**：CAP-01 + CAP-02（直接 fetch + 標記即寫入 + 新增 `onStartup` 補刪 + SW 退出即時路徑）。
-2. **CAP-03 實測**：先驗證 Navigation API 行為，再決定 PR-B 的內容（修補或記為已知限制）。
-3. **文件更新**：在 `docs/FEATURES.md` 新增限制說明。
+1. **PR-A (single-source-of-truth design, covers CAP-01 + CAP-02 + cross-device from the start)**: Direct `fetch` for real-time deletion + write-on-mark directly to `chrome.storage.sync` + `dss-last-auth-token` persistence + new `onStartup` remediation that reads the shared queue and removes entries only on confirmed delete success + SW removed from the real-time path.
+2. **Documentation update**: Add the limitation description (including the sync write-rate quota caveat) to `docs/FEATURES.md`, and the sync-scope note to `PRIVACY.md`.
 
 ---
 
-## 測試驗證清單
+## Test Verification Checklist
 
-| 場景 | 預期行為 | 對應問題 |
+| Scenario | Expected Behavior | Corresponding Issue |
 |-|-|-|
-| SPA 內正常導航離開暫時對話 | 對話被刪除，storage 待刪項目清除 | 迴歸 |
-| F5 / Ctrl+R 刷新 | 對話不被刪除，追蹤狀態保留 | 迴歸 |
-| 關閉分頁（正常網路） | keepalive fetch 即時刪除，storage 清除 | CAP-01 |
-| 關閉分頁（網路中斷） | keepalive 失敗，項目殘留，下次啟動 `onStartup` 補刪 | CAP-01 / CAP-02 |
-| 關閉整個瀏覽器後重開 | `onStartup` 補刪殘留項目 | CAP-02 |
-| 強制關機後重新開啟瀏覽器 | 待刪清單已持久化，`onStartup` 補刪 | CAP-02 |
-| **追蹤後仍停留在對話中（未離開）達數分鐘** | **對話不被刪除**（驗證未在追蹤時排程 Alarm、未誤刪進行中對話） | 安全迴歸 |
-| 標記對話後 auth token 過期 | 補刪失敗，符合已知限制，靜默放棄 | 已知限制 |
-| 網址列輸入相同 URL + Enter | 依 CAP-03 實測結果定義預期行為 | CAP-03 |
-| 網址列輸入不同 URL | 對話被刪除 | 迴歸 |
+| Normal SPA in-app navigation away from a temporary conversation | Conversation is deleted, pending-delete entry in the `chrome.storage.sync` queue is cleared | Regression |
+| F5 / Ctrl+R refresh | Conversation is not deleted, tracking state is preserved | Regression |
+| Closing a tab (network normal) | keepalive fetch deletes immediately, queue entry is cleared | CAP-01 |
+| Closing a tab (network disconnected) | keepalive fails, entry remains dangling in the queue, `onStartup` performs remediation on next startup | CAP-01 / CAP-02 |
+| Closing the entire browser and reopening | `onStartup` remediates the dangling entry | CAP-02 |
+| Reopening the browser after a forced shutdown | Pending-delete queue entry was already persisted; `onStartup` remediates | CAP-02 |
+| **Staying in a tracked conversation without leaving for several minutes** | **Conversation is not deleted** (verifies that an alarm is not scheduled at tracking time and an in-progress conversation is not mistakenly deleted) | Safety regression |
+| Auth token expires after conversation is marked | Remediation fails, consistent with the known limitation, silently gives up | Known limitation |
+| Typing a different URL in the address bar | Conversation is deleted | Regression |
+| Simulate a delete API call that returns a non-2xx response (or times out) | Entry is **not** removed from the queue; `attemptCount` is incremented and the entry remains for the next remediation attempt | Confirmed-deletion invariant |
+| Computer A tracks a conversation then is force-shut-down; computer B (same Chrome account, sync enabled, has previously logged into the same DeepSeek account) restarts | `onStartup` on computer B reads the shared queue, finds the entry, and deletes it using computer B's own `dss-last-auth-token`, removing it only after confirmed success | Layer 3 / Cross-device |
+| Same scenario, but computer B has never logged into that DeepSeek account (no local token) | Entry remains in the shared queue; no deletion attempted on computer B | Layer 3 / Cross-device, known limitation |
+| Inspect any `chrome.storage.sync` write during tracking | `authToken` is never present in the synced payload — only `chatUuid` and `attemptCount` | Layer 3 / Privacy regression |
+| Two devices attempt to remediate the same queue entry near-simultaneously | Both calls succeed (each returns HTTP 200); no error surfaces to the user | Layer 3 / Idempotency |
+| Re-deleting an already-deleted conversation | API returns HTTP 200 with `code: 0`; the entry is treated as confirmed success and removed (not retried, not dropped as a failure) | Idempotency (verified) |
+| A `chrome.storage.onChanged` (sync) event fires on the **originating** device right after write-on-mark, while the user is still in the conversation | The currently-open conversation is **not** deleted by the sync-triggered sweep (guard excludes the live/open UUID); only entries not open on this device are remediated | Sync-change safeguard |
+| Track/untrack more than ~120 temporary conversations within one minute | Some `chrome.storage.sync` writes are throttled; no tracking record is silently lost (throttled writes are logged/retried, not swallowed) | Layer 3 / Write-quota limitation |

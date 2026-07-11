@@ -103,3 +103,9 @@
   - `beforeunload`：涵蓋關閉分頁／瀏覽器與整頁導航；當目前 UUID 等於追蹤 UUID、未被抑制、且有 token 時，以 `keepalive: true` 刪除。
 - **生命週期**：監聽於「開關開啟」或「存在追蹤中的臨時 UUID」任一成立時保持掛載；標記新對話僅在開關開啟時進行；刪除已追蹤對話不受開關關閉影響；追蹤對象清空且開關關閉後才卸除監聽。
 - **獨立性**：此功能不受彈出選單右上角主開關連動，僅由首頁開關獨立控制。
+- **兩層式刪除架構（v4.9.0）**：
+  - **Layer 1（即時路徑，content script）**：SPA 導航沿用 Fiber/API 刪除；`beforeunload`（關閉分頁／瀏覽器）改為直接 `fetch(keepalive: true)`，不再經過 Service Worker 中繼，消除 IPC 競態。刪除成功（API 明確回傳成功）才移除待刪項目。
+  - **Layer 2（補救路徑，Service Worker，僅 `onStartup` 觸發）**：擴充既有的 `chrome.runtime.onStartup` 監聽器（原用於雲端預設集同步），讀取共用待刪佇列並以本機 `dss-last-auth-token` 逐筆補刪，僅確認成功後才移除項目，失敗則累加 `attemptCount` 並保留供下次補救。
+  - **跨裝置單一事實來源**：待刪佇列（`dss-pending-deletes-sync`）僅存在於 `chrome.storage.sync`，不設本機獨立副本；任一登入同一 Chrome 帳戶的裝置皆可用自身的 `dss-last-auth-token` 補刪佇列中的任何項目，無論該項目是否由自己標記。
+  - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描時排除本機裝置目前開啟中的臨時對話 UUID（`dss-open-temp-uuids`，僅本機儲存），避免誤刪使用者正在使用的對話。
+  - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid` 與 `attemptCount`。

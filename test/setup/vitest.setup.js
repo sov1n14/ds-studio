@@ -56,10 +56,31 @@ const { chrome } = await import('jest-chrome');
 
 // Override storage with working in-memory mocks (jest-chrome's storage
 // mocks are plain jest.fn() that don't invoke callbacks → tests hang).
-const storageMock = { local: new InMemoryStorageMock(), sync: new InMemoryStorageMock() };
+const storageMock = { local: new InMemoryStorageMock('local'), sync: new InMemoryStorageMock('sync') };
 chrome.storage.local = storageMock.local;
 chrome.storage.sync = storageMock.sync;
-chrome.storage.onChanged = storageMock.local.onChanged;
+// Fan-in dispatcher: a single addListener(l) call registers the listener on
+// BOTH area mocks, so it receives notifications with the correct areaName
+// ('local' or 'sync') regardless of which area triggered the change.
+const onChangedListeners = [];
+chrome.storage.onChanged = {
+    addListener: (listener) => {
+        onChangedListeners.push(listener);
+        storageMock.local.onChanged.addListener(listener);
+        storageMock.sync.onChanged.addListener(listener);
+    },
+    removeListener: (listener) => {
+        const idx = onChangedListeners.indexOf(listener);
+        if (idx !== -1) onChangedListeners.splice(idx, 1);
+        storageMock.local.onChanged.removeListener(listener);
+        storageMock.sync.onChanged.removeListener(listener);
+    },
+    // Test helper (mirrors jest-chrome's Event.callListeners): manually invoke all
+    // registered listeners, e.g. to simulate a storage change from another context.
+    callListeners: (changes, areaName) => {
+        onChangedListeners.forEach((l) => l(changes, areaName));
+    },
+};
 // jest-chrome provides flush() for its own onChanged; not needed after replacement
 
 globalThis.chrome = chrome;

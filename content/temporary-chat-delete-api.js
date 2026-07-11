@@ -50,17 +50,18 @@ const TemporaryChatDeleteApi = (() => {
      * 僅用於導航觸發的刪除（分頁仍開啟，不需要 keepalive）。
      * @param {string} chatUuid
      * @param {string} authToken
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>} 任一次嘗試成功回傳 true；全部失敗回傳 false
      */
     async function deleteChatSessionWithRetry(chatUuid, authToken) {
         for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             const isSuccess = await deleteChatSession(chatUuid, authToken, { keepalive: false });
-            if (isSuccess) return;
+            if (isSuccess) return true;
             if (attempt < MAX_RETRY_ATTEMPTS) {
                 await new Promise(resolve => setTimeout(resolve, RETRY_INTERVAL_MS));
             }
         }
         showDeleteFailedToast();
+        return false;
     }
 
     /**
