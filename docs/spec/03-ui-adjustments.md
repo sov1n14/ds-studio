@@ -72,7 +72,7 @@
 - **路由變更**：切換對話時中止進行中的捲動、重設狀態、移除舊按鈕，待 DOM 穩定後經由 `_tryConnectDom()` 閘控重試迴圈重新注入——持續重試至輸入區包裝容器或原生按鈕就緒為止（每 500ms × 最多 120 次），取代舊有的一次性無重試注入，從根本上消除 SPA 路由切換時因 DOM 未就緒而按鈕不顯示的競爭問題。
 - **捲動至頂部（可點擊中止）**：`scrollToTopAndWait()` 提供公開 API（供 Markdown 匯出整合），分段 `scrollBy(0, -0.9 * viewportHeight)` 搭配 MutationObserver 等待延遲載入，最長 30 秒逾時。捲動期間按鈕**全程維持可點**（`aria-disabled` 恆為 `"false"`，不再於捲動期間禁用）；若捲動進行中再次點擊，會以 `reason: 'stopped-by-user'` 中止目前捲動於當下位置、**不重新開始**（切換式），再次點擊才會重新捲動。
 - **鍵盤與無障礙**：`<div role="button" tabindex="0">`，支援 Enter / Space 鍵盤觸發；`aria-label="回到頂部"`；`aria-disabled` 全程維持 `"false"`。
-- **實作位置**：`content/go-top.js` + `content/go-top.css`；公開 API 掛載於 `window.DSStudio.GoToTop`。
+- **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動動畫引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
 
 ## 19. 行動裝置側欄滑動手勢 (Mobile Sidebar Swipe)
 
@@ -98,3 +98,11 @@
   - `disable()`：解除觸控事件監聽、清除輪詢計時器、重設手勢狀態。
   - `destroy()`：委派給 `disable()`。
 - **實作位置**：`content/mobile-sidebar-swipe.js`；公開 API 掛載於 `window.DSStudio.MobileSidebarSwipe`。
+
+## 20. 行動版首頁清理 (Mobile Homepage Cleanup) — v4.1.0
+
+- **目的**：在行動版 DeepSeek 首頁自動清理 DOM 元素，優化行動裝置的使用體驗。
+- **實作位置**：`content/mobile-homepage-cleanup.js`。
+- **功能**：自動移除/隱藏特定類別選擇器（`._9579690`）的 DOM 元素。
+- **主開關連動**：完全跟隨擴充功能主開關（`isEnabled`），無獨立開關。
+- **SPA 韌性**：透過 MutationObserver 監控 DOM 變化，在 SPA 導航後重新套用清理邏輯。

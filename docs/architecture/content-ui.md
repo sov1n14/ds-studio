@@ -52,7 +52,7 @@ The `HideThinking` module in `content/hide-thinking.js` auto-collapses DeepSeek'
 ### DOM Targeting
 
 - **Container selector**: `._74c0879` — the wrapper element for each thinking block.
-- **Header selector**: `._245c867` (primary) with `._5ab5d64` as fallback — the clickable toggle header inside the container.
+- **Header selector**: `._245c867` — the clickable toggle header inside the container. (Note: `._5ab5d64` does NOT exist as a fallback in `hide-thinking.js`; that class is used only in the unrelated `censor-reply-restore.dom.js`.)
 - **Expanded indicator**: Presence of a `.ds-think-content` child inside the container. Blocks without `.ds-think-content` are already collapsed and are skipped.
 - **Collapse marker**: `data-ht-collapsed="1"` is written to the container element after the collapse click. Guards against re-processing blocks that were already collapsed in the current session.
 

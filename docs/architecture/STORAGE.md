@@ -42,6 +42,7 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `dsLocalAuth` | `string[]` | `[]` | (v4.7.2) Pending-retry queue of keys whose sync write failed and fell back to local. No longer used to pin/override reads — `retrySync()` drains it. (v4.8.2) Never contains a permanently-oversized key — those are filtered out by the 8KB guard before reaching this queue. |
 | `dsOversizedKeys` | `string[]` | `[]` | (v4.8.2) Local-only tracking list of keys whose serialized value exceeds `QUOTA_BYTES_PER_ITEM` (8192 bytes) and can therefore never sync. Self-healing: a key is removed the next time it's written at a size at or under the limit. |
 | `dsPresetTombstones` | `Object<id, deletedAt>` | `{}` | (v4.8.3) Deletion tombstone map for prompt presets, synced to both `local` and `sync`. Consulted by `mergePresets()` so a preset deleted on one device is not resurrected by a stale copy still present on another device during conflict-resolution merge. Merged (keeping the newer `deletedAt` per id) and pruned (30-day retention) inside `resolveSyncConflict()`. |
+| `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | (v4.6.2) Recency timestamp for preset ordering. Used by `_pickPresetOrderByRecency()` during conflict resolution to select which side's order is newer. |
 | `promptPresets` | `PromptPreset[]` | — | *Retired as a storage key in v1.7.0*: Replaced by `dsPresetIndex` + `dsPreset_<id>` per-key format. Still composed as a runtime property in `getSettings()` return value. |
 
 ### PromptPreset Interface
@@ -91,7 +92,7 @@ To bypass Chrome's 8KB per-item sync quota (which `chatPresetMap` reached at ~17
 **Invariants:**
 - A uuid appears in **at most one** chunk.
 - `chunkCount >= 0`. When 0, the logical map is empty and no `chatPresetMap_*` keys exist.
-- `chunkSizes[i] = JSON.stringify(chunk_i).length` (byte-accurate for ASCII payload).
+- `chunkSizes[i] = this._byteLen(chunk_i)` (UTF-8 byte accurate via TextEncoder, see Dual-Storage Architecture section for `_byteLen()` details).
 - The empty map `{}` has JSON.stringify length 2.
 - `version` is strictly monotonic: incremented by exactly 1 on every successful write. No-op operations (same-value bind, unknown-uuid unbind, empty-diff mutate) do not bump version. Reserved as a concurrency token for Method D.
 

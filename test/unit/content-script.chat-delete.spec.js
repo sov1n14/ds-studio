@@ -38,6 +38,21 @@ global.TemporaryChatDeleteApi = {
     showDeleteFailedToast: vi.fn(),
 };
 
+// ── TemporaryChatPendingStore mock ──────────────────────────────────────────────
+global.TemporaryChatPendingStore = {
+    getPendingDeletes: vi.fn().mockResolvedValue([]),
+    savePendingDeletes: vi.fn().mockResolvedValue(undefined),
+    addPendingDelete: vi.fn().mockResolvedValue(undefined),
+    removePendingDelete: vi.fn().mockResolvedValue(undefined),
+    getOpenUuids: vi.fn().mockResolvedValue([]),
+    addOpenUuid: vi.fn().mockResolvedValue(undefined),
+    removeOpenUuid: vi.fn().mockResolvedValue(undefined),
+    clearOpenUuids: vi.fn().mockResolvedValue(undefined),
+    getLastAuthToken: vi.fn().mockResolvedValue(null),
+    setLastAuthToken: vi.fn().mockResolvedValue(undefined),
+    trackForDeletion: vi.fn().mockResolvedValue(undefined),
+};
+
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -49,8 +64,8 @@ function setPathname(path) {
 // Those tests are covered in temporary-chat-delete-api.spec.js.
 
 // ── beforeunload handler ──────────────────────────────────────────────────────
-// handleBeforeUnload now routes via chrome.runtime.sendMessage (keepalive: true path)
-// instead of calling fetch directly.
+// handleBeforeUnload now routes via TemporaryChatDeleteApi.deleteChatSession(uuid, token,
+// {keepalive:true}) directly (NOT chrome.runtime.sendMessage) on the tab-close path.
 
 describe('beforeunload handler (TemporaryChatDelete)', () => {
     beforeEach(() => {
@@ -58,6 +73,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         sessionStorage.clear();
         global.chrome.runtime.sendMessage.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.TemporaryChatDeleteApi.deleteChatSession.mockClear();
     });
 
     afterEach(() => {
@@ -66,7 +82,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         setPathname('/');
     });
 
-    it('calls chrome.runtime.sendMessage (not fetch) with keepalive payload when conditions are met', () => {
+    it('calls TemporaryChatDeleteApi.deleteChatSession(uuid, token, {keepalive:true}) not sendMessage when conditions are met', () => {
         const token = 'Bearer leave-token';
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
@@ -79,11 +95,8 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
-        const msg = global.chrome.runtime.sendMessage.mock.calls[0][0];
-        expect(msg.type).toBe('DSS_DELETE_TEMP_CHAT');
-        expect(msg.chatUuid).toBe(uuid);
-        expect(msg.authToken).toBe(token);
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).toHaveBeenCalledWith(uuid, token, { keepalive: true });
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
     it('does NOT call sendMessage when suppressNextUnloadDelete is true', () => {
@@ -98,6 +111,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
     });
 
     it('does NOT call sendMessage when isKeyboardRefresh is true', () => {
@@ -113,6 +127,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
     });
 
     it('does NOT call sendMessage when capturedAuthToken is null', () => {
@@ -128,6 +143,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
     });
 
     it('does NOT call sendMessage when URL has no chat UUID', () => {
@@ -142,6 +158,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
     });
 
     it('does NOT call sendMessage when current URL uuid does not match trackedTemporaryUuid', () => {
@@ -158,5 +175,6 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
     });
 });

@@ -31,9 +31,19 @@ This ensures merely opening a popup on a new chat page and selecting a preset, t
 The `PresetOverlay` module (coordinated by `content/content-script.js` via factory, with UI logic split across `preset-overlay.controller.js`, `preset-overlay.resolvers.js`, `preset-overlay.styles.js`, `preset-dropdown.component.js`, `preset-dropdown.position.js`, and `preset-settle.scheduler.js`) renders a floating dropdown centered on the chat title bar (`div._2be88ba`) on the DeepSeek page, enabling preset switching without opening the popup.
 
 **DOM Structure**:
-- A `<div id="dss-preset-overlay">` wrapper is absolutely positioned at `top: 50%; left: 50%; transform: translate(-50%, -50%)` within the title bar (`z-index: 1000`).
-- A `<select id="dss-preset-select">` element is styled with a dark semi-transparent background (`rgba(0,0,0,0.45)`), white text, rounded corners, and a 200px max-width. The title bar gets `position: relative !important` via the selector `._2be88ba:not(._1551317)` to serve as the positioning anchor — the `:not(._1551317)` exclusion preserves DeepSeek's native `position: absolute` on new conversation pages, preventing layout breakage of the welcome screen (`_9a2f8e4`).
+- A `<div id="dss-preset-overlay" role="combobox">` wrapper acts as the custom combobox container. Its positioning is dynamically computed per-frame by `content/preset-dropdown.position.js`'s `computePlacement()` (not static CSS) — see positioning modes below.
+- Inside, a `<button class="dss-preset-trigger">` shows the currently selected preset name, and a `<ul id="dss-preset-menu" role="listbox">` dropdown lists available presets. The title bar gets `position: relative !important` via the selector `._2be88ba:not(._1551317)` to serve as the positioning anchor — the `:not(._1551317)` exclusion preserves DeepSeek's native `position: absolute` on new conversation pages, preventing layout breakage of the welcome screen (`_9a2f8e4`).
 - CSS is injected via `injectOverlayStyles()` with a guard (`#dss-overlay-style`) to prevent duplicate injection, and can be removed entirely via `removeOverlayStyles()`.
+
+#### Responsive Positioning (v4.2.0–v4.2.2)
+
+The overlay uses three placement modes computed by `content/preset-dropdown.position.js`:
+
+- **Center mode** (viewport ≥ 768px): Centered vertically (`top: 50%; transform: translateY(-50%)`) within the title bar container. Horizontal position is dynamically set via inline `left` and `width` by `computePlacement()`.
+- **Gap mode** (< 768px): Positioned in the gap between the chat title's right edge and the new-chat button's left edge. A bounded settle retry loop (`preset-settle.scheduler.js`) polls the button's `left` position every animation frame until it stabilizes for 3 consecutive frames, preventing incorrect early measurements during page load.
+- **Hidden mode**: Overlay hidden entirely when the gap is too small.
+
+Supporting infrastructure includes a `ResizeObserver` on the target element and a window resize listener with rAF throttling.
 
 **Lifecycle**:
 1. `start(presets, activeId, enable)` — called from `initSettings()` after `setupNavigationDetection()`. Injects overlay styles, sets up the DOM observer, finds and mounts to the title bar, renders the preset list, and sets initial visibility based on the `enable` parameter (tied to the master switch `isEnabled`).
@@ -52,12 +62,12 @@ The `PresetOverlay` module (coordinated by `content/content-script.js` via facto
 - `findAndMount()` avoids redundant mounts by comparing `this.targetEl` with the found element.
 
 **ARIA and Accessibility**:
-The custom preset dropdown follows ARIA authoring practices:
-- The trigger has `role="combobox"`, `aria-haspopup="listbox"`, and `aria-expanded`.
-- The panel has `role="listbox"` and `aria-label="提示詞組清單"`.
+The overlay dropdown follows ARIA authoring practices:
+- The trigger (`<div id="dss-preset-overlay">`) has `role="combobox"`, `aria-haspopup="listbox"`, and `aria-expanded`.
+- The menu (`<ul id="dss-preset-menu">`) has `role="listbox"` and `aria-label="提示詞組清單"`.
 - Each preset item has `role="option"`.
-- Action buttons (edit, delete) have `aria-label` attributes.
-- The drag handle has `aria-hidden="true"` since drag is an enhancement not available to all input modalities.
+- Keyboard navigation: Up/Down arrows cycle through options, Enter selects, Escape closes.
+- (The popup's `custom-select.js` has its own ARIA attributes for edit/delete buttons and drag handles — separate from this overlay component.)
 
 ## Empty Preset (No-Op Mode)
 
@@ -78,7 +88,9 @@ The popup includes two distinct feedback mechanisms:
 
 **Sync Status Indicator** (added v2.0.0):
 - **DOM**: A `<span id="syncStatus">` element immediately after `#saveStatus` in the popup header.
-- **API** (`popup.js`): `refreshSyncStatus()` — calls `StorageManager.isSyncedWithCloud()`, toggles the `.synced` or `.unsynced` CSS class, and sets the text to `雲端同步` (green) or `未同步` (red). Called after every storage write and on initialization. Errors are silently swallowed — the indicator is informational only.
+- **API** (`popup.js`): `refreshSyncStatus()` — calls `StorageManager.isSyncedWithCloud()` and `StorageManager.hasOversizedItems()` (v4.8.2), toggles the `.synced` or `.unsynced` CSS class, and sets the text to `雲端同步` (green), `未同步` (red), or `內容過大，僅存本機` (red, oversized).
+
+There are three sync states: `synced` (green), `unsynced` (red, transient), and `oversized` (red, permanent — keys exceed 8KB sync limit). Called after every storage write and on initialization. Errors are silently swallowed — the indicator is informational only.
 - **CSS**: `#syncStatus.synced { color: var(--success-color) }` and `#syncStatus.unsynced { color: #dc2626 }`.
 
 **Toast Notification**:
@@ -88,3 +100,4 @@ The popup includes two distinct feedback mechanisms:
   - **JSON export success**: "設定已成功匯出" displayed for 2 seconds.
   - **JSON import success**: "設定已成功還原，請重新整理頁面。" displayed for 2 seconds (followed by page reload at 3s).
   - **Sync resolution success**: "資料已成功合併同步" displayed for 2 seconds (followed by page reload at 1s).
+- **Backup/restore operations**: "設定已成功匯出", "匯出失敗", "設定已成功還原", "復原備份已匯出", "復原備份已匯入", "已清除所有已還原紀錄", "清除失敗" — all driven by `popup/popup.backup-manager.js`.

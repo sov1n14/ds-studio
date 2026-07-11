@@ -17,7 +17,7 @@ Since v2.6.0, the export engine uses a scroll-and-harvest loop to capture the fu
    - **GoToTop** — calls `GoToTop.scrollToTopAndWait()` to anchor the virtual list at position 0.
 4. A non-blocking floating progress toast is shown to the user (styled via `go-top.css`, `pointer-events: none` so it does not block interaction).
 5. The harvest loop incrementally scrolls from top to bottom, waiting for DOM stability after each step via `MutationObserver` (see the Harvest Module section below for details).
-6. Each message node is cloned as it enters the viewport, deduplicated by a composite key (turn index + role), and collected.
+6. Each message node is cloned as it enters the viewport, deduplicated by the numeric `data-virtual-list-item-key` DOM attribute, and collected.
 7. Bottom detection uses 3 consecutive confirmations that `scrollTop + clientHeight >= scrollHeight` to ensure the list is fully loaded.
 8. A safety net detects external scroll jumps (e.g., React re-renders) and aborts with partial export.
 9. On completion, the original scroll position is restored. On timeout (120s), partial content is exported with a warning footer.
@@ -55,7 +55,7 @@ The popup includes a Backup & Restore card with four buttons:
 **JSON Import**: Opens a file picker (`<input type="file" accept=".json">`). After parsing the JSON, calls `StorageManager.restoreSettings(importedSettings)` which:
 - Merges `promptPresets` using `mergePresets()` (preserve newest by `updatedAt`, append new IDs).
 - Merges `chatPresetMap` (spread merge: local base + imported additions).
-- Overwrites other UI settings (global default prompt, isEnabled, includeThinking/References, sidebar auto-hide, chat width, input width, system time toggle).
+- Overwrites other UI settings (global default prompt, includeThinking/References, sidebar auto-hide, chat width, input width, system time toggle, activePresetId, chatWidthEnabled, inputWidthEnabled). **isEnabled** and **globalPromptEnabled** are device-local toggles (v4.7.3) and are **NOT** overwritten by import — each device keeps its own enable state.
 - After successful restore, shows a toast and reloads the popup after 3 seconds.
 
 **Censor-Restored Messages Backup/Restore/Clear**: The `restored_messages` dataset (stored in `chrome.storage.local` only) has dedicated buttons in the Backup & Restore card for exporting, importing, and clearing censored-message restoration data independently of general settings.
@@ -66,7 +66,7 @@ The popup includes a Backup & Restore card with four buttons:
 
 ### `harvestAllMessages()`
 
-The main export entry point. Returns an array of cloned DOM nodes (`Element[]`).
+The main export entry point. Returns `{ items: Element[], isComplete: boolean, reason?: string }` — an object containing the harvested DOM nodes, a completion flag, and an optional reason string (e.g., `'timeout'`, `'scroll_interrupted'`).
 
 **Pre-harvest setup:**
 1. Enables PreventAutoScroll to suppress DeepSeek's live-scroll behavior.
@@ -77,7 +77,7 @@ The main export entry point. Returns an array of cloned DOM nodes (`Element[]`).
 - Incrementally scrolls the conversation container using `scrollBy(0, viewportHeight * 0.9)`.
 - After each scroll step, a `MutationObserver` monitors the container for DOM changes (lazy-loaded messages). The step is considered "settled" after `HARVEST_STABLE_TICKS` (3) consecutive checks at `HARVEST_STABLE_INTERVAL` (150ms) intervals without mutations.
 - Clones each `.ds-message` node as it enters the viewport.
-- Deduplication via a `Map<string, Element>` keyed by `turnIndex-role` (a composite key derived from the message's position and type).
+- Deduplication via a `Map<number, Element>` keyed by the numeric `data-virtual-list-item-key` attribute value — a stable key assigned by DeepSeek's virtual list renderer.
 
 **Bottom detection:**
 - Checks if `scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - HARVEST_BOTTOM_TOLERANCE` (4px).
@@ -107,5 +107,5 @@ The main export entry point. Returns an array of cloned DOM nodes (`Element[]`).
 
 ### Exported API
 
-- `harvestAllMessages(options?)` — main harvest entry point
+- `harvestAllMessages()` — main harvest entry point (no parameters)
 - Exposed on `window.DSstudio.Harvest`

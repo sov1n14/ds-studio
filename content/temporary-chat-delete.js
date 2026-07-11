@@ -120,13 +120,15 @@ const TemporaryChatDelete = (() => {
     // ── 純工具函式 ───────────────────────────────────────────────────────────
 
     /**
-     * 從 URL pathname 擷取聊天 UUID（格式：/a/chat/s/<uuid>）。
-     * @param {string} [pathname] - 預設使用 window.location.pathname
+     * 從 URL（可為完整 href 或僅 pathname）擷取聊天 UUID（格式：/a/chat/s/<uuid>）。
+     * 正規表達式本身即會在 query string（?）或 hash（#）處停止比對，
+     * 故傳入完整 href 或僅 pathname 皆可正確擷取，無需額外剝離。
+     * @param {string} [urlOrPath] - 預設使用 window.location.pathname
      * @returns {string|null}
      */
-    function extractUuidFromUrl(pathname) {
-        const path = pathname !== undefined ? pathname : window.location.pathname;
-        const match = path.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
+    function extractUuidFromUrl(urlOrPath) {
+        const target = urlOrPath !== undefined ? urlOrPath : window.location.pathname;
+        const match = target.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
         return match ? match[1] : null;
     }
 
@@ -151,6 +153,7 @@ const TemporaryChatDelete = (() => {
             if (currentUuid) {
                 _trackedTemporaryUuid = currentUuid;
                 saveTrackedUuid(currentUuid);
+                TemporaryChatPendingStore.trackForDeletion(currentUuid);
                 _isPendingCreate = false;
             }
             return;
@@ -182,27 +185,39 @@ const TemporaryChatDelete = (() => {
         _trackedTemporaryUuid = null;
         saveTrackedUuid(null);
 
+        // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
+        // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
+        TemporaryChatPendingStore.removeOpenUuid(uuidToDelete);
+
         if (keepalive) {
-            // 分頁/瀏覽器關閉：透過 Service Worker 執行 keepalive fetch
-            chrome.runtime.sendMessage({
-                type: _getConst('DSS_SW_DELETE_MESSAGE_TYPE', 'DSS_DELETE_TEMP_CHAT'),
-                chatUuid: uuidToDelete,
-                authToken: tokenSnapshot,
-            });
+            // 分頁/瀏覽器關閉：直接以 keepalive fetch 執行刪除，確認成功後才移除待刪佇列項目
+            TemporaryChatDeleteApi.deleteChatSession(uuidToDelete, tokenSnapshot, { keepalive: true })
+                .then((isOk) => { if (isOk) TemporaryChatPendingStore.removePendingDelete(uuidToDelete); })
+                .catch(() => {});
+            // teardown 期間 .then 可能不執行 → 項目留在 sync 佇列，交由 onStartup 補救（confirmed-deletion invariant）
         } else {
             // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
             const FIBER_REQ = _getConst('DSS_FIBER_DELETE_MESSAGE_TYPE', 'DSS_FIBER_DELETE_SESSION');
             const FIBER_RES = _getConst('DSS_FIBER_DELETE_RESULT_TYPE', 'DSS_FIBER_DELETE_RESULT');
-            
+
             let fallbackTriggered = false;
             let timeoutId = null;
 
-            const fallbackToApi = () => {
+            const fallbackToApi = async () => {
                 if (fallbackTriggered) return;
                 fallbackTriggered = true;
                 window.removeEventListener('message', resultListener);
                 if (timeoutId) clearTimeout(timeoutId);
-                TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+                const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+                if (isOk) {
+                    TemporaryChatPendingStore.removePendingDelete(uuidToDelete);
+                } else {
+                    // 情境存活但重試耗盡 → 保留佇列項目，請 SW 排程 alarm 重試
+                    chrome.runtime.sendMessage({
+                        type: _getConst('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE', 'DSS_SCHEDULE_DELETE_RETRY'),
+                        chatUuid: uuidToDelete,
+                    });
+                }
             };
 
             const resultListener = (e) => {
@@ -213,6 +228,7 @@ const TemporaryChatDelete = (() => {
                 if (e.data.success) {
                     if (timeoutId) clearTimeout(timeoutId);
                     window.removeEventListener('message', resultListener);
+                    TemporaryChatPendingStore.removePendingDelete(uuidToDelete);
                 } else {
                     fallbackToApi();
                 }
@@ -243,6 +259,7 @@ const TemporaryChatDelete = (() => {
         if (e.source !== window) return;
         if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
         _capturedAuthToken = e.data.authorization || null;
+        if (e.data.authorization) TemporaryChatPendingStore.setLastAuthToken(e.data.authorization);
     }
 
     /**
@@ -272,6 +289,22 @@ const TemporaryChatDelete = (() => {
     }
 
     /**
+     * 處理來自 MAIN world history hook 的 SPA 導航訊息（DSS_HISTORY_NAV）。
+     * 建構合成的 NavigateEvent 物件並委派給 handleNavigationEvent。
+     * @param {MessageEvent} e
+     */
+    function handleHistoryNavMessage(e) {
+        if (e.source !== window) return;
+        if (e.data?.type !== 'DSS_HISTORY_NAV') return;
+        // 建構合成事件，使 handleNavigationEvent 可直接重用
+        const syntheticEvent = {
+            destination: { url: e.data.url },
+            navigationType: 'push',
+        };
+        handleNavigationEvent(syntheticEvent);
+    }
+
+    /**
      * 統一處理所有 postMessage（根據 type 路由至對應處理器）。
      * @param {MessageEvent} e
      */
@@ -279,6 +312,7 @@ const TemporaryChatDelete = (() => {
         handleAuthMessage(e);
         handleCreateMessage(e);
         handleCompletionMessage(e);
+        handleHistoryNavMessage(e);
     }
 
     /**
@@ -301,8 +335,13 @@ const TemporaryChatDelete = (() => {
 
         const fromUuid = extractUuidFromUrl();
 
-        // 離開臨時對話：非刷新且有追蹤 UUID 且與當前頁面 UUID 吻合
-        if (!isRefresh && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
+        // 目的地 UUID：即使目的地 URL 與目前 URL 僅差異於 query/hash，
+        // 只要對話 UUID 相同即視為「同一對話」的再導航，不應觸發刪除。
+        const destUuid = extractUuidFromUrl(destinationUrl);
+        const isSameConversation = !!destUuid && destUuid === _trackedTemporaryUuid;
+
+        // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
+        if (!isRefresh && !isSameConversation && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
             deleteTrackedAndClear({ keepalive: false });
         }
 
@@ -312,6 +351,7 @@ const TemporaryChatDelete = (() => {
             if (destinationUuid) {
                 _trackedTemporaryUuid = destinationUuid;
                 saveTrackedUuid(destinationUuid);
+                TemporaryChatPendingStore.trackForDeletion(destinationUuid);
                 _isPendingCreate = false;
             }
         }
@@ -342,7 +382,7 @@ const TemporaryChatDelete = (() => {
         if (currentUuid !== _trackedTemporaryUuid) return;
         if (!_capturedAuthToken) return;
 
-        // keepalive: true → 透過 SW 發送，確保分頁關閉後請求仍送出
+        // keepalive: true → 直接發送 keepalive fetch，確保分頁關閉後請求仍送出
         deleteTrackedAndClear({ keepalive: true });
     }
 
@@ -409,11 +449,18 @@ const TemporaryChatDelete = (() => {
         const CHANGED_EVENT = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
         window.addEventListener(CHANGED_EVENT, handleToggleChanged);
 
-        await initEnabledFlagFromStorage();
-
+        // 先恢復追蹤 UUID，再掛載監聽器，確保 handleWindowMessage（含 auth token 擷取）
+        // 在 await 之前即已就緒，避免 DSS_AUTH_CAPTURED 訊息在等待儲存時遺失
         _trackedTemporaryUuid = loadTrackedUuid();
 
-        if (_enabledFlagCache || _trackedTemporaryUuid) {
+        if (_trackedTemporaryUuid) {
+            attachListeners();
+        }
+
+        await initEnabledFlagFromStorage();
+
+        // await 返回後，若啟用旗標為 true 且監聽器尚未掛載，補充掛載
+        if (_enabledFlagCache && !_isListening) {
             attachListeners();
         }
     }
@@ -429,6 +476,7 @@ const TemporaryChatDelete = (() => {
         handleAuthMessage,
         handleCreateMessage,
         handleCompletionMessage,
+        handleHistoryNavMessage,
         handleWindowMessage,
         handleBeforeUnload,
         handleNavigationEvent,

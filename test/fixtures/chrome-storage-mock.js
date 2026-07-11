@@ -4,9 +4,10 @@
  * (e.g. for onChanged area discrimination, quota error simulation, etc.).
  */
 export class InMemoryStorageMock {
-    constructor() {
+    constructor(areaName = 'local') {
         this._data = {};
         this._listeners = [];
+        this._areaName = areaName;
     }
 
     get(keys, callback) {
@@ -65,7 +66,7 @@ export class InMemoryStorageMock {
             this._data[k] = items[k];
             changes[k] = { oldValue, newValue: items[k] };
         });
-        this._notify(changes, 'local');
+        this._notify(changes, this._areaName);
         if (callback) {
             setTimeout(() => callback(), 0);
         } else {
@@ -83,7 +84,7 @@ export class InMemoryStorageMock {
             }
         });
         if (Object.keys(changes).length > 0) {
-            this._notify(changes, 'local');
+            this._notify(changes, this._areaName);
         }
         if (callback) {
             setTimeout(() => callback?.(), 0);
@@ -99,7 +100,7 @@ export class InMemoryStorageMock {
         Object.keys(oldData).forEach(k => {
             changes[k] = { oldValue: oldData[k], newValue: undefined };
         });
-        this._notify(changes, 'local');
+        this._notify(changes, this._areaName);
         if (callback) {
             setTimeout(() => callback(), 0);
         } else {
@@ -136,8 +137,8 @@ export class InMemoryStorageMock {
  */
 export function createStorageMocks() {
     return {
-        local: new InMemoryStorageMock(),
-        sync: new InMemoryStorageMock(),
+        local: new InMemoryStorageMock('local'),
+        sync: new InMemoryStorageMock('sync'),
     };
 }
 

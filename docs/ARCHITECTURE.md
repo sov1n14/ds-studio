@@ -1,6 +1,6 @@
 # Architecture
 
-DS studio follows a standard Manifest V3 Chrome Extension architecture, focused on DOM interaction and content injection. The extension operates exclusively via content scripts injected into `chat.deepseek.com` and a popup UI — there is no background service worker.
+DS studio follows a standard Manifest V3 Chrome Extension architecture, focused on DOM interaction and content injection. The extension operates via content scripts injected into `chat.deepseek.com`, a popup UI, and a background service worker that handles periodic background tasks such as retrying failed temporary-chat deletions and cloud-sync scheduling.
 
 ## Directory Structure
 
@@ -18,6 +18,14 @@ ds-studio/
 │   ├── preset-dropdown.position.js  ─  Pure computePlacement(input) — no DOM access
 │   ├── preset-settle.scheduler.js   ─  Bounded settle retry loop (mobile position race condition)
 │   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
+│   ├── temporary-chat-constants.js  ─  Shared constants for temporary-chat feature (v4.5.0)
+│   ├── temporary-chat-toggle.js     ─  Homepage toggle UI for temporary chat (v4.5.0)
+│   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
+│   ├── temporary-chat-delete.js     ─  Delete logic for temporary conversations (v4.5.0)
+│   ├── temporary-chat-delete-api.js ─  Delete API fetch wrapper for temporary chat
+│   ├── temporary-chat-pending-store.js  ─  Pending-delete queue for cross-device remediation
+│   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
+│   ├── temporary-chat-fiber-delete.js   ─  React Fiber-based conversation deletion integration
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
@@ -40,6 +48,8 @@ ds-studio/
 │   ├── sse-parser.js *      ─  SSE stream parser (web accessible)
 │   ├── censor-xhr-hook.js * ─  XHR monkey-patch for SSE interception (web accessible)
 │   └── prevent-auto-scroll.js *       ─  Main-world auto-scroll patch (web accessible)
+├── background/                 ─  Service worker
+│   └── service-worker.js       ─  Background service worker: startup remediation, alarm-based retry, sync scheduling (v4.9.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
 │   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
@@ -49,6 +59,11 @@ ds-studio/
 │   ├── popup.preset-manager.js  ─  Preset CRUD helpers (createPresetManager ctx factory)
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
 │   ├── popup.live-sync.js   ─  chrome.storage.onChanged reactivity for the open popup (createLiveSyncListener ctx factory, v4.8.0)
+│   ├── custom-select.js        ─  Custom ARIA combobox component for preset selection (v1.9.0)
+│   ├── popup-utils.js          ─  ES module: debounce, fuzzyMatch utilities
+│   ├── popup.locale.js         ─  Language switcher UI (v4.3.3)
+│   ├── popup-modal.css         ─  Modal overlay styles
+│   ├── popup-select.css        ─  Custom select component styles
 │   └── editor/              ─  Standalone 1280×720 prompt editor (v3.0.0)
 │       ├── editor.html / editor.css
 │       └── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
@@ -63,6 +78,8 @@ ds-studio/
 │   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, globalPromptEnabled, restored_messages (v4.7.3 split)
 │   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
 │   ├── storage-manager.syncnow.js   ─  Unified syncNow() entry point (v4.7.0)
+│   ├── i18n.js                 ─  Internationalization system: locale switching, data-i18n attribute processing (v4.3.3)
+│   ├── logger.js               ─  Diagnostic logger, .warn() only after v4.8.4 cleanup
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
 ├── samples/                 ─  DOM reference HTML samples
 └── test/                    ─  Unit tests (Vitest only; integration tests removed v2.8.2)
@@ -116,6 +133,15 @@ per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) �
 - **Detach detection**: If `measure()` returns `null` after having returned a non-null value, the target element was removed mid-settle — stops with `'detached'`.
 - **Cancellation**: `unmount()` calls `cancel()` on the handle; the `_cancelled` guard prevents any already-scheduled frames from executing.
 - **Design**: Pure control logic — no DOM access. All interaction is injected via callbacks (`measure`, `apply`, `schedule`), keeping the module testable with a controlled frame queue.
+
+### Temporary Chat Deletion Architecture (v4.9.0)
+
+Temporary conversation deletion uses a two-layer architecture for reliability:
+
+- **Layer 1 (real-time, content script)**: `beforeunload` calls `fetch(..., { keepalive: true })` directly. SPA navigation uses Fiber/API deletion.
+- **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup` reads the shared pending-delete queue from `chrome.storage.sync` and retries each entry with the device's own locally-cached auth token.
+- **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any queue entry.
+- **Privacy**: `authToken` (`dss-last-auth-token`) is stored in `chrome.storage.local` only — never synced.
 
 ### Data Flow
 
