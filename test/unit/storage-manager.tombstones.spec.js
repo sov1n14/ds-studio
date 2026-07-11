@@ -1,16 +1,25 @@
 /**
- * StorageManager — tombstone-based deletion sync (v4.8.x fix)
+ * StorageManager — tombstone-based deletion sync (v4.8.x fix, entry-shape fix)
+ *
+ * Tombstone entry shape (current): { [id]: { ts: number, deleted: boolean } }
+ * Legacy shape (pre-fix, still accepted on read via normalizeTombstoneEntry/Map):
+ *   { [id]: deletedAtTimestamp }  — treated as { ts: deletedAtTimestamp, deleted: true }
  *
  * Covers:
  *   - Pure helpers: _mergeTombstones, _pruneTombstones, _isTombstonedAway
+ *     (new object shape, backward-compat with legacy bare-number shape,
+ *     and the deleted:true/false resurrection-guard scenarios)
  *   - mergePresets() tombstone-aware exclusion (stale local / stale sync / symmetric)
  *   - Newer edit surviving a tombstone (no over-deletion)
- *   - 30-day retention pruning
+ *   - 30-day retention pruning (both deleted:true and deleted:false entries)
  *   - savePromptPresets() writing tombstones to both local + sync on delete
  *   - resolveSyncConflict() end-to-end tombstone resolution
  *   - Regression: original cross-device resurrection bug scenario
  *   - _get() persisting a sync-wins PRESET_INDEX/PRESET_ORDER_META to local storage
  *   - Delete-vs-newer-edit race: genuine conflict must not be auto-resolved as a safe deletion
+ *   - clearPresetTombstones() BUG FIX: writes { ts, deleted: false } instead of
+ *     deleting the map key, so a newer "cleared" intent can beat a stale "deleted"
+ *     tombstone still held by an unsynced device (see _mergeTombstones ts-wins rule)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
@@ -31,64 +40,108 @@ function makePreset(overrides = {}) {
 
 describe('StorageManager._mergeTombstones (pure helper)', () => {
     it('unions ids from both sides', () => {
-        const local = { a: 100 };
-        const sync = { b: 200 };
+        const local = { a: { ts: 100, deleted: true } };
+        const sync = { b: { ts: 200, deleted: true } };
         const merged = StorageManager._mergeTombstones(local, sync);
-        expect(merged).toEqual({ a: 100, b: 200 });
+        expect(merged).toEqual({ a: { ts: 100, deleted: true }, b: { ts: 200, deleted: true } });
     });
 
-    it('picks the newer deletedAt when the same id exists on both sides', () => {
-        const local = { a: 100 };
-        const sync = { a: 300 };
-        expect(StorageManager._mergeTombstones(local, sync)).toEqual({ a: 300 });
+    it('picks the entry with the newer ts when the same id exists on both sides (including its deleted value)', () => {
+        const local = { a: { ts: 100, deleted: true } };
+        const sync = { a: { ts: 300, deleted: true } };
+        expect(StorageManager._mergeTombstones(local, sync)).toEqual({ a: { ts: 300, deleted: true } });
 
-        const local2 = { a: 300 };
-        const sync2 = { a: 100 };
-        expect(StorageManager._mergeTombstones(local2, sync2)).toEqual({ a: 300 });
+        const local2 = { a: { ts: 300, deleted: true } };
+        const sync2 = { a: { ts: 100, deleted: true } };
+        expect(StorageManager._mergeTombstones(local2, sync2)).toEqual({ a: { ts: 300, deleted: true } });
     });
 
     it('handles undefined/null/empty inputs', () => {
         expect(StorageManager._mergeTombstones(undefined, undefined)).toEqual({});
         expect(StorageManager._mergeTombstones(null, null)).toEqual({});
-        expect(StorageManager._mergeTombstones({ a: 1 }, null)).toEqual({ a: 1 });
-        expect(StorageManager._mergeTombstones(null, { b: 2 })).toEqual({ b: 2 });
+        expect(StorageManager._mergeTombstones({ a: { ts: 1, deleted: true } }, null)).toEqual({ a: { ts: 1, deleted: true } });
+        expect(StorageManager._mergeTombstones(null, { b: { ts: 2, deleted: true } })).toEqual({ b: { ts: 2, deleted: true } });
     });
 
     it('does not mutate the input objects', () => {
-        const local = { a: 100 };
-        const sync = { a: 300 };
+        const local = { a: { ts: 100, deleted: true } };
+        const sync = { a: { ts: 300, deleted: true } };
         StorageManager._mergeTombstones(local, sync);
-        expect(local).toEqual({ a: 100 });
-        expect(sync).toEqual({ a: 300 });
+        expect(local).toEqual({ a: { ts: 100, deleted: true } });
+        expect(sync).toEqual({ a: { ts: 300, deleted: true } });
+    });
+
+    it('BUG FIX: a newer "cleared" (deleted:false) entry beats a stale "deleted" (deleted:true) entry on the other side', () => {
+        const T1 = 1_000_000_000_000;
+        const T2 = T1 + DAY_MS;
+        const local = { a: { ts: T2, deleted: false } }; // re-imported / restored more recently
+        const sync = { a: { ts: T1, deleted: true } }; // stale device still thinks it's deleted
+        const merged = StorageManager._mergeTombstones(local, sync);
+        expect(merged).toEqual({ a: { ts: T2, deleted: false } });
+        expect(StorageManager._isTombstonedAway(merged, 'a', 0)).toBe(false);
+    });
+
+    it('a newer "deleted" entry beats a stale "cleared" entry on the other side (re-delete after restore)', () => {
+        const T1 = 1_000_000_000_000;
+        const T2 = T1 + DAY_MS;
+        const local = { a: { ts: T1, deleted: false } }; // stale device still thinks it was restored
+        const sync = { a: { ts: T2, deleted: true } }; // deleted again more recently, elsewhere
+        const merged = StorageManager._mergeTombstones(local, sync);
+        expect(merged).toEqual({ a: { ts: T2, deleted: true } });
+        expect(StorageManager._isTombstonedAway(merged, 'a', 0)).toBe(true);
+    });
+
+    it('BACKWARD-COMPAT: normalizes a legacy bare-number entry (different id) alongside a new-shape entry', () => {
+        const local = { a: 1_700_000_000_000 }; // legacy shape
+        const sync = { b: { ts: 1_800_000_000_000, deleted: true } }; // new shape
+        const merged = StorageManager._mergeTombstones(local, sync);
+        expect(merged).toEqual({
+            a: { ts: 1_700_000_000_000, deleted: true },
+            b: { ts: 1_800_000_000_000, deleted: true },
+        });
+    });
+
+    it('BACKWARD-COMPAT: same id with a legacy bare-number entry on one side and a new-shape entry on the other — newer ts wins', () => {
+        const legacyTs = 1_700_000_000_000;
+        const newerNewShape = { ts: legacyTs + DAY_MS, deleted: false };
+        const local = { a: legacyTs }; // legacy bare number, implicitly deleted:true
+        const sync = { a: newerNewShape };
+        expect(StorageManager._mergeTombstones(local, sync)).toEqual({ a: newerNewShape });
+
+        // Reversed: legacy side is newer, so it wins (normalized to deleted:true).
+        const olderNewShape = { ts: legacyTs - DAY_MS, deleted: false };
+        const local2 = { a: olderNewShape };
+        const sync2 = { a: legacyTs };
+        expect(StorageManager._mergeTombstones(local2, sync2)).toEqual({ a: { ts: legacyTs, deleted: true } });
     });
 });
 
 describe('StorageManager._pruneTombstones (pure helper)', () => {
     it('keeps entries within the 30-day retention window', () => {
         const now = 1_000_000_000_000;
-        const tombstones = { a: now - (29 * DAY_MS) };
-        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({ a: now - (29 * DAY_MS) });
+        const tombstones = { a: { ts: now - (29 * DAY_MS), deleted: true } };
+        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({ a: { ts: now - (29 * DAY_MS), deleted: true } });
     });
 
     it('prunes entries strictly older than the 30-day retention window', () => {
         const now = 1_000_000_000_000;
-        const tombstones = { a: now - (31 * DAY_MS) };
+        const tombstones = { a: { ts: now - (31 * DAY_MS), deleted: true } };
         expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({});
     });
 
-    it('keeps an entry exactly at the retention boundary (now - deletedAt === 30 days)', () => {
+    it('keeps an entry exactly at the retention boundary (now - ts === 30 days)', () => {
         const now = 1_000_000_000_000;
-        const tombstones = { a: now - (30 * DAY_MS) };
-        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({ a: now - (30 * DAY_MS) });
+        const tombstones = { a: { ts: now - (30 * DAY_MS), deleted: true } };
+        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({ a: { ts: now - (30 * DAY_MS), deleted: true } });
     });
 
     it('handles a mix of expired and live entries', () => {
         const now = 1_000_000_000_000;
         const tombstones = {
-            live: now - (1 * DAY_MS),
-            expired: now - (40 * DAY_MS),
+            live: { ts: now - (1 * DAY_MS), deleted: true },
+            expired: { ts: now - (40 * DAY_MS), deleted: true },
         };
-        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({ live: now - (1 * DAY_MS) });
+        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({ live: { ts: now - (1 * DAY_MS), deleted: true } });
     });
 
     it('handles undefined/null/empty input', () => {
@@ -96,26 +149,50 @@ describe('StorageManager._pruneTombstones (pure helper)', () => {
         expect(StorageManager._pruneTombstones(null)).toEqual({});
         expect(StorageManager._pruneTombstones({})).toEqual({});
     });
+
+    it('prunes entries past retention regardless of deleted value (both true and false), while retaining fresh entries of both', () => {
+        const now = 1_000_000_000_000;
+        const tombstones = {
+            staleDeleted: { ts: now - (40 * DAY_MS), deleted: true },
+            staleCleared: { ts: now - (40 * DAY_MS), deleted: false },
+            freshDeleted: { ts: now - (1 * DAY_MS), deleted: true },
+            freshCleared: { ts: now - (1 * DAY_MS), deleted: false },
+        };
+        expect(StorageManager._pruneTombstones(tombstones, now)).toEqual({
+            freshDeleted: { ts: now - (1 * DAY_MS), deleted: true },
+            freshCleared: { ts: now - (1 * DAY_MS), deleted: false },
+        });
+    });
 });
 
 describe('StorageManager._isTombstonedAway (pure decision fn)', () => {
     it('returns false when no tombstone exists for the id', () => {
         expect(StorageManager._isTombstonedAway({}, 'a', 100)).toBe(false);
-        expect(StorageManager._isTombstonedAway({ b: 100 }, 'a', 100)).toBe(false);
+        expect(StorageManager._isTombstonedAway({ b: { ts: 100, deleted: true } }, 'a', 100)).toBe(false);
     });
 
-    it('returns true when deletedAt >= referenceUpdatedAt (stale content, deletion wins)', () => {
-        expect(StorageManager._isTombstonedAway({ a: 500 }, 'a', 100)).toBe(true);
-        expect(StorageManager._isTombstonedAway({ a: 500 }, 'a', 500)).toBe(true); // equal → still tombstoned
+    it('returns true when ts >= referenceUpdatedAt and deleted === true (stale content, deletion wins)', () => {
+        expect(StorageManager._isTombstonedAway({ a: { ts: 500, deleted: true } }, 'a', 100)).toBe(true);
+        expect(StorageManager._isTombstonedAway({ a: { ts: 500, deleted: true } }, 'a', 500)).toBe(true); // equal → still tombstoned
     });
 
-    it('returns false when referenceUpdatedAt is strictly newer than deletedAt (later edit survives)', () => {
-        expect(StorageManager._isTombstonedAway({ a: 100 }, 'a', 500)).toBe(false);
+    it('returns false when referenceUpdatedAt is strictly newer than ts (later edit survives)', () => {
+        expect(StorageManager._isTombstonedAway({ a: { ts: 100, deleted: true } }, 'a', 500)).toBe(false);
     });
 
     it('treats a missing/undefined referenceUpdatedAt as 0', () => {
-        expect(StorageManager._isTombstonedAway({ a: 1 }, 'a', undefined)).toBe(true);
-        expect(StorageManager._isTombstonedAway({ a: 0 }, 'a', undefined)).toBe(true);
+        expect(StorageManager._isTombstonedAway({ a: { ts: 1, deleted: true } }, 'a', undefined)).toBe(true);
+        expect(StorageManager._isTombstonedAway({ a: { ts: 0, deleted: true } }, 'a', undefined)).toBe(true);
+    });
+
+    it('returns false whenever deleted !== true, regardless of how new the ts is', () => {
+        expect(StorageManager._isTombstonedAway({ a: { ts: 999999, deleted: false } }, 'a', 0)).toBe(false);
+        expect(StorageManager._isTombstonedAway({ a: { ts: 999999, deleted: false } }, 'a', undefined)).toBe(false);
+    });
+
+    it('BACKWARD-COMPAT: treats a legacy bare-number entry as deleted:true', () => {
+        expect(StorageManager._isTombstonedAway({ a: 500 }, 'a', 100)).toBe(true);
+        expect(StorageManager._isTombstonedAway({ a: 100 }, 'a', 500)).toBe(false);
     });
 });
 
@@ -123,7 +200,7 @@ describe('StorageManager.mergePresets() — tombstone-aware exclusion', () => {
     it('tombstone wins over stale local data (older updatedAt than deletion time)', () => {
         const base = [makePreset({ id: 'a', updatedAt: 100 })]; // stale local copy
         const incoming = []; // sync no longer has it
-        const tombstones = { a: 200 }; // deleted after the local copy's last edit
+        const tombstones = { a: 200 }; // deleted after the local copy's last edit (legacy shape, still accepted)
         const result = StorageManager.mergePresets(base, incoming, undefined, undefined, tombstones);
         expect(result.map(p => p.id)).not.toContain('a');
         expect(result).toHaveLength(0);
@@ -170,6 +247,14 @@ describe('StorageManager.mergePresets() — tombstone-aware exclusion', () => {
         expect(result[0].name).toBe('EditedLocally');
     });
 
+    it('a tombstone with deleted:false (cleared) never excludes the id, no matter how new its ts is', () => {
+        const base = [makePreset({ id: 'a', updatedAt: 100 })];
+        const incoming = [];
+        const tombstones = { a: { ts: 999999, deleted: false } };
+        const result = StorageManager.mergePresets(base, incoming, undefined, undefined, tombstones);
+        expect(result.map(p => p.id)).toEqual(['a']);
+    });
+
     it('works with no tombstones param (backward compatible, defaults to {})', () => {
         const base = [makePreset({ id: 'a', updatedAt: 100 })];
         const incoming = [];
@@ -183,16 +268,18 @@ describe('StorageManager.recordPresetTombstones()', () => {
         delete chrome.runtime.lastError;
     });
 
-    it('records a tombstone entry with the current timestamp for each deleted id', async () => {
+    it('records a tombstone entry with the current timestamp and deleted:true for each deleted id', async () => {
         const before = Date.now();
         await StorageManager.recordPresetTombstones(['a', 'b']);
         const after = Date.now();
 
         const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
         const tombstones = localAfter[K.PRESET_TOMBSTONES];
-        expect(tombstones.a).toBeGreaterThanOrEqual(before);
-        expect(tombstones.a).toBeLessThanOrEqual(after);
-        expect(tombstones.b).toBeGreaterThanOrEqual(before);
+        expect(tombstones.a.ts).toBeGreaterThanOrEqual(before);
+        expect(tombstones.a.ts).toBeLessThanOrEqual(after);
+        expect(tombstones.a.deleted).toBe(true);
+        expect(tombstones.b.ts).toBeGreaterThanOrEqual(before);
+        expect(tombstones.b.deleted).toBe(true);
     });
 
     it('is a no-op when deletedIds is empty or undefined', async () => {
@@ -203,23 +290,38 @@ describe('StorageManager.recordPresetTombstones()', () => {
     });
 
     it('merges with existing tombstones rather than overwriting them', async () => {
-        const existingDeletedAt = Date.now() - (1 * DAY_MS); // within retention window
-        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { existing: existingDeletedAt } });
+        const existingTs = Date.now() - (1 * DAY_MS); // within retention window
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { existing: { ts: existingTs, deleted: true } } });
         await StorageManager.recordPresetTombstones(['new-id']);
         const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
-        expect(localAfter[K.PRESET_TOMBSTONES].existing).toBe(existingDeletedAt);
-        expect(localAfter[K.PRESET_TOMBSTONES]['new-id']).toBeTypeOf('number');
+        expect(localAfter[K.PRESET_TOMBSTONES].existing).toEqual({ ts: existingTs, deleted: true });
+        expect(localAfter[K.PRESET_TOMBSTONES]['new-id'].deleted).toBe(true);
+        expect(localAfter[K.PRESET_TOMBSTONES]['new-id'].ts).toBeTypeOf('number');
     });
 
     it('prunes expired tombstones as a side effect while recording new ones', async () => {
         const now = Date.now();
         await chrome.storage.local.set({
-            [K.PRESET_TOMBSTONES]: { stale: now - (40 * DAY_MS) },
+            [K.PRESET_TOMBSTONES]: { stale: { ts: now - (40 * DAY_MS), deleted: true } },
         });
         await StorageManager.recordPresetTombstones(['fresh']);
         const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
         expect(localAfter[K.PRESET_TOMBSTONES]).not.toHaveProperty('stale');
         expect(localAfter[K.PRESET_TOMBSTONES]).toHaveProperty('fresh');
+    });
+
+    it('REGRESSION: delete → tombstone recorded (new shape) → pruned after 30 days, exactly as the pre-fix behavior did', async () => {
+        const now = Date.now();
+        // Simulate a tombstone recorded well within retention, then advance past retention on the next record call.
+        await chrome.storage.local.set({
+            [K.PRESET_TOMBSTONES]: { old: { ts: now - (31 * DAY_MS), deleted: true } },
+        });
+        await StorageManager.recordPresetTombstones(['still-fresh']);
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).not.toHaveProperty('old');
+        expect(localAfter[K.PRESET_TOMBSTONES]['still-fresh']).toEqual(
+            expect.objectContaining({ deleted: true })
+        );
     });
 });
 
@@ -247,6 +349,8 @@ describe('StorageManager.savePromptPresets() — tombstone write on delete', () 
 
         expect(localAfter[K.PRESET_TOMBSTONES]).toHaveProperty('b');
         expect(syncAfter[K.PRESET_TOMBSTONES]).toHaveProperty('b');
+        expect(localAfter[K.PRESET_TOMBSTONES].b.deleted).toBe(true);
+        expect(syncAfter[K.PRESET_TOMBSTONES].b.deleted).toBe(true);
 
         // Preset body itself is gone from both storages
         const syncPresetAfter = await chrome.storage.sync.get(['dsPreset_b']);
@@ -289,7 +393,7 @@ describe('StorageManager.resolveSyncConflict() — tombstone end-to-end resoluti
             [K.SYNC_CONFLICT_PENDING]: false,
             [K.PRESET_INDEX]: ['b'],
             dsPreset_b: presetB,
-            [K.PRESET_TOMBSTONES]: { a: now - (1 * DAY_MS) },
+            [K.PRESET_TOMBSTONES]: { a: { ts: now - (1 * DAY_MS), deleted: true } },
             [K.PRESET_ORDER_META]: { order: ['b'], orderUpdatedAt: now - (1 * DAY_MS) },
         });
 
@@ -328,8 +432,8 @@ describe('StorageManager.resolveSyncConflict() — tombstone end-to-end resoluti
             [K.PRESET_INDEX]: ['keep'],
             dsPreset_keep: survivor,
             [K.PRESET_TOMBSTONES]: {
-                gone1: now - (1 * DAY_MS),
-                gone2: now - (1 * DAY_MS),
+                gone1: { ts: now - (1 * DAY_MS), deleted: true },
+                gone2: { ts: now - (1 * DAY_MS), deleted: true },
             },
             [K.PRESET_ORDER_META]: { order: ['keep'], orderUpdatedAt: now - (1 * DAY_MS) },
         });
@@ -365,7 +469,7 @@ describe('StorageManager.resolveSyncConflict() — tombstone end-to-end resoluti
         await chrome.storage.sync.set({
             [K.SYNC_CONFLICT_PENDING]: false,
             [K.PRESET_INDEX]: [],
-            [K.PRESET_TOMBSTONES]: { a: deletionTs },
+            [K.PRESET_TOMBSTONES]: { a: { ts: deletionTs, deleted: true } },
             [K.PRESET_ORDER_META]: { order: [], orderUpdatedAt: deletionTs },
         });
 
@@ -383,6 +487,105 @@ describe('StorageManager.resolveSyncConflict() — tombstone end-to-end resoluti
         const survivor = settings.promptPresets.find(p => p.id === 'a');
         expect(survivor).toBeDefined();
         expect(survivor.name).toBe('Edited-After-Delete');
+    });
+});
+
+describe('StorageManager.clearPresetTombstones() — BUG FIX: writes {ts, deleted:false} instead of deleting the key', () => {
+    beforeEach(() => {
+        delete chrome.runtime.lastError;
+    });
+
+    it('sets matching ids to {ts: <recent>, deleted: false}, leaving other ids intact (normalized to object shape)', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now, b: now } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: now, b: now } });
+
+        const before = Date.now();
+        await StorageManager.clearPresetTombstones(['a']);
+        const after = Date.now();
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncAfter = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+
+        // 'a' is now an explicit "cleared" tombstone, not deleted from the map.
+        expect(localAfter[K.PRESET_TOMBSTONES].a.deleted).toBe(false);
+        expect(localAfter[K.PRESET_TOMBSTONES].a.ts).toBeGreaterThanOrEqual(before);
+        expect(localAfter[K.PRESET_TOMBSTONES].a.ts).toBeLessThanOrEqual(after);
+        expect(syncAfter[K.PRESET_TOMBSTONES].a.deleted).toBe(false);
+
+        // 'b' is untouched in value (still the original ts) but normalized to object shape as a
+        // side effect of the map-wide normalization performed before the write.
+        expect(localAfter[K.PRESET_TOMBSTONES].b).toEqual({ ts: now, deleted: true });
+        expect(syncAfter[K.PRESET_TOMBSTONES].b).toEqual({ ts: now, deleted: true });
+    });
+
+    it('a previously untracked id gets a new {ts, deleted:false} entry created (this is a write, not a no-op)', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: { ts: now, deleted: true } } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: { ts: now, deleted: true } } });
+
+        await expect(StorageManager.clearPresetTombstones(['not-there'])).resolves.not.toThrow();
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncAfter = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).toHaveProperty('not-there');
+        expect(localAfter[K.PRESET_TOMBSTONES]['not-there'].deleted).toBe(false);
+        expect(localAfter[K.PRESET_TOMBSTONES].a).toEqual({ ts: now, deleted: true }); // untouched
+        expect(syncAfter[K.PRESET_TOMBSTONES]).toHaveProperty('not-there');
+    });
+
+    it('does not write to storage at all when the id already has {deleted:false} (no redundant write)', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: { ts: now, deleted: false } } });
+
+        const setSpy = vi.spyOn(chrome.storage.local, 'set');
+        await StorageManager.clearPresetTombstones(['a']);
+        expect(setSpy).not.toHaveBeenCalled();
+        setSpy.mockRestore();
+    });
+
+    it('persists the update to both chrome.storage.local and chrome.storage.sync', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+
+        await StorageManager.clearPresetTombstones(['a']);
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncAfter = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES].a.deleted).toBe(false);
+        expect(syncAfter[K.PRESET_TOMBSTONES].a.deleted).toBe(false);
+    });
+
+    it('is a safe no-op for empty or undefined ids array', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+
+        await expect(StorageManager.clearPresetTombstones([])).resolves.not.toThrow();
+        await expect(StorageManager.clearPresetTombstones(undefined)).resolves.not.toThrow();
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).toEqual({ a: now });
+    });
+
+    it('BUG FIX regression: a newer "cleared" tombstone written by clearPresetTombstones() beats a stale "deleted" tombstone still held by an unsynced device after _mergeTombstones', async () => {
+        const now = Date.now();
+        const staleDeletedAt = now - (2 * DAY_MS);
+
+        // This device clears the tombstone for 'a' (e.g. user re-imported a backup containing it).
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: { ts: staleDeletedAt, deleted: true } } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: { ts: staleDeletedAt, deleted: true } } });
+        await StorageManager.clearPresetTombstones(['a']);
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const clearedEntry = localAfter[K.PRESET_TOMBSTONES].a;
+        expect(clearedEntry.deleted).toBe(false);
+
+        // Meanwhile, an unsynced device still carries the old "deleted" tombstone.
+        const staleDeviceTombstones = { a: { ts: staleDeletedAt, deleted: true } };
+
+        const merged = StorageManager._mergeTombstones(staleDeviceTombstones, { a: clearedEntry });
+        expect(merged.a.deleted).toBe(false);
+        expect(StorageManager._isTombstonedAway(merged, 'a', 0)).toBe(false);
     });
 });
 
