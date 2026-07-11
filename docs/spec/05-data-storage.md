@@ -24,8 +24,9 @@
 - **匯入**：「還原設定（匯入 JSON）」按鈕開啟檔案選取器。在選取檔案並經使用者確認後：
   - 提示詞組使用 `mergePresets()` **合併** — 相同 ID 保留較新的 `updatedAt`，新 ID 附加於後。
   - `chatPresetMap` 透過展開合併（本地端基底 + 匯入新增）。
-  - UI 設定（globalDefaultPrompt、globalPromptEnabled、isEnabled、includeThinking、includeReferences、側邊欄自動隱藏、寬度）由匯入值**覆寫**。
+  - UI 設定（globalDefaultPrompt、includeThinking、includeReferences、側邊欄自動隱藏、寬度）由匯入值**覆寫**。
   - 成功後顯示 Toast，3 秒後重新載入彈出選單。
+  - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。
 - 此外，備份與還原卡片還包含「匯出復原備份」、「匯入復原備份」、「清除所有已還原紀錄」三個按鈕，專門用於管理 `restored_messages`（審查回覆還原記錄），獨立於一般設定備份。
 
 ## 14. 雲端同步與衝突處理
@@ -34,7 +35,7 @@
 - **自動同步**：所有寫入操作（`_set()`）為安全起見同時寫入同步與本地端儲存空間。
 - **衝突偵測**：首次執行（或升級）時，比較本地端與同步的 `promptPresets`。若兩者不同且同步有資料，則設定 `syncConflictPending = true`，並阻止讀取使用同步資料（僅回傳本地端資料）。
 - **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
-- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定，清除衝突旗標。
+- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決），清除衝突旗標。
 - **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
 - **刪除墓碑（v4.8.3）**：刪除提示詞組時會記錄一筆帶刪除時間戳的墓碑於 `dsPresetTombstones`（本地與同步兩端）。`resolveSyncConflict()` 合併時會先合併雙邊墓碑（保留較新的 `deletedAt`）並清理超過 30 天保留期的舊墓碑，再交給 `mergePresets()` 判斷：任一側資料的 `updatedAt` 不晚於其墓碑時間即會被排除，防止某裝置刪除的提示詞組被另一裝置（或同步備份中）仍保留的舊資料復活。
 
@@ -44,7 +45,7 @@
 
 - **網域**：`chat.deepseek.com`
 - **平台**：Chrome 擴充功能 Manifest V3
-- **權限**：`storage`、`activeTab`
+- **權限**：`storage`、`activeTab`、`alarms`（用於 background service worker 的排程重試與同步）
 
 ### DOM 選取
 
@@ -75,7 +76,9 @@
 | `includeReferences` | boolean | `true` | 匯出的 MD 是否包含引用參考連結。 |
 | `globalDefaultPrompt` | string | `''` | 在所有對話中預先附加至各提示詞組前的全域提示詞。 |
 | `globalPromptEnabled` | boolean | `true` | 全域預設提示詞是否注入（v3.0.0）。主開關優先權更高。 |
-| `chatPresetMap` | object | `{}` | 將對話 UUID 對應至提示詞組 ID，實現各對話綁定。 |
+| `chatPresetMap` | object | `{}` | *已於 v2.4.0 遷移為分塊儲存*：舊版扁平鍵，僅於遷移時讀取，遷移後清理。 |
+| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | （v2.4.0+）分塊索引：版本號（樂觀並發權杖）、分塊數量、各塊位元組大小。 |
+| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | （v2.4.0+）實際資料分塊，每塊 ≤ 7168 bytes，合併後即完整的 chatPresetMap。 |
 | `dsSidebarAutoHide` | boolean | `false` | 側邊欄自動隱藏功能是否啟用。 |
 | `dsChatWidth` | number | `70` | 對話區域寬度百分比（30–100）。 |
 | `dsChatWidthEnabled` | boolean | `false` | 對話區域寬度調整是否啟用。 |
@@ -87,6 +90,8 @@
 | `syncInitialized` | boolean | `false` | 初始同步是否已完成（僅本地端）。 |
 | `syncConflictPending` | boolean | `false` | 是否有同步衝突待使用者解決（僅本地端）。 |
 | `dsPresetTombstones` | `Object<id, deletedAt>` | `{}` | （v4.8.3）提示詞組刪除墓碑，同步於本地與雲端。合併時用於判斷某 id 是否已被刪除，避免舊資料復活。 |
+| `dsOversizedKeys` | `string[]` | `[]` | （v4.8.2）永久超出 8KB 同步配額的金鑰清單（僅本地端）。自癒：下次寫入尺寸低於限制時自動移除。 |
+| `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | （v4.6.2）提示詞組排序的權威時間戳，用於跨裝置合併時決定哪一端的排序較新。 |
 | `promptPresets` | `PromptPreset[]` | — | *已於 v1.7.0 退役*：v1.7.0 之前用於儲存所有提示詞組的陣列，已被 `dsPresetIndex` + `dsPreset_<id>` 取代。 |
 | `restored_messages` | object | {} | 已復原的審查回覆記錄，含 message_id、fragments 等（僅本地端，最多 200 筆）。 |
 

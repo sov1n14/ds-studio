@@ -14,8 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | [4.9.1](changelog/v4.md#491---2026-07-11) | 修正臨時對話「導向同一對話」誤刪：判定改以目的地 `/a/chat/s/{uuid}` 的 UUID 比對追蹤中對話（取代完整 URL 字串相等），導向同一對話但 query／hash 不同時不再誤刪；刷新與離開他頁行為不變 |
 | [4.9.0](changelog/v4.md#490---2026-07-11) | 臨時對話刪除機制兩層化：content script 直接 `fetch(keepalive)` 即時刪除（移除不可靠的 SW IPC 中繼）、SW `onStartup` 補刪；待刪佇列改為 `chrome.storage.sync` 單一事實來源，支援跨裝置補刪；新增 Sync-Change Safeguard 與本機開啟中對話清單防誤刪；authToken 僅存本機永不同步 |
 | [4.8.4](changelog/v4.md#484---2026-07-11) | 移除純診斷用日誌轉發子系統（logger.js sync 機制、孤兒除錯檔 diagnostic-sidebar-log.js、temp-chat 系列除錯 log），保留告警類 console.warn/error；不影響任何使用者可見功能 |
+| [4.8.5](changelog/v4.md#485---2026-07-11) | 移除彈出視窗手動同步按鈕，簡化為純自動同步 |
 | [4.8.3](changelog/v4.md#483---2026-07-11) | 新增提示詞組刪除墓碑（Tombstone）機制，修復跨裝置同步時「已刪除提示詞組復活」的缺陷；同時修正 sync 勝出索引未落盤本機的缺口 |
 | [4.6.2](changelog/v4.md#462---2026-06-28) | 修復跨裝置雲同步：提示詞組順序（dsPresetOrderMeta 時間戳）與內容（dsLocalAuth 精確 pinning）現可正確同步；初始化衝突偵測改為 auto/manual 分類；手動同步改為推+拉；chatmap 模組獨立拆分 |
+| [4.6.3](changelog/v4.md#463---2026-06-28) | 新增統一診斷記錄輸出至 Service Worker console |
+| [4.6.4](changelog/v4.md#464---2026-06-29) | 修復同步收斂時較新編輯遭較舊版本覆蓋 |
+| [4.6.5](changelog/v4.md#465---2026-06-30) | 修復提示詞內容跨裝置同步失效並強化同步韌性 |
 | [4.6.1](changelog/v4.md#461---2026-06-22) | 修復行動版編輯訊息發送按鈕 textarea 解析順序 |
 | [4.6.0](changelog/v4.md#460---2026-06-20) | 整合 React Fiber 原生對話刪除機制 |
 | [4.5.1](changelog/v4.md#451---2026-06-18) | 修正「臨時對話」：僅刪除（呼叫 create API）新建的對話、歷史對話永不刪除；離開首頁移除開關、回首頁重注入；網址列輸入目前網址／重整不刪除；關閉開關仍刪除已標記對話 |

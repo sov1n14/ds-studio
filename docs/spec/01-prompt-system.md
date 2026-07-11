@@ -11,7 +11,7 @@
 - **新增流程**：點擊 `+` 開啟內嵌命名對話框。名稱為必填 — 空輸入時確認按鈕會停用，並顯示紅色 `* 必填` 指示。重複名稱會以警示對話框拒絕。
 - **重新命名流程**：點擊 `✎` 開啟預填當前名稱的內嵌對話框。重複名稱會被拒絕。
 - **刪除流程**：點擊 `✕` 開啟確認對話框，附有紅色危險樣式按鈕。若刪除的提示詞組為當前啟用中，系統會重設為空狀態（`activePresetId = ''`），而非自動選取其他提示詞組。所有指向被刪除提示詞組的 `chatPresetMap` 綁定都會被清理。空狀態選取時刪除按鈕為停用狀態。（v4.8.3）刪除同時會記錄一筆墓碑於 `dsPresetTombstones`（本地與同步兩端），確保刪除能正確透過同步合併傳播到其他裝置，而不只是清理本機的 `chatPresetMap` 綁定。
-- **提示詞資料模型**：每組提示詞包含 `id`（字串）、`name`（字串）、`content`（字串）、`createdAt`（數字，紀元毫秒）、`updatedAt`（數字，紀元毫秒）。`id` 以 `preset-{timestamp}-{random}` 格式產生。內容於獨立編輯視窗中自動儲存：`input` 事件設定 dirty flag 並觸發 600ms 防抖寫入，`blur`、`visibilitychange` 與 `pagehide` 事件提供立即寫入保險（獨立視窗可能被作業系統直接關閉），僅在 dirty 時寫入以避免耗盡 Chrome sync 配額。
+- **提示詞資料模型**：每組提示詞包含 `id`（字串）、`name`（字串）、`content`（字串）、`createdAt`（數字，紀元毫秒）、`updatedAt`（數字，紀元毫秒）。`id` 以 `preset-{timestamp}-{random}` 格式產生。內容於獨立編輯視窗中自動儲存：`input` 事件設定 dirty flag 並觸發 500ms 防抖寫入（v4.8.1 從 600ms 對齊為 500ms），`blur`、`visibilitychange` 與 `pagehide` 事件提供立即寫入保險（獨立視窗可能被作業系統直接關閉），僅在 dirty 時寫入以避免耗盡 Chrome sync 配額。
 - **獨立提示詞編輯視窗**（v3.0.0）：點擊鉛筆按鈕透過 `chrome.windows.create`（`type: 'popup'`，1280×720）開啟 `popup/editor/editor.html`。Query string 契約：`?target=global` 編輯全域預設提示詞；`?target=preset&id=<presetId>` 編輯該提示詞組內容。視窗標題顯示「全域預設提示詞」或提示詞組名稱，並有「已儲存」狀態指示。每種目標各為單例 — 重複點擊鉛筆會聚焦既有視窗（`chrome.windows.update`），視窗已關閉時才重新建立。提示詞組儲存後會廣播 `ACTIVE_PRESET_CHANGED` 使開啟中的 DeepSeek 分頁即時更新。無效的 query 參數或提示詞組已被刪除時，視窗呈現停用狀態並顯示說明文字。所有儲存一律經由 `StorageManager`。
 
 ## 2. 提示詞注入邏輯
@@ -35,7 +35,7 @@
 - **防護條件**：以下情況跳過注入：
   - 透過開關停用功能。
   - 使用者輸入為空（僅含空白字元）。
-  - 文字輸入區已含有先前注入的前綴（開頭為 `<system-prompt>` 或 `<user-input>`）。
+  - 文字輸入區已含有先前注入的前綴（開頭為 `<system-prompt>` 或 `<user-input>`）時，系統會**擷取 `<user-input>` 內的原文後重新注入**（含更新後的提示詞內容與時間戳），而非完全跳過注入。
 
 ## 3. 編輯訊息清理（解除包裹）
 
@@ -47,6 +47,7 @@
   - `._646a522`：將 `max-height` 設為 `(window.innerHeight − _2be88ba 高度 − _871cbca 高度 − 32)px`。三項高度於當下即時取得（`window.innerHeight` 與兩來源元素的 `getBoundingClientRect().height`）。**缺元素規則**：若 `_2be88ba` 或 `_871cbca` 任一不存在，則跳過 `._646a522` 的設定（保持原狀）；`.cc852ac5` 的移除不受影響。
 - **解除包裹條件**：偵測到 textarea 後，若其內容符合 `/<user-input>\n([\s\S]*)\n<\/user-input>$/`，則僅保留 `<user-input>` 內的原文（透過 native value setter + `input`/`change` 事件寫回，與注入採用相同的 React-aware 寫入技術）。
 - **保護條件**：若編輯框內容**找不到** `<user-input>...</user-input>` 結構（例如未經注入的純文字訊息），則完全不更動編輯框內容，亦不觸發任何事件。
+- **編輯框捲入視野（v3.4.0）**：解除包裹後，在 `requestAnimationFrame` 中執行 `applyEditScrollPosition()`，將編輯框捲動至固定 header（`._2be88ba`）下方 16px 處。透過調整捲動容器的 `scrollTop` 達成（`computeScrollDelta()` + `findScrollableAncestor()`）。若編輯框、header 或捲動容器任一不存在，則為 no-op。
 - **再次送出**：清理後僅保留原文；使用者修改後點擊編輯送出按鈕時，注入邏輯（§2）會依當前設定重新包裹，行為與一般送出一致。
 
 ## 4. UUID 對話綁定提示詞組
@@ -69,6 +70,7 @@
 - **儲存**：獨立儲存在 `globalDefaultPrompt` 鍵下，透過 `chrome.storage.sync` 同步。
 - **與各提示詞組的互動**：在 `buildInjectionPrefix()` 中，全域預設提示詞（開關開啟時）與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。合併結果在注入前以 `<system-prompt>` 標籤包裹。
 - **提示詞組獨立性**：變更全域預設提示詞不會影響任何提示詞組的內容，反之亦然。`globalPromptEnabled` 開關也不影響提示詞組內容的注入。
+- **裝置層級限制（v4.7.3）**：`globalPromptEnabled` 與 `isEnabled` 同為裝置層級的本地專屬設定，不參與雲端同步與衝突解決，確保各裝置可獨立控制啟用狀態。
 
 ## 6. 空白選項模式（無操作模式）
 

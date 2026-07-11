@@ -13,8 +13,10 @@
 | **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup | [→ content-interaction.md](content-interaction.md) |
 | **互動復原模組** | Censor Reply Restore (4 files + CSS) | [→ spec/04-features.md](../spec/04-features.md) |
 | **臨時對話模組** | Temporary Conversation（`temporary-chat-constants.js`、`temporary-chat-toggle.js` + `.css`、`temporary-chat-delete.js`） | [→ spec/04-features.md](../spec/04-features.md) |
+| **匯出工具模組** | Scroll-and-Harvest Markdown export engine | [→ EXPORT.md](EXPORT.md) |
+| **工具模組** | Mobile Homepage DOM cleanup (v4.1.0) | — |
 
-> **v4.0.0 模組化**：以下大型內容腳本已拆分為「入口檔 + 方法包」（行為不變，方法包經 `globalThis.__DS_*` 由入口檔 `Object.assign` 合併，載入順序於 `manifest.json` 強制：方法包先於入口檔）：
+> **v4.0.0 模組化**：以下大型內容腳本已拆分為「入口檔 + 方法包」（行為不變，方法包經 `globalThis.__DS_*` 由入口檔 `Object.assign` 合併，載入順序於 `manifest.json` 強制：方法包先於入口檔）。此外，`content-script.harvest.js`（匯出工具）與 `mobile-homepage-cleanup.js`（行動版首頁 DOM 清理）也是透過 `manifest.json` 的 `content_scripts` 清單載入：
 >
 > - `content-script.js` → `content-script.js`（入口）+ `content-script.export.js`（Markdown 匯出）<!-- overlay 於 v4.2.0 進一步拆分為 6 個獨立模組，詳見 ARCHITECTURE.md 目錄樹 -->
 > - `go-top.js` → `go-top.js`（入口）+ `go-top.locate.js`（查詢/定位/可見性）+ `go-top.render.js`（渲染/注入/模式切換）+ `go-top.scroll.js`（捲動動畫引擎）

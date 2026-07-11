@@ -18,8 +18,8 @@ All data processed by the Extension is stored **locally on your device** or with
 
 Used to save your settings, prompt groups, and extension data.
 
-- **`chrome.storage.local`** — Stores prompt group contents, UI adjustment preferences, censored reply recovery records, and operational state. This data never leaves your device.
-- **`chrome.storage.sync`** — Stores prompt group names, enabled/disabled toggles, and non-sensitive settings. This data is synchronized across your Chrome browsers via your Google Account. The developer has no access to this data.
+- **`chrome.storage.local`** — Stores prompt group contents, UI adjustment preferences, censored reply recovery records, the captured DeepSeek auth token (dss-last-auth-token) used for temporary-chat deletion, and operational state. This data never leaves your device.
+- **`chrome.storage.sync`** — Stores prompt group names, enabled/disabled toggles, non-sensitive settings, and a cross-device pending-delete queue (chatUuid/attemptCount) for temporary-chat remediation. This data is synchronized across your Chrome browsers via your Google Account. The developer has no access to this data.
 
 ### `activeTab`
 
@@ -47,6 +47,13 @@ The Extension makes network requests **only** to `chat.deepseek.com` and only fo
 These requests are made on your behalf and are functionally identical to what the DeepSeek web app does natively.
 
 **The Extension never communicates with any server controlled by the developer.**
+
+### Cross-Device Remedial Deletion for Temporary Chats
+
+When the Temporary Conversation feature is enabled and a conversation is deleted, a non-sensitive pending-delete entry (containing only a chat session UUID and retry attempt count) is written to \`chrome.storage.sync\`. If the original device's delete request fails (e.g., browser crashed before the request completed), another device signed into the same Chrome account can pick up the pending entry and retry the deletion using its own locally-cached auth token.
+
+- The auth token itself is never written to \`chrome.storage.sync\` — it remains local to each device.
+- A local-only open-session set prevents remediation from deleting a conversation currently in use on that device.
 
 ## Third-Party Services
 

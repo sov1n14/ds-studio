@@ -21,6 +21,7 @@
   - [Backup \& Restore Settings](#backup--restore-settings)
   - [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
   - [Master Switch Linkage](#master-switch-linkage)
+  - [Temporary Conversation](#temporary-conversation)
   - [Legacy Data Migration](#legacy-data-migration)
 
 ---
@@ -173,7 +174,6 @@ In the popup menu's **Backup & Restore** section:
 | **Export Restore Records** | Independently backup the restoration records of censored replies |
 | **Import Restore Records** | Independently restore restoration records of censored replies |
 | **Clear All Restored Records** | Delete all restoration records of censored replies with one click |
-| **Manual Sync** | Immediately push local data back to the cloud sync space, useful when displaying "Not Synced" |
 
 ## Cloud Sync Conflict Handling
 
@@ -183,8 +183,8 @@ If multiple devices edit prompt groups simultaneously:
 
 1. The next time you open the popup menu, a **Cloud Sync Conflict** dialog will appear.
 2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp).
-3. Interface settings are overwritten by the cloud version.
-4. The popup menu title bar displays real-time sync status (green **Cloud Synced** or red **Not Synced**), along with a **Manual Sync** button.
+3. Interface settings (except device-local toggles like `isEnabled` and `globalPromptEnabled`) are overwritten by the cloud version.
+4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only**).
 
 ## Master Switch Linkage
 
@@ -197,8 +197,36 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - In-page overlay dropdown
 - Back to top button
 - Mobile sidebar swipe gesture
+- ⚠️ **Not controlled**: Temporary Conversation has its own independent toggle on the DeepSeek homepage.
 
 This ensures one-click disabling of all extension behaviors.
+
+## Temporary Conversation
+
+The Temporary Conversation feature allows you to use DeepSeek conversations without leaving a trace — conversations started while the feature is enabled are automatically deleted when you leave them.
+
+### How It Works
+
+1. **Toggle**: A switch on the DeepSeek homepage (`chat.deepseek.com/`) controls the feature. When turned ON (default: OFF), any **new** conversation you create is automatically marked as a "temporary" conversation.
+2. **Detection**: A conversation is identified as temporary only when a `POST /api/v0/chat_session/create` API call is observed. Opening an existing conversation from the history list (which calls `/api/v0/chat/history_messages`) is **never** marked or deleted.
+3. **Deletion triggers**: Leaving the temporary conversation (navigating to a different URL), closing the tab, or closing the browser all trigger deletion by calling `POST /api/v0/chat_session/delete`.
+4. **Exclusions**: Page refresh (F5/Ctrl+R), navigating to the same URL, or navigating to the same conversation with a different query string or hash (e.g., `?model=v3`) will **not** trigger deletion.
+
+### Architecture
+
+- **Layer 1 (real-time)**: The content script calls `fetch(..., { keepalive: true })` directly on tab/browser close. SPA navigation uses Fiber-based deletion with API fallback.
+- **Layer 2 (remediation)**: A Service Worker reads a shared pending-delete queue on browser startup and retries any failed deletions.
+- **Cross-device**: The pending-delete queue lives in `chrome.storage.sync` so any device signed into the same Chrome account can remediate entries.
+- **Privacy**: The auth token used for deletion is stored in `chrome.storage.local` only — it is never synced across devices.
+
+### Known Limitations
+
+| Scenario | Deletion Guarantee | Explanation |
+|-|-|-|
+| Normal leave (navigate away, close tab) | ✅ Guaranteed | Real-time fetch with keepalive |
+| Browser crash | ⏳ Delayed (next startup) | Layer 2 remediation on `onStartup` |
+| Browser crash + token expired | ❌ Not possible | Auth token must be recaptured; safety measure prevents deleting wrong content |
+| Cross-device cleanup | ✅ Guaranteed | Any device can remediate any pending entry |
 
 ## Legacy Data Migration
 

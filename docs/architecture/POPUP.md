@@ -160,29 +160,39 @@ Note: `custom-select.js` contains its own private copies of `_fuzzyMatch()` and 
 In `popup.html`, the script tags appear in this order:
 
 ```html
+<script src="../utils/logger.js"></script>
 <script src="../utils/storage-manager.chunking.js"></script>
 <script src="../utils/storage-manager.lock.js"></script>
 <script src="../utils/storage-manager.sync.js"></script>
 <script src="../utils/storage-manager.presets.js"></script>
+<script src="../utils/storage-manager.tombstones.js"></script>
+<script src="../utils/storage-manager.chatmap.js"></script>
+<script src="../utils/storage-manager.local.js"></script>
+<script src="../utils/storage-manager.init.js"></script>
+<script src="../utils/storage-manager.syncnow.js"></script>
 <script src="../utils/storage-manager.js"></script>
 <script src="../utils/messaging.js"></script>
+<script src="../utils/i18n.js"></script>
 <script src="custom-select.js"></script>
 <script src="popup.modal.js"></script>
 <script src="popup.preset-manager.js"></script>
 <script src="popup.backup-manager.js"></script>
 <script src="popup.live-sync.js"></script>
 <script src="popup.js"></script>
+<script src="popup.locale.js"></script>
 ```
 
-- The four `storage-manager.*.js` bundles load first; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split).
+- `utils/logger.js` loads first, providing structured logging. The nine `storage-manager.*.js` bundles (chunking, lock, sync, presets, tombstones, chatmap, local, init, syncnow) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split).
 - `storage-manager.js` (entry) loads next and runs `Object.assign(StorageManager, ...)` to merge the bundles before exposing `window.StorageManager`. Both custom-select.js users and popup.js depend on it at runtime.
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js for the `ACTIVE_PRESET_CHANGED` broadcast).
+- `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with locale string maps, `setLocale()`, and `t(key)` lookup — see the Language / Locale Switcher section below.
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
 - `popup.live-sync.js` (v4.8.0) registers `window.__DS_PopupLiveSync`, exposing `createLiveSyncListener(ctx)` — see the Live Sync Listener section below.
-- `popup.js` (entry) loads last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
+- `popup.js` (entry) loads second-to-last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
+- `popup.locale.js` (v4.3.3) loads last, wiring `#localeSwitcherBtn` click to panel toggle and radio change to `dsI18n.setLocale()` — see the Language / Locale Switcher section below.
 
-The editor window (`popup/editor/editor.html`) loads the four `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, then `editor.js` — all classic scripts, no inline JS (MV3 CSP-safe). `popup-utils.js` is an ES module (top-level `export`) and is deliberately NOT loaded as a classic script anywhere; `editor.js` carries its own local `debounce` copy for this reason.
+The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, the nine `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.js`, then `editor.js` — all classic scripts, no inline JS (MV3 CSP-safe). `popup-utils.js` is an ES module (top-level `export`) and is deliberately NOT loaded as a classic script anywhere; `editor.js` carries its own local `debounce` copy for this reason.
 
 ### Data Flow Integration
 
@@ -220,6 +230,19 @@ The popup previously only read storage once at open time (via `StorageManager.sy
 - `activePresetId` → re-renders only when the incoming value differs from the popup's own in-memory value (guards against a redundant re-render echo of the popup's own write).
 
 **No feedback loop**: every DOM write is idempotent (`applyToggle`/`applySlider` only assign when the value actually differs), and the module never calls any `StorageManager.save*` itself — so a change the popup itself just wrote flows back through `onChanged` as a same-value no-op rather than a loop.
+
+## Language / Locale Switcher (v4.3.3)
+
+The popup includes a built-in language switcher that toggles between Traditional Chinese (zh_TW) and English (en).
+
+**DOM Structure**: A globe-icon button (`#localeSwitcherBtn`) in the Features & Export card header, toggling a `#localePanel` with radio inputs for each locale.
+
+**Implementation**:
+- `utils/i18n.js` — Core i18n engine: defines a `dsI18n` object with locale string maps, `setLocale(locale)` method, and `t(key)` lookup. Processes `data-i18n` attributes on DOM elements. Persists the selected locale to `chrome.storage.local` as `dsLocale`.
+- `popup/popup.locale.js` — Popup locale switcher UI: wires `#localeSwitcherBtn` click to panel toggle, radio change to `dsI18n.setLocale()` plus page reload.
+- Content scripts also listen for `dsI18n-locale-changed` events to live-update UI text (e.g., Quote Reply button label, overlay preset text) without page reload.
+
+The `popup.js` `DOMContentLoaded` handler initializes `dsI18n` early, before rendering any locale-dependent text.
 
 ## Standalone Prompt Editor Window (v3.0.0)
 

@@ -34,7 +34,7 @@ Scroll/resize event listeners (`_scrollHandler`, `_resizeHandler`) are attached 
 Appends `formatQuote(selectedText)` to the textarea value:
 
 - **`formatQuote`**: `text.split(/\r?\n/).map(l => '> ' + l).join('\n')` — each line receives a Markdown blockquote prefix.
-- **React-aware write**: Uses `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` (same pattern as `content-script.js:391`) followed by `input` and `change` event dispatch to trigger React state updates.
+- **React-aware write**: Uses `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` (same pattern as `content-script.js:302-303`) followed by `input` and `change` event dispatch to trigger React state updates.
 - **Append logic**: empty textarea → quoted text only; non-empty → existing content + `\n` (if not already ending with `\n`) + quoted text.
 
 ### CSS Injection
@@ -43,6 +43,7 @@ A `<style id="dss-quote-reply-style">` is injected into `document.head` with `.d
 
 - `position: fixed; z-index: 2147483000` for proper stacking above the DeepSeek UI.
 - Light/dark mode handled by both `@media (prefers-color-scheme: dark)` and `html[data-theme="dark"]` selectors (the latter covers DeepSeek's runtime theme toggle).
+- **i18n support** (v4.3.3+): The button label text is sourced via `dsI18n.t('quoteReplyBtnLabel')` instead of being hardcoded, and a `dsI18n-locale-changed` document event listener live-updates the button text when the user switches language without requiring a page reload.
 
 ### Dismissal Conditions
 
@@ -98,7 +99,7 @@ The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's
 
 ### Architecture
 
-- **`content/prevent-auto-scroll.js`** (MAIN world): Executes in the page's JavaScript context. Monkey-patches `Element.prototype.scrollTo`, `Element.prototype.scrollBy`, and the `scrollTop` setter on `Element.prototype`. Each patched method checks `_isBridgeEnabled()` before allowing or blocking the scroll. If the bridge is enabled (interception active), calls to scroll to the bottom of the conversation are suppressed.
+- **`content/prevent-auto-scroll.js`** (MAIN world): Executes in the page's JavaScript context. Monkey-patches `Element.prototype.scrollTo`, `Element.prototype.scrollBy`, `window.scrollTo`, `window.scrollBy`, the `scrollTop` setter on `Element.prototype`, and **`Element.prototype.scrollIntoView`** (unconditionally blocked when bridge is enabled). Each patched method checks `_isBridgeEnabled()` before allowing or blocking the scroll. If the bridge is enabled (interception active), calls to scroll to the bottom of the conversation are suppressed.
 - **`content/prevent-auto-scroll-bridge.js`** (ISOLATED world): Content script that manages injection and control. Injects the main-world script via a `<script>` element using `chrome.runtime.getURL('content/prevent-auto-scroll.js')`. Creates and manages a hidden `<div id="dss-prevent-auto-scroll-bridge" style="display:none">` in the document whose `dataset.enabled` attribute is read by the main-world patch.
 
 ### Control Flow
@@ -127,7 +128,7 @@ A checkbox in the Features & Export card (`#showSystemTimeToggle`) controls the 
 
 ### Content Script Integration
 
-In `content-script.js`:
+In `content-script.export.js` (re-exported through `content-script.js`):
 
 - `let showSystemTime = false` — runtime state variable, initialized from storage during `initSettings()`.
 - `formatSystemTime(date = new Date())` — pure function returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
