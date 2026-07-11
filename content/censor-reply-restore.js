@@ -111,9 +111,9 @@ const CensorReplyRestore = {
 
             // 後備方案：尋找容器中任何有 5 個以上 icon buttons 的 .ds-flex
             const allFlex = container.querySelectorAll('.ds-flex');
-            for (let i = 0; i < allFlex.length; i++) {
-                if (allFlex[i].querySelectorAll('.ds-icon-button, [role="button"].ds-button.ds-button--icon').length >= 5) return allFlex[i];
-            }
+            return Array.from(allFlex).find(
+                (el) => el.querySelectorAll('.ds-icon-button, [role="button"].ds-button.ds-button--icon').length >= 5
+            ) || null;
         }
 
         return null;

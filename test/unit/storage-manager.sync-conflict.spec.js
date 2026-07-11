@@ -224,43 +224,34 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
                 promptPresets: [
                     { id: 'p2', name: 'Imported', content: 'i', createdAt: 2, updatedAt: 2 },
                 ],
-            }, false);
+            });
 
             const settings = await StorageManager.getSettings();
             expect(settings.promptPresets).toHaveLength(2);
         });
 
-        it('with mergePresetsOnly=true, does not overwrite UI settings', async () => {
-            await StorageManager.saveEnabledState(true);
-            await StorageManager.saveChatWidth(90);
+        // NOTE: restoreSettings() no longer takes a mergePresetsOnly parameter — it
+        // always behaves as the old mergePresetsOnly=false path (unconditionally
+        // overwrites UI settings). The old "mergePresetsOnly=true" test case has been
+        // removed since that code path no longer exists.
 
-            await StorageManager.restoreSettings({
-                isEnabled: false,
-                chatWidth: 30,
-            }, true);
-
-            const settings = await StorageManager.getSettings();
-            expect(settings.isEnabled).toBe(true);
-            expect(settings.chatWidth).toBe(90);
-        });
-
-        it('with mergePresetsOnly=false, overwrites UI settings', async () => {
+        it('overwrites UI settings from the imported payload', async () => {
             await StorageManager.saveChatWidth(90);
 
             await StorageManager.restoreSettings({
                 chatWidth: 30,
-            }, false);
+            });
 
             const settings = await StorageManager.getSettings();
             expect(settings.chatWidth).toBe(30);
         });
 
-        it('with mergePresetsOnly=false, does NOT overwrite isEnabled (report.md §4.3 Step 3 — local-only, excluded from import)', async () => {
+        it('does NOT overwrite isEnabled (report.md §4.3 Step 3 — local-only, excluded from import)', async () => {
             await StorageManager.saveEnabledState(true);
 
             await StorageManager.restoreSettings({
                 isEnabled: false,
-            }, false);
+            });
 
             const settings = await StorageManager.getSettings();
             expect(settings.isEnabled).toBe(true);
@@ -278,7 +269,7 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
                 promptPresets: [
                     { id: 'restored-id', name: 'Restored', content: 'r', createdAt: now, updatedAt: now },
                 ],
-            }, false);
+            });
 
             const settings = await StorageManager.getSettings();
             expect(settings.promptPresets.map(p => p.id)).toContain('restored-id');
@@ -305,7 +296,7 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
                 promptPresets: [
                     { id: 'no-tombstone-id', name: 'Plain Import', content: 'p', createdAt: now, updatedAt: now },
                 ],
-            }, false);
+            });
 
             const settings = await StorageManager.getSettings();
             expect(settings.promptPresets.map(p => p.id)).toContain('no-tombstone-id');

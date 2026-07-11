@@ -269,10 +269,7 @@
 
                     // 7. 清理被裁減的孤兒 chunk key
                     if (lockNewMeta.chunkCount < lockMetaCopy.chunkCount) {
-                        const orphanedKeys = [];
-                        for (let i = lockNewMeta.chunkCount; i < lockMetaCopy.chunkCount; i++) {
-                            orphanedKeys.push(StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + i);
-                        }
+                        const orphanedKeys = Array.from({ length: lockMetaCopy.chunkCount - lockNewMeta.chunkCount }, (_, i) => StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + (lockNewMeta.chunkCount + i));
                         await this._safeRemove('sync', orphanedKeys);
                         await this._safeRemove('local', orphanedKeys);
                     }
@@ -428,10 +425,7 @@
                         }
 
                         const newChunkCount = lastNonEmptyIdx + 1;
-                        const orphanedKeys = [];
-                        for (let i = newChunkCount; i < this._metaCache.chunkCount; i++) {
-                            orphanedKeys.push(StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + i);
-                        }
+                        const orphanedKeys = Array.from({ length: this._metaCache.chunkCount - newChunkCount }, (_, i) => StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + (newChunkCount + i));
 
                         const newMeta = this._buildNextMeta(this._metaCache, {
                             chunkCount: newChunkCount,

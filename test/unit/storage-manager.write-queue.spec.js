@@ -138,12 +138,12 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
 
             const importedSettings = {
                 chatPresetMap: { 'uuid-imported': 'preset-imported' },
-                mergePresetsOnly: true,
             };
 
-            // Fire bind and restore without awaiting — both use the write queue
+            // Fire bind and restore without awaiting — both use the write queue.
+            // NOTE: restoreSettings() no longer takes a mergePresetsOnly parameter.
             const pBind = SM.bindChatToPreset('uuid-concurrent', 'preset-concurrent');
-            const pRestore = SM.restoreSettings(importedSettings, true);
+            const pRestore = SM.restoreSettings(importedSettings);
 
             await Promise.all([pBind, pRestore]);
 

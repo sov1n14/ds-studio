@@ -1,11 +1,9 @@
 /**
  * DS studio — Custom Preset Dropdown Component
- * Loaded as a classic script; exposes factory on window.__DSSCustomSelect.
+ * Loaded as a classic script; declares createPresetCustomSelect as a page-global function.
  */
-(function (global) {
-    'use strict';
 
-    function _reorderPresets(presets, srcId, dstId, insertBefore) {
+function _reorderPresets(presets, srcId, dstId, insertBefore) {
         const srcIndex = presets.findIndex(p => p.id === srcId);
         if (srcIndex === -1) return [...presets];
         const result = [...presets];
@@ -59,7 +57,7 @@
         onRequestDelete,
         onRequestDeleteAll,
     }) {
-        const { buildPresetItemMarkup } = global.__DS_PresetItemRenderer;
+        const { buildPresetItemMarkup } = window.__DS_PresetItemRenderer;
         const state = {
             isOpen: false,
             keyword: '',
@@ -440,7 +438,3 @@
 
         return { render, open, close, isOpen, setActive, destroy };
     }
-
-    global.__DSSCustomSelect = { createPresetCustomSelect };
-
-})(window);

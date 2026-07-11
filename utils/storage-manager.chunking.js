@@ -15,10 +15,7 @@
             const metaRaw = await this._safeGet('sync', [StorageManager.KEYS.CHAT_PRESET_MAP_META]);
             const meta = metaRaw[StorageManager.KEYS.CHAT_PRESET_MAP_META]
                 ?? { version: 0, chunkCount: 0, chunkSizes: [] };
-            const chunkKeys = [];
-            for (let i = 0; i < meta.chunkCount; i++) {
-                chunkKeys.push(StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + i);
-            }
+            const chunkKeys = Array.from({ length: meta.chunkCount }, (_, i) => StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + i);
             const chunks = await this._get(chunkKeys);
             const index = new Map();
             for (let i = 0; i < meta.chunkCount; i++) {
@@ -38,10 +35,7 @@
         async _readAllChunks() {
             await this._ensureChunkCachesLoaded();
             const metaCopy = { ...this._metaCache, chunkSizes: [...this._metaCache.chunkSizes] };
-            const chunkKeys = [];
-            for (let i = 0; i < metaCopy.chunkCount; i++) {
-                chunkKeys.push(StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + i);
-            }
+            const chunkKeys = Array.from({ length: metaCopy.chunkCount }, (_, i) => StorageManager.KEYS.CHAT_PRESET_MAP_CHUNK_PREFIX + i);
             const chunks = await this._get(chunkKeys);
             const chunksByIdx = [];
             const map = {};

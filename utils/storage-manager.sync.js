@@ -253,9 +253,8 @@
         /**
          * 從匯入的 JSON 物件還原所有設定。
          * @param {Object} importedSettings
-         * @param {boolean} mergePresetsOnly - 若為 true，僅合併 presets 而不覆寫 UI 設定
          */
-        async restoreSettings(importedSettings, mergePresetsOnly = false) {
+        async restoreSettings(importedSettings) {
             const currentSettings = await this.getSettings();
             const updates = {};
 
@@ -280,22 +279,20 @@
                 }));
             }
 
-            // 其餘設定直接覆寫，除非 mergePresetsOnly 為 true
-            if (!mergePresetsOnly) {
-                if (importedSettings.activePresetId !== undefined) updates[this.KEYS.ACTIVE_PRESET_ID] = importedSettings.activePresetId;
-                // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
-                // 匯入備份不應覆寫當前裝置的開關狀態，故不從 importedSettings 還原。
-                if (importedSettings.includeThinking !== undefined) updates[this.KEYS.INCLUDE_THINKING] = importedSettings.includeThinking;
-                if (importedSettings.includeReferences !== undefined) updates[this.KEYS.INCLUDE_REFERENCES] = importedSettings.includeReferences;
-                if (importedSettings.globalDefaultPrompt !== undefined) updates[this.KEYS.GLOBAL_DEFAULT_PROMPT] = importedSettings.globalDefaultPrompt;
-                if (importedSettings.sidebarAutoHide !== undefined) updates[this.KEYS.SIDEBAR_AUTO_HIDE] = importedSettings.sidebarAutoHide;
-                if (importedSettings.hideThinking !== undefined) updates[this.KEYS.HIDE_THINKING] = importedSettings.hideThinking;
-                if (importedSettings.showSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.showSystemTime;
-                if (importedSettings.chatWidth !== undefined) updates[this.KEYS.CHAT_WIDTH] = importedSettings.chatWidth;
-                if (importedSettings.chatWidthEnabled !== undefined) updates[this.KEYS.CHAT_WIDTH_ENABLED] = importedSettings.chatWidthEnabled;
-                if (importedSettings.inputWidth !== undefined) updates[this.KEYS.INPUT_WIDTH] = importedSettings.inputWidth;
-                if (importedSettings.inputWidthEnabled !== undefined) updates[this.KEYS.INPUT_WIDTH_ENABLED] = importedSettings.inputWidthEnabled;
-            }
+            // 其餘設定直接覆寫
+            if (importedSettings.activePresetId !== undefined) updates[this.KEYS.ACTIVE_PRESET_ID] = importedSettings.activePresetId;
+            // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
+            // 匯入備份不應覆寫當前裝置的開關狀態，故不從 importedSettings 還原。
+            if (importedSettings.includeThinking !== undefined) updates[this.KEYS.INCLUDE_THINKING] = importedSettings.includeThinking;
+            if (importedSettings.includeReferences !== undefined) updates[this.KEYS.INCLUDE_REFERENCES] = importedSettings.includeReferences;
+            if (importedSettings.globalDefaultPrompt !== undefined) updates[this.KEYS.GLOBAL_DEFAULT_PROMPT] = importedSettings.globalDefaultPrompt;
+            if (importedSettings.sidebarAutoHide !== undefined) updates[this.KEYS.SIDEBAR_AUTO_HIDE] = importedSettings.sidebarAutoHide;
+            if (importedSettings.hideThinking !== undefined) updates[this.KEYS.HIDE_THINKING] = importedSettings.hideThinking;
+            if (importedSettings.showSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.showSystemTime;
+            if (importedSettings.chatWidth !== undefined) updates[this.KEYS.CHAT_WIDTH] = importedSettings.chatWidth;
+            if (importedSettings.chatWidthEnabled !== undefined) updates[this.KEYS.CHAT_WIDTH_ENABLED] = importedSettings.chatWidthEnabled;
+            if (importedSettings.inputWidth !== undefined) updates[this.KEYS.INPUT_WIDTH] = importedSettings.inputWidth;
+            if (importedSettings.inputWidthEnabled !== undefined) updates[this.KEYS.INPUT_WIDTH_ENABLED] = importedSettings.inputWidthEnabled;
 
             if (Object.keys(updates).length > 0) {
                 return this._set(updates);

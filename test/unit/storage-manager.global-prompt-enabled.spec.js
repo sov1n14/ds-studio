@@ -4,8 +4,10 @@
  *   - globalPromptEnabled (global-prompt toggle)
  *
  * Both keys were converted from synced settings to device-local-only settings:
- *   - saveEnabledState/getEnabledState and saveGlobalPromptEnabled/getGlobalPromptEnabled
- *     read/write chrome.storage.local directly, never touching chrome.storage.sync.
+ *   - saveEnabledState/saveGlobalPromptEnabled write chrome.storage.local directly,
+ *     never touching chrome.storage.sync. (The paired getEnabledState/
+ *     getGlobalPromptEnabled getters were dead code and have since been removed —
+ *     getSettings() is the only read path for these two keys.)
  *   - getSettings() sources isEnabled/globalPromptEnabled from local storage only.
  *   - resolveSyncConflict() never restores/overwrites these two keys from a sync payload.
  *   - restoreSettings() (import/backup restore) does NOT set these two keys from an
@@ -54,12 +56,6 @@ describe('StorageManager — isEnabled / globalPromptEnabled (local-only, report
             expect(settings.globalPromptEnabled).toBe(true);
         });
 
-        it('getGlobalPromptEnabled() reads directly from chrome.storage.local', async () => {
-            await chrome.storage.local.set({ [K.GLOBAL_PROMPT_ENABLED]: false });
-            const result = await StorageManager.getGlobalPromptEnabled();
-            expect(result[K.GLOBAL_PROMPT_ENABLED]).toBe(false);
-        });
-
         it('getSettings() reflects globalPromptEnabled from local even if a stale value exists in sync', async () => {
             // Simulate a stale/foreign sync value that must NOT leak into settings.
             await chrome.storage.sync.set({ [K.GLOBAL_PROMPT_ENABLED]: false });
@@ -79,12 +75,6 @@ describe('StorageManager — isEnabled / globalPromptEnabled (local-only, report
 
             const syncData = await chrome.storage.sync.get([K.IS_ENABLED]);
             expect(syncData[K.IS_ENABLED]).toBeUndefined();
-        });
-
-        it('getEnabledState() reads directly from chrome.storage.local', async () => {
-            await chrome.storage.local.set({ [K.IS_ENABLED]: false });
-            const result = await StorageManager.getEnabledState();
-            expect(result[K.IS_ENABLED]).toBe(false);
         });
 
         it('getSettings() reflects isEnabled from local even if a stale value exists in sync', async () => {

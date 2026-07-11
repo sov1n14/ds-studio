@@ -127,7 +127,7 @@ const TemporaryChatDelete = (() => {
      * @returns {string|null}
      */
     function extractUuidFromUrl(urlOrPath) {
-        const target = urlOrPath !== undefined ? urlOrPath : window.location.pathname;
+        const target = urlOrPath ?? window.location.pathname;
         const match = target.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
         return match ? match[1] : null;
     }

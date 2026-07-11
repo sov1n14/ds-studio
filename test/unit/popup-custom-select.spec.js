@@ -21,8 +21,18 @@ beforeAll(() => {
     const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
     eval(rendererCode);
 
+    // custom-select.js (post-refactor) is a plain top-level function declaration
+    // with no window.__DSSCustomSelect bridge — it relies on classic-script global
+    // leakage when loaded via <script> tag. A direct eval() inside this (strict-mode
+    // ESM) test module would NOT leak `createPresetCustomSelect` to the global scope,
+    // so an indirect eval is used instead, which always runs as a non-strict global
+    // script regardless of the caller's strictness.
     const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
-    eval(code);
+    const globalEval = eval;
+    globalEval(code);
+    if (typeof globalThis.createPresetCustomSelect !== 'function') {
+        throw new Error('createPresetCustomSelect was not exposed as a global after eval');
+    }
 
     // Extract Modal object from popup.js for modal-integration tests
     const popupCode = readFileSync(resolve(__dirname, '../../popup/popup.modal.js'), 'utf-8');
@@ -30,7 +40,6 @@ beforeAll(() => {
     if (!match) {
         throw new Error('Could not extract Modal object from popup.js');
     }
-    const globalEval = eval;
     globalEval(match[0].replace('const Modal', 'var Modal'));
     if (typeof globalThis.Modal !== 'object') {
         throw new Error('Extracted code did not define Modal as an object');
@@ -76,7 +85,7 @@ function createSelect(overrides = {}) {
     const onRequestDelete = vi.fn();
     const onRequestDeleteAll = vi.fn();
 
-    const sel = window.__DSSCustomSelect.createPresetCustomSelect({
+    const sel = createPresetCustomSelect({
         triggerEl: document.getElementById('trigger'),
         panelEl: document.getElementById('panel'),
         valueEl: document.getElementById('value'),
@@ -291,6 +300,62 @@ describe('createPresetCustomSelect', () => {
             expect(document.getElementById('list').classList.contains('ds-select__list--filtering')).toBe(false);
             vi.useRealTimers();
         });
+    });
+
+    describe('拖曳排序（_reorderPresets，private helper of custom-select.js）', () => {
+        // _reorderPresets() has no direct export since the popup-utils.js module it
+        // used to live in was deleted; it's now a private function inside
+        // custom-select.js, exercised only through the drag-and-drop pointer flow
+        // below (onReorder callback receives its return value).
+        function dragHandleFor(id) {
+            const handle = document.querySelector(`#list .ds-select__item[data-id="${id}"] .ds-select__drag-handle`);
+            // happy-dom does not implement PointerEvent.setPointerCapture — stub it
+            // so _onHandlePointerDown's handle.setPointerCapture(e.pointerId) call
+            // does not throw.
+            if (typeof handle.setPointerCapture !== 'function') {
+                handle.setPointerCapture = () => {};
+            }
+            return handle;
+        }
+
+        function fireDrag(handle, { fromY, toY, targetItemId }) {
+            handle.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, clientY: fromY, bubbles: true }));
+            // Move far enough (>= 5px) to arm the drag past the tap threshold, landing
+            // over the target item so _updateInsertionLine records hoverTargetId.
+            const targetItem = document.querySelector(`#list .ds-select__item[data-id="${targetItemId}"]`);
+            const rect = targetItem.getBoundingClientRect();
+            handle.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: toY, bubbles: true }));
+            handle.dispatchEvent(new PointerEvent('pointerup', { clientX: 0, clientY: toY, bubbles: true }));
+        }
+
+        it('拖曳項目至另一項目下方時，onReorder 收到重新排序後的陣列', () => {
+            const { sel, onReorder } = createSelect();
+            sel.open();
+
+            const handle = dragHandleFor('a');
+            // getBoundingClientRect() on happy-dom returns all-zero rects, so every
+            // item is treated as "insert after" (clientY >= rect.top) — dragging 'a'
+            // therefore lands after the last item found by the walk ('c').
+            fireDrag(handle, { fromY: 0, toY: 50, targetItemId: 'c' });
+
+            expect(onReorder).toHaveBeenCalledTimes(1);
+            const reordered = onReorder.mock.calls[0][0];
+            expect(reordered.map(p => p.id)).not.toEqual(['a', 'b', 'c']);
+            expect(reordered.map(p => p.id).sort()).toEqual(['a', 'b', 'c']);
+        });
+
+        it('未實際位移（未超過 5px 閾值）時視為點擊，呼叫 onSelect 而非 onReorder', () => {
+            const { sel, onSelect, onReorder } = createSelect();
+            sel.open();
+
+            const handle = dragHandleFor('b');
+            handle.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, clientY: 0, bubbles: true }));
+            handle.dispatchEvent(new PointerEvent('pointerup', { clientX: 0, clientY: 0, bubbles: true }));
+
+            expect(onReorder).not.toHaveBeenCalled();
+            expect(onSelect).toHaveBeenCalledWith('b');
+        });
+
     });
 
     describe('刪除全部按鈕 (.ds-select__item-btn--delete-all)', () => {

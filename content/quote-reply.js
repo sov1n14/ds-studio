@@ -157,7 +157,7 @@ html[data-theme="dark"] .dss-quote-btn {
     },
 
     handleSelectionChange(selectionLike) {
-        const sel = selectionLike !== undefined ? selectionLike : window.getSelection();
+        const sel = selectionLike ?? window.getSelection();
 
         if (!sel || sel.toString().trim() === '') {
             QuoteReply.hideButton();

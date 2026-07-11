@@ -20,7 +20,7 @@
          * @throws {LockAcquireTimeoutError} 超過 LOCK_ACQUIRE_TIMEOUT_MS 仍未取得鎖。
          */
         async _acquireChatPresetMapLock() {
-            const token = Math.random().toString(36).slice(2) + '-' + Date.now();
+            const token = crypto.randomUUID();
             const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
 
             while (Date.now() < deadline) {

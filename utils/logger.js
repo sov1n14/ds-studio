@@ -20,7 +20,7 @@
          * @param {*}      [data]
          */
         warn(event, data) {
-            console.warn('[DS-Sync]', event, data !== undefined ? data : '');
+            console.warn('[DS-Sync]', event, data ?? '');
         },
     };
 

@@ -1,31 +1,98 @@
 /**
  * DS studio — Popup Controller（入口）
- * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
- *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）
+ * 依賴：popup.modal.js（Modal, Toast）、custom-select.js（createPresetCustomSelect）、
+ *       popup.preset-manager.js（requestAddPreset/requestEditPreset/requestDeletePreset/requestDeleteAllPresets）、
+ *       popup.backup-manager.js（bindExportJson 等）、popup.live-sync.js（startLiveSync）、
+ *       popup.editor-windows.js（openEditorWindow）、popup.settings-controls.js（bindSettingsControls）
  * 需在本檔案之前以 <script> 載入上述模組。
  */
 
+// --- DOM refs（供本檔案與其他 sub-module 共用） ---
+const enableToggle              = document.getElementById('enableToggle');
+const includeThinkingToggle     = document.getElementById('includeThinkingToggle');
+const includeReferencesToggle   = document.getElementById('includeReferencesToggle');
+const showSystemTimeToggle      = document.getElementById('showSystemTimeToggle');
+const saveStatus                = document.getElementById('saveStatus');
+const addPresetBtn              = document.getElementById('addPresetBtn');
+const editPresetBtn             = document.getElementById('editPresetBtn');
+const editGlobalPromptBtn       = document.getElementById('editGlobalPromptBtn');
+const globalPromptToggle        = document.getElementById('globalPromptToggle');
+const sidebarAutoHideToggle     = document.getElementById('sidebarAutoHideToggle');
+const hideThinkingToggle        = document.getElementById('hideThinkingToggle');
+const chatWidthToggle           = document.getElementById('chatWidthToggle');
+const chatWidthSlider           = document.getElementById('chatWidthSlider');
+const chatWidthValue            = document.getElementById('chatWidthValue');
+const chatWidthSliderContainer  = document.getElementById('chatWidthSliderContainer');
+const inputWidthToggle          = document.getElementById('inputWidthToggle');
+const inputWidthSlider          = document.getElementById('inputWidthSlider');
+const inputWidthValue           = document.getElementById('inputWidthValue');
+const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
+const syncStatusEl              = document.getElementById('syncStatus');
+
+let saveTimeout;
+
+// --- 共享 popup 狀態（取代先前散落在 DOMContentLoaded 閉包中的變數） ---
+const popupState = {
+    presets: [],
+    activePresetId: null,
+    chatPresetMap: {},
+    currentTabUuid: undefined,
+    customSelect: null,
+    globalEditorWindowId: null,
+    presetEditorWindowId: null,
+};
+
 // ────────────────────────────────────────────
-// 防抖工具（與 popup-utils.js 邏輯一致，
-// 因 popup-utils.js 採用 ES module export 無法
-// 在 classic script 環境下直接取用，故於此複製）
+// Helpers（頂層宣告，供其他 sub-module 直接呼叫）
 // ────────────────────────────────────────────
 
-/**
- * 建立防抖包裝函式。
- * @param {Function} fn - 要延遲執行的函式
- * @param {number} delayMs - 延遲毫秒數
- * @returns {Function} 防抖後的函式
- */
-function debounce(fn, delayMs) {
-    let timer = null;
-    return function (...args) {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-            timer = null;
-            fn.apply(this, args);
-        }, delayMs);
-    };
+/** 依主開關狀態切換子控制項 disabled */
+function applyMasterSwitchUI(isEnabled) {
+    const subControls = [
+        sidebarAutoHideToggle,
+        hideThinkingToggle,
+        showSystemTimeToggle,
+        chatWidthToggle, chatWidthSlider,
+        inputWidthToggle, inputWidthSlider
+    ];
+    subControls.forEach(el => {
+        if (el) el.disabled = !isEnabled;
+    });
+}
+
+async function refreshSyncStatus() {
+    try {
+        const isSynced = await StorageManager.isSyncedWithCloud();
+        const isOversized = await StorageManager.hasOversizedItems();
+        const el = document.getElementById('syncStatus');
+        el.classList.toggle('synced',   isSynced && !isOversized);
+        el.classList.toggle('unsynced', !isSynced || isOversized);
+        el.textContent = isOversized
+            ? dsI18n.t('syncStatusOversized')
+            : (isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced'));
+    } catch (e) { /* 靜默忽略 — 僅為 UI 提示 */ }
+}
+
+function showSaveStatus() {
+    saveStatus.classList.remove('status-hidden');
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        saveStatus.classList.add('status-hidden');
+    }, 1000);
+}
+
+/** 依目前活躍提示詞組更新鉛筆按鈕的停用狀態 */
+function updateEditPresetBtnState() {
+    if (editPresetBtn) {
+        editPresetBtn.disabled = (popupState.activePresetId === '');
+    }
+}
+
+/** 廣播目前活躍提示詞組至內容腳本 */
+function sendActivePresetToContentScript() {
+    const preset  = popupState.presets.find(p => p.id === popupState.activePresetId);
+    const content = preset?.content ?? '';
+    window.DSVMessaging?.broadcastActivePreset(popupState.activePresetId, content);
 }
 
 // ────────────────────────────────────────────
@@ -33,159 +100,10 @@ function debounce(fn, delayMs) {
 // ────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 從全域取回 Modal 與 Toast（由 popup.modal.js 注入）
-    const { Modal, Toast } = window.__DS_PopupModal;
-
-    // --- DOM refs ---
-    const enableToggle              = document.getElementById('enableToggle');
-    const includeThinkingToggle     = document.getElementById('includeThinkingToggle');
-    const includeReferencesToggle   = document.getElementById('includeReferencesToggle');
-    const showSystemTimeToggle      = document.getElementById('showSystemTimeToggle');
-    const saveStatus                = document.getElementById('saveStatus');
-    const addPresetBtn              = document.getElementById('addPresetBtn');
-    const editPresetBtn             = document.getElementById('editPresetBtn');
-    const editGlobalPromptBtn       = document.getElementById('editGlobalPromptBtn');
-    const globalPromptToggle        = document.getElementById('globalPromptToggle');
-    const sidebarAutoHideToggle     = document.getElementById('sidebarAutoHideToggle');
-    const hideThinkingToggle        = document.getElementById('hideThinkingToggle');
-    const chatWidthToggle           = document.getElementById('chatWidthToggle');
-    const chatWidthSlider           = document.getElementById('chatWidthSlider');
-    const chatWidthValue            = document.getElementById('chatWidthValue');
-    const chatWidthSliderContainer  = document.getElementById('chatWidthSliderContainer');
-    const inputWidthToggle          = document.getElementById('inputWidthToggle');
-    const inputWidthSlider          = document.getElementById('inputWidthSlider');
-    const inputWidthValue           = document.getElementById('inputWidthValue');
-    const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
-    const syncStatusEl              = document.getElementById('syncStatus');
-
-    let saveTimeout;
-    let customSelect;
-
     // Init Modal & Toast
     Modal.init();
     Toast.init();
     await dsI18n.init();
-
-    // --- 狀態 ---
-    let presets        = [];
-    let activePresetId = null;
-    let chatPresetMap  = {};
-    let currentTabUuid = undefined;
-
-    // --- 編輯器視窗 ID 追蹤（各保留一個 slot） ---
-    let globalEditorWindowId = null;
-    let presetEditorWindowId = null;
-
-    // --- 主開關 UI 輔助 ---
-    function applyMasterSwitchUI(isEnabled) {
-        const subControls = [
-            sidebarAutoHideToggle,
-            hideThinkingToggle,
-            showSystemTimeToggle,
-            chatWidthToggle, chatWidthSlider,
-            inputWidthToggle, inputWidthSlider
-        ];
-        subControls.forEach(el => {
-            if (el) el.disabled = !isEnabled;
-        });
-    }
-
-    // ────────────────────────────────────────────
-    // Helpers
-    // ────────────────────────────────────────────
-
-    async function refreshSyncStatus() {
-        try {
-            const isSynced = await StorageManager.isSyncedWithCloud();
-            const isOversized = await StorageManager.hasOversizedItems();
-            const el = document.getElementById('syncStatus');
-            el.classList.toggle('synced',   isSynced && !isOversized);
-            el.classList.toggle('unsynced', !isSynced || isOversized);
-            el.textContent = isOversized
-                ? dsI18n.t('syncStatusOversized')
-                : (isSynced ? dsI18n.t('syncStatusSynced') : dsI18n.t('syncStatusUnsynced'));
-        } catch (e) { /* 靜默忽略 — 僅為 UI 提示 */ }
-    }
-
-    function showSaveStatus() {
-        saveStatus.classList.remove('status-hidden');
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-            saveStatus.classList.add('status-hidden');
-        }, 1000);
-    }
-
-    /** 依目前活躍提示詞組更新鉛筆按鈕的停用狀態 */
-    function updateEditPresetBtnState() {
-        if (editPresetBtn) {
-            editPresetBtn.disabled = (activePresetId === '');
-        }
-    }
-
-    /** 廣播目前活躍提示詞組至內容腳本 */
-    function sendActivePresetToContentScript() {
-        const preset  = presets.find(p => p.id === activePresetId);
-        const content = preset?.content ?? '';
-        window.DSVMessaging?.broadcastActivePreset(activePresetId, content);
-    }
-
-    /**
-     * 開啟（或聚焦）編輯器視窗（singleton per target）
-     * @param {'global'|'preset'} target - 編輯目標類型
-     * @param {string} [presetId] - 僅在 target==='preset' 時使用
-     */
-    async function openEditorWindow(target, presetId) {
-        const baseUrl = chrome.runtime.getURL('popup/editor/editor.html');
-        const url = target === 'global'
-            ? `${baseUrl}?target=global`
-            : `${baseUrl}?target=preset&id=${encodeURIComponent(presetId)}`;
-
-        // 根據 target 選取對應的視窗 ID slot
-        const isGlobal      = target === 'global';
-        const trackedId     = isGlobal ? globalEditorWindowId : presetEditorWindowId;
-
-        if (trackedId !== null) {
-            try {
-                // 嘗試聚焦現有視窗
-                await chrome.windows.update(trackedId, { focused: true });
-                return;
-            } catch {
-                // 視窗已關閉，清除追蹤 ID 並重新建立
-                if (isGlobal) {
-                    globalEditorWindowId = null;
-                } else {
-                    presetEditorWindowId = null;
-                }
-            }
-        }
-
-        try {
-            const win = await chrome.windows.create({ url, type: 'popup', width: 1280, height: 720 });
-            if (isGlobal) {
-                globalEditorWindowId = win.id;
-            } else {
-                presetEditorWindowId = win.id;
-            }
-        } catch (err) {
-        }
-    }
-
-    // --- 建立 preset manager（透過 factory 接收上下文） ---
-    const presetManager = window.__DS_PopupPresetManager.createPresetManager({
-        getPresets:          () => presets,
-        setPresets:          (v) => { presets = v; },
-        getActivePresetId:   () => activePresetId,
-        setActivePresetId:   (v) => { activePresetId = v; },
-        getChatPresetMap:    () => chatPresetMap,
-        setChatPresetMap:    (v) => { chatPresetMap = v; },
-        getCustomSelect:     () => customSelect,
-        refreshSyncStatus,
-        showSaveStatus,
-        updateEditPresetBtnState,
-        sendActivePresetToContentScript,
-        Modal,
-        StorageManager,
-    });
 
     // --- 載入初始設定 ---
     await StorageManager.initialize();
@@ -212,13 +130,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
     const settings = await StorageManager.syncNow();
 
-    presets        = settings.promptPresets;
-    activePresetId = settings.activePresetId;
-    chatPresetMap  = settings.chatPresetMap;
+    popupState.presets        = settings.promptPresets;
+    popupState.activePresetId = settings.activePresetId;
+    popupState.chatPresetMap  = settings.chatPresetMap;
 
     // 清除已失效的 chatPresetMap 條目
-    const validIds = new Set(presets.map(p => p.id));
-    chatPresetMap = await StorageManager.mutateChatPresetMap(map => {
+    const validIds = new Set(popupState.presets.map(p => p.id));
+    popupState.chatPresetMap = await StorageManager.mutateChatPresetMap(map => {
         for (const [uuid, pid] of Object.entries(map)) {
             if (pid && !validIds.has(pid)) {
                 delete map[uuid];
@@ -261,30 +179,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tabs[0] && tabs[0].url && tabs[0].url.includes('chat.deepseek.com')) {
-            const uuid  = presetManager.extractUuidFromUrl(tabs[0].url);
+            const uuid  = extractUuidFromUrl(tabs[0].url);
             const tabId = tabs[0].id;
-            currentTabUuid = uuid || null;
+            popupState.currentTabUuid = uuid || null;
 
-            if (uuid && chatPresetMap[uuid]) {
+            if (uuid && popupState.chatPresetMap[uuid]) {
                 // 已綁定對話：自動選擇對應提示詞組
-                activePresetId = chatPresetMap[uuid];
-                await StorageManager.saveActivePresetId(activePresetId);
+                popupState.activePresetId = popupState.chatPresetMap[uuid];
+                await StorageManager.saveActivePresetId(popupState.activePresetId);
             } else {
                 // 未綁定對話：從內容腳本查詢 pending preset
-                const pending = await presetManager.getPendingPresetIdFromContentScript(tabId);
-                activePresetId = (pending && presets.some(p => p.id === pending)) ? pending : '';
-                await StorageManager.saveActivePresetId(activePresetId);
+                const pending = await getPendingPresetIdFromContentScript(tabId);
+                popupState.activePresetId = (pending && popupState.presets.some(p => p.id === pending)) ? pending : '';
+                await StorageManager.saveActivePresetId(popupState.activePresetId);
             }
         } else {
             // 非 DeepSeek 頁面：預設空白選項
-            activePresetId = '';
+            popupState.activePresetId = '';
         }
     } catch (err) {
         // 查詢分頁失敗：安全回退為空白
-        activePresetId = '';
+        popupState.activePresetId = '';
     }
 
-    customSelect = window.__DSSCustomSelect.createPresetCustomSelect({
+    popupState.customSelect = createPresetCustomSelect({
         triggerEl:    document.getElementById('presetSelect'),
         panelEl:      document.getElementById('presetSelectPanel'),
         valueEl:      document.getElementById('presetSelectValue'),
@@ -292,242 +210,70 @@ document.addEventListener('DOMContentLoaded', async () => {
         listEl:       document.getElementById('presetSelectList'),
         blankItemEl:  document.querySelector('.ds-select__item--empty'),
         emptyHintEl:  document.getElementById('presetSelectEmptyHint'),
-        getPresets:        () => presets,
-        getActivePresetId: () => activePresetId,
+        getPresets:        () => popupState.presets,
+        getActivePresetId: () => popupState.activePresetId,
         onSelect: async (id) => {
             Modal.dismissActive();
 
-            if (currentTabUuid && id !== '') {
-                await StorageManager.bindChatToPreset(currentTabUuid, id);
-                chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
-            } else if (currentTabUuid && id === '') {
-                await StorageManager.unbindChat(currentTabUuid);
-                chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
+            if (popupState.currentTabUuid && id !== '') {
+                await StorageManager.bindChatToPreset(popupState.currentTabUuid, id);
+                popupState.chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
+            } else if (popupState.currentTabUuid && id === '') {
+                await StorageManager.unbindChat(popupState.currentTabUuid);
+                popupState.chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
             }
 
-            activePresetId = id;
-            await StorageManager.saveActivePresetId(activePresetId);
+            popupState.activePresetId = id;
+            await StorageManager.saveActivePresetId(popupState.activePresetId);
 
             updateEditPresetBtnState();
             showSaveStatus();
             await refreshSyncStatus();
             sendActivePresetToContentScript();
-            customSelect.render();
+            popupState.customSelect.render();
         },
         onReorder: async (newPresets) => {
-            presets = newPresets;
+            popupState.presets = newPresets;
             await StorageManager.savePromptPresets(newPresets, { order: newPresets.map(p => p.id), orderUpdatedAt: Date.now() });
             await refreshSyncStatus();
-            customSelect.render();
+            popupState.customSelect.render();
         },
-        onRequestEdit:      (id) => presetManager.requestEditPreset(id),
-        onRequestDelete:    (id) => presetManager.requestDeletePreset(id),
-        onRequestDeleteAll: ()   => presetManager.requestDeleteAllPresets(),
+        onRequestEdit:      (id) => requestEditPreset(popupState, id),
+        onRequestDelete:    (id) => requestDeletePreset(popupState, id),
+        onRequestDeleteAll: ()   => requestDeleteAllPresets(popupState),
     });
 
-    customSelect.render();
+    popupState.customSelect.render();
     updateEditPresetBtnState();
     sendActivePresetToContentScript();
 
     // --- 啟動 Live Sync：即時反映其他裝置/分頁/視窗所做的設定變更 ---
-    const liveSync = window.__DS_PopupLiveSync.createLiveSyncListener({
-        StorageManager,
-        dom: {
-            enableToggle, includeThinkingToggle, includeReferencesToggle,
-            showSystemTimeToggle, globalPromptToggle,
-            sidebarAutoHideToggle, hideThinkingToggle,
-            chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
-            inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
-        },
-        applyMasterSwitchUI,
-        updateEditPresetBtnState,
-        getPresets:        () => presets,
-        setPresets:        (v) => { presets = v; },
-        getActivePresetId: () => activePresetId,
-        setActivePresetId: (v) => { activePresetId = v; },
-        getChatPresetMap:  () => chatPresetMap,
-        setChatPresetMap:  (v) => { chatPresetMap = v; },
-        getCustomSelect:   () => customSelect,
-    });
-    liveSync.start();
+    startLiveSync(popupState);
 
     // ────────────────────────────────────────────
-    // 按鈕 & 開關事件綁定
+    // 按鈕事件綁定
     // ────────────────────────────────────────────
 
     // --- 新增提示詞組 ---
-    addPresetBtn.addEventListener('click', async () => {
-        const name = await Modal.prompt({
-            title: dsI18n.t('addPresetDialogTitle'),
-            placeholder: dsI18n.t('addPresetPlaceholder')
-        });
-
-        if (!name) return;
-
-        // 名稱重複檢查
-        if (presets.some(p => p.name === name)) {
-            await Modal.confirm({
-                title: dsI18n.t('duplicateNameTitle'),
-                message: dsI18n.t('duplicateNameMessage', { name }),
-                confirmText: dsI18n.t('confirmButton'),
-                cancelText: null
-            });
-            return;
-        }
-
-        const newPreset = {
-            id:        'preset-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-            name:      name,
-            content:   '',
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-
-        presets.push(newPreset);
-        activePresetId = newPreset.id;
-
-        await Promise.all([
-            StorageManager.savePromptPresets(presets),
-            StorageManager.saveActivePresetId(activePresetId)
-        ]);
-        await refreshSyncStatus();
-
-        // 若在對話頁面則自動綁定新提示詞組
-        if (currentTabUuid) {
-            await StorageManager.bindChatToPreset(currentTabUuid, activePresetId);
-            chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
-            await refreshSyncStatus();
-        }
-
-        customSelect.render();
-        updateEditPresetBtnState();
-        showSaveStatus();
-        sendActivePresetToContentScript();
-    });
+    addPresetBtn.addEventListener('click', () => requestAddPreset(popupState));
 
     // --- 編輯提示詞組內容（開啟編輯器視窗） ---
     if (editPresetBtn) {
         editPresetBtn.addEventListener('click', () => {
-            if (!activePresetId) return;
-            openEditorWindow('preset', activePresetId);
+            if (!popupState.activePresetId) return;
+            openEditorWindow(popupState, 'preset', popupState.activePresetId);
         });
     }
 
     // --- 編輯全域提示詞（開啟編輯器視窗） ---
     if (editGlobalPromptBtn) {
         editGlobalPromptBtn.addEventListener('click', () => {
-            openEditorWindow('global');
+            openEditorWindow(popupState, 'global');
         });
     }
 
-    // --- 全域提示詞開關 ---
-    if (globalPromptToggle) {
-        globalPromptToggle.addEventListener('change', async () => {
-            await StorageManager.saveGlobalPromptEnabled(globalPromptToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    // --- 主開關 ---
-    enableToggle.addEventListener('change', async () => {
-        await StorageManager.saveEnabledState(enableToggle.checked);
-        await refreshSyncStatus();
-        applyMasterSwitchUI(enableToggle.checked);
-        showSaveStatus();
-    });
-
-    if (includeThinkingToggle) {
-        includeThinkingToggle.addEventListener('change', async () => {
-            await StorageManager.saveIncludeThinking(includeThinkingToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (includeReferencesToggle) {
-        includeReferencesToggle.addEventListener('change', async () => {
-            await StorageManager.saveIncludeReferences(includeReferencesToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (sidebarAutoHideToggle) {
-        sidebarAutoHideToggle.addEventListener('change', async () => {
-            await StorageManager.saveSidebarAutoHide(sidebarAutoHideToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (hideThinkingToggle) {
-        hideThinkingToggle.addEventListener('change', async () => {
-            await StorageManager.saveHideThinking(hideThinkingToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (showSystemTimeToggle) {
-        showSystemTimeToggle.addEventListener('change', async () => {
-            await StorageManager.saveShowSystemTime(showSystemTimeToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    // 對話區域寬度開關與 slider
-    if (chatWidthToggle && chatWidthSliderContainer) {
-        chatWidthToggle.addEventListener('change', async () => {
-            const isEnabled = chatWidthToggle.checked;
-            chatWidthSliderContainer.classList.toggle('collapsed', !isEnabled);
-            await StorageManager.saveChatWidthEnabled(isEnabled);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-    // 防抖儲存對話區域寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
-    const debouncedSaveChatWidth = debounce(async (widthValue) => {
-        await StorageManager.saveChatWidth(widthValue);
-        await refreshSyncStatus();
-        showSaveStatus();
-    }, 500);
-
-    if (chatWidthSlider && chatWidthValue) {
-        chatWidthSlider.addEventListener('input', () => {
-            chatWidthValue.textContent = chatWidthSlider.value + '%';
-        });
-        chatWidthSlider.addEventListener('change', () => {
-            debouncedSaveChatWidth(parseInt(chatWidthSlider.value, 10));
-        });
-    }
-
-    // 編輯輸入框寬度開關與 slider
-    if (inputWidthToggle && inputWidthSliderContainer) {
-        inputWidthToggle.addEventListener('change', async () => {
-            const isEnabled = inputWidthToggle.checked;
-            inputWidthSliderContainer.classList.toggle('collapsed', !isEnabled);
-            await StorageManager.saveInputWidthEnabled(isEnabled);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-    // 防抖儲存編輯輸入框寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
-    const debouncedSaveInputWidth = debounce(async (widthValue) => {
-        await StorageManager.saveInputWidth(widthValue);
-        await refreshSyncStatus();
-        showSaveStatus();
-    }, 500);
-
-    if (inputWidthSlider && inputWidthValue) {
-        inputWidthSlider.addEventListener('input', () => {
-            inputWidthValue.textContent = inputWidthSlider.value + '%';
-        });
-        inputWidthSlider.addEventListener('change', () => {
-            debouncedSaveInputWidth(parseInt(inputWidthSlider.value, 10));
-        });
-    }
+    // --- 設定開關與寬度滑桿（委派至 popup.settings-controls.js） ---
+    bindSettingsControls();
 
     // --- 匯出 Markdown ---
     const exportMdBtn = document.getElementById('exportMdBtn');
@@ -554,22 +300,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- JSON 備份與復原訊息備份（委派至 popup.backup-manager.js） ---
-    const backupManager = window.__DS_PopupBackupManager.createBackupManager({
-        refreshSyncStatus,
-        Modal,
-        Toast,
-        StorageManager,
-    });
-
-    backupManager.bindExportJson(document.getElementById('exportJsonBtn'));
-    backupManager.bindImportJson(
+    bindExportJson(document.getElementById('exportJsonBtn'));
+    bindImportJson(
         document.getElementById('importJsonBtn'),
         document.getElementById('importJsonInput')
     );
-    backupManager.bindExportRestored(document.getElementById('exportRestoredBtn'));
-    backupManager.bindImportRestored(
+    bindExportRestored(document.getElementById('exportRestoredBtn'));
+    bindImportRestored(
         document.getElementById('importRestoredBtn'),
         document.getElementById('importRestoredInput')
     );
-    backupManager.bindClearRestored(document.getElementById('clearRestoredBtn'));
+    bindClearRestored(document.getElementById('clearRestoredBtn'));
 });
