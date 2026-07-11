@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.10.0](changelog/v4.md#4100---2026-07-12) | 提示詞組列新增鉛筆/刪除 hover 提示並修正鉛筆圖示方向；新增「(無提示詞組)」列一鍵刪除全部提示詞組按鈕與確認對話框；`custom-select.js` 拆出 `preset-item-renderer.js` |
 | [4.9.1](changelog/v4.md#491---2026-07-11) | 修正臨時對話「導向同一對話」誤刪：判定改以目的地 `/a/chat/s/{uuid}` 的 UUID 比對追蹤中對話（取代完整 URL 字串相等），導向同一對話但 query／hash 不同時不再誤刪；刷新與離開他頁行為不變 |
 | [4.9.0](changelog/v4.md#490---2026-07-11) | 臨時對話刪除機制兩層化：content script 直接 `fetch(keepalive)` 即時刪除（移除不可靠的 SW IPC 中繼）、SW `onStartup` 補刪；待刪佇列改為 `chrome.storage.sync` 單一事實來源，支援跨裝置補刪；新增 Sync-Change Safeguard 與本機開啟中對話清單防誤刪；authToken 僅存本機永不同步 |
 | [4.8.4](changelog/v4.md#484---2026-07-11) | 移除純診斷用日誌轉發子系統（logger.js sync 機制、孤兒除錯檔 diagnostic-sidebar-log.js、temp-chat 系列除錯 log），保留告警類 console.warn/error；不影響任何使用者可見功能 |

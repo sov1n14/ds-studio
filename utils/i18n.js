@@ -99,6 +99,10 @@
     deletePresetMessage: '確定要刪除「{name}」嗎？此操作無法復原。',
     deleteButton: '刪除',
 
+    // ---- Preset Manager: Delete All ----
+    deleteAllPresetsTitle: '刪除全部提示詞組',
+    deleteAllPresetsMessage: '確定要刪除全部提示詞組嗎？此操作無法復原。',
+
     // ---- Backup Manager: Export ----
     settingsExportedToast: '設定已成功匯出',
     exportFailedToast: '匯出失敗',
@@ -135,6 +139,9 @@
     noPresetOptionCustomSelect: '（無提示詞組）',
     renameAriaLabel: '重新命名',
     deleteAriaLabel: '刪除',
+    editPresetNameTooltip: '編輯提示詞組名稱',
+    deletePresetTooltip: '刪除提示詞',
+    deleteAllPresetsTooltip: '刪除全部提示詞組',
 
     // ---- Content Script: Censor Reply Restore ----
     restoredBadge: '⚠ 已復原內容（後續對話無法沿用）',
@@ -263,6 +270,10 @@
     deletePresetMessage: 'Are you sure you want to delete "{name}"? This action cannot be undone.',
     deleteButton: 'Delete',
 
+    // ---- Preset Manager: Delete All ----
+    deleteAllPresetsTitle: 'Delete All Prompt Groups',
+    deleteAllPresetsMessage: 'Are you sure you want to delete all prompt groups? This action cannot be undone.',
+
     // ---- Backup Manager: Export ----
     settingsExportedToast: 'Settings exported successfully',
     exportFailedToast: 'Export failed',
@@ -299,6 +310,9 @@
     noPresetOptionCustomSelect: '(No Prompt Group)',
     renameAriaLabel: 'Rename',
     deleteAriaLabel: 'Delete',
+    editPresetNameTooltip: 'Edit prompt group name',
+    deletePresetTooltip: 'Delete prompt',
+    deleteAllPresetsTooltip: 'Delete all prompt groups',
 
     // ---- Content Script: Censor Reply Restore ----
     restoredBadge: '⚠ Content Restored (cannot be used in subsequent dialogue)',

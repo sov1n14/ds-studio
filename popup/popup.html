@@ -100,6 +100,12 @@
                                      data-id=""
                                      data-blank="true">
                                     <span class="ds-select__item-name" data-i18n="noPresetOption">（無提示詞組）</span>
+                                    <button class="ds-select__item-btn ds-select__item-btn--delete-all"
+                                            type="button"
+                                            title="刪除全部提示詞組"
+                                            data-i18n="deleteAllPresetsTooltip"
+                                            data-i18n-attr="title"
+                                            aria-label="刪除全部提示詞組">✕</button>
                                 </div>
                                 <div id="presetSelectList" class="ds-select__list"></div>
                                 <div id="presetSelectEmptyHint" class="ds-select__empty-hint" data-i18n="noSearchResultsHint" hidden>無相符結果</div>
@@ -251,6 +257,7 @@
     <script src="../utils/storage-manager.js"></script>
     <script src="../utils/messaging.js"></script>
     <script src="../utils/i18n.js"></script>
+    <script src="preset-item-renderer.js"></script>
     <script src="custom-select.js"></script>
     <script src="popup.modal.js"></script>
     <script src="popup.preset-manager.js"></script>

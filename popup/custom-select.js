@@ -20,14 +20,6 @@
         return result;
     }
 
-    function _escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
     function _fuzzyMatch(name, keyword) {
         if (!keyword) return true;
         const lowerName = String(name).toLowerCase();
@@ -65,7 +57,9 @@
         onReorder,
         onRequestEdit,
         onRequestDelete,
+        onRequestDeleteAll,
     }) {
+        const { buildPresetItemMarkup } = global.__DS_PresetItemRenderer;
         const state = {
             isOpen: false,
             keyword: '',
@@ -132,11 +126,7 @@
                 item.className = 'ds-select__item' + (p.id === activeId ? ' ds-select__item--selected' : '');
                 item.setAttribute('role', 'option');
                 item.setAttribute('data-id', p.id);
-                item.innerHTML =
-                    `<span class="ds-select__drag-handle" aria-hidden="true">⠿</span>` +
-                    `<span class="ds-select__item-name">${_escapeHtml(p.name)}</span>` +
-                    `<button class="ds-select__item-btn ds-select__item-btn--edit" type="button" aria-label="${dsI18n.t('renameAriaLabel')}">✎</button>` +
-                    `<button class="ds-select__item-btn ds-select__item-btn--delete" type="button" aria-label="${dsI18n.t('deleteAriaLabel')}">✕</button>`;
+                item.innerHTML = buildPresetItemMarkup(p);
                 listEl.appendChild(item);
             });
 
@@ -224,6 +214,14 @@
             panelEl.addEventListener('pointerdown', e => e.stopPropagation());
 
             panelEl.addEventListener('click', e => {
+                // Delete-all button (inside the blank/empty item row)
+                const deleteAllBtn = e.target.closest('.ds-select__item-btn--delete-all');
+                if (deleteAllBtn) {
+                    e.stopPropagation();
+                    if (onRequestDeleteAll) onRequestDeleteAll();
+                    return;
+                }
+
                 // Blank option
                 const blankClick = e.target.closest('.ds-select__item--empty');
                 if (blankClick) {
