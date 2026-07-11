@@ -98,8 +98,9 @@
 - **標記與刪除邏輯**（`content/temporary-chat-delete.js`）：
   - `deleteChatSession(chatUuid, { keepalive })`：guard clause 缺 token 或缺 chatUuid 即不送出；以 `fetch` POST 帶 authorization 與 x-client-* 標頭。
   - **標記**：收到 `DSS_CHAT_CREATE_DETECTED` 且開關開啟時設 pending；當 Navigation API `navigate` 落在 `/a/chat/s/<uuid>` 時，將該 UUID 寫入 `DSS_TEMP_CHAT_UUID_KEY` 作為追蹤對象並清除 pending。
-  - **離開即刪除**：`navigate` 事件計算離開前的 `fromUuid` 與目的地 URL；當「目的地 URL 與目前 URL 不同且 `navigationType !== 'reload'`」、`fromUuid` 等於追蹤的臨時 UUID、且已擷取 token 時，刪除並清除追蹤 UUID。
+  - **離開即刪除**：`navigate` 事件計算離開前的 `fromUuid` 與目的地 URL；當「非刷新」、「非導向同一對話」、`fromUuid` 等於追蹤的臨時 UUID、且已擷取 token 時，刪除並清除追蹤 UUID。
   - **同網址／重整不刪除（Bug 修正）**：`navigationType === 'reload'` 或目的地 URL 等於目前 URL（含於網址列重按目前對話網址）時不刪除，並設定抑制旗標阻擋後續 `beforeunload` 刪除；另以 F5 / Ctrl+R / Cmd+R 鍵盤偵測為第二層保險。
+  - **導向同一對話不刪除（Bug 修正，v4.9.1）**：`handleNavigationEvent` 從目的地 URL 擷取 `/a/chat/s/{uuid}` 的 `destUuid`，以 `isSameConversation = destUuid === _trackedTemporaryUuid` 作為守衛。只要導向的是同一追蹤中對話（即使僅 query string 或 hash 不同，如 `?model=v3`、`#msg-42`）即不刪除，取代先前僅比對完整 URL 字串相等的脆弱判定；`extractUuidFromUrl` 相應擴充為可接受選用的完整 URL 參數。此守衛不影響「導向其他頁面仍刪除」與「關閉分頁仍刪除」的既有行為。
   - `beforeunload`：涵蓋關閉分頁／瀏覽器與整頁導航；當目前 UUID 等於追蹤 UUID、未被抑制、且有 token 時，以 `keepalive: true` 刪除。
 - **生命週期**：監聽於「開關開啟」或「存在追蹤中的臨時 UUID」任一成立時保持掛載；標記新對話僅在開關開啟時進行；刪除已追蹤對話不受開關關閉影響；追蹤對象清空且開關關閉後才卸除監聽。
 - **獨立性**：此功能不受彈出選單右上角主開關連動，僅由首頁開關獨立控制。

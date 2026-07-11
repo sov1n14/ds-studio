@@ -176,6 +176,21 @@ describe('D — extractUuidFromUrl', () => {
         expect(TemporaryChatDelete.extractUuidFromUrl()).toBe(uuid);
         window.history.replaceState({}, '', '/');
     });
+
+    it('D5: extracts uuid from a full URL with a query string', () => {
+        const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
+        expect(TemporaryChatDelete.extractUuidFromUrl(`https://chat.deepseek.com/a/chat/s/${uuid}?foo=bar`)).toBe(uuid);
+    });
+
+    it('D6: extracts uuid from a full URL with a hash fragment', () => {
+        const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
+        expect(TemporaryChatDelete.extractUuidFromUrl(`https://chat.deepseek.com/a/chat/s/${uuid}#msg-42`)).toBe(uuid);
+    });
+
+    it('D7: extracts uuid from a full URL with BOTH a query string and a hash fragment', () => {
+        const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
+        expect(TemporaryChatDelete.extractUuidFromUrl(`https://chat.deepseek.com/a/chat/s/${uuid}?model=v3#msg-42`)).toBe(uuid);
+    });
 });
 
 // ── Group E: handleAuthMessage ────────────────────────────────────────────────
@@ -1356,6 +1371,189 @@ describe('P — listener lifecycle', () => {
 
         attachSpy.mockRestore();
         sessionStorage.clear();
+    });
+});
+
+// ── Group R: handleNavigationEvent (same-conversation guard) ─────────────────
+
+describe('R — handleNavigationEvent (same-conversation guard)', () => {
+    beforeEach(() => {
+        TemporaryChatDelete.__resetState();
+        sessionStorage.clear();
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.chrome.runtime.sendMessage.mockClear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        sessionStorage.clear();
+        setPathname('/');
+    });
+
+    it('R1: same uuid, destination identical to current href → no delete, uuid stays tracked', () => {
+        const uuid = 'a1b2c3d4-1111-2222-3333-a1b2c3d4e5f6';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: window.location.href,
+            navigationType: 'push',
+        }));
+
+        expect(postMessageSpy).not.toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid,
+        }, '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('R2: same uuid, destination differs only by query string → no delete, uuid stays tracked', () => {
+        const uuid = 'a1b2c3d4-2222-3333-4444-a1b2c3d4e5f6';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: `https://chat.deepseek.com/a/chat/s/${uuid}?model=v3`,
+            navigationType: 'push',
+        }));
+
+        expect(postMessageSpy).not.toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid,
+        }, '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('R3: same uuid, destination differs only by hash fragment → no delete, uuid stays tracked', () => {
+        const uuid = 'a1b2c3d4-3333-4444-5555-a1b2c3d4e5f6';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: `https://chat.deepseek.com/a/chat/s/${uuid}#msg-42`,
+            navigationType: 'push',
+        }));
+
+        expect(postMessageSpy).not.toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid,
+        }, '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('R4: same uuid, destination differs by BOTH query string and hash fragment → no delete, uuid stays tracked', () => {
+        const uuid = 'a1b2c3d4-4444-5555-6666-a1b2c3d4e5f6';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: `https://chat.deepseek.com/a/chat/s/${uuid}?model=v3#msg-42`,
+            navigationType: 'push',
+        }));
+
+        expect(postMessageSpy).not.toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid,
+        }, '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('R5: DIFFERENT uuid, destination has query/hash → deletion STILL fires (guard compares uuid, not full URL)', () => {
+        const trackedUuid = 'a1b2c3d4-5555-6666-7777-a1b2c3d4e5f6';
+        const destUuid = 'b2b2c3d4-6666-7777-8888-b2b2c3d4e5f6';
+        setPathname(`/a/chat/s/${trackedUuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: trackedUuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: `https://chat.deepseek.com/a/chat/s/${destUuid}?model=v3#msg-42`,
+            navigationType: 'push',
+        }));
+
+        expect(postMessageSpy).toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: trackedUuid,
+        }, '*');
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('R6: no tracked uuid, destination has a uuid → isSameConversation false, deletion no-ops (no tracked uuid)', () => {
+        const destUuid = 'c3c3d4e5-7777-8888-9999-c3c3d4e5f6a7';
+        setPathname('/');
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: null,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: `https://chat.deepseek.com/a/chat/s/${destUuid}?model=v3`,
+            navigationType: 'push',
+        }));
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+    });
+
+    it('R7: destination has NO uuid (homepage) while leaving tracked conversation → normal deletion-on-leave still fires', () => {
+        const uuid = 'a1b2c3d4-6666-7777-8888-a1b2c3d4e5f6';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: 'https://chat.deepseek.com/',
+            navigationType: 'push',
+        }));
+
+        expect(postMessageSpy).toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid,
+        }, '*');
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+
+        postMessageSpy.mockRestore();
     });
 });
 

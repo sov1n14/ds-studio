@@ -120,13 +120,15 @@ const TemporaryChatDelete = (() => {
     // ── 純工具函式 ───────────────────────────────────────────────────────────
 
     /**
-     * 從 URL pathname 擷取聊天 UUID（格式：/a/chat/s/<uuid>）。
-     * @param {string} [pathname] - 預設使用 window.location.pathname
+     * 從 URL（可為完整 href 或僅 pathname）擷取聊天 UUID（格式：/a/chat/s/<uuid>）。
+     * 正規表達式本身即會在 query string（?）或 hash（#）處停止比對，
+     * 故傳入完整 href 或僅 pathname 皆可正確擷取，無需額外剝離。
+     * @param {string} [urlOrPath] - 預設使用 window.location.pathname
      * @returns {string|null}
      */
-    function extractUuidFromUrl(pathname) {
-        const path = pathname !== undefined ? pathname : window.location.pathname;
-        const match = path.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
+    function extractUuidFromUrl(urlOrPath) {
+        const target = urlOrPath !== undefined ? urlOrPath : window.location.pathname;
+        const match = target.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
         return match ? match[1] : null;
     }
 
@@ -333,8 +335,13 @@ const TemporaryChatDelete = (() => {
 
         const fromUuid = extractUuidFromUrl();
 
-        // 離開臨時對話：非刷新且有追蹤 UUID 且與當前頁面 UUID 吻合
-        if (!isRefresh && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
+        // 目的地 UUID：即使目的地 URL 與目前 URL 僅差異於 query/hash，
+        // 只要對話 UUID 相同即視為「同一對話」的再導航，不應觸發刪除。
+        const destUuid = extractUuidFromUrl(destinationUrl);
+        const isSameConversation = !!destUuid && destUuid === _trackedTemporaryUuid;
+
+        // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
+        if (!isRefresh && !isSameConversation && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
             deleteTrackedAndClear({ keepalive: false });
         }
 
