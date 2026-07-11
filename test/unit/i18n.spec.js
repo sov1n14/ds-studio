@@ -211,6 +211,45 @@ describe('dsI18n', () => {
             expect(dsI18n().t('cancelButtonClearRestored')).toBe('取消');
         });
 
+        it('preset tooltip/title/message keys resolve to non-empty strings in zh_TW and en', () => {
+            // Note: deleteAllPresetsTitle and deleteAllPresetsTooltip intentionally
+            // share the same zh_TW/en copy ("刪除全部提示詞組" / "Delete all prompt
+            // groups") in the actual translation data, so this suite does not
+            // assert cross-key distinctness — only non-emptiness and that each
+            // key resolves to real text (not a raw-key fallback), plus that the
+            // en/zh_TW pair for every key differs (locale actually switched).
+            const keys = [
+                'editPresetNameTooltip',
+                'deletePresetTooltip',
+                'deleteAllPresetsTooltip',
+                'deleteAllPresetsTitle',
+                'deleteAllPresetsMessage',
+            ];
+
+            dsI18n().setLocale('zh_TW');
+            const zhValues = keys.map(key => dsI18n().t(key));
+            zhValues.forEach((val, i) => {
+                expect(typeof val).toBe('string');
+                expect(val.length).toBeGreaterThan(0);
+                expect(val).not.toBe(keys[i]); // must not fall back to the raw key
+            });
+
+            dsI18n().setLocale('en');
+            const enValues = keys.map(key => dsI18n().t(key));
+            enValues.forEach((val, i) => {
+                expect(typeof val).toBe('string');
+                expect(val.length).toBeGreaterThan(0);
+                expect(val).not.toBe(keys[i]);
+            });
+
+            // en strings must differ from their zh_TW counterparts (locale actually switched)
+            keys.forEach((_, i) => {
+                expect(enValues[i]).not.toBe(zhValues[i]);
+            });
+
+            dsI18n().setLocale('zh_TW');
+        });
+
         it('all zh_TW keys have a corresponding en key in the data', () => {
             const sampleKeys = [
                 'globalPromptLabel', 'saveStatus', 'confirmButton',

@@ -9,6 +9,18 @@ const __dirname = dirname(__filename);
 let Modal;
 
 beforeAll(() => {
+    // custom-select.js depends on window.__DS_PresetItemRenderer to build
+    // each row's markup, and that renderer calls dsI18n.t(...), so both must
+    // be loaded (and i18n initialized) before custom-select.js is evaluated —
+    // mirrors the <script> load order declared in popup/popup.html.
+    if (!globalThis.dsI18n) {
+        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
+        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
+    }
+
+    const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
+    eval(rendererCode);
+
     const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
     eval(code);
 
@@ -39,6 +51,7 @@ function makeDOM() {
             </div>
             <div class="ds-select__item ds-select__item--empty" data-id="" data-blank="true">
                 <span class="ds-select__item-name">（無提示詞組）</span>
+                <button class="ds-select__item-btn ds-select__item-btn--delete-all" type="button">✕</button>
             </div>
             <div id="list" class="ds-select__list"></div>
             <div id="hint" hidden>無相符結果</div>
@@ -61,6 +74,7 @@ function createSelect(overrides = {}) {
     const onReorder = vi.fn();
     const onRequestEdit = vi.fn();
     const onRequestDelete = vi.fn();
+    const onRequestDeleteAll = vi.fn();
 
     const sel = window.__DSSCustomSelect.createPresetCustomSelect({
         triggerEl: document.getElementById('trigger'),
@@ -76,10 +90,11 @@ function createSelect(overrides = {}) {
         onReorder,
         onRequestEdit,
         onRequestDelete,
+        onRequestDeleteAll,
         ...overrides,
     });
 
-    return { sel, onSelect, onReorder, onRequestEdit, onRequestDelete, getPresets: () => presets, setActiveId: (id) => { activeId = id; } };
+    return { sel, onSelect, onReorder, onRequestEdit, onRequestDelete, onRequestDeleteAll, getPresets: () => presets, setActiveId: (id) => { activeId = id; } };
 }
 
 describe('createPresetCustomSelect', () => {
@@ -275,6 +290,44 @@ describe('createPresetCustomSelect', () => {
             vi.advanceTimersByTime(400);
             expect(document.getElementById('list').classList.contains('ds-select__list--filtering')).toBe(false);
             vi.useRealTimers();
+        });
+    });
+
+    describe('刪除全部按鈕 (.ds-select__item-btn--delete-all)', () => {
+        it('點擊呼叫 onRequestDeleteAll', () => {
+            const { sel, onRequestDeleteAll } = createSelect();
+            sel.open();
+            const deleteAllBtn = document.querySelector('.ds-select__item-btn--delete-all');
+            deleteAllBtn.click();
+            expect(onRequestDeleteAll).toHaveBeenCalledTimes(1);
+        });
+
+        it('點擊不會同時觸發空白項目的 onSelect(\'\')', () => {
+            const { sel, onSelect, onRequestDeleteAll } = createSelect();
+            sel.open();
+            const deleteAllBtn = document.querySelector('.ds-select__item-btn--delete-all');
+            deleteAllBtn.click();
+            expect(onRequestDeleteAll).toHaveBeenCalledTimes(1);
+            expect(onSelect).not.toHaveBeenCalled();
+        });
+
+        it('省略 onRequestDeleteAll（undefined）時點擊不會拋出例外', () => {
+            const { sel } = createSelect({ onRequestDeleteAll: undefined });
+            sel.open();
+            const deleteAllBtn = document.querySelector('.ds-select__item-btn--delete-all');
+            expect(() => deleteAllBtn.click()).not.toThrow();
+        });
+
+        it('新增刪除全部分支後，per-item 的 edit/delete 按鈕仍正確運作（回歸測試）', () => {
+            const { sel, onRequestEdit, onRequestDelete } = createSelect();
+            sel.open();
+            const editBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--edit');
+            editBtn.click();
+            expect(onRequestEdit).toHaveBeenCalledWith('a');
+
+            const deleteBtn = document.querySelector('#list .ds-select__item[data-id="b"] .ds-select__item-btn--delete');
+            deleteBtn.click();
+            expect(onRequestDelete).toHaveBeenCalledWith('b');
         });
     });
 

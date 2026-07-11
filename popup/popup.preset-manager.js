@@ -98,6 +98,44 @@ function createPresetManager(ctx) {
         ctx.sendActivePresetToContentScript();
     }
 
+    // --- 刪除全部提示詞組 ---
+    async function requestDeleteAllPresets() {
+        const presets = ctx.getPresets();
+        if (presets.length === 0) return;
+
+        const isConfirmed = await ctx.Modal.confirm({
+            title: dsI18n.t('deleteAllPresetsTitle'),
+            message: dsI18n.t('deleteAllPresetsMessage'),
+            confirmText: dsI18n.t('deleteButton'),
+            variant: 'danger'
+        });
+
+        if (!isConfirmed) return;
+
+        const deletedIds = new Set(presets.map(p => p.id));
+
+        ctx.setPresets([]);
+        ctx.setActivePresetId('');
+        await ctx.StorageManager.saveActivePresetId('');
+        await ctx.StorageManager.savePromptPresets([]);
+        await ctx.refreshSyncStatus();
+
+        const updatedMap = await ctx.StorageManager.mutateChatPresetMap(map => {
+            for (const uuid of Object.keys(map)) {
+                if (deletedIds.has(map[uuid])) {
+                    delete map[uuid];
+                }
+            }
+        });
+        ctx.setChatPresetMap(updatedMap);
+        await ctx.refreshSyncStatus();
+
+        ctx.getCustomSelect().render();
+        ctx.updateEditPresetBtnState();
+        ctx.showSaveStatus();
+        ctx.sendActivePresetToContentScript();
+    }
+
     // --- 從內容腳本查詢 pending preset ID ---
     async function getPendingPresetIdFromContentScript(tabId) {
         try {
@@ -121,6 +159,7 @@ function createPresetManager(ctx) {
     return {
         requestEditPreset,
         requestDeletePreset,
+        requestDeleteAllPresets,
         getPendingPresetIdFromContentScript,
         extractUuidFromUrl,
     };

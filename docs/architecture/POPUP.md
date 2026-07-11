@@ -87,6 +87,7 @@ The factory receives a configuration object with the following properties:
 | `onReorder` | `Function` | Called with `(newPresets)` after a drag-reorder completes. The caller persists the new order to storage. |
 | `onRequestEdit` | `Function` | Called with `(presetId)` when the edit button is clicked. popup.js opens a rename modal. |
 | `onRequestDelete` | `Function` | Called with `(presetId)` when the delete button is clicked. popup.js opens a delete confirmation modal. |
+| `onRequestDeleteAll` | `Function` (v4.10.0) | Called with no arguments when the "delete all" button on the blank `(無提示詞組)` item is clicked. popup.js opens a "delete all presets" confirmation modal via `presetManager.requestDeleteAllPresets()`. The panel click handler stops propagation on this button before the blank-item `onSelect('')` branch runs, so a delete-all click never also selects the blank option. |
 
 This "inversion of control" pattern keeps the component agnostic to storage logic: it only manages DOM and interaction state, while the caller (popup.js) owns persistence and business logic.
 
@@ -109,9 +110,10 @@ The component maintains a single `state` object with the following fields:
 - **`_renderList()`**: Rebuilds the dropdown list DOM. Iterates presets, filters by `filteredIds`, and creates `div.ds-select__item` elements with three child regions:
   - Drag handle (`⠿` character, class `ds-select__drag-handle`)
   - Item name (class `ds-select__item-name`, HTML-escaped)
-  - Inline action buttons (edit `✎` / delete `✕`, classes `ds-select__item-btn--edit` / `ds-select__item-btn--delete`)
+  - Inline action buttons (edit / delete, classes `ds-select__item-btn--edit` / `ds-select__item-btn--delete`), each carrying an i18n `title`/`aria-label` (edit: `編輯提示詞組名稱`; delete: `刪除提示詞`)
   - Skips rendering when a drag is in progress (`state.drag !== null`) to avoid DOM churn during drag.
   - Calls `_bindDrag()` after populating the list to attach pointer event handlers to each drag handle.
+  - Row markup is built by `buildPresetItemMarkup(preset)` in `popup/preset-item-renderer.js` (v4.10.0 — extracted from `custom-select.js` to stay under the 450-line proactive-split threshold). The edit button now reuses the outer pencil's hand-drawn SVG path (shrunk to 12×12 via `.ds-select__item-btn--edit svg` in `popup-select.css`) instead of the `✎` glyph, so its stroke direction matches `#editPresetBtn` exactly; the delete button keeps the `✕` glyph.
 
 - **`_applyFilter()`**: Reads the current search input value, iterates all presets with `_fuzzyMatch()`, updates `filteredIds`, and calls `_renderList()`. Called via a debounced wrapper `_debouncedFilter`.
 
@@ -155,6 +157,10 @@ Drag uses the Pointer Events API for unified mouse+touch handling, bypassing the
 
 Note: `custom-select.js` contains its own private copies of `_fuzzyMatch()` and `_debounce()` (prefixed with `_`). Exported ES-module versions also exist in `popup-utils.js` as `fuzzyMatch()` and `debounce()` for unit testing and potential reuse.
 
+### Delete-All Button (blank item, v4.10.0)
+
+The static "(無提示詞組)" blank item (`blankItemEl`) now also renders a `.ds-select__item-btn--delete-all` button (`✕` glyph, i18n title `刪除全部提示詞組`), positioned like the per-row delete buttons and revealed on hover via the same `.ds-select__item--empty:hover .ds-select__item-btn` rule in `popup-select.css`. The panel click handler in `_bindEvents()` checks for this button class before the blank-option selection branch, calls `onRequestDeleteAll()`, and returns early (stopping propagation) so the click never also fires `onSelect('')`. `popup.preset-manager.js`'s `requestDeleteAllPresets()` mirrors `requestDeletePreset(id)`: it confirms via `Modal.confirm({ title: '刪除全部提示詞組', message: '確定要刪除全部提示詞組嗎？此操作無法復原。', variant: 'danger' })`, then on confirm clears `presets` to `[]`, resets `activePresetId` to `''`, strips every `chatPresetMap` entry that referenced any previously-existing preset id (not just one, unlike the single-delete path), and calls `StorageManager.savePromptPresets([])` — reusing the existing tombstone/cleanup machinery in `storage-manager.presets.js`, since it diffs the old vs. new `PRESET_INDEX` to compute `deletedIds`.
+
 ### Module Loading Order
 
 In `popup.html`, the script tags appear in this order:
@@ -173,6 +179,7 @@ In `popup.html`, the script tags appear in this order:
 <script src="../utils/storage-manager.js"></script>
 <script src="../utils/messaging.js"></script>
 <script src="../utils/i18n.js"></script>
+<script src="preset-item-renderer.js"></script>
 <script src="custom-select.js"></script>
 <script src="popup.modal.js"></script>
 <script src="popup.preset-manager.js"></script>
@@ -186,6 +193,7 @@ In `popup.html`, the script tags appear in this order:
 - `storage-manager.js` (entry) loads next and runs `Object.assign(StorageManager, ...)` to merge the bundles before exposing `window.StorageManager`. Both custom-select.js users and popup.js depend on it at runtime.
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js for the `ACTIVE_PRESET_CHANGED` broadcast).
 - `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with locale string maps, `setLocale()`, and `t(key)` lookup — see the Language / Locale Switcher section below.
+- `preset-item-renderer.js` (v4.10.0) registers `window.__DS_PresetItemRenderer` (`escapeHtml`, `buildPresetItemMarkup`) and must load before `custom-select.js`, which destructures it.
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
 - `popup.live-sync.js` (v4.8.0) registers `window.__DS_PopupLiveSync`, exposing `createLiveSyncListener(ctx)` — see the Live Sync Listener section below.

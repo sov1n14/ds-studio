@@ -162,7 +162,8 @@
     line-height: 1;
 }
 
-.ds-select__item:hover .ds-select__item-btn {
+.ds-select__item:hover .ds-select__item-btn,
+.ds-select__item--empty:hover .ds-select__item-btn {
     display: flex;
 }
 
@@ -171,9 +172,16 @@
     color: var(--text-color);
 }
 
-.ds-select__item-btn--delete:hover {
+.ds-select__item-btn--delete:hover,
+.ds-select__item-btn--delete-all:hover {
     background-color: #fef2f2;
     color: #dc2626;
+}
+
+/* 內層編輯（鉛筆）按鈕圖示縮小以符合精簡列高 */
+.ds-select__item-btn--edit svg {
+    width: 12px;
+    height: 12px;
 }
 
 .ds-select__item--dragging {
