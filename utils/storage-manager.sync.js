@@ -263,6 +263,13 @@
             if (importedSettings.promptPresets) {
                 const mergedPresets = this.mergePresets(currentSettings.promptPresets, importedSettings.promptPresets);
                 await this.savePromptPresets(mergedPresets);
+
+                // 清除匯入 preset 的舊 tombstone 記錄，避免使用者刪除全部 preset 後
+                // 重新匯入備份還原時，於下次跨裝置同步遭墓碑機制再次判定為已刪除。
+                const importedPresetIds = importedSettings.promptPresets
+                    .map(preset => preset && preset.id)
+                    .filter(Boolean);
+                await this.clearPresetTombstones(importedPresetIds);
             }
 
             // 透過 mutateChatPresetMap 將匯入的 chatPresetMap 合併至現有資料

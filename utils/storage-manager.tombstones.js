@@ -70,6 +70,34 @@
 
             await this._set({ [this.KEYS.PRESET_TOMBSTONES]: pruned });
         },
+
+        /**
+         * 清除指定 id 清單的 tombstone 記錄，並寫回 local + sync（經由既有 _set() 的
+         * 8KB 守衛與 dsLocalAuth 重試佇列邏輯，不重新實作寫入守衛）。
+         * 僅移除清單中「確實存在」的 id，其餘 tombstone 記錄維持不變；
+         * 若清單中的 id 不存在於 tombstone map，則靜默略過，不視為錯誤。
+         * 用途：使用者重新匯入備份還原 preset 時，需清除該 preset 先前的刪除墓碑，
+         * 避免下次跨裝置同步時被墓碑判定為「已刪除」而再次遭到清除。
+         * @param {string[]} ids - 需清除 tombstone 記錄的 preset id 清單
+         */
+        async clearPresetTombstones(ids) {
+            if (!ids || ids.length === 0) return;
+
+            const data = await this._get([this.KEYS.PRESET_TOMBSTONES]);
+            const tombstones = { ...(data[this.KEYS.PRESET_TOMBSTONES] || {}) };
+
+            let hasChanged = false;
+            ids.forEach(id => {
+                if (Object.prototype.hasOwnProperty.call(tombstones, id)) {
+                    delete tombstones[id];
+                    hasChanged = true;
+                }
+            });
+
+            if (!hasChanged) return;
+
+            await this._set({ [this.KEYS.PRESET_TOMBSTONES]: tombstones });
+        },
     };
 
     root.__DS_StorageManager_tombstones = bundle;

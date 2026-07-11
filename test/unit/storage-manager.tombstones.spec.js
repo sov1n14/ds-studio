@@ -386,6 +386,74 @@ describe('StorageManager.resolveSyncConflict() — tombstone end-to-end resoluti
     });
 });
 
+describe('StorageManager.clearPresetTombstones()', () => {
+    beforeEach(() => {
+        delete chrome.runtime.lastError;
+    });
+
+    it('removes tombstone entries for exact matching ids only, leaving other ids intact', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now, b: now } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: now, b: now } });
+
+        await StorageManager.clearPresetTombstones(['a']);
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncAfter = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).not.toHaveProperty('a');
+        expect(localAfter[K.PRESET_TOMBSTONES]).toHaveProperty('b');
+        expect(syncAfter[K.PRESET_TOMBSTONES]).not.toHaveProperty('a');
+        expect(syncAfter[K.PRESET_TOMBSTONES]).toHaveProperty('b');
+    });
+
+    it('silently no-ops for ids not present in the tombstone map', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+
+        await expect(StorageManager.clearPresetTombstones(['not-there'])).resolves.not.toThrow();
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncAfter = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).toEqual({ a: now });
+        expect(syncAfter[K.PRESET_TOMBSTONES]).toEqual({ a: now });
+    });
+
+    it('does not write to storage at all when no ids match (no unintended writes)', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+
+        const setSpy = vi.spyOn(chrome.storage.local, 'set');
+        await StorageManager.clearPresetTombstones(['not-there']);
+        expect(setSpy).not.toHaveBeenCalled();
+        setSpy.mockRestore();
+    });
+
+    it('persists the update to both chrome.storage.local and chrome.storage.sync', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+        await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+
+        await StorageManager.clearPresetTombstones(['a']);
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        const syncAfter = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).toEqual({});
+        expect(syncAfter[K.PRESET_TOMBSTONES]).toEqual({});
+    });
+
+    it('is a safe no-op for empty or undefined ids array', async () => {
+        const now = Date.now();
+        await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { a: now } });
+
+        await expect(StorageManager.clearPresetTombstones([])).resolves.not.toThrow();
+        await expect(StorageManager.clearPresetTombstones(undefined)).resolves.not.toThrow();
+
+        const localAfter = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+        expect(localAfter[K.PRESET_TOMBSTONES]).toEqual({ a: now });
+    });
+});
+
 describe('StorageManager._get() — sync-wins PRESET_INDEX/PRESET_ORDER_META persisted to local', () => {
     beforeEach(() => {
         delete chrome.runtime.lastError;

@@ -265,6 +265,47 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
             const settings = await StorageManager.getSettings();
             expect(settings.isEnabled).toBe(true);
         });
+
+        it('BUG FIX: re-importing a preset whose id has a stale (not-yet-expired) tombstone restores it and clears the tombstone', async () => {
+            const K = StorageManager.KEYS;
+            const now = Date.now();
+            // Seed a tombstone for 'restored-id' within the 30-day retention window,
+            // simulating: user deleted all presets, then re-imports a backup containing that id.
+            await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { 'restored-id': now - (5 * 24 * 60 * 60 * 1000) } });
+            await chrome.storage.sync.set({ [K.PRESET_TOMBSTONES]: { 'restored-id': now - (5 * 24 * 60 * 60 * 1000) } });
+
+            await StorageManager.restoreSettings({
+                promptPresets: [
+                    { id: 'restored-id', name: 'Restored', content: 'r', createdAt: now, updatedAt: now },
+                ],
+            }, false);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.promptPresets.map(p => p.id)).toContain('restored-id');
+
+            const localTombstones = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+            const syncTombstones = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
+            expect(localTombstones[K.PRESET_TOMBSTONES]).not.toHaveProperty('restored-id');
+            expect(syncTombstones[K.PRESET_TOMBSTONES]).not.toHaveProperty('restored-id');
+        });
+
+        it('regression-safety: importing presets with no matching tombstone entries works exactly as before', async () => {
+            const K = StorageManager.KEYS;
+            const now = Date.now();
+            await chrome.storage.local.set({ [K.PRESET_TOMBSTONES]: { 'unrelated-id': now } });
+
+            await StorageManager.restoreSettings({
+                promptPresets: [
+                    { id: 'no-tombstone-id', name: 'Plain Import', content: 'p', createdAt: now, updatedAt: now },
+                ],
+            }, false);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.promptPresets.map(p => p.id)).toContain('no-tombstone-id');
+
+            const localTombstones = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
+            expect(localTombstones[K.PRESET_TOMBSTONES]).toHaveProperty('unrelated-id');
+        });
     });
 
     describe('regression — parked stale edit must not resurface over a later, different cloud edit (report.md §4.2 Step 2)', () => {
