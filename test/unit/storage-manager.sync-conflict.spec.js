@@ -285,8 +285,15 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
 
             const localTombstones = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
             const syncTombstones = await chrome.storage.sync.get([K.PRESET_TOMBSTONES]);
-            expect(localTombstones[K.PRESET_TOMBSTONES]).not.toHaveProperty('restored-id');
-            expect(syncTombstones[K.PRESET_TOMBSTONES]).not.toHaveProperty('restored-id');
+            // BUG FIX: clearPresetTombstones() no longer deletes the map key outright —
+            // it writes { ts, deleted: false } so a newer "cleared" intent can beat a
+            // stale "deleted" tombstone still held by an unsynced device.
+            expect(localTombstones[K.PRESET_TOMBSTONES]['restored-id']).toEqual(
+                expect.objectContaining({ deleted: false })
+            );
+            expect(syncTombstones[K.PRESET_TOMBSTONES]['restored-id']).toEqual(
+                expect.objectContaining({ deleted: false })
+            );
         });
 
         it('regression-safety: importing presets with no matching tombstone entries works exactly as before', async () => {

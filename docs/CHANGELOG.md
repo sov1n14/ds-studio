@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.10.2](changelog/v4.md#4102---2026-07-12) | 修正墓碑合併演算法：`clearPresetTombstones()` 刪鍵無時間戳可仲裁，導致清除永遠輸給陳舊的刪除記錄；墓碑條目形狀改為 `{ ts, deleted }`，清除改為寫入 `deleted:false` 而非刪鍵 |
 | [4.10.1](changelog/v4.md#4101---2026-07-12) | 修正刪除全部提示詞組後再匯入 JSON 備份，於下次跨裝置同步時被舊墓碑再次刪除的缺陷；`restoreSettings()` 匯入後新增 `clearPresetTombstones()` 精準清除對應 ID 墓碑 |
 | [4.10.0](changelog/v4.md#4100---2026-07-12) | 提示詞組列新增鉛筆/刪除 hover 提示並修正鉛筆圖示方向；新增「(無提示詞組)」列一鍵刪除全部提示詞組按鈕與確認對話框；`custom-select.js` 拆出 `preset-item-renderer.js` |
 | [4.9.1](changelog/v4.md#491---2026-07-11) | 修正臨時對話「導向同一對話」誤刪：判定改以目的地 `/a/chat/s/{uuid}` 的 UUID 比對追蹤中對話（取代完整 URL 字串相等），導向同一對話但 query／hash 不同時不再誤刪；刷新與離開他頁行為不變 |

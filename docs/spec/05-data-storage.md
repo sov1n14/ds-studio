@@ -38,7 +38,8 @@
 - **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
 - **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決），清除衝突旗標。
 - **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
-- **刪除墓碑（v4.8.3）**：刪除提示詞組時會記錄一筆帶刪除時間戳的墓碑於 `dsPresetTombstones`（本地與同步兩端）。`resolveSyncConflict()` 合併時會先合併雙邊墓碑（保留較新的 `deletedAt`）並清理超過 30 天保留期的舊墓碑，再交給 `mergePresets()` 判斷：任一側資料的 `updatedAt` 不晚於其墓碑時間即會被排除，防止某裝置刪除的提示詞組被另一裝置（或同步備份中）仍保留的舊資料復活。
+- **刪除墓碑（v4.8.3）**：刪除提示詞組時會記錄一筆帶刪除時間戳的墓碑於 `dsPresetTombstones`（本地與同步兩端）。`resolveSyncConflict()` 合併時會先合併雙邊墓碑（保留 `ts` 較新的一筆）並清理超過 30 天保留期的舊墓碑，再交給 `mergePresets()` 判斷：任一側資料的 `updatedAt` 不晚於其墓碑時間即會被排除，防止某裝置刪除的提示詞組被另一裝置（或同步備份中）仍保留的舊資料復活。
+- **墓碑合併演算法修正（v4.10.2）**：修復「清除墓碑」（JSON 匯入還原時呼叫的 `clearPresetTombstones()`）過去直接刪除墓碑鍵，導致無時間戳可供合併時仲裁勝負、任一側仍持有舊墓碑即會復活已清除紀錄的缺陷。墓碑條目形狀改為 `{ ts, deleted }`：實際刪除寫入 `{ ts, deleted: true }`，清除（還原）改為寫入 `{ ts, deleted: false }` 而非刪鍵；合併時取 `ts` 較新的一側整組勝出，「清除」與「刪除」成為同一時間軸上的兩次普通寫入，較新者必定勝出。舊版裸數字墓碑會自動正規化為 `{ ts: <該數字>, deleted: true }` 以維持相容。
 
 ## 技術規格
 
@@ -90,7 +91,7 @@
 | `dsLocalAuth` | `string[]` | `[]` | 本地端權威金鑰清單（Plan A）。記錄上次 sync 寫入失敗、改為寫入 local 的金鑰名稱，讓後續讀取優先取用 local 值（僅本地端）。 |
 | `syncInitialized` | boolean | `false` | 初始同步是否已完成（僅本地端）。 |
 | `syncConflictPending` | boolean | `false` | 是否有同步衝突待使用者解決（僅本地端）。 |
-| `dsPresetTombstones` | `Object<id, deletedAt>` | `{}` | （v4.8.3）提示詞組刪除墓碑，同步於本地與雲端。合併時用於判斷某 id 是否已被刪除，避免舊資料復活。（v4.10.1）JSON 匯入後會呼叫 `clearPresetTombstones()` 清除匯入 ID 對應的墓碑，避免下次同步時被重新刪除。 |
+| `dsPresetTombstones` | `Object<id, { ts: number, deleted: boolean }>` | `{}` | （v4.8.3）提示詞組刪除墓碑，同步於本地與雲端。合併時用於判斷某 id 是否已被刪除，避免舊資料復活。（v4.10.1）JSON 匯入後會呼叫 `clearPresetTombstones()` 清除匯入 ID 對應的墓碑，避免下次同步時被重新刪除。（v4.10.2）條目形狀由裸數字改為 `{ ts, deleted }`：`deleted: true` 表示已刪除，`deleted: false` 表示已清除（還原）。合併時取 `ts` 較新者整組勝出。舊版裸數字條目讀取時自動正規化為 `{ ts, deleted: true }`。 |
 | `dsOversizedKeys` | `string[]` | `[]` | （v4.8.2）永久超出 8KB 同步配額的金鑰清單（僅本地端）。自癒：下次寫入尺寸低於限制時自動移除。 |
 | `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | （v4.6.2）提示詞組排序的權威時間戳，用於跨裝置合併時決定哪一端的排序較新。 |
 | `promptPresets` | `PromptPreset[]` | — | *已於 v1.7.0 退役*：v1.7.0 之前用於儲存所有提示詞組的陣列，已被 `dsPresetIndex` + `dsPreset_<id>` 取代。 |
