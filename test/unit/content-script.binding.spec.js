@@ -141,14 +141,34 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
         expect(s().pendingPresetId).toBeNull();
     });
 
-    it('uses pendingPresetId when currentChatUuid has no binding — Bug 2 part 2 fix', async () => {
+    it('uses pendingPresetId when there is no currentChatUuid yet', async () => {
         // Seed a preset so it can be looked up by updatePromptPrefixFromBinding
         await seedPreset('p1', 'Helper', 'You are helpful.');
 
-        // Scenario: user is on a chat page (currentChatUuid set),
-        // no binding exists (chatPresetMap empty),
-        // but a pending preset is set — the old condition `!currentChatUuid && pendingPresetId`
-        // would have skipped this; the fix checks `pendingPresetId` unconditionally.
+        // Scenario: no chat is active yet (new-chat page, currentChatUuid null),
+        // and the user picked a preset from the dropdown before a UUID was assigned
+        // (pendingPresetId holds that choice). This is the ONLY case where
+        // pendingPresetId should be consulted.
+        contentScript.__setState({
+            currentChatUuid: null,
+            chatPresetMap: {},
+            pendingPresetId: 'p1',
+        });
+
+        await contentScript.updatePromptPrefixFromBinding();
+
+        expect(s().promptPrefix).toBe('You are helpful.');
+    });
+
+    it('does NOT fall back to stale pendingPresetId once a chat is bound (currentChatUuid set, no map entry) — regression for the fixed bug', async () => {
+        // Seed a preset so a fallback WOULD be resolvable if the bug were present
+        await seedPreset('p1', 'Helper', 'You are helpful.');
+
+        // Scenario: currentChatUuid is already set (chat is active), chatPresetMap
+        // has never been populated for this chat, but pendingPresetId still holds a
+        // stale value left over from ACTIVE_PRESET_CHANGED. Once a chat is active,
+        // its prompt-set binding must be determined solely by chatPresetMap — the
+        // pending value must be ignored, leaving promptPrefix empty.
         contentScript.__setState({
             currentChatUuid: 'some-chat-uuid',
             chatPresetMap: {},
@@ -157,7 +177,7 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
 
         await contentScript.updatePromptPrefixFromBinding();
 
-        expect(s().promptPrefix).toBe('You are helpful.');
+        expect(s().promptPrefix).toBe('');
     });
 });
 
