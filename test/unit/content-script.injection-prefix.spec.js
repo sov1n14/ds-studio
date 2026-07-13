@@ -378,4 +378,91 @@ describe('onSelectChange: promptPrefix updates synchronously (v2.8.1)', () => {
         // Assert pendingPresetId set synchronously — no async needed
         expect(contentScript.__getState().pendingPresetId).toBe('preset-B');
     });
+
+    it('switching to "No Prompt Set" clears the prefix even when the chat was only ever resolved via a stale pendingPresetId (bug regression, end-to-end)', async () => {
+        // Arrange: currentChatUuid is bound, but chatPresetMap was never actually
+        // populated for it (mirrors the reported bug) — the only reason
+        // promptPrefix was non-empty is a leftover pendingPresetId from an earlier
+        // ACTIVE_PRESET_CHANGED message.
+        contentScript.__setState({
+            currentChatUuid: 'uuid-1',
+            chatPresetMap: {},
+            pendingPresetId: 'preset-A',
+            promptPrefix: 'Content of preset A',
+        });
+
+        vi.spyOn(StorageManager, 'unbindChat').mockResolvedValue(undefined);
+        vi.spyOn(StorageManager, 'saveActivePresetId').mockResolvedValue(undefined);
+
+        // Act: user explicitly selects "No Prompt Set" (id === '')
+        contentScript.PresetOverlay.onSelectChange('');
+
+        // Wait for the async updatePromptPrefixFromBinding to settle
+        await new Promise(r => setTimeout(r, 0));
+
+        // Assert: promptPrefix must be cleared, not re-populated from pendingPresetId
+        expect(contentScript.__getState().promptPrefix).toBe('');
+
+        // Assert end-to-end: a resubmit textarea gets no <system-prompt> wrapper injected
+        contentScript.__setState({ isEnabled: true });
+        const ta = document.createElement('textarea');
+        ta.value = 'resubmitted message';
+        expect(contentScript.injectPrefix(ta)).toBe(true);
+        expect(ta.value).not.toContain('<system-prompt>');
+    });
+});
+
+describe('ACTIVE_PRESET_CHANGED message handler does not leak into an already-bound chat (v2.8.x fix)', () => {
+    async function seedPreset(id, name, content) {
+        const item = {
+            activePresetId: id,
+            dsPresetIndex: [id],
+            [`dsPreset_${id}`]: { id, name, content, createdAt: 1000, updatedAt: 1000 },
+        };
+        await chrome.storage.local.set(item);
+        await chrome.storage.sync.set(item);
+    }
+
+    beforeEach(async () => {
+        await new Promise(r => setTimeout(r, 0));
+        contentScript.__resetState();
+
+        await chrome.storage.local.remove([
+            'chatPresetMap', 'dsPresetIndex', 'activePresetId',
+            'dsPreset_preset-A', 'syncInitialized',
+        ]);
+        await chrome.storage.sync.remove([
+            'chatPresetMap', 'dsPresetIndex', 'activePresetId',
+            'dsPreset_preset-A', 'syncInitialized',
+        ]);
+
+        await seedPreset('preset-A', 'Preset A', 'Content of preset A');
+    });
+
+    it('dispatching ACTIVE_PRESET_CHANGED while a chat is already active must not resurrect its prefix via pendingPresetId', async () => {
+        // Arrange: a chat is already active and explicitly has no binding.
+        contentScript.__setState({
+            currentChatUuid: 'uuid-active',
+            chatPresetMap: {},
+            promptPrefix: '',
+        });
+
+        // Act: simulate the popup broadcasting ACTIVE_PRESET_CHANGED via the real
+        // chrome.runtime.onMessage listener registered by content-script.js at load time.
+        chrome.runtime.onMessage.callListeners(
+            { action: 'ACTIVE_PRESET_CHANGED', presetId: 'preset-A' },
+            {},
+            () => {}
+        );
+
+        // The handler sets pendingPresetId synchronously, then calls
+        // updatePromptPrefixFromBinding() asynchronously — wait for it to settle.
+        await new Promise(r => setTimeout(r, 0));
+
+        // pendingPresetId is set (that part of the handler is unchanged)...
+        expect(contentScript.__getState().pendingPresetId).toBe('preset-A');
+        // ...but because currentChatUuid is already active with no map entry,
+        // promptPrefix must remain empty — not fall back to the new pendingPresetId.
+        expect(contentScript.__getState().promptPrefix).toBe('');
+    });
 });

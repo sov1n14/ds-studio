@@ -147,9 +147,13 @@ function markChatCreationAttempt() {
 
 // 根據當前聊天 UUID 綁定重新計算 promptPrefix；無綁定則清空。
 async function updatePromptPrefixFromBinding() {
+    // pendingPresetId 僅適用於「尚無 currentChatUuid」的情境（新對話尚未取得 UUID 前的暫存選擇）。
+    // 一旦已綁定至具體對話，該對話的綁定狀態必須完全由 chatPresetMap 決定，
+    // 避免因其他管道（例如 ACTIVE_PRESET_CHANGED 訊息）殘留的過期 pendingPresetId
+    // 在使用者明確選擇「無提示詞組」後被誤用而重新注入舊提示詞組。
     let presetId = null;
-    if (currentChatUuid && chatPresetMap[currentChatUuid]) {
-        presetId = chatPresetMap[currentChatUuid];
+    if (currentChatUuid) {
+        presetId = chatPresetMap[currentChatUuid] || null;
     } else if (pendingPresetId) {
         presetId = pendingPresetId;
     }
