@@ -38,6 +38,7 @@
     exportMarkdownButton: '匯出當前頁面對話為 Markdown',
     sidebarAutoHideLabel: '側邊欄自動隱藏（保留 60px hover 展開）',
     hideThinkingLabel: '隱藏思考過程',
+    historyPanelLabel: '完整對話歷史面板',
     chatWidthLabel: '對話區域寬度',
     inputWidthLabel: '編輯輸入框寬度',
     narrowLabel: '窄',
@@ -182,6 +183,20 @@
     globalPlaceholder: '輸入全域預設提示詞（會在所有對話中自動插入）',
     presetPlaceholder: '請輸入提示詞內容...',
 
+    // ---- Content Script: Full Conversation History Panel ----
+    historyPanelTitle: '完整對話歷史',
+    historyPanelSearchPlaceholder: '搜尋這段對話…',
+    historyPanelJumpOldest: '跳到最舊',
+    historyPanelJumpNewest: '跳到最新',
+    historyPanelExport: '匯出 Markdown',
+    historyPanelClose: '關閉',
+    historyPanelThinking: '思考過程',
+    historyPanelEmptyNoRecord: '本地找不到這個對話的快取記錄',
+    historyPanelEmptyNoMessages: '這個對話沒有可顯示的訊息',
+    historyPanelEmptyDbError: '讀取本地資料庫失敗',
+    historyPanelRoleUser: '你',
+    historyPanelRoleAssistant: 'AI',
+
     // ---- Utils ----
     migratedPresetName: '我的提示詞',
   };
@@ -209,6 +224,7 @@
     exportMarkdownButton: 'Export Current Page Conversation as Markdown',
     sidebarAutoHideLabel: 'Auto-hide Sidebar (60px on hover to expand)',
     hideThinkingLabel: 'Collapse Thinking Process',
+    historyPanelLabel: 'Full Conversation History Panel',
     chatWidthLabel: 'Conversation Area Width',
     inputWidthLabel: 'Input Box Width',
     narrowLabel: 'Narrow',
@@ -352,6 +368,20 @@
     presetNotFoundError: 'Prompt group not found (may have been deleted)',
     globalPlaceholder: 'Enter the global default prompt (will be inserted in all conversations)',
     presetPlaceholder: 'Enter prompt content...',
+
+    // ---- Content Script: Full Conversation History Panel ----
+    historyPanelTitle: 'Full Conversation History',
+    historyPanelSearchPlaceholder: 'Search this conversation…',
+    historyPanelJumpOldest: 'Jump to Oldest',
+    historyPanelJumpNewest: 'Jump to Newest',
+    historyPanelExport: 'Export Markdown',
+    historyPanelClose: 'Close',
+    historyPanelThinking: 'Thinking Process',
+    historyPanelEmptyNoRecord: 'No local cached record found for this conversation',
+    historyPanelEmptyNoMessages: 'This conversation has no messages to display',
+    historyPanelEmptyDbError: 'Failed to read the local database',
+    historyPanelRoleUser: 'You',
+    historyPanelRoleAssistant: 'AI',
 
     // ---- Utils ----
     migratedPresetName: 'My Prompts',

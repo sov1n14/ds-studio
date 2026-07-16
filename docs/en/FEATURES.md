@@ -12,6 +12,7 @@
   - [In-Page Quick Switch Overlay](#in-page-quick-switch-overlay)
   - [UI Adjustment Features](#ui-adjustment-features)
   - [Back to Top Button](#back-to-top-button)
+  - [Full Conversation History Panel](#full-conversation-history-panel)
   - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
   - [Exporting Conversations](#exporting-conversations)
     - [Export Options](#export-options)
@@ -105,6 +106,18 @@ The **Back to Top** button is fully automatic and requires no configuration:
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch.
 - **Export Integration**: Automatically integrated into the Markdown export flow to ensure full conversation capture.
 
+## Full Conversation History Panel
+
+DeepSeek's web app renders long conversations with a virtual list that, past a certain length, only recycles messages within a fixed window and stops requesting older messages from the backend. As a result, neither manual scrolling, holding Page Up, nor the **Back to Top** button can reach the very beginning of the conversation. This feature bypasses that limitation by reading the complete conversation already cached locally in your browser and rendering it in its own panel:
+
+- **How to Open**: A clock-icon button appears just above the **Back to Top** button in the bottom-right corner of the conversation page. Click it to open the full history panel.
+- **Actually Reaches the Top**: The panel reconstructs the current conversation's complete message list from local data (including the oldest messages that were never rendered on screen). Use **Jump to Oldest** to go straight to the beginning, or **Jump to Newest** to return to the end.
+- **Full-Text Search**: Type a keyword in the panel header to search the entire conversation, stepping through matches with previous/next and highlighting each hit.
+- **Content Rendering**: Messages are shown as plain text preserving original line breaks; the AI's thinking process is collapsed by default and can be expanded. Only the current main thread is shown (excluding branches superseded by regeneration or editing).
+- **Markdown Export**: Export the complete current main thread as a `.md` file.
+- **Enable/Disable**: Controlled by the **Full Conversation History Panel** toggle in the popup menu's **UI Adjustments** card (enabled by default), and linked to the extension's master switch.
+- **Data Source**: Reads entirely from local data (the page's IndexedDB); no additional network requests are made and no data leaves your device.
+
 ## Mobile Sidebar Swipe Gesture
 
 This feature only works on mobile devices and requires no configuration:
@@ -196,6 +209,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - Conversation area and input box width adjustment
 - In-page overlay dropdown
 - Back to top button
+- Full conversation history panel
 - Mobile sidebar swipe gesture
 - ⚠️ **Not controlled**: Temporary Conversation has its own independent toggle on the DeepSeek homepage.
 

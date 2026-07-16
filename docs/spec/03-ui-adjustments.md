@@ -106,3 +106,18 @@
 - **功能**：自動移除/隱藏特定類別選擇器（`._9579690`）的 DOM 元素。
 - **主開關連動**：完全跟隨擴充功能主開關（`isEnabled`），無獨立開關。
 - **SPA 韌性**：透過 MutationObserver 監控 DOM 變化，在 SPA 導航後重新套用清理邏輯。
+
+## 21. 完整對話歷史面板 (Full Conversation History Panel) — v4.11.0
+
+- **目的**：DeepSeek 前端以虛擬列表渲染對話，超長對話超過一定長度後只在固定視窗內回收 DOM、不再向後端請求更舊訊息，導致手動捲動與「回到頂部」按鈕皆無法到達對話最頂端。本功能直接讀取頁面本機 IndexedDB 中已快取的完整對話，於自建面板呈現，繞過該虛擬列表缺陷，讓最舊訊息真正可達。
+- **開關位置**：彈出選單「UI 調整」卡片中的 `#historyPanelToggle` 核取方塊。
+- **儲存鍵**：`historyPanelEnabled`（`StorageManager.KEYS.HISTORY_PANEL_ENABLED` = `dsHistoryPanelEnabled`，布林值，預設 `true`）。
+- **資料來源**：頁面 IndexedDB 資料庫 `deepseek-chat` 的 object store `history-message`（out-of-line key，以對話 `chat_session_id`（UUID）為鍵）。content script 與頁面同源，可直接以 `window.indexedDB` 讀取，無需額外權限或注入 MAIN-world 腳本。紀錄外層為 `{ data, version, key, cacheResetAt, timestamp, frontendVersion }`，訊息陣列位於 `record.data.chat_messages`。
+- **主線重建**：訊息以 `message_id` / `parent_id` 構成樹狀結構。以 `chat_session.current_message_id` 為葉節點沿 `parent_id` 回溯至根（`parent_id` 為缺失／`null`／`'0'`）後反轉，得到由舊到新的目前主線；`current_message_id` 不在集合中時，退回以 `Number(inserted_at)` 升冪排序全部訊息（fallback）。含循環防護避免異常資料造成無限迴圈。僅呈現主線，不含被重新生成／編輯後取代的分支。
+- **內容呈現**：每則訊息的 `fragments`（JSON 字串）解析為 `{ type, content }` 陣列。`THINK` 型別（AI 思考過程）收於預設收合的 `<details>`；其餘型別（`REQUEST` 等）視為正文，以純文字保留換行呈現（不套用 Markdown）。所有訊息內容一律以 `textContent`／`createTextNode` 建構，搜尋標示以文字節點重建，絕不使用 `innerHTML` 注入對話內容，防止 XSS。
+- **面板能力**：全文搜尋（不分大小寫子字串比對、highlight、上一筆／下一筆與符合計數）、一鍵「跳到最舊」／「跳到最新」、以及匯出目前主線為 Markdown（H1 標題 + 逐則角色標頭 + 時間 + 正文；`THINK` 不納入匯出；檔名清理非法字元並以 `deepseek-<title>-<sessionId>.md` 命名）。面板為全螢幕遮罩 + 置中卡片，僅面板內清單捲動（頁面本體不捲動），支援明暗主題（`prefers-color-scheme`）。
+- **入口按鈕**：複製站方 `ds-button` 樣式並移除 `dsw-gotop*` 類別、改用專屬時鐘圖示（class `dss-history-open`），堆疊於「回到頂部」按鈕上方 8px、不重疊；具去重與 SPA 重注入防護，`aria-label`／`title` 取自 i18n `historyPanelLabel`。
+- **主開關感知**：功能僅在主開關（`isEnabled`）開啟且 `historyPanelEnabled` 為 `true` 時作用；透過 `chrome.storage.onChanged`（`local` 命名空間）即時反映兩者變化，停用時移除入口按鈕並關閉面板。路由變更時重設暫存的對話資料、關閉面板並依新對話重新注入按鈕。
+- **i18n**：新增 12 組 `historyPanel*` 字串於 `utils/i18n.js`（`historyPanelTitle`、`historyPanelSearchPlaceholder`、`historyPanelJumpOldest`、`historyPanelJumpNewest`、`historyPanelExport`、`historyPanelClose`、`historyPanelThinking`、`historyPanelEmptyNoRecord`、`historyPanelEmptyNoMessages`、`historyPanelEmptyDbError`、`historyPanelRoleUser`、`historyPanelRoleAssistant`），zh_TW／en 均補齊；開關標籤沿用既有 `historyPanelLabel`。
+- **已知限制**：使用者訊息（`REQUEST`）內容會包含擴充功能注入的系統提示原文（如 `Current Time:` / `<system-prompt>`）；正文為純文字不套 Markdown 格式；僅呈現目前主線。
+- **實作位置**：`content/history-panel.idb.js`（IndexedDB 讀取與主線重建）、`content/history-panel.render.js`（面板 UI／搜尋）、`content/history-panel.export.js`（Markdown 匯出）、`content/history-panel.js`（入口／生命週期／按鈕注入）、`content/history-panel.css`；公開 API 掛載於 `window.DSstudio.HistoryPanel`，資料／渲染／匯出層分別掛於 `window.__DS_HistoryPanel_idb`／`__DS_HistoryPanel_render`／`__DS_HistoryPanel_export`。

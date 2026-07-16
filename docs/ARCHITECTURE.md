@@ -40,6 +40,11 @@ ds-studio/
 │   ├── go-top.locate.js     ─  DOM query / locator / visibility bundle
 │   ├── go-top.render.js     ─  Button render / inject / mode-transition bundle
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
+│   ├── history-panel.js     ─  Entry: full-history panel lifecycle & open-button injection (v4.11.0)
+│   ├── history-panel.idb.js ─  IndexedDB read (deepseek-chat/history-message) & active-thread rebuild (v4.11.0)
+│   ├── history-panel.render.js ─  Panel UI / search / thinking-collapse render (v4.11.0)
+│   ├── history-panel.export.js ─  Active-thread → Markdown export (v4.11.0)
+│   ├── history-panel.css    ─  Full-history panel styles (v4.11.0)
 │   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
@@ -111,7 +116,7 @@ DeepSeek's chat interface relies on a frontend framework (likely React) which tr
 The `isEnabled` key acts as a master switch for all extension features:
 
 - **Popup UI**: When the master toggle is turned off, `applyMasterSwitchUI()` disables all sub-controls (sidebar auto-hide checkbox, hide-thinking checkbox, system time toggle, chat width toggle + slider, input width toggle + slider) via `el.disabled = true`.
-- **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, GoToTop, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true.
+- **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, GoToTop, HistoryPanel, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true.
 - **System time injection**: When `isEnabled` is false, `showSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
@@ -142,6 +147,16 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 - **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup` reads the shared pending-delete queue from `chrome.storage.sync` and retries each entry with the device's own locally-cached auth token.
 - **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any queue entry.
 - **Privacy**: `authToken` (`dss-last-auth-token`) is stored in `chrome.storage.local` only — never synced.
+
+### Full Conversation History Panel (v4.11.0)
+
+DeepSeek's virtualized message list, past a certain conversation length, only recycles DOM within a fixed window and stops requesting older messages from the backend — so neither manual scrolling nor `GoToTop.scrollToTopAndWait()` can reach the true top. This feature sidesteps the broken list entirely by reading the conversation that DeepSeek already caches locally.
+
+- **Data source**: The page origin's IndexedDB database `deepseek-chat`, object store `history-message` (out-of-line keys; the key is the conversation `chat_session_id` UUID). A content script shares the page origin, so `window.indexedDB.open('deepseek-chat')` reads it directly — no extra permission and no MAIN-world injection. DeepSeek uses a `cache_version` + `cache_control: "MERGE"` protocol: the full message array is persisted in `record.data.chat_messages`, and the `history_messages` API returns an empty array when the local cache is current — confirming the complete conversation lives on-device.
+- **Active-thread reconstruction** (`history-panel.idb.js`): messages form a tree via `message_id`/`parent_id`. `buildActiveThread()` walks from `chat_session.current_message_id` up through `parent_id` to the root (`parent_id` missing/`null`/`'0'`), then reverses to oldest→newest. If `current_message_id` is absent, it falls back to sorting all messages ascending by `Number(inserted_at)`. A cycle guard prevents infinite loops on malformed data. Regenerated/edited branches off the active path are omitted. `normalizeThread()` then maps each node to `{ messageId, parentId, role, insertedAt, fragments }`, parsing the `fragments` JSON string into `{ type, content }[]`.
+- **Rendering** (`history-panel.render.js`): `THINK` fragments render inside a default-collapsed `<details>`; other fragment types render as plain text with preserved line breaks. All conversation text is inserted via `textContent`/`createTextNode` (search highlighting rebuilds text nodes) — never `innerHTML` — so conversation content cannot inject markup. The panel is a full-screen overlay + centered card; only the message list scrolls. Provides full-text search (highlight + prev/next + count) and jump-to-oldest/newest.
+- **Export** (`history-panel.export.js`): `toMarkdown()` (pure) emits an H1 title + per-message role heading + timestamp + non-THINK body; `THINK` is excluded from export. `buildFilename()` sanitizes illegal characters into `deepseek-<title>-<sessionId>.md`. `downloadMarkdown()` performs the Blob/anchor download.
+- **Entry & lifecycle** (`history-panel.js`): injects a distinct clock-icon open-button (class `dss-history-open`, no `dsw-gotop*` classes) stacked 8px above the go-top button, reusing go-top's inject/observer/route-change patterns. Active only when the master switch AND `historyPanelEnabled` (`dsHistoryPanelEnabled`, default true) are on, reacting live via `chrome.storage.onChanged`. Exposed as `window.DSstudio.HistoryPanel`.
 
 ### Data Flow
 

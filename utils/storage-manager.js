@@ -74,6 +74,7 @@ const StorageManager = {
         PRESET_ORDER_META: 'dsPresetOrderMeta',
         PRESET_TOMBSTONES: 'dsPresetTombstones', // new: 刪除墓碑記錄，防止跨裝置合併時復活已刪除項目
         RESTORED_MESSAGES: 'restored_messages',
+        HISTORY_PANEL_ENABLED: 'dsHistoryPanelEnabled', // 完整對話歷史面板功能開關
     },
 
     /**
@@ -100,6 +101,7 @@ const StorageManager = {
         dsPresetOrderMeta: { order: [], orderUpdatedAt: 0 },
         dsPresetTombstones: {},
         restored_messages: {},
+        dsHistoryPanelEnabled: true,
     },
 
     /**
@@ -403,6 +405,10 @@ const StorageManager = {
 
     async saveHideThinking(enabled) {
         return this._set({ [this.KEYS.HIDE_THINKING]: enabled });
+    },
+
+    async saveHistoryPanelEnabled(enabled) {
+        return this._set({ [this.KEYS.HISTORY_PANEL_ENABLED]: enabled });
     },
 
     async saveShowSystemTime(enabled) {

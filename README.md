@@ -12,6 +12,7 @@ DS studio is a **Chrome extension** that enhances the experience of using **[cha
 | **Quick Switching** | In-page Overlay dropdown with search filtering and drag-to-reorder, bidirectional sync with popup menu |
 | **UI Adjustments** | Auto-hide sidebar, conversation/input box width adjustment, collapse thinking process, back-to-top button |
 | **Conversation Export** | One-click export full conversation as Markdown, with toggle for thinking process and reference links |
+| **Full Conversation History Panel** | Reads the full locally-cached conversation, bypassing DeepSeek's virtual list that can't scroll to the top, to reach the oldest messages; supports full-text search and Markdown export |
 | **Quote Reply** | Select AI reply text and convert it to Markdown blockquote with one click |
 | **System Time Injection** | Automatically append current system time and timezone offset to each message |
 | **Censored Reply Recovery** | Automatically restore original replies censored by DeepSeek from stream data, persists across refreshes |

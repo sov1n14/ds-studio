@@ -9,6 +9,7 @@
 | 模組群組 | 涵蓋功能 | 詳細文件 |
 |-|-|-|
 | **UI 調整模組** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, GoToTop, Mobile Sidebar Swipe | [→ content-ui.md](content-ui.md) |
+| **歷史面板模組** | Full Conversation History Panel（IndexedDB 讀取、面板／搜尋、Markdown 匯出，v4.11.0） | [→ content-ui.md](content-ui.md#history-panel-module-v4110) |
 | **導航與介面模組** | SPA Navigation, Overlay Preset Selector, Empty Preset, Toast | [→ content-navigation.md](content-navigation.md) |
 | **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup | [→ content-interaction.md](content-interaction.md) |
 | **互動復原模組** | Censor Reply Restore (4 files + CSS) | [→ spec/04-features.md](../spec/04-features.md) |

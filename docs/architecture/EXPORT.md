@@ -109,3 +109,15 @@ The main export entry point. Returns `{ items: Element[], isComplete: boolean, r
 
 - `harvestAllMessages()` — main harvest entry point (no parameters)
 - Exposed on `window.DSstudio.Harvest`
+
+## History Panel Markdown Export (v4.11.0)
+
+Distinct from the DOM scroll-and-harvest export above, the Full Conversation History Panel (see [content-ui.md](content-ui.md#history-panel-module-v4110)) exports from the **locally cached conversation data** (page IndexedDB `deepseek-chat`/`history-message`), not the rendered DOM — so it captures the full conversation including messages the virtual list never renders, with no scrolling required.
+
+`content/history-panel.export.js` (`window.__DS_HistoryPanel_export`) consumes the normalized active-thread result from `history-panel.idb.js`:
+
+- `toMarkdown(threadResult)` — pure, no DOM. Returns `''` for `!ok`/empty. Emits an H1 conversation title (fallback when empty), then per message a role heading (`## 🧑 使用者` / `## 🤖 助理`), an italic datetime line derived from `insertedAt` (epoch seconds), and the body joined from the message's **non-THINK** fragment contents. `THINK` (AI reasoning) fragments are deliberately excluded from export. Message content is kept verbatim (already Markdown-ish text from DeepSeek).
+- `buildFilename(threadResult)` — pure. Sanitizes illegal filename characters (`\ / : * ? " < > |` and control chars), collapses whitespace to `-`, caps the title at ~50 chars, and returns `deepseek-<sanitized-title>-<sessionId>.md` (fallback title `conversation`).
+- `downloadMarkdown(threadResult)` — impure. Builds a `text/markdown` Blob, creates a temporary `<a download>`, clicks it, then revokes the object URL. Returns `false` (no-op) when the generated Markdown is empty. No `chrome.*` APIs used.
+
+`toMarkdown` and `buildFilename` are pure and browser-independent, so they are unit-tested directly in Vitest (`test/unit/history-panel.export.spec.js`).
