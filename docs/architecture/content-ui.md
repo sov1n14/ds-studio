@@ -143,6 +143,30 @@ GoToTop is controlled **solely** by `isEnabled` (no per-feature toggle). `setupS
 
 Exposed on `window.DSstudio.GoToTop`: `enable()`, `disable()`, `init()`, `scrollToTopAndWait()`, `destroy()`.
 
+## History Panel Module (v4.11.0)
+
+`content/history-panel.{idb,render,export,js}` + `content/history-panel.css` implement a full-conversation viewer that bypasses DeepSeek's virtual list, which (past a certain conversation length) recycles DOM within a fixed window and never requests older messages — leaving the true top unreachable by scrolling. Instead of scrolling the site's list, the module reads the conversation DeepSeek already caches locally.
+
+### IndexedDB Read (`history-panel.idb.js`)
+
+`window.__DS_HistoryPanel_idb` exposes pure helpers plus one impure reader. Since a content script shares the page origin, `window.indexedDB.open('deepseek-chat')` reads the page's own database directly — no extra permission, no MAIN-world injection.
+
+- `loadActiveThread(sessionId)` — opens `deepseek-chat`, reads the `history-message` store, `get(sessionId)` (out-of-line key = conversation UUID). Returns `{ ok: true, sessionId, title, currentMessageId, messages }` or `{ ok: false, reason }` (`NO_SESSION_ID` / `NO_RECORD` / `NO_MESSAGES` / `DB_ERROR`); always closes the DB in `finally`. Messages live at `record.data.chat_messages`; title/`current_message_id` at `record.data.chat_session`.
+- `buildActiveThread(messages, currentMessageId)` (pure) — walks `parent_id` from `String(currentMessageId)` up to a root (`parent_id` missing/`null`/`'0'`), reverses to oldest→newest. Falls back to sorting all messages ascending by `Number(inserted_at)` when `currentMessageId` isn't found. Cycle-guarded.
+- `parseFragments(raw)` (pure) — parses the `fragments` JSON string (or passes through an array) to `{ type, content }[]`; `[]` on any failure. `normalizeThread()` composes the above into `{ messageId, parentId, role, insertedAt, fragments }[]`.
+
+### Rendering (`history-panel.render.js`)
+
+`window.__DS_HistoryPanel_render`: `createPanel({ onExport, onClose })` builds an unattached full-screen overlay + centered card (header with title, search input, prev/next-match + counter, jump-oldest/newest, export, close; closes on backdrop click + Esc). `renderThread(panelEl, threadResult)` fills the list — an empty/error state per `reason`, otherwise one row per message with a role label, non-THINK fragments as `white-space: pre-wrap` plain text, and `THINK` fragments inside a default-collapsed `<details>`. All conversation text goes through `textContent`/`createTextNode`; search highlighting rebuilds text nodes — **never `innerHTML`** — so message content can't inject markup. `open()`/`close()` toggle visibility and the Esc listener. Only `.dss-history-list` scrolls; the page body never does. Styles (`history-panel.css`, all `dss-history-*`, no `ds-*`/`dsw-*` overrides) support light/dark via `prefers-color-scheme`.
+
+### Markdown Export (`history-panel.export.js`)
+
+`window.__DS_HistoryPanel_export`: `toMarkdown(threadResult)` (pure) → H1 title + per-message role heading + datetime + non-THINK body (`THINK` excluded); `buildFilename(threadResult)` (pure) → sanitized `deepseek-<title>-<sessionId>.md`; `downloadMarkdown(threadResult)` performs the Blob/anchor download.
+
+### Injection & Master Switch (`history-panel.js`)
+
+`window.DSstudio.HistoryPanel` (`enable()`, `disable()`, `init()`, `destroy()`). The open-button is a clone of the site's `ds-button` styling with all `dsw-gotop*` classes stripped and a distinct clock icon (marker class `dss-history-open`), stacked 8px above the go-top button via the same offset math, de-duped and re-injected on SPA route changes. Click loads the active thread and opens the panel (created once, reused). Active only when the master switch (`isEnabled`) AND `historyPanelEnabled` (`dsHistoryPanelEnabled`, default `true`) are on; reacts live via `chrome.storage.onChanged` on the `local` namespace, removing the button and closing the panel when disabled.
+
 ## Mobile Sidebar Swipe
 
 The `MobileSidebarSwipe` module in `content/mobile-sidebar-swipe.js` detects right-swipe gestures on mobile devices within the central 80% viewport area and clicks the sidebar toggle button to show/hide the navigation sidebar.

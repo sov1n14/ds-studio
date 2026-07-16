@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const globalPromptToggle        = document.getElementById('globalPromptToggle');
     const sidebarAutoHideToggle     = document.getElementById('sidebarAutoHideToggle');
     const hideThinkingToggle        = document.getElementById('hideThinkingToggle');
+    const historyPanelToggle        = document.getElementById('historyPanelToggle');
     const chatWidthToggle           = document.getElementById('chatWidthToggle');
     const chatWidthSlider           = document.getElementById('chatWidthSlider');
     const chatWidthValue            = document.getElementById('chatWidthValue');
@@ -81,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const subControls = [
             sidebarAutoHideToggle,
             hideThinkingToggle,
+            historyPanelToggle,
             showSystemTimeToggle,
             chatWidthToggle, chatWidthSlider,
             inputWidthToggle, inputWidthSlider
@@ -233,6 +235,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (includeReferencesToggle) includeReferencesToggle.checked = settings.includeReferences;
     if (sidebarAutoHideToggle)   sidebarAutoHideToggle.checked   = settings.sidebarAutoHide;
     if (hideThinkingToggle)      hideThinkingToggle.checked      = settings.hideThinking;
+    if (historyPanelToggle)      historyPanelToggle.checked      = settings.historyPanelEnabled;
     if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.showSystemTime;
 
     // 全域提示詞開關初始值
@@ -335,7 +338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         dom: {
             enableToggle, includeThinkingToggle, includeReferencesToggle,
             showSystemTimeToggle, globalPromptToggle,
-            sidebarAutoHideToggle, hideThinkingToggle,
+            sidebarAutoHideToggle, hideThinkingToggle, historyPanelToggle,
             chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
             inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
         },
@@ -472,6 +475,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (showSystemTimeToggle) {
         showSystemTimeToggle.addEventListener('change', async () => {
             await StorageManager.saveShowSystemTime(showSystemTimeToggle.checked);
+            await refreshSyncStatus();
+            showSaveStatus();
+        });
+    }
+
+    if (historyPanelToggle) {
+        historyPanelToggle.addEventListener('change', async () => {
+            await StorageManager.saveHistoryPanelEnabled(historyPanelToggle.checked);
             await refreshSyncStatus();
             showSaveStatus();
         });

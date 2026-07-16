@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 2026-06-22
+**Last updated:** 2026-07-16
 
 > **[📖 繁體中文版隱私權政策](docs/PRIVACY.md)** — 閱讀隱私權政策的繁體中文版本
 
@@ -35,6 +35,7 @@ The Extension injects content scripts into `chat.deepseek.com` to provide its fe
 
 - Read and modify the conversation page DOM to enhance the user interface.
 - Intercept network responses from DeepSeek's servers solely for the purpose of restoring censored replies.
+- Read DeepSeek's own on-device IndexedDB conversation cache (the `deepseek-chat` database's `history-message` store), used only by the Full Conversation History Panel to display, search, and export your current conversation locally. This read happens entirely on-device, makes **no** network request, and no data leaves your device.
 - **Do not** read, collect, or transmit any data outside of your browser.
 
 ## Network Requests

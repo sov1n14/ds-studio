@@ -88,6 +88,7 @@
 | `dsInputWidthEnabled` | boolean | `false` | 輸入框寬度調整是否啟用。 |
 | `dsHideThinking` | boolean | `false` | 隱藏思考過程功能是否啟用。 |
 | `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
+| `dsHistoryPanelEnabled` | boolean | `true` | （v4.11.0）完整對話歷史面板是否啟用（`StorageManager.KEYS.HISTORY_PANEL_ENABLED`，設定物件欄位 `historyPanelEnabled`）。受主開關連動。 |
 | `dsLocalAuth` | `string[]` | `[]` | 本地端權威金鑰清單（Plan A）。記錄上次 sync 寫入失敗、改為寫入 local 的金鑰名稱，讓後續讀取優先取用 local 值（僅本地端）。 |
 | `syncInitialized` | boolean | `false` | 初始同步是否已完成（僅本地端）。 |
 | `syncConflictPending` | boolean | `false` | 是否有同步衝突待使用者解決（僅本地端）。 |

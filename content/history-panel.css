@@ -1,0 +1,268 @@
+/* DS Studio — Full Conversation History Panel 樣式
+ * 所有 selector 一律以 dss-history- 為前綴，禁止對任何 ds-* class 設定樣式。
+ */
+
+/*
+ * 開啟按鈕：疊放於 go-top／原生按鈕上方（由 history-panel.js 的
+ * _applyStackOffset 動態計算 margin-bottom 與 right，此處僅提供定位基準）。
+ * 外觀（圓形、尺寸、顏色）沿用 clone 來源攜帶的 ds-* class，此處不重複設定。
+ */
+.dss-history-open {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.dss-history-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.dss-history-panel {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  max-width: 860px;
+  height: 85vh;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  /* 面板本身不捲動；僅訊息清單區域捲動，避免整頁跟著捲動 */
+}
+
+.dss-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  flex: 0 0 auto;
+}
+
+.dss-history-title {
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dss-history-close-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.dss-history-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.dss-history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.dss-history-search-input {
+  flex: 1 1 180px;
+  min-width: 120px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+}
+
+.dss-history-search-btn,
+.dss-history-jump-btn,
+.dss-history-export-btn {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.dss-history-search-btn:hover,
+.dss-history-jump-btn:hover,
+.dss-history-export-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.dss-history-export-btn {
+  background: #4d6bfe;
+  border-color: #4d6bfe;
+  color: #fff;
+}
+
+.dss-history-export-btn:hover {
+  background: #3d59e8;
+}
+
+.dss-history-match-counter {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  min-width: 48px;
+  text-align: center;
+}
+
+.dss-history-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dss-history-empty {
+  margin: auto;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 14px;
+  text-align: center;
+}
+
+.dss-history-msg {
+  border-radius: 10px;
+  padding: 10px 14px;
+  max-width: 92%;
+}
+
+.dss-history-msg--user {
+  align-self: flex-end;
+  background: #e8edff;
+}
+
+.dss-history-msg--assistant {
+  align-self: flex-start;
+  background: #f2f2f2;
+}
+
+.dss-history-msg__label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.65;
+  margin-bottom: 4px;
+}
+
+.dss-history-msg__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.dss-history-think {
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 6px 10px;
+}
+
+.dss-history-think__summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.dss-history-think__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.75;
+  margin-top: 6px;
+}
+
+.dss-history-highlight {
+  background: #ffe08a;
+  color: #1a1a1a;
+  border-radius: 2px;
+}
+
+.dss-history-highlight--current {
+  background: #ff9f1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dss-history-panel {
+    background: #1e1e1e;
+    color: #f0f0f0;
+  }
+
+  .dss-history-header {
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .dss-history-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .dss-history-toolbar {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .dss-history-search-input {
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .dss-history-search-btn,
+  .dss-history-jump-btn {
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .dss-history-search-btn:hover,
+  .dss-history-jump-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .dss-history-match-counter {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .dss-history-empty {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .dss-history-msg--user {
+    background: #2c3563;
+  }
+
+  .dss-history-msg--assistant {
+    background: #2b2b2b;
+  }
+
+  .dss-history-think {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .dss-history-highlight {
+    background: #7a5c00;
+    color: #ffe9b0;
+  }
+
+  .dss-history-highlight--current {
+    background: #a6790a;
+  }
+}

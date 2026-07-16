@@ -83,11 +83,15 @@
         "content/go-top.render.js",
         "content/go-top.scroll.js",
         "content/go-top.js",
+        "content/history-panel.idb.js",
+        "content/history-panel.render.js",
+        "content/history-panel.export.js",
+        "content/history-panel.js",
         "content/mobile-sidebar-swipe.js",
         "content/mobile-homepage-cleanup.js",
         "content/auto-retry.js"
       ],
-      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css", "content/temporary-chat-toggle.css"],
+      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css", "content/temporary-chat-toggle.css", "content/history-panel.css"],
       "run_at": "document_end"
     }
   ]

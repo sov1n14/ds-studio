@@ -95,6 +95,10 @@ function createLiveSyncListener(ctx) {
             applyToggle(dom.hideThinkingToggle, changes[KEYS.HIDE_THINKING].newValue);
         }
 
+        if (changes[KEYS.HISTORY_PANEL_ENABLED]) {
+            applyToggle(dom.historyPanelToggle, changes[KEYS.HISTORY_PANEL_ENABLED].newValue);
+        }
+
         if (changes[KEYS.SHOW_SYSTEM_TIME]) {
             applyToggle(dom.showSystemTimeToggle, changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false);
         }
