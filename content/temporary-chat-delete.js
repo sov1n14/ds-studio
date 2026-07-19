@@ -55,7 +55,8 @@ const TemporaryChatDelete = (() => {
     function loadTrackedUuid() {
         try {
             const key = _getConst('DSS_TEMP_CHAT_UUID_KEY', 'dss-temporary-chat-uuid');
-            return sessionStorage.getItem(key) || null;
+            const restoredValue = sessionStorage.getItem(key) || null;
+            return restoredValue;
         } catch {
             return null;
         }
@@ -330,7 +331,10 @@ const TemporaryChatDelete = (() => {
         // 鍵盤補充旗標整合
         const isRefresh = isReloadOrSameUrl || _isKeyboardRefresh;
 
-        _suppressNextUnloadDelete = isRefresh;
+        // beforeunload 抑制旗標只應由「真正的整頁刷新」武裝（含鍵盤刷新）。
+        // 同 URL 的 SPA push（例如建立臨時對話時的第二次導航）不會卸載頁面，
+        // 若也武裝此旗標，會在真正離開至外部網站時卡住不消耗，導致刪除被錯誤跳過。
+        _suppressNextUnloadDelete = isReload || _isKeyboardRefresh;
         _isKeyboardRefresh = false;
 
         const fromUuid = extractUuidFromUrl();
