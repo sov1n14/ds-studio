@@ -693,7 +693,25 @@ describe('K — same-URL / reload must NOT delete', () => {
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
     });
 
-    it('K2: same destination URL as current href → no deletion, suppressNextUnloadDelete set', () => {
+    it('K1b: after a genuine reload navigation, the subsequent beforeunload does NOT dispatch the delete (suppress correctly armed)', () => {
+        const uuid = 'a1b2c3d4-1112-1112-1112-aabbccddee00';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: `https://chat.deepseek.com/a/chat/s/${uuid}`,
+            navigationType: 'reload',
+        }));
+
+        TemporaryChatDelete.handleBeforeUnload();
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+    });
+
+    it('K2: same-URL push (navigationType "push") → no deletion on the navigate event itself, but does NOT arm suppressNextUnloadDelete (only a real reload arms it)', () => {
         const uuid = 'a1b2c3d4-2222-2222-2222-aabbccddee00';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -708,7 +726,32 @@ describe('K — same-URL / reload must NOT delete', () => {
         }));
 
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
-        expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
+        expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(false);
+    });
+
+    it('K2b (regression): after a same-URL push, a subsequent leave to an external site (beforeunload) DOES dispatch the keepalive delete — suppress must not have been wrongly armed', () => {
+        // vi.restoreAllMocks() in this suite's afterEach wipes vi.fn() implementations (mockReset
+        // semantics), so re-arm the resolved value here — matching the pattern used in Groups M/N/O.
+        global.TemporaryChatDeleteApi.deleteChatSession.mockResolvedValue(true);
+        const uuid = 'a1b2c3d4-2223-2223-2223-aabbccddee00';
+        setPathname(`/a/chat/s/${uuid}`);
+        TemporaryChatDelete.__setState({
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const currentHref = window.location.href;
+        // Same-URL SPA push (e.g. second navigation while creating the temp chat)
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: currentHref,
+            navigationType: 'push',
+        }));
+
+        // User then leaves to an external site — no `navigate` event fires for this,
+        // only `beforeunload`.
+        TemporaryChatDelete.handleBeforeUnload();
+
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).toHaveBeenCalledWith(uuid, 'Bearer tok', { keepalive: true });
     });
 
     it('K3: tracked uuid persists after reload navigation (not cleared)', () => {
