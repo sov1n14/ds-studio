@@ -30,6 +30,8 @@ const TemporaryChatToggle = (() => {
     let _injectedRow = null;
     // chrome.storage.session 的本地快取，使 readEnabledFlag() 保持同步
     let _enabledFlagCache = false;
+    // 擴充功能主開關狀態；於 init() 中從 StorageManager.KEYS.IS_ENABLED 讀取
+    let _masterEnabled = false;
 
     // ── 純工具函式（可供測試匯出） ───────────────────────────────────────────
 
@@ -182,6 +184,8 @@ const TemporaryChatToggle = (() => {
      * Silently returns when the anchor is absent — the MutationObserver will retry.
      */
     function tryInject() {
+        if (!_masterEnabled) return;
+
         const anchor = document.querySelector('div.aaff8b8f');
 
         if (!anchor) return;
@@ -252,6 +256,14 @@ const TemporaryChatToggle = (() => {
         // 先等待快取初始化，確保 readEnabledFlag() 有正確值
         await initEnabledFlagFromStorage();
 
+        // 讀取擴充功能主開關狀態，決定是否允許注入切換列
+        try {
+            const result = await chrome.storage.local.get([StorageManager.KEYS.IS_ENABLED]);
+            _masterEnabled = result[StorageManager.KEYS.IS_ENABLED] ?? false;
+        } catch {
+            _masterEnabled = false;
+        }
+
         // Start observer and navigation listeners regardless of current path,
         // so SPA navigations back to '/' are handled correctly
         startObserver();
@@ -286,6 +298,18 @@ const TemporaryChatToggle = (() => {
             // 通知 TemporaryChatDelete 等其他監聽者
             dispatchToggleEvent(newValue);
         },
+        /**
+         * 供主開關 storage 監聽器使用：更新 _masterEnabled 並同步顯示/隱藏切換列。
+         * @param {boolean} isMasterEnabled
+         */
+        __setMasterEnabled(isMasterEnabled) {
+            _masterEnabled = isMasterEnabled;
+            if (!_masterEnabled) {
+                removeToggleRow();
+            } else if (window.location.pathname === '/') {
+                tryInject();
+            }
+        },
     };
 })();
 
@@ -293,6 +317,13 @@ const TemporaryChatToggle = (() => {
 // 當其他分頁透過 chrome.storage.session 改變啟用旗標時，同步本分頁的快取與 UI。
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+
+    // 擴充功能主開關：控制切換列的顯示/隱藏
+    if (changes[StorageManager.KEYS.IS_ENABLED]) {
+        const isMasterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
+        TemporaryChatToggle.__setMasterEnabled(isMasterEnabled);
+    }
+
     const key =
         (typeof globalThis !== 'undefined' && globalThis['DSS_TEMP_CHAT_STORAGE_KEY']) ||
         (typeof window !== 'undefined' && window['DSS_TEMP_CHAT_STORAGE_KEY']) ||
