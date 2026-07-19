@@ -15,17 +15,44 @@ const chromeStorageLocalMock = {
     _reset() { this._store = {}; },
 };
 
+// NOTE: static `import` statements are hoisted above all other top-level code
+// in this module, so the module-under-test's own top-level
+// `chrome.storage.onChanged.addListener(...)` call (temporary-chat-toggle.js
+// line ~318) actually registers against whatever `global.chrome` the vitest
+// setupFile (test/setup/vitest.setup.js) already installed — NOT the local
+// stub assigned below (that assignment runs only after the hoisted import).
+// So we capture the setup file's onChanged reference first and drive the
+// listener through its `callListeners` test helper.
+const setupOnChanged = global.chrome?.storage?.onChanged;
+
+// Capture onChanged listeners so tests can invoke the module's top-level
+// chrome.storage.onChanged.addListener callback directly.
+const onChangedListeners = [];
 global.chrome = {
     storage: {
         local: chromeStorageLocalMock,
-        onChanged: { addListener: () => {} },
+        onChanged: { addListener: (l) => { onChangedListeners.push(l); } },
     },
 };
+
+// Minimal StorageManager stub — only KEYS.IS_ENABLED is used by this module.
+global.StorageManager = { KEYS: { IS_ENABLED: 'isEnabled' } };
 
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
 const STORAGE_KEY = 'dss-temporary-chat-enabled';
 const CHANGED_EVENT = 'dss-temporary-chat-changed';
+const IS_ENABLED_KEY = 'isEnabled';
+
+// Fires the module's real onChanged listener, registered (at import-hoist
+// time) against the setup file's chrome mock — see note above.
+function fireOnChanged(changes, area) {
+    if (setupOnChanged?.callListeners) {
+        setupOnChanged.callListeners(changes, area);
+    } else {
+        onChangedListeners.forEach((l) => l(changes, area));
+    }
+}
 
 // ── Group A: initEnabledFlagFromStorage (via init) ───────────────────────────
 // initEnabledFlagFromStorage is private; test its effects via init() which awaits it.
@@ -550,5 +577,109 @@ describe('K — handleNavigation (SPA-aware)', () => {
         TemporaryChatToggle.handleNavigation('/a/chat/s/uuid', '/');
 
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+    });
+});
+
+// ── Group L: master switch (_masterEnabled) ──────────────────────────────────
+
+describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
+    function createAnchorInDOM() {
+        const parent = document.createElement('div');
+        const anchor = document.createElement('div');
+        anchor.className = 'aaff8b8f';
+        parent.appendChild(anchor);
+        document.body.appendChild(parent);
+        return anchor;
+    }
+
+    beforeEach(() => {
+        chromeStorageLocalMock._reset();
+        document.body.innerHTML = '';
+        // Reset master switch + injected row to a known baseline before each test.
+        TemporaryChatToggle.__setMasterEnabled(false);
+        document.body.innerHTML = '';
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        TemporaryChatToggle.__setMasterEnabled(false);
+        document.body.innerHTML = '';
+    });
+
+    it('L1: init() defaults _masterEnabled to false when IS_ENABLED is absent — no injection on homepage', async () => {
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+
+        await TemporaryChatToggle.init();
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+    });
+
+    it('L2: init() seeds _masterEnabled from storage true — injects on homepage', async () => {
+        window.history.replaceState({}, '', '/');
+        chromeStorageLocalMock._store[IS_ENABLED_KEY] = true;
+        createAnchorInDOM();
+
+        await TemporaryChatToggle.init();
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+    });
+
+    it('L3: __setMasterEnabled(false) removes an existing injected row', () => {
+        window.history.replaceState({}, '', '/');
+        TemporaryChatToggle.__setMasterEnabled(true);
+        const anchor = createAnchorInDOM();
+        TemporaryChatToggle.injectToggleRow(anchor);
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+
+        TemporaryChatToggle.__setMasterEnabled(false);
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+    });
+
+    it('L4: __setMasterEnabled(true) on homepage re-injects the row', () => {
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+
+        TemporaryChatToggle.__setMasterEnabled(true);
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+    });
+
+    it('L5: __setMasterEnabled(true) off-homepage does NOT inject', () => {
+        window.history.replaceState({}, '', '/a/chat/s/some-uuid');
+        createAnchorInDOM();
+
+        TemporaryChatToggle.__setMasterEnabled(true);
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+    });
+
+    it('L6: onChanged IS_ENABLED (area=local) routes to __setMasterEnabled', () => {
+        const spy = vi.spyOn(TemporaryChatToggle, '__setMasterEnabled');
+
+        fireOnChanged({ [IS_ENABLED_KEY]: { newValue: true } }, 'local');
+
+        expect(spy).toHaveBeenCalledWith(true);
+    });
+
+    it('L7: onChanged feature-key branch still works alongside the IS_ENABLED branch', () => {
+        fireOnChanged({
+            [IS_ENABLED_KEY]: { newValue: true },
+            [STORAGE_KEY]: { newValue: true },
+        }, 'local');
+
+        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+    });
+
+    it('L8: onChanged with area !== "local" is ignored (no master-switch effect)', () => {
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+        const spy = vi.spyOn(TemporaryChatToggle, '__setMasterEnabled');
+
+        fireOnChanged({ [IS_ENABLED_KEY]: { newValue: true } }, 'sync');
+
+        expect(spy).not.toHaveBeenCalled();
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 });
