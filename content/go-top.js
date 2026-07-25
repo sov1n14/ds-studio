@@ -20,7 +20,6 @@
  */
 const GoToTop = {
     // === 常數 ===
-    SCROLL_STEP_FACTOR: 0.9,
     TIMEOUT: 30000,
     OBSERVER_DEBOUNCE: 50,
     ANCHOR_POLL_INTERVAL: 100,

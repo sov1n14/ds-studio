@@ -126,14 +126,16 @@ A route observer monitors `window.location.pathname` via a body `MutationObserve
 
 ### `scrollToTopAndWait()`
 
-This is the programmatic smooth-scroll API, returning a `Promise<{success, reason?}>`:
+This is the programmatic scroll-to-top API, returning a `Promise<{success, reason?}>`:
 
 1. Toggle (click-to-stop): if a scroll is already in progress (`_locked`), calling it again aborts the current scroll at its present position via `_scrollReject({ success: false, reason: 'stopped-by-user' })` and returns immediately WITHOUT starting a new scroll. The button stays clickable (`aria-disabled` remains `"false"`) for the entire scroll — it is never disabled mid-scroll.
-2. Scrolls in steps of `-0.9 * viewportHeight` using `scrollBy()`.
-3. After each step, waits for DOM stability via a `MutationObserver` on the scroll container. If the container's `scrollHeight` changes (lazy load), the stability counter resets.
+2. Jumps straight to the top on each poll by writing `scrollContainer.scrollTop = 0`. Arrival time therefore depends only on how many lazy-mount cycles the virtualized list needs, not on the length of the conversation.
+3. After each poll, waits for DOM stability via a `MutationObserver` on the scroll container. If the container's `scrollHeight` changes (lazy load), the stability counter resets and the next poll jumps to the top again.
 4. Top detection requires 3 consecutive stable ticks with `scrollTop <= 0` and matching `scrollHeight`.
-5. Timeout after 30s (configurable). Aborted with reason `'aborted'` on route change during scroll, and likewise when `disable()` runs mid-scroll. Invoking `_scrollReject` is the ONLY external cancellation surface: it runs the scroll closure's `cleanup()`, which clears the closure-local anchor-poll timer. Merely dropping the `_scrollReject` reference does not stop the loop — it would keep calling `scrollBy` until its own timeout or `MAX_ANCHOR_RETRIES` ceiling.
+5. Timeout after 30s (configurable). Aborted with reason `'aborted'` on route change during scroll, and likewise when `disable()` runs mid-scroll. Invoking `_scrollReject` is the ONLY external cancellation surface: it runs the scroll closure's `cleanup()`, which clears the closure-local anchor-poll timer. Merely dropping the `_scrollReject` reference does not stop the loop — it would keep writing `scrollTop = 0` until its own timeout or `MAX_ANCHOR_RETRIES` ceiling.
 6. Calls `_evaluateVisibility()` on cleanup to restore the button display state.
+
+**Why up jumps but down steps.** `harvest.js`'s downward capture loop deliberately advances only `0.9 * viewportHeight` per step, because it must render and capture every message on the way past — anything the virtualized list skips is content the export loses. `scrollToTopAndWait()` has no such obligation: it only needs to arrive, and discards everything it passes. The asymmetry is therefore intentional, not an inconsistency to be unified away. Do not "harmonise" the two loops.
 
 ### Master Switch
 

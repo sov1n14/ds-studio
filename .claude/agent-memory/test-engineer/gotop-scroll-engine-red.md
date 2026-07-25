@@ -1,0 +1,16 @@
+---
+name: gotop-scroll-engine-red
+description: Red-phase for the go-top jump-based scroll redesign (test/unit/go-top.scroll-engine.spec.js) — stateful-container mocking technique that stays mechanism-agnostic across scrollBy-stepping vs scrollTop-jump implementations.
+metadata:
+  type: project
+---
+
+New file `test/unit/go-top.scroll-engine.spec.js` covers the redesign of `GoToTop.scrollToTopAndWait()` from stepped `scrollBy(0, -innerHeight*0.9)` polling to a direct `scrollTop = 0` jump (with re-jump on lazy-mount regrowth). See [[project_gotop_test_suite_split_2026_07_26]] for the file map this adds to.
+
+**Technique — mechanism-agnostic scroll container mock:** give the fixture container a real get/set-backed `scrollTop` (not a bare property), and route `container.scrollBy = vi.fn((x,y) => { container.scrollTop = current + y; })` through that same setter. Then make the mocked `_getAnchor()` return an element whose `getBoundingClientRect().top` reads `-container.scrollTop` LIVE (not a snapshot). This makes one test correctly discriminate old-vs-new code without ever asserting on `scrollBy` call counts: whichever mechanism moves `scrollTop`, the anchor's "at top" verdict and the final `container.scrollTop` value are both genuinely derived from it. Used this same pattern to repair `go-top.visibility.spec.js`'s "calls scrollBy on the correct nested scroll container" test (renamed to assert the outcome — container ends at 0, `document.scrollingElement` untouched — instead of pinning the scrollBy call).
+
+**R1 (core, must-fail-today) result:** budget = `ANCHOR_POLL_INTERVAL * 15` (1500ms virtual) on a container 50x viewport tall (`window.innerHeight` pinned to 100 via `Object.defineProperty` for determinism, step = 90px, distance = 4900px ≈ 55 steps ≈ 5.5s needed by old code). Observed failure on current code: `expect(settled).toBe(true)` → `AssertionError: expected false to be true` (promise still pending after the budget). This is the correct red — confirms today's code is proportional-to-length as the directive states.
+
+**R2 (regrowth) unexpectedly passed on first run — investigated, not vacuous:** current (pre-redesign) code already has the stable-scrollHeight convergence gate, which is explicitly "retained unchanged" by the redesign per the directive — so R2 tests a PRESERVED capability, not new behavior, and passing on both old and new code is expected (unlike R1, the directive never says R2 "must fail today"). Non-vacuousness proof (no mutation needed, derived logically from the fixture): the growth hook only fires once, pushing `scrollTop` back up to `growth` (200) the first time it hits exactly 0; the final assertion `container.scrollTop === 0` can only pass if the implementation scrolls a SECOND time after that push-back. A buggy implementation that declared success on the first touch of 0 without re-verifying would leave `container.scrollTop === 200` at test end, failing the assertion. So the test does discriminate correct-vs-broken regrowth handling even though it happens to pass on both the current and redesigned code.
+
+**Gotcha:** `vi.advanceTimersByTimeAsync(20000)` inside a fake-timer test reports ~1ms of REAL execution time in the runner output — that's normal (it fast-forwards virtual time), not a sign the test resolved instantly or skipped work.

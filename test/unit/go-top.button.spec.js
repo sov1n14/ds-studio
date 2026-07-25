@@ -40,7 +40,6 @@ describe('GoToTop', () => {
             expect(GoToTop.TIMEOUT).toBe(30000);
             expect(GoToTop.ANCHOR_POLL_INTERVAL).toBe(100);
             expect(GoToTop.MAX_ANCHOR_RETRIES).toBe(5);
-            expect(GoToTop.SCROLL_STEP_FACTOR).toBe(0.9);
             expect(GoToTop.OBSERVER_DEBOUNCE).toBe(50);
             expect(GoToTop.WRAPPER_OBSERVER_DEBOUNCE).toBe(80);
             // New ds-button constants (v2.9+)

@@ -12,8 +12,11 @@
         // ─────────────────────────────
 
         /**
-         * Smoothly scroll to the top of the conversation.
-         * Uses scrollBy steps and waits for lazy-loaded content via MutationObserver.
+         * Scroll to the top of the conversation.
+         * Jumps the resolved scroll container directly to scrollTop 0 on each poll,
+         * re-jumping while the virtualized list keeps lazily mounting older messages
+         * above, and resolves once the scroll height has stabilised and the top
+         * anchor is verified via MutationObserver-driven polling.
          *
          * @param {Object} [options]
          * @param {number} [options.timeout] - Max scroll duration in ms (default TIMEOUT)
@@ -105,7 +108,9 @@
                         return;
                     }
 
-                    scrollContainer.scrollBy(0, -window.innerHeight * this.SCROLL_STEP_FACTOR);
+                    // 直接跳至頂端而非逐步位移：距離越長，逐步位移所需的輪詢次數越多，
+                    // 直接寫入 scrollTop = 0 讓抵達時間與對話長度無關（僅取決於收斂閘門）。
+                    scrollContainer.scrollTop = 0;
 
                     const currentScrollTop = scrollContainer.scrollTop;
                     const currentScrollHeight = scrollContainer.scrollHeight;

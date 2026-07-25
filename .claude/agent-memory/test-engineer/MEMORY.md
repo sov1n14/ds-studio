@@ -40,3 +40,5 @@
 - [Go-Top Test Harness Addendum](project_test_harness.md) — "enable / disable" beforeEach mocks addEventListener as no-op spy; build a real container to test scroll-listener teardown.
 - [Go-Top Teardown Bugs 2026-07-26](gotop-teardown-bugs.md) — 2 confirmed disable() bugs (route-change timer survives, in-flight scroll poll survives), red tests in go-top.enable.spec.js.
 - [GoToTop PreventAutoScroll Coordination Red 2026-07-26](gotop-pas-coordination-red.md) — save-restore red tests; 2/5 vacuous on no-op baseline, proved via synthetic-buggy mutation stand-ins.
+- [GoToTop Scroll-Engine Redesign Red 2026-07-26](gotop-scroll-engine-red.md) — jump-vs-step mechanism-agnostic container mock; R1 observed-fail, R2 pass-on-both explained (preserved gate).
+- [GoToTop scrollBy-Probe Repair 2026-07-26](gotop-scrollby-probe-repair.md) — 4 tests coupled to scrollBy broke when jump landed; re-pointed at scrollTop setter (reused existing pattern); shared-tree git-status gotcha.

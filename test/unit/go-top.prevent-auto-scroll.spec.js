@@ -40,7 +40,17 @@ function createScrollContainer() {
     container.style.height = '100px';
     Object.defineProperty(container, 'scrollHeight', { value: 500, configurable: true });
     Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
-    container.scrollBy = vi.fn();
+    let scrollTopValue = 0;
+    // Real get/set backing for scrollTop (matches the pattern established in
+    // go-top.scroll-engine.spec.js), plus scrollBy routed through the same
+    // setter — so the fixture stays valid whether the poll loop moves the
+    // container via stepped scrollBy calls or a single scrollTop write.
+    Object.defineProperty(container, 'scrollTop', {
+        get: () => scrollTopValue,
+        set: (v) => { scrollTopValue = v; },
+        configurable: true,
+    });
+    container.scrollBy = vi.fn((x, y) => { container.scrollTop = scrollTopValue + y; });
     document.body.appendChild(container);
     return container;
 }
@@ -52,14 +62,25 @@ function makeAnchorAtTop(rect) {
 }
 
 /**
- * Wraps container.scrollBy so the FIRST call samples PreventAutoScroll's
- * isEnabled() — this observes real mid-flight state rather than inferring it
- * from call spies.
+ * Wraps the container's scrollTop setter so the FIRST write samples
+ * PreventAutoScroll's isEnabled() — this observes real mid-flight state
+ * rather than inferring it from call spies. A setter probe (rather than a
+ * scrollBy spy) is mechanism-agnostic: it fires whether the poll loop moves
+ * the container via stepped scrollBy calls (which route through this same
+ * setter, see createScrollContainer) or a single direct scrollTop write.
+ * Must be called AFTER createScrollContainer(), which installs the
+ * get/set-backed scrollTop this wraps.
  */
 function sampleIsEnabledOnFirstScrollStep(container, pas) {
     let sampled;
-    container.scrollBy = vi.fn(() => {
-        if (sampled === undefined) sampled = pas.isEnabled();
+    const { get, set } = Object.getOwnPropertyDescriptor(container, 'scrollTop');
+    Object.defineProperty(container, 'scrollTop', {
+        get,
+        set: (v) => {
+            if (sampled === undefined) sampled = pas.isEnabled();
+            set(v);
+        },
+        configurable: true,
     });
     return () => sampled;
 }

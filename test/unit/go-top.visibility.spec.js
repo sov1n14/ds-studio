@@ -286,15 +286,40 @@ describe('GoToTop', () => {
             expect(result).toEqual({ success: true });
         });
 
-        it('calls scrollBy on the correct nested scroll container, not document', async () => {
+        it('scrolls the correct nested scroll container to the top, not document.scrollingElement', async () => {
             const container = createScrollContainer();
-            const scrollBySpy = vi.spyOn(container, 'scrollBy');
+            // Give the container a real, independently-tracked scrollTop so the
+            // test can observe which element actually ends up at 0, without
+            // pinning whichever API (scrollBy, a direct scrollTop write, ...)
+            // performs the move. See go-top.scroll-engine.spec.js for the
+            // rationale (mechanism is being redesigned from stepping to a jump).
+            let scrollTopValue = 300;
+            Object.defineProperty(container, 'scrollTop', {
+                get: () => scrollTopValue,
+                set: (v) => { scrollTopValue = Math.max(0, v); },
+                configurable: true,
+            });
+            container.scrollBy = vi.fn((x, y) => { container.scrollTop = scrollTopValue + y; });
             GoToTop._scrollContainer = container;
-            vi.spyOn(GoToTop, '_getAnchor')
-                .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
 
-            await GoToTop.scrollToTopAndWait();
-            expect(scrollBySpy).toHaveBeenCalled();
+            // Anchor tracks the container's REAL scrollTop live, so "at top"
+            // only becomes true once the container has genuinely reached 0.
+            const anchor = makeAnchorAtTop({ top: 0, bottom: 50, height: 50 });
+            anchor.getBoundingClientRect = () => ({
+                top: -container.scrollTop,
+                bottom: -container.scrollTop + 50,
+                height: 50,
+            });
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(anchor);
+
+            const docScrollingElement = document.scrollingElement || document.documentElement;
+            const docScrollTopBefore = docScrollingElement.scrollTop;
+
+            const result = await GoToTop.scrollToTopAndWait();
+
+            expect(result).toEqual({ success: true });
+            expect(container.scrollTop).toBe(0);
+            expect(docScrollingElement.scrollTop).toBe(docScrollTopBefore);
         });
 
         it('re-probes scroll container when cached container is invalid', async () => {

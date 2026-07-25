@@ -212,7 +212,23 @@ describe('GoToTop', () => {
             container.style.overflowY = 'auto';
             Object.defineProperty(container, 'scrollHeight', { value: 500, configurable: true });
             Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
-            container.scrollBy = vi.fn();
+            let scrollTopValue = 0;
+            let scrollTopSetCount = 0;
+            // Real get/set backing for scrollTop (matches the pattern established
+            // in go-top.scroll-engine.spec.js), plus scrollBy routed through the
+            // same setter — so poll activity is counted whether the loop moves
+            // the container via stepped scrollBy calls or a single scrollTop
+            // write.
+            Object.defineProperty(container, 'scrollTop', {
+                get: () => scrollTopValue,
+                set: (v) => { scrollTopValue = v; scrollTopSetCount++; },
+                configurable: true,
+            });
+            Object.defineProperty(container, 'scrollTopSetCount', {
+                get: () => scrollTopSetCount,
+                configurable: true,
+            });
+            container.scrollBy = vi.fn((x, y) => { container.scrollTop = scrollTopValue + y; });
             document.body.appendChild(container);
             return container;
         }
@@ -298,7 +314,7 @@ describe('GoToTop', () => {
 
                 // Let the scroll operation genuinely get into flight.
                 await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 2);
-                const scrollCallsBeforeDisable = container.scrollBy.mock.calls.length;
+                const scrollCallsBeforeDisable = container.scrollTopSetCount;
                 expect(scrollCallsBeforeDisable).toBeGreaterThan(0);
                 expect(settled).toBe(false);
 
@@ -312,7 +328,7 @@ describe('GoToTop', () => {
                 // to its own timeout ceiling.
                 expect(settled).toBe(true);
                 // No further scroll movement occurred after disable.
-                expect(container.scrollBy.mock.calls.length).toBe(scrollCallsBeforeDisable);
+                expect(container.scrollTopSetCount).toBe(scrollCallsBeforeDisable);
             } finally {
                 vi.useRealTimers();
             }
