@@ -6,6 +6,11 @@
 (function (root) {
     'use strict';
 
+    // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+    const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
+
     const bundle = {
         // ─────────────────────────────
         //  Private: Query helpers
@@ -44,7 +49,7 @@
             if (anchor) {
                 let el = anchor.parentElement;
                 while (el && el !== document.body) {
-                    if (el.classList.contains('ds-scroll-area') &&
+                    if (el.classList.contains(SCROLL_AREA_CLASS) &&
                         el.scrollHeight > el.clientHeight) {
                         this._scrollContainer = el;
                         return el;
@@ -59,7 +64,7 @@
             if (virtualList) {
                 let el = virtualList.parentElement;
                 while (el && el !== document.body) {
-                    if (el.classList.contains('ds-scroll-area') &&
+                    if (el.classList.contains(SCROLL_AREA_CLASS) &&
                         el.scrollHeight > el.clientHeight) {
                         this._scrollContainer = el;
                         return el;

@@ -20,6 +20,10 @@ const showHarvestToastScrolling = __DSHarvestToast.showHarvestToastScrolling;
 const showHarvestToastCapturing = __DSHarvestToast.showHarvestToastCapturing;
 const hideHarvestToast = __DSHarvestToast.hideHarvestToast;
 
+// 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 // ─────────────────────────────────────────────────────────────────
 //  常數
 // ─────────────────────────────────────────────────────────────────
@@ -53,7 +57,7 @@ const HARVEST_BOTTOM_CONFIRM_COUNT = 3;
 const HARVEST_SCROLL_JUMP_THRESHOLD_FACTOR = 1.5;
 
 // ─────────────────────────────────────────────────────────────────
-//  選擇器（與 go-top.js 保持一致，提供回退）
+//  選擇器
 // ─────────────────────────────────────────────────────────────────
 
 /** 虛擬列表可見項目容器 */
@@ -65,9 +69,9 @@ const MESSAGE_SELECTOR = '.ds-message';
 /** 虛擬列表項目包裝（攜帶 data-virtual-list-item-key） */
 const ITEM_KEY_ATTR = 'data-virtual-list-item-key';
 
-/** 虛擬列表外容器（用於定位滾動容器） */
-const VIRTUAL_LIST_SELECTOR = '.ds-virtual-list-items._6f2c522';
-const VIRTUAL_LIST_FALLBACK = '[class*="ds-virtual-list-items"]';
+/** 虛擬列表外容器（用於定位滾動容器；單一來源定義於 content/ds-selectors.js） */
+const VIRTUAL_LIST_SELECTOR = __DSSelectors.VIRTUAL_LIST_SELECTOR;
+const VIRTUAL_LIST_FALLBACK = __DSSelectors.VIRTUAL_LIST_FALLBACK;
 
 // ─────────────────────────────────────────────────────────────────
 //  (a) 擷取/捲動邏輯
@@ -89,7 +93,7 @@ function _findHarvestScrollContainer() {
         let el = virtualList.parentElement;
         while (el && el !== document.body) {
             if (
-                el.classList.contains('ds-scroll-area') &&
+                el.classList.contains(__DSSelectors.SCROLL_AREA_CLASS) &&
                 el.scrollHeight > el.clientHeight
             ) {
                 return el;

@@ -18,6 +18,11 @@
  *   3. go-top.scroll.js → 掛載 globalThis.__DS_GoToTop_scroll
  *   4. go-top.js        → Object.assign 合併後呼叫 GoToTop.init()
  */
+
+// 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const GoToTop = {
     // === 常數 ===
     TIMEOUT: 30000,
@@ -44,10 +49,9 @@ const GoToTop = {
     // 訊息選擇器：先用雜湊組合，再退回 class-substring 比對
     // confirmed in full-page.html line 328: <div class="d29f3d7d ds-message _63c77b1">
     FIRST_MSG_SELECTOR: '.ds-message._63c77b1',
-    // 虛擬列表容器：用於找到正確的滾動容器
-    // confirmed in full-page.html line 323: <div class="ds-virtual-list-items _6f2c522">
-    VIRTUAL_LIST_SELECTOR: '.ds-virtual-list-items._6f2c522',
-    VIRTUAL_LIST_FALLBACK: '[class*="ds-virtual-list-items"]',
+    // 虛擬列表容器：用於找到正確的滾動容器（單一來源定義於 content/ds-selectors.js）
+    VIRTUAL_LIST_SELECTOR: __DSSelectors.VIRTUAL_LIST_SELECTOR,
+    VIRTUAL_LIST_FALLBACK: __DSSelectors.VIRTUAL_LIST_FALLBACK,
     // 原生按鈕選擇器：精確雜湊 class 優先，再退回穩定 ds-* class 組合
     // confirmed in go-bottom.html: <div role="button" class="ds-button ... ds-button--floating _0706cde ...">
     NATIVE_BTN_SELECTOR: '._0706cde:not(.dsw-gotop)',
