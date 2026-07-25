@@ -4,6 +4,7 @@ import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 // ── Globals preload (i18n) ──────────────────────────────────────────────────
 // dsI18n is referenced by many modules at load time. Load it first so the
 // IIFE runs and populates window.dsI18n before any dependent module evaluates.
+import '../../utils/i18n.locales.js';
 import '../../utils/i18n.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────

@@ -18,8 +18,8 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 11 script tags', () => {
-        expect(scriptSrcs).toHaveLength(11);
+    it('has exactly 12 script tags', () => {
+        expect(scriptSrcs).toHaveLength(12);
     });
 
     it.each([
@@ -32,8 +32,9 @@ describe('editor.html script tag structure', () => {
         ['storage-manager.init.js seventh', 6, '../../utils/storage-manager.init.js'],
         ['storage-manager.js eighth', 7, '../../utils/storage-manager.js'],
         ['messaging.js ninth', 8, '../../utils/messaging.js'],
-        ['i18n.js tenth (between messaging.js and editor.js)', 9, '../../utils/i18n.js'],
-        ['editor.js last (eleventh)', 10, 'editor.js'],
+        ['i18n.locales.js tenth (immediately before i18n.js)', 9, '../../utils/i18n.locales.js'],
+        ['i18n.js eleventh (between i18n.locales.js and editor.js)', 10, '../../utils/i18n.js'],
+        ['editor.js last (twelfth)', 11, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });

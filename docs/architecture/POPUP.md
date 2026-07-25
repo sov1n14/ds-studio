@@ -175,6 +175,7 @@ In `popup.html`, the script tags appear in this order:
 <script src="../utils/storage-manager.init.js"></script>
 <script src="../utils/storage-manager.js"></script>
 <script src="../utils/messaging.js"></script>
+<script src="../utils/i18n.locales.js"></script>
 <script src="../utils/i18n.js"></script>
 <script src="preset-item-renderer.js"></script>
 <script src="custom-select.js"></script>
@@ -196,7 +197,8 @@ This invariant is load-bearing and fails **silently** when violated. The entry f
 
 Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, `popup/editor/editor.html`, `background/service-worker.js` (`importScripts`), and `test/setup/vitest.setup.js`. `test/unit/storage-manager.loader-contract.spec.js` enforces this automatically — it discovers the bundle set from the entry file's `Object.assign` call and from the `utils/` directory listing, then asserts every loader lists every bundle and places it before the entry file. Adding or renaming a bundle without updating a loader fails that test rather than silently breaking a runtime context.
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js for the `ACTIVE_PRESET_CHANGED` broadcast).
-- `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with locale string maps, `setLocale()`, and `t(key)` lookup — see the Language / Locale Switcher section below.
+- `utils/i18n.locales.js` (v4.11.14 split) holds the `zh_TW` and `en` translation dictionaries as pure data and registers `globalThis.__DS_I18N_Locales`. It carries no logic.
+- `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with `setLocale()` and `t(key)` lookup — see the Language / Locale Switcher section below. As of v4.11.14 the ~340 lines of locale string maps no longer live here; the engine reads them off `__DS_I18N_Locales` synchronously at the top of its IIFE, with a `require('./i18n.locales.js')` fallback guarded by `typeof require !== 'undefined'` for the Node/vitest path. **The browser has no such fallback**, so every loader must place `i18n.locales.js` immediately before `i18n.js` or `zh_TW`/`en` resolve to undefined and every translated string breaks silently. Four loaders must stay in agreement: `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, `popup/editor/editor.html`, and `test/setup/vitest.setup.js`.
 - `preset-item-renderer.js` (v4.10.0) registers `window.__DS_PresetItemRenderer` (`escapeHtml`, `buildPresetItemMarkup`) and must load before `custom-select.js`, which destructures it.
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
@@ -205,7 +207,7 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `popup.js` (entry) loads second-to-last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 - `popup.locale.js` (v4.3.3) loads last, wiring `#localeSwitcherBtn` click to panel toggle and radio change to `dsI18n.setLocale()` — see the Language / Locale Switcher section below.
 
-The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, the six `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.js`, then `editor.js` — 11 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` carries its own local `debounce` copy because it is a classic script and cannot `import`.
+The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, the six `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, then `editor.js` — 12 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` carries its own local `debounce` copy because it is a classic script and cannot `import`.
 
 ### Data Flow Integration
 
