@@ -58,7 +58,7 @@ function setupForSwipe() {
 //  beforeEach / afterEach
 //  Resets every mutable property on the module to its default value so that
 //  state from one test never leaks into the next. Uses the same approach as
-//  go-top.spec.js (reset in beforeEach, restore timers in afterEach) but
+//  go-top.visibility.spec.js (reset in beforeEach, restore timers in afterEach) but
 //  also cleans up touch listeners and globals for the added complexity of
 //  this module's touch event bindings and navigator mocking.
 // ─────────────────────────────────────────────────────────────────────────────

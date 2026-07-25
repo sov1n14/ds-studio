@@ -21,3 +21,5 @@ v2.8.6 introduced three production fixes; tests updated accordingly.
 
 **Why**: align regression tests with v2.8.6 behavior.
 **How to apply**: future go-top test changes must use `[data-virtual-list-item-key="1"]` for at-top assertions, and assert element identity (not just class) for transition tests.
+
+**Note (2026-07-26):** `go-top.spec.js` (referenced throughout above, including in this file's own description) no longer exists as a single file — it was split into seven spec files plus a shared helper. See [[project_gotop_test_suite_split_2026_07_26]] for the current layout.

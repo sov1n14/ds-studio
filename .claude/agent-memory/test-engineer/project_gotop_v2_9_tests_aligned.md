@@ -18,3 +18,5 @@ Changes made 2026-06-05:
 - Added 2 new `_getNativeButton` test cases: (1) fallback rejects primary button — matches fallback via `ds-button--floating`+`ds-button--circle` but fails post-validation due to `ds-button--primary`; (2) fallback rejects non-floating button — no `ds-button--floating` means no fallback match.
 - Fixed pre-existing breakage from `[GoToTop]` diagnostic log removal: removed `console.warn` spy+assertion from `_querySelectorWithFallback` degraded test (production no longer warns on degraded entry).
 - The test file did not need a rewrite — see [[project_gotop_v2_8_6_tests]] for the prior test state.
+
+**Note (2026-07-26):** `go-top.spec.js` referenced above no longer exists as a single file — it was split into seven spec files plus a shared helper. See [[project_gotop_test_suite_split_2026_07_26]] for the current layout.
