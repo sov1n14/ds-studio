@@ -5,7 +5,9 @@ metadata:
   type: project
 ---
 
-The manual-sync button (`#forceSyncBtn`) and its click handler were removed from `popup/popup.html` and `popup/popup.js` (manifest bumped 4.8.4 -> 4.8.5). `StorageManager.retrySync()` itself was untouched and remains used by `background/service-worker.js` and `utils/storage-manager.syncnow.js`.
+The manual-sync button (`#forceSyncBtn`) and its click handler were removed from `popup/popup.html` and `popup/popup.js` (manifest bumped 4.8.4 -> 4.8.5). `StorageManager.retrySync()` itself was untouched and remains used by `background/service-worker.js` and `utils/storage-manager.sync.js` (this
+logic was originally in a standalone `storage-manager.syncnow.js`, absorbed into `sync.js` in
+v4.11.3).
 
 In `test/unit/popup.sync-write-quota.spec.js`, the describe block at ~line 371 was named `retrySync() — forceSyncBtn integration scenarios` but its 3 tests never touched the DOM button — they called `StorageManager.retrySync()` directly and asserted on `result.success` / `remainingUnsyncedCount`. Renamed to `retrySync() behavior` and kept as-is (still valid coverage, not duplicated elsewhere — other retrySync specs test clear/pull sub-behaviors, not the top-level success/failure/remaining-count contract).
 

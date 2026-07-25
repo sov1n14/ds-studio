@@ -20,14 +20,20 @@ Also added one tombstone-write assertion to the existing delete test in
 rule.
 
 **Found and fixed a test-infrastructure gap (not production code):**
-`test/setup/vitest.setup.js` preloads `storage-manager.chunking/lock/sync/presets/chatmap/...`
-bundle files but was missing `utils/storage-manager.tombstones.js`. Since `storage-manager.js`'s
-bundle mixin does `Object.assign(StorageManager, ..., root.__DS_StorageManager_tombstones || {}, ...)`,
-without this preload `_mergeTombstones`/`_pruneTombstones`/`_isTombstonedAway`/
-`recordPresetTombstones` would silently be undefined on `StorageManager` in every spec file.
-Fixed by adding `import '../../utils/storage-manager.tombstones.js';` alongside the other
-bundle preloads (right after `storage-manager.presets.js`). This is a test-infra fix within
-`test/`, within test-engineer's authority — no production code touched.
+`test/setup/vitest.setup.js` preloads `storage-manager.chunk-lock/sync/presets/chatmap/...`
+bundle files but was missing the tombstone methods' bundle. At the time, tombstone code lived
+in a standalone `utils/storage-manager.tombstones.js` file, mixed in via
+`root.__DS_StorageManager_tombstones`; without this preload `_mergeTombstones`/
+`_pruneTombstones`/`_isTombstonedAway`/`recordPresetTombstones` would silently be undefined on
+`StorageManager` in every spec file. Fixed by adding the missing import alongside the other
+bundle preloads. This is a test-infra fix within `test/`, within test-engineer's authority — no
+production code touched.
+
+**UPDATE (v4.11.3):** `utils/storage-manager.tombstones.js` no longer exists as a standalone
+file — it was merged into `utils/storage-manager.presets.js`, and the tombstone methods now
+arrive via `root.__DS_StorageManager_presets`. The gap described above is moot post-merge since
+`storage-manager.presets.js` was always preloaded; verify `vitest.setup.js` still imports
+`storage-manager.presets.js` before relying on tombstone methods in new tests.
 
 **Gotcha for future tombstone tests:** don't use small literal timestamps like `12345` as a
 `deletedAt` — `_pruneTombstones` treats anything more than 30 days before "now" (real

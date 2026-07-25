@@ -5,7 +5,8 @@ metadata:
   type: project
 ---
 
-`utils/storage-manager.tombstones.js` tombstone entries changed shape: legacy `{ [id]: deletedAtTs }` (bare number) → `{ [id]: { ts, deleted } }`. `normalizeTombstoneEntry/Map` provide backward-compat on read (bare number → `{ ts: n, deleted: true }`). `_mergeTombstones` now unions by `ts` and carries the whole winning entry (including `deleted`). `clearPresetTombstones()` bug fix: no longer deletes the map key — writes `{ ts: now, deleted: false }` instead, so a newer "cleared" tombstone can outrace a stale "deleted" tombstone still held by an unsynced device during merge. No-op only when the id already has `{ deleted: false }` (not merely "id absent").
+`utils/storage-manager.presets.js` (tombstone methods merged in here since v4.11.3; were
+previously in a now-deleted standalone `storage-manager.tombstones.js`) tombstone entries changed shape: legacy `{ [id]: deletedAtTs }` (bare number) → `{ [id]: { ts, deleted } }`. `normalizeTombstoneEntry/Map` provide backward-compat on read (bare number → `{ ts: n, deleted: true }`). `_mergeTombstones` now unions by `ts` and carries the whole winning entry (including `deleted`). `clearPresetTombstones()` bug fix: no longer deletes the map key — writes `{ ts: now, deleted: false }` instead, so a newer "cleared" tombstone can outrace a stale "deleted" tombstone still held by an unsynced device during merge. No-op only when the id already has `{ deleted: false }` (not merely "id absent").
 
 **Why:** Prior key-deletion behavior meant clearing a tombstone lost the ts-based conflict resolution — an unsynced device with a stale `deleted:true` entry could resurrect the deletion after merge, since the cleared side had no entry to compare `ts` against.
 

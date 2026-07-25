@@ -53,3 +53,5 @@ metadata:
 ## Pre-existing exit-code-1 noise
 
 Runner exits with code 1 due to unhandled `ECONNREFUSED :3000` (fixture server) and re-thrown errors from intentional throw tests. This does NOT reflect test failures. As of 2026-05-29: 605 tests pass across 37 files.
+
+**happy-dom SyncFetch noise (separate from the above):** happy-dom itself emits harmless `SyncFetch` `ECONNREFUSED` errors targeting `127.0.0.1:3000` during the suite run — unrelated to the fixture-server noise above and unrelated to any test's own logic. Count roughly doubled to ~96 occurrences as of the v4.11.4 suite run (was lower in earlier versions/smaller suites). Never affects pass/fail — treat any occurrence count as informational only, not a regression signal.

@@ -9,7 +9,7 @@ metadata:
 **Runner:** `cd ds-studio/test && npm run test:unit` (vitest run).  
 **Coverage:** v8, covers `../utils/**/*.js` and `../content/**/*.js`.  
 **Test directory:** `ds-studio/test/unit/*.spec.js` only — this is enforced by `test/vitest.config.js`'s `include: ['unit/**/*.spec.js']`. Playwright/`test/integration/` is RETIRED (CLAUDE.md §3 bans e2e tests); as of 2026-07-25 the last Playwright infra file (`test/setup/playwright-extension.js`) and an unused fixture (`test/fixtures/presets.js`) were confirmed dead and deleted. Do not reference `test/integration/*.spec.js` as current — it no longer exists.  
-**Chrome mock:** `jest-chrome` + custom `InMemoryStorageMock` (fixtures/chrome-storage-mock.js). Setup in `setup/vitest.setup.js`. Storage cleared `beforeEach`.
+**Chrome mock:** `jest-chrome` was removed (see [[project_jest_chrome_removal]]) — `chrome.*` is now a hand-rolled `vi.fn()`-based mock written directly in `setup/vitest.setup.js`, plus the custom `InMemoryStorageMock` (fixtures/chrome-storage-mock.js) for `chrome.storage`. Storage cleared `beforeEach`.
 **CRITICAL execution gotcha:** vitest MUST be run with cwd = `test/` (`cd ds-studio/test && npx vitest run`). Running from repo root skips `test/setup/vitest.setup.js` and produces a flood of bogus `chrome is not defined` failures — this has fooled multiple agents.
 
 **Key patterns:**
