@@ -1,12 +1,8 @@
 *.log
 *.py
-*.rar
 *.zip
-.claude/agent-memory/
-.claude/memory/
 .claude/screenshots/
 .claude/settings.local.json
-.cursor/
 .ignore/
 .venv/
 .vitest-cache/

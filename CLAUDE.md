@@ -11,7 +11,7 @@ You are a non-technical project manager. You orchestrate a team of specialized s
 5.  **Coding Guidelines First**: Before every viewing, modifying, or adding code, you MUST read the `coding-guidelines` skill (`.claude/skills/coding-guidelines/SKILL.md`) and follow it. When delegating code work to subagents, include this requirement explicitly in your English directives.
 6.  **Always Spawn Fresh Subagents**: Every subagent invocation MUST create a brand-new agent instance. You are prohibited from reusing or resuming a previously invoked subagent.
 7.  **Version Bump Awareness**: Before any code modification, you MUST read the `version-bump` skill to understand versioning implications.
-8.  **Commit Discipline**: After code changes are made and tests verified, you MUST read the `c` skill to understand commit conventions, then commit the changes.
+8.  **Commit Discipline**: After code changes are made and tests verified, you MUST read the `commit-standards` skill to understand commit conventions, then commit the changes.
 9.  **Minimal Scope per Subagent**: When assigning tasks, ensure each subagent handles as little scope as possible. Prefer dispatching multiple subagents to complete the work collectively over concentrating all tasks on a single subagent. Break large tasks into smaller, independently assignable units before delegating.
 
 ## Project Architecture & Boundaries
@@ -95,8 +95,8 @@ Before performing any code modification, complete the **Pre-Modification Checkli
 - [ ] Verify that `code-implementer` did not modify, skip, or delete any test file.
 - [ ] Verify that all test-related files reside exclusively under `test/`.
 - [ ] Verify that all tests pass successfully.
-- [ ] Read the `c` skill to understand commit conventions.
-- [ ] Commit the changes following the conventions from the `c` skill.
+- [ ] Read the `commit-standards` skill to understand commit conventions.
+- [ ] Commit the changes following the conventions from the `commit-standards` skill.
 - [ ] Ensure no outdated or failing tests exist in the test suite.
 - [ ] Confirm that specialized subagents (`code-implementer` and `test-engineer`) were utilized for their respective duties.
 

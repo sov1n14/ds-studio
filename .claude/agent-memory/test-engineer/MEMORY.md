@@ -1,0 +1,24 @@
+- [Sidebar Auto-Hide Coverage Gap](project_sidebar_auto_hide_coverage.md) — Zero automated tests for `content/sidebar-auto-hide.js`; BDD scenarios in test_case.md Feature 6 but unimplemented.
+- [Sidebar Auto-Hide Tests Created](project_sidebar-auto-hide-tests.md) — 32 tests in Groups A–E now covering setupHoverZone, collapse/expand, timers, enable/disable. All pass.
+- [Go-Top v2.8.6 Tests](project_gotop_v2_8_6_tests.md) — Updated for element-reuse transitions, strict _isAtTop (only ANCHOR_SELECTOR_FALLBACK2), scrollTop matrix, flaky timeout fix. 148/148 pass.
+- [Go-Top v2.9 Tests Aligned](project_gotop_v2_9_tests_aligned.md) — Tests already synced with rebuilt go-top.js; fix one children[0]->[1] index assertion bug only.
+- [Censor Reply Restore v2.8.9 Tests](project_censor_reply_restore_v289_tests.md) — 35 new tests for _resolveMessageIdFromStorage, _getMessageIdFromElement lookup order, _storedRecordsApplied guard, post-refresh restore.
+- [Censor Reply Restore v2.8.11 Tests](project_censor_reply_restore_v2811_tests.md) — Session-scoped key tests; 6 existing tests fixed (bare→scoped key assertions); 23 new tests; hex-only session ID gotcha documented.
+- [XHR Hook v2.9 edit_message Tests](project_censor_xhr_hook_v290_tests.md) — 24 tests for edit_message endpoint; wasHooked pattern (not originalSend count) to detect interception; vm sandbox for IIFE hooks.
+- [Popup Refactor v3.0.0 Tests](project_popup_refactor_v300_tests.md) — 5 new spec files, 2 existing fixed; migration-push populateDefaults() must include all DEFAULTS keys.
+- [Go-Top Gating+Toggle Tests](project_gotop_v2_9_gating_toggle.md) — Change A: _tryConnectDom gates on .aaff8b8f/native btn; _injectAsFallback deleted; Change B: scroll toggle aborts, aria-disabled stays false.
+- [Edit Message Cleanup Tests](project_edit_message_cleanup_tests.md) — 78 tests in Groups A–G; Group G adds 16 tests for EDIT_SCROLL_GAP_PX, computeScrollDelta, and applyEditScrollPosition; scrollable-ancestor walk and guard clauses covered.
+- [Preset Dropdown Tests](project_preset_dropdown_tests.md) — vitest.setup.js overlay wiring fix + 24 position tests + 45 component tests; happy-dom empty-string dataset.value quirk documented.
+- [Preset DOM Resolvers Tests](project_preset_dom_resolvers_tests.md) — 16 tests for title/button resolver fix; rAF-sync stub required; assert via style.left not spy args (closure capture).
+- [Preset Position v2 Tests](project_preset_position_v2_tests.md) — windowWidth-driven branching, no minWidth floor, hidden flag; 40+23 tests; window.innerWidth stub pattern; EXPECTED_CENTER_LEFT=374 (Math.round applied in v4.2.1).
+- [Preset Position v4.2.1 Rounding Fix](project_preset_position_v421_rounding.md) — Math.round in all branches; EXPECTED_CENTER_LEFT 373.5→374; toBeCloseTo→toBe; idempotency test added in Group 9.
+- [Temporary Chat Tests](project_temporary_chat_tests.md) — 3 new spec files + 2 fixed; handleNavigationEvent not exported (use __setState); vi.spyOn can't intercept IIFE closures (assert state instead).
+- [Temporary Chat v2 Tests](project_temporary_chat_v2_tests.md) — chrome.storage.session mock pattern, IIFE spy limitation, advanceTimersByTimeAsync(60001) for retry, DSS_CHAT_COMPLETION_DETECTED extra message in edit-message spec.
+- [Sync Order Meta Tests](project_sync_order_meta_tests.md) — 4-param mergePresets, PRESET_ORDER_META, retrySync stale-push prevention; chatmap.js must be preloaded in vitest.setup.js; savePromptPresets only writes meta when index changes.
+- [syncNow() persist gap](project_syncnow_persist_gap.md) — remote-newer overwrite never persisted to chrome.storage.local, only returned in-memory by getSettings(); confirmed failing test.
+- [syncNow() unparked push OK](project_syncnow_unparked_push_ok.md) — never-parked local-newer preset still gets pushed, via retrySync()'s trailing resolveSyncConflict(), not per-item dsLocalAuth logic.
+- [Popup Live Sync Tests](project_popup_live_sync_tests.md) — 37 tests for createLiveSyncListener; popup.js has CRLF (use \r?\n in regex); storage-mock reload needs ~500ms real flush, not a few ticks.
+- [forceSyncBtn Removal Cleanup](project_forcesyncbtn_removal_cleanup.md) — renamed misleading describe block; vitest config is at test/vitest.config.js, run with --config from inside test/.
+- [Tombstone Sync Tests](project_tombstone_sync_tests.md) — 31 new tests for _mergeTombstones/_pruneTombstones/_isTombstonedAway/mergePresets/resolveSyncConflict; fixed missing vitest.setup.js preload of storage-manager.tombstones.js.
+- [Preset Delete-All Tests](project_preset_delete_all_tests.md) — new renderer/preset-manager/i18n tests; fixed custom-select.js spec load-order gap (needs preset-item-renderer.js + i18n preloaded).
+- [Tombstone Object-Shape Tests](project_tombstone_object_shape_tests.md) — tombstone entries {ts,deleted} not bare number; clearPresetTombstones writes {deleted:false} not key-delete; map-wide normalize side effect on write.
