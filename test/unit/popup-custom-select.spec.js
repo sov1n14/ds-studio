@@ -327,6 +327,52 @@ describe('createPresetCustomSelect', () => {
         });
     });
 
+    // 環境限制：happy-dom 16.8.1 會忽略 addEventListener 的 signal 選項，
+    // 因此無法在此測試環境中驗證 AbortController 型式的監聽器卸載行為。
+    describe('外部點擊關閉面板', () => {
+        it('面板開啟時，於 document.body（面板/trigger 之外）觸發 pointerdown 應關閉面板', () => {
+            const { sel } = createSelect();
+            sel.open();
+            expect(document.getElementById('panel').hidden).toBe(false);
+
+            document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+            expect(document.getElementById('panel').hidden).toBe(true);
+        });
+
+        it('面板開啟時，於 panel 元素本身觸發 pointerdown 不應關閉面板', () => {
+            const { sel } = createSelect();
+            sel.open();
+
+            document.getElementById('panel').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+            expect(document.getElementById('panel').hidden).toBe(false);
+        });
+
+        it('面板開啟時，於 trigger 元素觸發 pointerdown 不應關閉面板', () => {
+            const { sel } = createSelect();
+            sel.open();
+
+            document.getElementById('trigger').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+            expect(document.getElementById('panel').hidden).toBe(false);
+        });
+
+        it('面板已透過 close() 關閉後，於 document.body 觸發 pointerdown 不應拋出例外，也不應有重入的關閉副作用', () => {
+            const { sel } = createSelect();
+            sel.open();
+            sel.close();
+            expect(document.getElementById('panel').hidden).toBe(true);
+
+            expect(() => {
+                document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+            }).not.toThrow();
+
+            expect(document.getElementById('panel').hidden).toBe(true);
+            expect(document.getElementById('trigger').getAttribute('aria-expanded')).toBe('false');
+        });
+    });
+
 });
 
 describe('與 Modal 整合', () => {

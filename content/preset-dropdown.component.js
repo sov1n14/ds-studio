@@ -3,6 +3,11 @@
  * 自訂下拉選單，取代原生 <select>，支援 text-overflow: ellipsis 截斷顯示。
  * 符合 ARIA combobox/listbox 模式；以 position:fixed 浮層呈現選單，跳脫祖先 overflow 裁切。
  * 此檔案以 classic script 載入，無 ES import/export，須在 preset-overlay.controller.js 之前載入。
+ *
+ * 註：原生 <select> 已於先前評估中被否決（已否決兩次，特此記錄以免重複討論）。
+ * 原因：Chrome 對原生 <select> 展開後的選項清單無法自訂樣式，該浮層由瀏覽器／作業系統
+ * 於頁面樣式範圍之外渲染，導致擴充功能的主題、hover 狀態與版面配置皆無法套用其上。
+ * 本元件的存在目的即是提供可完全自訂樣式的選項清單。
  */
 
 (function (root) {
@@ -21,36 +26,6 @@
 
     /** 選項 id 前綴 */
     const OPTION_ID_PREFIX = 'dss-preset-opt-';
-
-    // ── 工具：離屏量測文字寬度 ────────────────────────────────────────────────
-
-    /**
-     * 建立離屏量測 span，複製指定元素的字型樣式後量測文字自然寬度。
-     * 在 jsdom 中 getBoundingClientRect 回傳零值屬預期行為。
-     *
-     * @param {HTMLElement} sourceEl - 複製字型樣式的來源元素
-     * @param {string} text - 要量測的文字內容
-     * @returns {number} 文字自然寬度（px）
-     */
-    function measureTextWidth(sourceEl, text) {
-        const probe = document.createElement('span');
-        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;pointer-events:none;';
-
-        // 複製字型相關樣式以確保量測精確
-        if (sourceEl) {
-            const computed = window.getComputedStyle(sourceEl);
-            probe.style.fontSize   = computed.fontSize;
-            probe.style.fontFamily = computed.fontFamily;
-            probe.style.fontWeight = computed.fontWeight;
-            probe.style.letterSpacing = computed.letterSpacing;
-        }
-
-        probe.textContent = text;
-        document.body.appendChild(probe);
-        const width = probe.getBoundingClientRect().width;
-        document.body.removeChild(probe);
-        return width;
-    }
 
     // ── 選單浮層定位 ──────────────────────────────────────────────────────────
 
@@ -384,8 +359,7 @@
          * @returns {number} 觸發器所需最小完整寬度（px）
          */
         function getNaturalWidth() {
-            const labelText   = label.textContent || '';
-            const labelWidth  = measureTextWidth(label, labelText);
+            const labelWidth  = label.scrollWidth;
             // 箭頭寬度使用穩定常數，避免 getBoundingClientRect 受當前 inline width 約束影響，
             // 確保連續兩次呼叫對相同標籤文字回傳完全相同的值（冪等性保證）
             const arrowWidth  = 16;

@@ -387,13 +387,6 @@ describe('createPresetDropdown — getNaturalWidth()', () => {
         expect(w).toBeGreaterThanOrEqual(0);
     });
 
-    it('does not leave probe nodes in document.body after measurement', () => {
-        const before = document.body.childElementCount;
-        dd.getNaturalWidth();
-        // The probe span is appended then immediately removed; count must be same
-        expect(document.body.childElementCount).toBe(before);
-    });
-
     it('does not throw when label has no text', () => {
         // setValue('') → placeholder text; should still not throw
         dd.setValue('');
