@@ -15,11 +15,66 @@ describe('CensorReplyRestore', () => {
         document.body.innerHTML = '';
     });
 
+    /**
+     * Shared DOM helper: builds a user+assistant chat pair in a virtual list container.
+     * Returns the assistant message element. `censored: false` renders an all-enabled
+     * toolbar instead of the censored (buttons[1]/[4] disabled) pattern.
+     */
+    function buildChatPair(assistantKey, userPromptText, { censored = true } = {}) {
+        const container = document.createElement('div');
+        container.className = 'ds-virtual-list-visible-items';
+
+        const userItem = document.createElement('div');
+        userItem.setAttribute('data-virtual-list-item-key', 'user-' + assistantKey);
+        const userMsg = document.createElement('div');
+        userMsg.className = 'ds-message';
+        const userContent = document.createElement('div');
+        userContent.className = 'fbb737a4';
+        userContent.textContent = userPromptText;
+        userMsg.appendChild(userContent);
+        userItem.appendChild(userMsg);
+        container.appendChild(userItem);
+
+        const asstItem = document.createElement('div');
+        asstItem.setAttribute('data-virtual-list-item-key', assistantKey);
+        const asstMsg = document.createElement('div');
+        asstMsg.className = 'ds-message _63c77b1';
+        const mainContent = document.createElement('div');
+        mainContent.className = 'ds-markdown ds-assistant-message-main-content';
+        mainContent.textContent = 'censored text';
+        asstMsg.appendChild(mainContent);
+        asstItem.appendChild(asstMsg);
+
+        // Toolbar — censored pattern: buttons[1] and buttons[4] disabled
+        const toolbar = document.createElement('div');
+        toolbar.className = 'ds-flex';
+        for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
+            const btn = document.createElement('button');
+            btn.className = 'ds-icon-button';
+            if (state === 'disabled' && censored) {
+                btn.classList.add('ds-icon-button--disabled');
+                btn.setAttribute('aria-disabled', 'true');
+            }
+            toolbar.appendChild(btn);
+        }
+        asstItem.appendChild(toolbar);
+        container.appendChild(asstItem);
+
+        document.body.appendChild(container);
+        return asstMsg;
+    }
+
     describe('_parseSseEvent()', () => {
-        it('parses initial response event with message_id and fragments', () => {
-            const state = {};
-            const line = 'data: {"v":{"response":{"message_id":38,"fragments":[{"id":2,"type":"THINK","content":"We"}]}}}';
+        // Shared boilerplate for every case below: clone an initial state, feed one SSE
+        // line through the parser, and return the mutated state for assertions.
+        function applyEvent(initialState, line) {
+            const state = { ...initialState };
             CensorReplyRestore._parseSseEvent(state, line);
+            return state;
+        }
+
+        it('parses initial response event with message_id and fragments', () => {
+            const state = applyEvent({}, 'data: {"v":{"response":{"message_id":38,"fragments":[{"id":2,"type":"THINK","content":"We"}]}}}');
             expect(state.messageId).toBe(38);
             expect(state.fragments).toHaveLength(1);
             expect(state.fragments[0].type).toBe('THINK');
@@ -27,84 +82,60 @@ describe('CensorReplyRestore', () => {
         });
 
         it('appends content to the last fragment on APPEND /content', () => {
-            const state = {
-                messageId: 38,
-                fragments: [{ id: 2, type: 'THINK', content: 'We' }],
-                started: true
-            };
-            const line = 'data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            const state = applyEvent(
+                { messageId: 38, fragments: [{ id: 2, type: 'THINK', content: 'We' }], started: true },
+                'data: {"p":"response/fragments/-1/content","o":"APPEND","v":" need"}'
+            );
             expect(state.fragments[0].content).toBe('We need');
         });
 
         it('pushes new fragment on APPEND /fragments', () => {
-            const state = {
-                messageId: 38,
-                fragments: [{ id: 2, type: 'THINK', content: 'We' }],
-                started: true
-            };
-            const line = 'data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"Hi"}]}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            const state = applyEvent(
+                { messageId: 38, fragments: [{ id: 2, type: 'THINK', content: 'We' }], started: true },
+                'data: {"p":"response/fragments","o":"APPEND","v":[{"id":3,"type":"RESPONSE","content":"Hi"}]}'
+            );
             expect(state.fragments).toHaveLength(2);
             expect(state.fragments[1].type).toBe('RESPONSE');
         });
 
         it('sets elapsed_secs on SET /elapsed_secs', () => {
-            const state = {
-                messageId: 38,
-                fragments: [{ id: 2, type: 'THINK', content: 'We' }],
-                started: true
-            };
-            const line = 'data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":1.425}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            const state = applyEvent(
+                { messageId: 38, fragments: [{ id: 2, type: 'THINK', content: 'We' }], started: true },
+                'data: {"p":"response/fragments/-1/elapsed_secs","o":"SET","v":1.425}'
+            );
             expect(state.thinkingElapsedSecs).toBe(1.425);
         });
 
         it('marks finished on SET FINISHED', () => {
-            const state = {
-                messageId: 38,
-                fragments: [{ id: 2, type: 'THINK', content: 'We' }],
-                started: true
-            };
-            const line = 'data: {"p":"response/status","o":"SET","v":"FINISHED"}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            const state = applyEvent(
+                { messageId: 38, fragments: [{ id: 2, type: 'THINK', content: 'We' }], started: true },
+                'data: {"p":"response/status","o":"SET","v":"FINISHED"}'
+            );
             expect(state.finished).toBe(true);
         });
 
         it('handles BATCH operations recursively', () => {
-            const state = {
-                messageId: 38,
-                fragments: [{ id: 2, type: 'THINK', content: '' }],
-                started: true
-            };
-            const batchLine = 'data: {"o":"BATCH","v":[{"o":"APPEND","v":"hello"},{"o":"SET","p":"x/elapsed_secs","v":0.5}]}';
-            CensorReplyRestore._parseSseEvent(state, batchLine);
+            const state = applyEvent(
+                { messageId: 38, fragments: [{ id: 2, type: 'THINK', content: '' }], started: true },
+                'data: {"o":"BATCH","v":[{"o":"APPEND","v":"hello"},{"o":"SET","p":"x/elapsed_secs","v":0.5}]}'
+            );
             expect(state.fragments[0].content).toBe('hello');
         });
 
         it('handles short format {"v":"..."} as continuation APPEND to fragments/-1/content', () => {
-            const state = {
-                messageId: 38,
-                fragments: [{ id: 2, type: 'THINK', content: 'ab' }],
-                started: true
-            };
-            // Event with v value but no p (path) or o (operation) — is a short-format continuation
-            // Should append to last fragment's content per SSE spec
-            const line = 'data: {"v":"cd"}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            // Event with v value but no p (path) or o (operation) — is a short-format continuation.
+            // Should append to last fragment's content per SSE spec.
+            const state = applyEvent(
+                { messageId: 38, fragments: [{ id: 2, type: 'THINK', content: 'ab' }], started: true },
+                'data: {"v":"cd"}'
+            );
             // Content should be appended to produce combined value
             expect(state.fragments[0].content).toBe('abcd');
         });
 
         it('ignores short format {"v":"..."} when fragments is empty', () => {
-            const state = {
-                messageId: 38,
-                fragments: [],
-                started: true
-            };
             // Short-format event with empty fragments should be silently ignored
-            const line = 'data: {"v":"cd"}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            const state = applyEvent({ messageId: 38, fragments: [], started: true }, 'data: {"v":"cd"}');
             // Fragments should remain empty, no error thrown
             expect(state.fragments).toHaveLength(0);
         });
@@ -115,74 +146,45 @@ describe('CensorReplyRestore', () => {
             expect(() => CensorReplyRestore._parseSseEvent(state, line)).not.toThrow();
             expect(state.fragments).toHaveLength(0);
         });
+
+        it('tracks thinkingEnabled from the initial response event when THINK fragments are present', () => {
+            // Relocated from test/unit/integration-sse-parsing.spec.js: that file's other 7 cases
+            // were removed as vacuous or duplicated elsewhere, leaving only this thinkingEnabled
+            // assertion, which is the sole place in the repo that exercises state.thinkingEnabled.
+            const state = applyEvent(
+                {},
+                'data: {"v":{"response":{"message_id":4,"parent_id":3,"thinking_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"用户"}]}}}'
+            );
+
+            // Precondition is asserted directly (not a bare `if`) so that if the fixture ever
+            // stops containing a THINK fragment, this test fails loudly instead of silently
+            // asserting nothing.
+            const thinkFragments = state.fragments.filter(f => f.type === 'THINK');
+            expect(thinkFragments.length).toBeGreaterThan(0);
+            expect(state.thinkingEnabled).toBe(true);
+        });
     });
 
     describe('_renderMarkdown()', () => {
-        it('renders a simple paragraph', () => {
-            const html = CensorReplyRestore._renderMarkdown('Hello world');
-            expect(html).toContain('<p class="ds-markdown-paragraph">');
-            expect(html).toContain('<span>Hello world</span>');
-        });
-
-        it('renders headings', () => {
-            const html = CensorReplyRestore._renderMarkdown('# Title\n## Sub');
-            expect(html).toContain('<h1><span>Title</span></h1>');
-            expect(html).toContain('<h2><span>Sub</span></h2>');
-        });
-
-        it('renders bold and italic', () => {
-            const html = CensorReplyRestore._renderMarkdown('**bold** and *italic*');
-            expect(html).toContain('<strong><span>bold</span></strong>');
-            expect(html).toContain('<em><span>italic</span></em>');
-        });
-
-        it('renders inline code', () => {
-            const html = CensorReplyRestore._renderMarkdown('Use `code` here');
-            expect(html).toContain('<code>code</code>');
-        });
-
-        it('renders links', () => {
-            const html = CensorReplyRestore._renderMarkdown('[text](https://example.com)');
-            expect(html).toContain('<a href="https://example.com" target="_blank" rel="noreferrer">');
-            expect(html).toContain('<span>text</span>');
-        });
-
-        it('renders horizontal rule', () => {
-            const html = CensorReplyRestore._renderMarkdown('---');
-            expect(html).toContain('<hr>');
-        });
-
-        it('renders blockquote', () => {
-            const html = CensorReplyRestore._renderMarkdown('> quote text');
-            expect(html).toContain('<blockquote>');
-            expect(html).toContain('quote text');
-        });
-
-        it('renders unordered list', () => {
-            const html = CensorReplyRestore._renderMarkdown('- item1\n- item2');
-            expect(html).toContain('<ul>');
-            expect(html).toContain('<li><p><span>item1</span></p></li>');
-            expect(html).toContain('<li><p><span>item2</span></p></li>');
-        });
-
-        it('renders ordered list', () => {
-            const html = CensorReplyRestore._renderMarkdown('1. first\n2. second');
-            expect(html).toContain('<ol start="1">');
-            expect(html).toContain('<span>first</span>');
-        });
-
-        it('renders code block', () => {
-            const html = CensorReplyRestore._renderMarkdown('```js\nconst x = 1;\n```');
-            expect(html).toContain('<div class="md-code-block md-code-block-dark">');
-            expect(html).toContain('const x = 1;');
-        });
-
-        it('renders tables', () => {
-            const md = '| H1 | H2 |\n|---|---|\n| A | B |';
-            const html = CensorReplyRestore._renderMarkdown(md);
-            expect(html).toContain('<table>');
-            expect(html).toContain('<th><span>H1</span></th>');
-            expect(html).toContain('<td><span>A</span></td>');
+        // Each row is a true parameter variation of the same assertion shape:
+        // render the markdown input, then confirm every expected substring is present.
+        it.each([
+            ['renders a simple paragraph', 'Hello world', ['<p class="ds-markdown-paragraph">', '<span>Hello world</span>']],
+            ['renders headings', '# Title\n## Sub', ['<h1><span>Title</span></h1>', '<h2><span>Sub</span></h2>']],
+            ['renders bold and italic', '**bold** and *italic*', ['<strong><span>bold</span></strong>', '<em><span>italic</span></em>']],
+            ['renders inline code', 'Use `code` here', ['<code>code</code>']],
+            ['renders links', '[text](https://example.com)', ['<a href="https://example.com" target="_blank" rel="noreferrer">', '<span>text</span>']],
+            ['renders horizontal rule', '---', ['<hr>']],
+            ['renders blockquote', '> quote text', ['<blockquote>', 'quote text']],
+            ['renders unordered list', '- item1\n- item2', ['<ul>', '<li><p><span>item1</span></p></li>', '<li><p><span>item2</span></p></li>']],
+            ['renders ordered list', '1. first\n2. second', ['<ol start="1">', '<span>first</span>']],
+            ['renders code block', '```js\nconst x = 1;\n```', ['<div class="md-code-block md-code-block-dark">', 'const x = 1;']],
+            ['renders tables', '| H1 | H2 |\n|---|---|\n| A | B |', ['<table>', '<th><span>H1</span></th>', '<td><span>A</span></td>']]
+        ])('%s', (_name, markdown, expectedSubstrings) => {
+            const html = CensorReplyRestore._renderMarkdown(markdown);
+            for (const substr of expectedSubstrings) {
+                expect(html).toContain(substr);
+            }
         });
 
         it('returns empty string for null/empty input', () => {
@@ -240,63 +242,32 @@ describe('CensorReplyRestore', () => {
         }
 
         // ── Legacy DOM tests ───────────────────────────────────────────────────
+        // True parameter variation: same builder, same assertion, differing button states/expectation.
 
-        it('(legacy) returns true when buttons[1] and buttons[4] both have ds-icon-button--disabled + aria-disabled', () => {
-            const toolbar = createLegacyToolbar(['enabled', 'disabled', 'enabled', 'enabled', 'disabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(true);
-        });
-
-        it('(legacy) returns false when button[1] is enabled', () => {
-            const toolbar = createLegacyToolbar(['enabled', 'enabled', 'enabled', 'enabled', 'disabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
-        });
-
-        it('(legacy) returns false when button[4] is enabled', () => {
-            const toolbar = createLegacyToolbar(['enabled', 'disabled', 'enabled', 'enabled', 'enabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
-        });
-
-        it('(legacy) returns false when there are fewer than 5 buttons', () => {
-            const toolbar = createLegacyToolbar(['enabled', 'disabled', 'enabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
+        it.each([
+            ['returns true when buttons[1] and buttons[4] both have ds-icon-button--disabled + aria-disabled', ['enabled', 'disabled', 'enabled', 'enabled', 'disabled'], true],
+            ['returns false when button[1] is enabled', ['enabled', 'enabled', 'enabled', 'enabled', 'disabled'], false],
+            ['returns false when button[4] is enabled', ['enabled', 'disabled', 'enabled', 'enabled', 'enabled'], false],
+            ['returns false when there are fewer than 5 buttons', ['enabled', 'disabled', 'enabled'], false]
+        ])('(legacy) %s', (_name, btnStates, expected) => {
+            const toolbar = createLegacyToolbar(btnStates);
+            expect(CensorReplyRestore._isCensored(toolbar)).toBe(expected);
         });
 
         // ── New DOM tests ──────────────────────────────────────────────────────
 
-        it('(new DOM) returns true when buttons[1] has ds-button--disabled + aria-disabled and buttons[4] has ds-button--disabled WITHOUT aria-disabled', () => {
+        it.each([
             // Mirrors real chat-area.html: buttons[1] has aria-disabled, buttons[4] does NOT
-            const toolbar = createNewDomToolbar(['enabled', 'disabled', 'enabled', 'enabled', 'disabled-no-aria']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(true);
-        });
-
-        it('(new DOM) returns true when both buttons[1] and buttons[4] have ds-button--disabled + aria-disabled', () => {
-            const toolbar = createNewDomToolbar(['enabled', 'disabled', 'enabled', 'enabled', 'disabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(true);
-        });
-
-        it('(new DOM) returns true when both buttons[1] and buttons[4] have only ds-button--disabled (no aria-disabled on either)', () => {
-            const toolbar = createNewDomToolbar(['enabled', 'disabled-no-aria', 'enabled', 'enabled', 'disabled-no-aria']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(true);
-        });
-
-        it('(new DOM) returns false when no buttons are disabled', () => {
-            const toolbar = createNewDomToolbar(['enabled', 'enabled', 'enabled', 'enabled', 'enabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
-        });
-
-        it('(new DOM) returns false when only buttons[1] is disabled but buttons[4] is not', () => {
-            const toolbar = createNewDomToolbar(['enabled', 'disabled', 'enabled', 'enabled', 'enabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
-        });
-
-        it('(new DOM) returns false when only buttons[4] is disabled but buttons[1] is not', () => {
-            const toolbar = createNewDomToolbar(['enabled', 'enabled', 'enabled', 'enabled', 'disabled-no-aria']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
-        });
-
-        it('(new DOM) returns false when there are fewer than 5 new-style buttons', () => {
-            const toolbar = createNewDomToolbar(['enabled', 'disabled', 'enabled']);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
+            ['returns true when buttons[1] has ds-button--disabled + aria-disabled and buttons[4] has ds-button--disabled WITHOUT aria-disabled', ['enabled', 'disabled', 'enabled', 'enabled', 'disabled-no-aria'], true],
+            ['returns true when both buttons[1] and buttons[4] have ds-button--disabled + aria-disabled', ['enabled', 'disabled', 'enabled', 'enabled', 'disabled'], true],
+            ['returns true when both buttons[1] and buttons[4] have only ds-button--disabled (no aria-disabled on either)', ['enabled', 'disabled-no-aria', 'enabled', 'enabled', 'disabled-no-aria'], true],
+            ['returns false when no buttons are disabled', ['enabled', 'enabled', 'enabled', 'enabled', 'enabled'], false],
+            ['returns false when only buttons[1] is disabled but buttons[4] is not', ['enabled', 'disabled', 'enabled', 'enabled', 'enabled'], false],
+            ['returns false when only buttons[4] is disabled but buttons[1] is not', ['enabled', 'enabled', 'enabled', 'enabled', 'disabled-no-aria'], false],
+            ['returns false when there are fewer than 5 new-style buttons', ['enabled', 'disabled', 'enabled'], false]
+        ])('(new DOM) %s', (_name, btnStates, expected) => {
+            const toolbar = createNewDomToolbar(btnStates);
+            expect(CensorReplyRestore._isCensored(toolbar)).toBe(expected);
         });
 
         // ── Null / invalid input ───────────────────────────────────────────────
@@ -792,49 +763,8 @@ describe('CensorReplyRestore', () => {
     });
 
     describe('_tryRestoreFromStoredRecords() — session+prompt anchoring', () => {
-        function createChatPair(assistantKey, userPromptText) {
-            const container = document.createElement('div');
-            container.className = 'ds-virtual-list-visible-items';
-
-            const userItem = document.createElement('div');
-            userItem.setAttribute('data-virtual-list-item-key', 'user-' + assistantKey);
-            const userMsg = document.createElement('div');
-            userMsg.className = 'ds-message';
-            const userContent = document.createElement('div');
-            userContent.className = 'fbb737a4';
-            userContent.textContent = userPromptText;
-            userMsg.appendChild(userContent);
-            userItem.appendChild(userMsg);
-            container.appendChild(userItem);
-
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', assistantKey);
-            const asstMsg = document.createElement('div');
-            asstMsg.className = 'ds-message _63c77b1';
-            const mainContent = document.createElement('div');
-            mainContent.className = 'ds-markdown ds-assistant-message-main-content';
-            mainContent.textContent = 'censored text';
-            asstMsg.appendChild(mainContent);
-            asstItem.appendChild(asstMsg);
-
-            // Censored toolbar: buttons 2 and 5 disabled (0-indexed 1 and 4)
-            const toolbar = document.createElement('div');
-            toolbar.className = 'ds-flex';
-            for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
-                const btn = document.createElement('button');
-                btn.className = 'ds-icon-button';
-                if (state === 'disabled') {
-                    btn.classList.add('ds-icon-button--disabled');
-                    btn.setAttribute('aria-disabled', 'true');
-                }
-                toolbar.appendChild(btn);
-            }
-            asstItem.appendChild(toolbar);
-            container.appendChild(asstItem);
-
-            document.body.appendChild(container);
-            return asstMsg;
-        }
+        // Uses the shared buildChatPair() helper (censored: true by default), which builds
+        // the identical container/user/assistant/toolbar shape this block previously duplicated.
 
         beforeEach(() => {
             CensorReplyRestore._keyToMessageId = new Map();
@@ -849,9 +779,9 @@ describe('CensorReplyRestore', () => {
         it('restores messages by matching prompt_key between DOM and records', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            createChatPair('asst-1', 'What is AI?');
-            createChatPair('asst-2', 'Tell me a joke');
-            createChatPair('asst-3', 'Explain quantum physics');
+            buildChatPair('asst-1', 'What is AI?');
+            buildChatPair('asst-2', 'Tell me a joke');
+            buildChatPair('asst-3', 'Explain quantum physics');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -885,8 +815,8 @@ describe('CensorReplyRestore', () => {
         it('pairs duplicate prompts by message_id order', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            createChatPair('asst-1', 'hello');
-            createChatPair('asst-2', 'hello');
+            buildChatPair('asst-1', 'hello');
+            buildChatPair('asst-2', 'hello');
 
             CensorReplyRestore._restoredMessages = {
                 '100': {
@@ -917,7 +847,7 @@ describe('CensorReplyRestore', () => {
         it('does NOT inject records from a different chat_session_id', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/a0000000-0000-0000-0000-000000000001');
 
-            createChatPair('asst-1', 'Hello');
+            buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -936,7 +866,7 @@ describe('CensorReplyRestore', () => {
         it('skips legacy records without prompt_key or chat_session_id', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            createChatPair('asst-1', 'Hello');
+            buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -955,7 +885,7 @@ describe('CensorReplyRestore', () => {
         it('does nothing when current session cannot be determined from URL', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/some/other/page');
 
-            createChatPair('asst-1', 'Hello');
+            buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -974,7 +904,7 @@ describe('CensorReplyRestore', () => {
         it('returns false when no records can be matched', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            createChatPair('asst-1', 'What is AI?');
+            buildChatPair('asst-1', 'What is AI?');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -1044,36 +974,17 @@ describe('CensorReplyRestore', () => {
     });
 
     describe('_normalizePrompt()', () => {
-        it('trims leading and trailing whitespace', () => {
-            expect(CensorReplyRestore._normalizePrompt('  hello  ')).toBe('hello');
-        });
-
-        it('collapses multiple internal whitespace to single space', () => {
-            expect(CensorReplyRestore._normalizePrompt('hello    world')).toBe('hello world');
-        });
-
-        it('collapses mixed internal whitespace (tabs, newlines, spaces)', () => {
-            expect(CensorReplyRestore._normalizePrompt('hello\t  \nworld')).toBe('hello world');
-        });
-
-        it('returns empty string for null input', () => {
-            expect(CensorReplyRestore._normalizePrompt(null)).toBe('');
-        });
-
-        it('returns empty string for non-string input (number)', () => {
-            expect(CensorReplyRestore._normalizePrompt(42)).toBe('');
-        });
-
-        it('returns empty string for non-string input (object)', () => {
-            expect(CensorReplyRestore._normalizePrompt({})).toBe('');
-        });
-
-        it('does not modify already-clean text', () => {
-            expect(CensorReplyRestore._normalizePrompt('hello world')).toBe('hello world');
-        });
-
-        it('returns empty string for empty string', () => {
-            expect(CensorReplyRestore._normalizePrompt('')).toBe('');
+        it.each([
+            ['trims leading and trailing whitespace', '  hello  ', 'hello'],
+            ['collapses multiple internal whitespace to single space', 'hello    world', 'hello world'],
+            ['collapses mixed internal whitespace (tabs, newlines, spaces)', 'hello\t  \nworld', 'hello world'],
+            ['returns empty string for null input', null, ''],
+            ['returns empty string for non-string input (number)', 42, ''],
+            ['returns empty string for non-string input (object)', {}, ''],
+            ['does not modify already-clean text', 'hello world', 'hello world'],
+            ['returns empty string for empty string', '', '']
+        ])('%s', (_name, input, expected) => {
+            expect(CensorReplyRestore._normalizePrompt(input)).toBe(expected);
         });
     });
 
@@ -1081,54 +992,6 @@ describe('CensorReplyRestore', () => {
     // New tests: _getMessageIdFromElement, _resolveMessageIdFromStorage,
     // _storedRecordsApplied guard, Gap A/B/C/F/G
     // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * Shared DOM helper: builds a user+assistant chat pair in a virtual list container.
-     * Returns the assistant message element.
-     */
-    function buildChatPair(assistantKey, userPromptText, { censored = true } = {}) {
-        const container = document.createElement('div');
-        container.className = 'ds-virtual-list-visible-items';
-
-        const userItem = document.createElement('div');
-        userItem.setAttribute('data-virtual-list-item-key', 'user-' + assistantKey);
-        const userMsg = document.createElement('div');
-        userMsg.className = 'ds-message';
-        const userContent = document.createElement('div');
-        userContent.className = 'fbb737a4';
-        userContent.textContent = userPromptText;
-        userMsg.appendChild(userContent);
-        userItem.appendChild(userMsg);
-        container.appendChild(userItem);
-
-        const asstItem = document.createElement('div');
-        asstItem.setAttribute('data-virtual-list-item-key', assistantKey);
-        const asstMsg = document.createElement('div');
-        asstMsg.className = 'ds-message _63c77b1';
-        const mainContent = document.createElement('div');
-        mainContent.className = 'ds-markdown ds-assistant-message-main-content';
-        mainContent.textContent = 'censored text';
-        asstMsg.appendChild(mainContent);
-        asstItem.appendChild(asstMsg);
-
-        // Toolbar — censored pattern: buttons[1] and buttons[4] disabled
-        const toolbar = document.createElement('div');
-        toolbar.className = 'ds-flex';
-        for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
-            const btn = document.createElement('button');
-            btn.className = 'ds-icon-button';
-            if (state === 'disabled' && censored) {
-                btn.classList.add('ds-icon-button--disabled');
-                btn.setAttribute('aria-disabled', 'true');
-            }
-            toolbar.appendChild(btn);
-        }
-        asstItem.appendChild(toolbar);
-        container.appendChild(asstItem);
-
-        document.body.appendChild(container);
-        return asstMsg;
-    }
 
     describe('_getMessageIdFromElement()', () => {
         beforeEach(() => {
@@ -1905,25 +1768,14 @@ describe('CensorReplyRestore', () => {
     // ─────────────────────────────────────────────────────────────────
 
     describe('_recordKey() — session-scoped key helper', () => {
-        it('returns "{sessionId}::{messageId}" format for normal session', () => {
-            expect(CensorReplyRestore._recordKey('abc-123', 42)).toBe('abc-123::42');
-        });
-
-        it('uses "nosession" prefix when sessionId is null', () => {
-            expect(CensorReplyRestore._recordKey(null, 42)).toBe('nosession::42');
-        });
-
-        it('uses "nosession" prefix when sessionId is undefined', () => {
-            expect(CensorReplyRestore._recordKey(undefined, 5)).toBe('nosession::5');
-        });
-
-        it('uses "nosession" prefix when sessionId is empty string', () => {
-            expect(CensorReplyRestore._recordKey('', 99)).toBe('nosession::99');
-        });
-
-        it('coerces numeric messageId to string', () => {
-            const key = CensorReplyRestore._recordKey('sess-1', 100);
-            expect(key).toBe('sess-1::100');
+        it.each([
+            ['returns "{sessionId}::{messageId}" format for normal session', 'abc-123', 42, 'abc-123::42'],
+            ['uses "nosession" prefix when sessionId is null', null, 42, 'nosession::42'],
+            ['uses "nosession" prefix when sessionId is undefined', undefined, 5, 'nosession::5'],
+            ['uses "nosession" prefix when sessionId is empty string', '', 99, 'nosession::99'],
+            ['coerces numeric messageId to string', 'sess-1', 100, 'sess-1::100']
+        ])('%s', (_name, sessionId, messageId, expected) => {
+            expect(CensorReplyRestore._recordKey(sessionId, messageId)).toBe(expected);
         });
     });
 

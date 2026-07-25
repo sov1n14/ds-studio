@@ -49,21 +49,34 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-// jest-chrome uses jest.fn() internally; map jest → vi so it works in vitest
-vi.stubGlobal('jest', vi);
+// ── Hand-rolled chrome.* mock ────────────────────────────────────────────────
+// Replaces jest-chrome: this suite only touches a small, fixed slice of the
+// chrome API (storage, runtime, alarms, tabs, windows), so a full jest-chrome
+// + jest 27 peer-dependency stack is unneeded weight for what's effectively a
+// handful of vi.fn() calls and three fireable events.
 
-const { chrome } = await import('jest-chrome');
+// Mirrors jest-chrome's Event: addListener/removeListener/hasListener plus a
+// callListeners() test helper that invokes every registered listener with the
+// given args (used by specs to simulate onAlarm/onMessage/onStartup/onInstalled
+// firing).
+function createMockEvent() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => listeners.forEach((fn) => fn(...args)),
+    };
+}
 
-// Override storage with working in-memory mocks (jest-chrome's storage
-// mocks are plain jest.fn() that don't invoke callbacks → tests hang).
+// In-memory storage mocks (real get/set/remove/clear semantics — jest-chrome's
+// own storage mocks are plain jest.fn() that never invoke callbacks → hangs).
 const storageMock = { local: new InMemoryStorageMock('local'), sync: new InMemoryStorageMock('sync') };
-chrome.storage.local = storageMock.local;
-chrome.storage.sync = storageMock.sync;
 // Fan-in dispatcher: a single addListener(l) call registers the listener on
 // BOTH area mocks, so it receives notifications with the correct areaName
 // ('local' or 'sync') regardless of which area triggered the change.
 const onChangedListeners = [];
-chrome.storage.onChanged = {
+const storageOnChanged = {
     addListener: (listener) => {
         onChangedListeners.push(listener);
         storageMock.local.onChanged.addListener(listener);
@@ -81,9 +94,38 @@ chrome.storage.onChanged = {
         onChangedListeners.forEach((l) => l(changes, areaName));
     },
 };
-// jest-chrome provides flush() for its own onChanged; not needed after replacement
 
-globalThis.chrome = chrome;
+globalThis.chrome = {
+    storage: {
+        local: storageMock.local,
+        sync: storageMock.sync,
+        onChanged: storageOnChanged,
+        // No `session` area by default — a spec that needs it installs its own
+        // stub (see content-script.chat-delete.spec.js's `if (!chrome.storage.session)`).
+    },
+    runtime: {
+        id: 'test-extension-id',
+        lastError: undefined,
+        getURL: vi.fn(),
+        sendMessage: vi.fn(),
+        onInstalled: createMockEvent(),
+        onStartup: createMockEvent(),
+        onMessage: createMockEvent(),
+    },
+    alarms: {
+        create: vi.fn(),
+        clear: vi.fn(),
+        onAlarm: createMockEvent(),
+    },
+    tabs: {
+        query: vi.fn(),
+        sendMessage: vi.fn(),
+    },
+    windows: {
+        create: vi.fn(),
+        update: vi.fn(),
+    },
+};
 
 beforeEach(() => {
     storageMock.local.clear();

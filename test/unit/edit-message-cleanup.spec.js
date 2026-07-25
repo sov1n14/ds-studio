@@ -53,54 +53,41 @@ const {
 // ---------------------------------------------------------------------------
 
 describe('A. extractUserInput', () => {
-    it('A1: exports the correct constant values', () => {
+    // Only constants with no independent behavior coverage are asserted here.
+    // REMOVE_MAX_HEIGHT_SELECTOR / DYNAMIC_MAX_HEIGHT_SELECTOR / HEIGHT_SOURCE_SELECTOR_A/B /
+    // MAX_HEIGHT_OFFSET_PX are exercised as hardcoded DOM literals by Group C/F (e.g. C1, C8);
+    // USER_INPUT_REGEX's matching behavior is exercised by A2-A14 — a value change there
+    // already fails those tests, so re-asserting the literal here would be a redundant mirror.
+    it('A1: exports the correct constant values (constants with no other tripwire)', () => {
         expect(EDIT_BUTTON_CLASS).toBe('d4910adc');
-        expect(REMOVE_MAX_HEIGHT_SELECTOR).toBe('.cc852ac5');
-        expect(DYNAMIC_MAX_HEIGHT_SELECTOR).toBe('._646a522');
-        expect(HEIGHT_SOURCE_SELECTOR_A).toBe('._2be88ba');
-        expect(HEIGHT_SOURCE_SELECTOR_B).toBe('._871cbca');
-        expect(MAX_HEIGHT_OFFSET_PX).toBe(32);
         expect(DETECTION_TIMEOUT_MS).toBe(2000);
         expect(VALUE_WAIT_TIMEOUT_MS).toBe(800);
-        expect(USER_INPUT_REGEX).toBeInstanceOf(RegExp);
     });
 
-    it('A2: extracts inner content from a real injected message shape', () => {
-        const text =
-            '<system-prompt>\nYou are helpful.\n</system-prompt>\n\n' +
-            '<user-input>\n你好\n</user-input>';
-        expect(extractUserInput(text)).toBe('你好');
+    it.each([
+        [
+            'A2: extracts inner content from a real injected message shape',
+            '<system-prompt>\nYou are helpful.\n</system-prompt>\n\n<user-input>\n你好\n</user-input>',
+            '你好',
+        ],
+        [
+            'A3: extracts multi-line inner content correctly',
+            '<system-prompt>\nSys\n</system-prompt>\n\n<user-input>\nLine 1\nLine 2\nLine 3\n</user-input>',
+            'Line 1\nLine 2\nLine 3',
+        ],
+    ])('%s', (_title, text, expected) => {
+        expect(extractUserInput(text)).toBe(expected);
     });
 
-    it('A3: extracts multi-line inner content correctly', () => {
-        const text =
-            '<system-prompt>\nSys\n</system-prompt>\n\n' +
-            '<user-input>\nLine 1\nLine 2\nLine 3\n</user-input>';
-        expect(extractUserInput(text)).toBe('Line 1\nLine 2\nLine 3');
-    });
-
-    it('A4: returns null when no <user-input> wrapper is present (plain text)', () => {
-        expect(extractUserInput('hello world')).toBeNull();
-    });
-
-    it('A5: returns null for an empty string', () => {
-        expect(extractUserInput('')).toBeNull();
-    });
-
-    it('A6: returns null for null input', () => {
-        expect(extractUserInput(null)).toBeNull();
-    });
-
-    it('A7: returns null for undefined input', () => {
-        expect(extractUserInput(undefined)).toBeNull();
-    });
-
-    it('A8: returns null for a number input', () => {
-        expect(extractUserInput(42)).toBeNull();
-    });
-
-    it('A9: returns null for an object input', () => {
-        expect(extractUserInput({})).toBeNull();
+    it.each([
+        ['A4: returns null when no <user-input> wrapper is present (plain text)', 'hello world'],
+        ['A5: returns null for an empty string', ''],
+        ['A6: returns null for null input', null],
+        ['A7: returns null for undefined input', undefined],
+        ['A8: returns null for a number input', 42],
+        ['A9: returns null for an object input', {}],
+    ])('%s', (_title, input) => {
+        expect(extractUserInput(input)).toBeNull();
     });
 
     it('A10: wrapper without system-prompt preamble is still matched', () => {
@@ -108,25 +95,32 @@ describe('A. extractUserInput', () => {
         expect(extractUserInput(text)).toBe('bare input');
     });
 
-    it('A11: trailing content after </user-input> prevents a match (regex is end-anchored)', () => {
-        const text = '<user-input>\nhello\n</user-input> trailing';
+    it.each([
+        [
+            'A11: trailing content after </user-input> prevents a match (regex is end-anchored)',
+            '<user-input>\nhello\n</user-input> trailing',
+        ],
+        [
+            'A12: trailing newline after </user-input> prevents a match',
+            '<user-input>\nhello\n</user-input>\n',
+        ],
+    ])('%s', (_title, text) => {
         expect(extractUserInput(text)).toBeNull();
     });
 
-    it('A12: trailing newline after </user-input> prevents a match', () => {
-        const text = '<user-input>\nhello\n</user-input>\n';
-        expect(extractUserInput(text)).toBeNull();
-    });
-
-    it('A13: whitespace-only inner content is returned as-is (not coerced)', () => {
-        const text = '<user-input>\n   \n</user-input>';
-        expect(extractUserInput(text)).toBe('   ');
-    });
-
-    it('A14: Korean inner content preserved exactly', () => {
-        const text =
-            'Current Time: 2026/06/07 18:10:26\n\n<user-input>\n중국은 왜?\n</user-input>';
-        expect(extractUserInput(text)).toBe('중국은 왜?');
+    it.each([
+        [
+            'A13: whitespace-only inner content is returned as-is (not coerced)',
+            '<user-input>\n   \n</user-input>',
+            '   ',
+        ],
+        [
+            'A14: Korean inner content preserved exactly',
+            'Current Time: 2026/06/07 18:10:26\n\n<user-input>\n중국은 왜?\n</user-input>',
+            '중국은 왜?',
+        ],
+    ])('%s', (_title, text, expected) => {
+        expect(extractUserInput(text)).toBe(expected);
     });
 });
 
@@ -135,45 +129,21 @@ describe('A. extractUserInput', () => {
 // ---------------------------------------------------------------------------
 
 describe('B. computeDynamicMaxHeight', () => {
-    it('B1: MAX_HEIGHT_OFFSET_PX constant is 32 (used by the formula)', () => {
-        expect(MAX_HEIGHT_OFFSET_PX).toBe(32);
-    });
-
-    it('B2: typical case — 1000 window, 100 sourceA, 200 sourceB → 668', () => {
-        expect(computeDynamicMaxHeight(1000, 100, 200)).toBe(668);
-    });
-
-    it('B3: zero source heights — result is windowHeight minus offset', () => {
-        expect(computeDynamicMaxHeight(800, 0, 0)).toBe(768);
-    });
-
-    it('B4: all zeros — result is negative offset', () => {
-        expect(computeDynamicMaxHeight(0, 0, 0)).toBe(-32);
-    });
-
-    it('B5: large source heights can produce a negative result (no clamping)', () => {
+    // B1 (MAX_HEIGHT_OFFSET_PX mirror) removed: the constant's value is already the
+    // sole determinant of every expected result below (e.g. B2's 668 bakes in "-32"),
+    // so a wrong/changed offset already fails B2-B9 — a standalone mirror was redundant.
+    it.each([
+        ['B2: typical case — 1000 window, 100 sourceA, 200 sourceB → 668', 1000, 100, 200, 668],
+        ['B3: zero source heights — result is windowHeight minus offset', 800, 0, 0, 768],
+        ['B4: all zeros — result is negative offset', 0, 0, 0, -32],
         // Source heights larger than window — function returns raw arithmetic, no clamp
-        const result = computeDynamicMaxHeight(500, 400, 200);
-        expect(result).toBe(-132);
-    });
-
-    it('B6: formula is windowHeight - sourceHeightA - sourceHeightB - 32', () => {
-        const wh = 1080;
-        const a = 56;
-        const b = 72;
-        expect(computeDynamicMaxHeight(wh, a, b)).toBe(wh - a - b - 32);
-    });
-
-    it('B7: fractional pixel heights produce fractional result (no rounding)', () => {
-        expect(computeDynamicMaxHeight(900, 50.5, 49.5)).toBe(768);
-    });
-
-    it('B8: sourceHeightA only contributes correctly when sourceHeightB is zero', () => {
-        expect(computeDynamicMaxHeight(600, 80, 0)).toBe(488);
-    });
-
-    it('B9: sourceHeightB only contributes correctly when sourceHeightA is zero', () => {
-        expect(computeDynamicMaxHeight(600, 0, 80)).toBe(488);
+        ['B5: large source heights can produce a negative result (no clamping)', 500, 400, 200, -132],
+        ['B6: formula is windowHeight - sourceHeightA - sourceHeightB - 32', 1080, 56, 72, 1080 - 56 - 72 - 32],
+        ['B7: fractional pixel heights produce fractional result (no rounding)', 900, 50.5, 49.5, 768],
+        ['B8: sourceHeightA only contributes correctly when sourceHeightB is zero', 600, 80, 0, 488],
+        ['B9: sourceHeightB only contributes correctly when sourceHeightA is zero', 600, 0, 80, 488],
+    ])('%s', (_title, windowHeight, sourceA, sourceB, expected) => {
+        expect(computeDynamicMaxHeight(windowHeight, sourceA, sourceB)).toBe(expected);
     });
 });
 
@@ -408,12 +378,11 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     // ---- fallback when root is null / omitted ----
 
-    it('C12: falls back to document when root is null (no throw)', () => {
-        expect(() => applyMaxHeightAdjustments(null)).not.toThrow();
-    });
-
-    it('C13: falls back to document when called with no argument (no throw)', () => {
-        expect(() => applyMaxHeightAdjustments()).not.toThrow();
+    it.each([
+        ['C12: falls back to document when root is null (no throw)', [null]],
+        ['C13: falls back to document when called with no argument (no throw)', []],
+    ])('%s', (_title, args) => {
+        expect(() => applyMaxHeightAdjustments(...args)).not.toThrow();
     });
 });
 
@@ -445,24 +414,15 @@ describe('D. applyTextareaCleanup', () => {
         expect(applyTextareaCleanup(ta)).toBe(true);
     });
 
-    it('D2: dispatches an input event after rewriting value', () => {
+    it.each([
+        ['D2: dispatches an input event after rewriting value', 'input'],
+        ['D3: dispatches a change event after rewriting value', 'change'],
+    ])('%s', (_title, eventName) => {
         const wrapped = '<user-input>\nhello\n</user-input>';
         const ta = makeTextarea(wrapped);
 
         const listener = vi.fn();
-        ta.addEventListener('input', listener);
-
-        applyTextareaCleanup(ta);
-
-        expect(listener).toHaveBeenCalledOnce();
-    });
-
-    it('D3: dispatches a change event after rewriting value', () => {
-        const wrapped = '<user-input>\nhello\n</user-input>';
-        const ta = makeTextarea(wrapped);
-
-        const listener = vi.fn();
-        ta.addEventListener('change', listener);
+        ta.addEventListener(eventName, listener);
 
         applyTextareaCleanup(ta);
 
@@ -504,13 +464,11 @@ describe('D. applyTextareaCleanup', () => {
         expect(applyTextareaCleanup(ta)).toBe(false);
     });
 
-    it('D7: returns false without error when passed a non-textarea element', () => {
-        const div = document.createElement('div');
-        expect(applyTextareaCleanup(div)).toBe(false);
-    });
-
-    it('D8: returns false without error when passed null', () => {
-        expect(applyTextareaCleanup(null)).toBe(false);
+    it.each([
+        ['D7: returns false without error when passed a non-textarea element', () => document.createElement('div')],
+        ['D8: returns false without error when passed null', () => null],
+    ])('%s', (_title, makeArg) => {
+        expect(applyTextareaCleanup(makeArg())).toBe(false);
     });
 
     it('D9: multi-line inner content is preserved after cleanup', () => {
@@ -873,31 +831,24 @@ describe('F. handleEditButtonClick', () => {
 // ---------------------------------------------------------------------------
 
 describe('G. scroll-into-position', () => {
-    // -------------------------------------------------------------------------
-    // G1: EDIT_SCROLL_GAP_PX constant
-    // -------------------------------------------------------------------------
-
-    it('G1: EDIT_SCROLL_GAP_PX is 16', () => {
-        expect(EDIT_SCROLL_GAP_PX).toBe(16);
-    });
+    // G1 (EDIT_SCROLL_GAP_PX mirror) removed: G7-G11 call applyEditScrollPosition and
+    // assert a scrollTop delta computed with gap=16 hardcoded into the test's own
+    // expected value (e.g. G7's "300 + 84"), so a wrong/changed gap already fails
+    // those tests — a standalone mirror was redundant.
 
     // -------------------------------------------------------------------------
     // G2–G6: computeScrollDelta — pure arithmetic
     // -------------------------------------------------------------------------
 
-    it('G2: positive delta — edit box below target position (scroll down)', () => {
+    it.each([
         // editBoxTop=200, headerBottom=100, gap=16 → target=116, delta=84 (scroll down)
-        expect(computeScrollDelta(200, 100, 16)).toBe(84);
-    });
-
-    it('G3: negative delta — edit box above target position (scroll up)', () => {
+        ['G2: positive delta — edit box below target position (scroll down)', 200, 100, 16, 84],
         // editBoxTop=50, headerBottom=100, gap=16 → target=116, delta=-66 (scroll up)
-        expect(computeScrollDelta(50, 100, 16)).toBe(-66);
-    });
-
-    it('G4: zero delta — edit box is already perfectly aligned', () => {
+        ['G3: negative delta — edit box above target position (scroll up)', 50, 100, 16, -66],
         // editBoxTop=116, headerBottom=100, gap=16 → target=116, delta=0
-        expect(computeScrollDelta(116, 100, 16)).toBe(0);
+        ['G4: zero delta — edit box is already perfectly aligned', 116, 100, 16, 0],
+    ])('%s', (_title, editBoxTop, headerBottom, gap, expected) => {
+        expect(computeScrollDelta(editBoxTop, headerBottom, gap)).toBe(expected);
     });
 
     it('G5: fractional pixel values produce fractional result without rounding', () => {
@@ -989,31 +940,19 @@ describe('G. scroll-into-position', () => {
         return { editBox, header, listEl };
     }
 
-    it('G7: scrollTop is incremented by the correct computed delta', () => {
+    it.each([
         // editBoxTop=200, headerBottom=100, gap=16 → delta=84
-        const { listEl } = buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 300 });
-
-        applyEditScrollPosition(document);
-
-        expect(listEl.scrollTop).toBe(300 + 84);
-    });
-
-    it('G8: negative delta scrolls the container upward (scrollTop decreases)', () => {
+        ['G7: scrollTop is incremented by the correct computed delta', 200, 100, 300, 300 + 84],
         // editBoxTop=50, headerBottom=100, gap=16 → delta=-66
-        const { listEl } = buildScrollDOM({ editBoxTop: 50, headerBottom: 100, initialScrollTop: 200 });
-
-        applyEditScrollPosition(document);
-
-        expect(listEl.scrollTop).toBe(200 + (-66));
-    });
-
-    it('G9: zero delta leaves scrollTop unchanged', () => {
+        ['G8: negative delta scrolls the container upward (scrollTop decreases)', 50, 100, 200, 200 + (-66)],
         // editBoxTop=116, headerBottom=100, gap=16 → delta=0
-        const { listEl } = buildScrollDOM({ editBoxTop: 116, headerBottom: 100, initialScrollTop: 500 });
+        ['G9: zero delta leaves scrollTop unchanged', 116, 100, 500, 500],
+    ])('%s', (_title, editBoxTop, headerBottom, initialScrollTop, expectedScrollTop) => {
+        const { listEl } = buildScrollDOM({ editBoxTop, headerBottom, initialScrollTop });
 
         applyEditScrollPosition(document);
 
-        expect(listEl.scrollTop).toBe(500);
+        expect(listEl.scrollTop).toBe(expectedScrollTop);
     });
 
     it('G10: scrollable-ancestor detection — when ._6f2c522 is not scrollable, walks up to scrollable ancestor', () => {
@@ -1132,16 +1071,13 @@ describe('G. scroll-into-position', () => {
         expect(() => applyEditScrollPosition(document)).not.toThrow();
     });
 
-    it('G15: searchRoot null falls back to document without throwing', () => {
+    it.each([
+        ['G15: searchRoot null falls back to document without throwing', null],
+        ['G16: searchRoot undefined falls back to document without throwing', undefined],
+    ])('%s', (_title, searchRoot) => {
         // Minimal DOM so the function can actually execute
         buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 0 });
 
-        expect(() => applyEditScrollPosition(null)).not.toThrow();
-    });
-
-    it('G16: searchRoot undefined falls back to document without throwing', () => {
-        buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 0 });
-
-        expect(() => applyEditScrollPosition(undefined)).not.toThrow();
+        expect(() => applyEditScrollPosition(searchRoot)).not.toThrow();
     });
 });

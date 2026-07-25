@@ -12,7 +12,6 @@
   "devDependencies": {
     "vitest": "^3.2.4",
     "@vitest/ui": "^3.2.4",
-    "happy-dom": "^16.0.0",
-    "jest-chrome": "^0.8.0"
+    "happy-dom": "^16.0.0"
   }
 }

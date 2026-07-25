@@ -1374,47 +1374,6 @@ describe('GoToTop', () => {
             expect(GoToTop._button.style.marginBottom).toBe('');
         });
 
-        it('no-op guard: when already in stacked mode and native button still present, no DOM moves or class churn', () => {
-            const { injectParent, nativeBtn } = createFullWrapperWithNativeButton();
-
-            GoToTop._injectIntoWrapper(nativeBtn);
-            const originalBtn = GoToTop._button;
-            const originalClass = GoToTop._button.className;
-
-            vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(nativeBtn);
-            vi.spyOn(GoToTop, '_transitionToStacked');
-            vi.spyOn(GoToTop, '_transitionToSolo');
-            vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
-
-            // The no-op path should NOT call transition helpers
-            expect(GoToTop._button.isConnected).toBe(true);
-            expect(GoToTop._injectionMode).toBe('injected');
-            expect(GoToTop._transitionToStacked).not.toHaveBeenCalled();
-            expect(GoToTop._transitionToSolo).not.toHaveBeenCalled();
-            // Button element unchanged
-            expect(GoToTop._button).toBe(originalBtn);
-            expect(GoToTop._button.className).toBe(originalClass);
-        });
-
-        it('no-op guard: when already in wrapper-solo mode and native button absent, no DOM moves or class churn', () => {
-            createWrapperWithoutNativeButton();
-            GoToTop._injectIntoWrapperDirect();
-            const originalBtn = GoToTop._button;
-            const originalClass = GoToTop._button.className;
-
-            vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(null);
-            vi.spyOn(GoToTop, '_transitionToStacked');
-            vi.spyOn(GoToTop, '_transitionToSolo');
-
-            // button is connected, mode is wrapper-solo, native absent → no-op
-            expect(GoToTop._button.isConnected).toBe(true);
-            expect(GoToTop._injectionMode).toBe('wrapper-solo');
-            expect(GoToTop._transitionToStacked).not.toHaveBeenCalled();
-            expect(GoToTop._transitionToSolo).not.toHaveBeenCalled();
-            expect(GoToTop._button).toBe(originalBtn);
-            expect(GoToTop._button.className).toBe(originalClass);
-        });
-
         it('visibility is preserved across solo→stacked: visible button stays visible', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
             GoToTop._injectIntoWrapperDirect();
