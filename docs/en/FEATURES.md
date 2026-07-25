@@ -13,6 +13,7 @@
   - [UI Adjustment Features](#ui-adjustment-features)
   - [Back to Top Button](#back-to-top-button)
   - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
+  - [Auto Retry](#auto-retry)
   - [Exporting Conversations](#exporting-conversations)
     - [Export Options](#export-options)
   - [Quote Reply](#quote-reply)
@@ -113,6 +114,15 @@ This feature only works on mobile devices and requires no configuration:
 - **Accidental Trigger Prevention**: The system automatically detects swipe direction and distance — only a clear rightward swipe (≥ 50px, predominantly horizontal, < 500ms) triggers the action; vertical scrolling or brief touches do not activate it.
 - **Compatibility**: The trigger area deliberately avoids the screen edges to prevent conflicts with Chrome Android's system back gesture.
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle.
+
+## Auto Retry
+
+When a DeepSeek response fails (e.g. "The server is busy. Please try again later.") and a retry button appears, the extension clicks it for you:
+
+- **Detection**: Polls the page once per second for the retry button; clicks it once whenever it is present.
+- **Retry Count**: Unlimited. As long as the button remains on screen, it retries once per second until a response is produced and the button disappears.
+- **Selector Strategy**: Primarily targets DeepSeek's semantic classes `.ds-button--warning.ds-button--circle.ds-button--xs`, with the hashed classes `.a3b9bd76._76a2310` as a fallback, reducing the chance of breakage when DeepSeek ships a front-end change.
+- **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle. When the master switch is off, the polling timer is stopped entirely and consumes no resources.
 
 ## Exporting Conversations
 
