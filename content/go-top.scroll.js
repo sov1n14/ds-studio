@@ -34,7 +34,6 @@
             const effectiveTimeout = options.timeout || this.TIMEOUT;
 
             this._scrollPromise = new Promise((resolve, reject) => {
-                this._scrollResolve = resolve;
                 this._scrollReject = reject;
 
                 let consecutiveMisses = 0;
@@ -81,7 +80,6 @@
                     }
                     this._locked = false;
                     this._scrollPromise = null;
-                    this._scrollResolve = null;
                     this._scrollReject = null;
                     if (this._button) {
                         this._button.setAttribute('aria-disabled', 'false');

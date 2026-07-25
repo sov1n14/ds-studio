@@ -151,12 +151,6 @@ describe('dsI18n', () => {
             expect(dsI18n().getLocale()).toBe('en');
             expect(dsI18n().t('globalPromptLabel')).toBe('Global Default Prompt');
         });
-
-        it('getLocaleName() returns display name for current locale', () => {
-            expect(dsI18n().getLocaleName()).toBe('中文');
-            dsI18n().setLocale('en');
-            expect(dsI18n().getLocaleName()).toBe('English');
-        });
     });
 
     // ── 4. Edge cases ──────────────────────────────────────────────────────

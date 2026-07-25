@@ -359,8 +359,6 @@
   //  i18n API
   // ============================================================
   const i18n = {
-    LOCALE_NAMES: LOCALE_NAMES,
-
     _data: null,
     _locale: DEFAULT_LOCALE,
 
@@ -384,11 +382,6 @@
     /** Get current locale code (zh_TW | en) */
     getLocale() {
       return this._locale;
-    },
-
-    /** Get display name of current locale */
-    getLocaleName() {
-      return LOCALE_NAMES[this._locale] || this._locale;
     },
 
     /** For testing only — reset internal state so init() re-reads storage */

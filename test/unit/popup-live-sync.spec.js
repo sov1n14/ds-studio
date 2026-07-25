@@ -427,7 +427,7 @@ describe('createLiveSyncListener — preset list reload', () => {
 
 describe('createLiveSyncListener — chat preset map reload', () => {
     it('reloads chatPresetMap when CHAT_PRESET_MAP_META changes', async () => {
-        await StorageManager.saveChatPresetMap({ uuidA: 'p1' });
+        await StorageManager.mutateChatPresetMap(() => ({ uuidA: 'p1' }));
 
         const { ctx, state } = buildCtx();
         const listener = startAndCapture(ctx);
@@ -439,7 +439,7 @@ describe('createLiveSyncListener — chat preset map reload', () => {
     });
 
     it('reloads chatPresetMap when a chatPresetMap_* chunk key changes', async () => {
-        await StorageManager.saveChatPresetMap({ uuidB: 'p2' });
+        await StorageManager.mutateChatPresetMap(() => ({ uuidB: 'p2' }));
 
         const { ctx, state } = buildCtx();
         const listener = startAndCapture(ctx);

@@ -47,15 +47,15 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
     });
 
     describe('3. Mixed API ordering', () => {
-        it('interleaves saveChatPresetMap, bindChatToPreset, unbindChat, and mutateChatPresetMap; final state equals serial application in submission order', async () => {
+        it('interleaves mutateChatPresetMap (raw replace), bindChatToPreset, unbindChat, and mutateChatPresetMap; final state equals serial application in submission order', async () => {
             // Submission order:
-            // 1. saveChatPresetMap({ 'a': 'p1' })       — raw write
+            // 1. mutateChatPresetMap(() => ({ 'a': 'p1' })) — raw write
             // 2. bindChatToPreset('b', 'p2')             — add binding
             // 3. unbindChat('a')                          — remove binding
             // 4. mutateChatPresetMap(map => { map.c = 'p3'; }) — add another key
             // Expected serial result: { 'b': 'p2', 'c': 'p3' }
 
-            const p1 = SM.saveChatPresetMap({ a: 'p1' });
+            const p1 = SM.mutateChatPresetMap(() => ({ a: 'p1' }));
             const p2 = SM.bindChatToPreset('b', 'p2');
             const p3 = SM.unbindChat('a');
             const p4 = SM.mutateChatPresetMap((map) => {

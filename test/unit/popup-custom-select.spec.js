@@ -108,9 +108,7 @@ describe('createPresetCustomSelect', () => {
             expect(typeof sel.render).toBe('function');
             expect(typeof sel.open).toBe('function');
             expect(typeof sel.close).toBe('function');
-            expect(typeof sel.isOpen).toBe('function');
             expect(typeof sel.setActive).toBe('function');
-            expect(typeof sel.destroy).toBe('function');
         });
 
         it('初始面板應為隱藏狀態', () => {
@@ -159,7 +157,6 @@ describe('createPresetCustomSelect', () => {
             const { sel } = createSelect();
             sel.open();
             expect(document.getElementById('panel').hidden).toBe(false);
-            expect(sel.isOpen()).toBe(true);
             expect(document.getElementById('trigger').getAttribute('aria-expanded')).toBe('true');
         });
 
@@ -168,7 +165,6 @@ describe('createPresetCustomSelect', () => {
             sel.open();
             sel.close();
             expect(document.getElementById('panel').hidden).toBe(true);
-            expect(sel.isOpen()).toBe(false);
             expect(document.getElementById('trigger').getAttribute('aria-expanded')).toBe('false');
         });
 
@@ -205,7 +201,7 @@ describe('createPresetCustomSelect', () => {
             const item = document.querySelector('#list .ds-select__item[data-id="a"]');
             item.click();
             expect(onSelect).toHaveBeenCalledWith('a');
-            expect(sel.isOpen()).toBe(false);
+            expect(document.getElementById('panel').hidden).toBe(true);
         });
 
         it('點擊空白選項呼叫 onSelect 並傳入空字串', () => {
@@ -214,7 +210,7 @@ describe('createPresetCustomSelect', () => {
             const blank = document.querySelector('.ds-select__item--empty');
             blank.click();
             expect(onSelect).toHaveBeenCalledWith('');
-            expect(sel.isOpen()).toBe(false);
+            expect(document.getElementById('panel').hidden).toBe(true);
         });
     });
 
@@ -225,7 +221,7 @@ describe('createPresetCustomSelect', () => {
             const editBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--edit');
             editBtn.click();
             expect(onRequestEdit).toHaveBeenCalledWith('a');
-            expect(sel.isOpen()).toBe(true);
+            expect(document.getElementById('panel').hidden).toBe(false);
         });
 
         it('點擊 delete 按鈕呼叫 onRequestDelete 且不關閉面板', () => {
@@ -234,7 +230,7 @@ describe('createPresetCustomSelect', () => {
             const deleteBtn = document.querySelector('#list .ds-select__item[data-id="b"] .ds-select__item-btn--delete');
             deleteBtn.click();
             expect(onRequestDelete).toHaveBeenCalledWith('b');
-            expect(sel.isOpen()).toBe(true);
+            expect(document.getElementById('panel').hidden).toBe(false);
         });
     });
 
@@ -331,13 +327,6 @@ describe('createPresetCustomSelect', () => {
         });
     });
 
-    describe('destroy()', () => {
-        it('destroy() 不拋出例外', () => {
-            const { sel } = createSelect();
-            sel.open();
-            expect(() => sel.destroy()).not.toThrow();
-        });
-    });
 });
 
 describe('與 Modal 整合', () => {

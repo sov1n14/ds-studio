@@ -13,8 +13,6 @@
 
         /**
          * Attempt each CSS selector in order and return the first match.
-         * 只有在首次成功解析到 DOM 後（_hasSeenDom = true）才累積失敗計數，
-         * 避免在頁面初始化期間 DOM 尚未掛載時誤判為降級模式。
          * @param {string[]} selectors - Array of CSS selector strings
          * @returns {Element|null}
          */
@@ -24,20 +22,11 @@
             for (const sel of selectors) {
                 const el = document.querySelector(sel);
                 if (el) {
-                    // 首次成功找到元素，啟動降級計數追蹤
                     this._hasSeenDom = true;
-                    this._missCount = 0;
                     return el;
                 }
             }
 
-            // 尚未首次見到 DOM（頁面尚未完成掛載）時不計入失敗，避免假性降級
-            if (!this._hasSeenDom) return null;
-
-            this._missCount += 1;
-            if (this._missCount >= this.DEGRADED_THRESHOLD && !this._degraded) {
-                this._degraded = true;
-            }
             return null;
         },
 

@@ -52,7 +52,6 @@ const GoToTop = {
     // 原生按鈕選擇器：精確雜湊 class 優先，再退回穩定 ds-* class 組合
     // confirmed in go-bottom.html: <div role="button" class="ds-button ... ds-button--floating _0706cde ...">
     NATIVE_BTN_SELECTOR: '._0706cde:not(.dsw-gotop)',
-    DEGRADED_THRESHOLD: 3,
     INJECT_PARENT_SELECTOR: '.aaff8b8f',
     INJECT_PARENT_FALLBACK: '._871cbca > div:nth-child(2)',
     OUTER_WRAPPER_SELECTOR: '._871cbca',
@@ -71,12 +70,9 @@ const GoToTop = {
     _wrapperObserverTimer: null,
     _scrollListener: null,
     _locked: false,
-    _degraded: false,
-    _missCount: 0,
     // 首次成功找到 DOM 後才開始累積 miss 計數
     _hasSeenDom: false,
     _scrollPromise: null,
-    _scrollResolve: null,
     _scrollReject: null,
     _popstateHandler: null,
     _observerTimer: null,
@@ -203,10 +199,7 @@ const GoToTop = {
         // 重設所有狀態
         this._locked = false;
         this._scrollPromise = null;
-        this._scrollResolve = null;
         this._scrollReject = null;
-        this._missCount = 0;
-        this._degraded = false;
         // 路由切換後 DOM 重新掛載，重設首次見到 DOM 的旗標
         this._hasSeenDom = false;
 
@@ -317,10 +310,7 @@ const GoToTop = {
 
         this._scrollContainer = null;
         this._scrollPromise = null;
-        this._scrollResolve = null;
         this._scrollReject = null;
-        this._missCount = 0;
-        this._degraded = false;
         this._hasSeenDom = false;
     },
 

@@ -72,14 +72,11 @@ describe('GoToTop', () => {
         GoToTop.enabled = false;
         GoToTop._masterEnabled = false;
         GoToTop._locked = false;
-        GoToTop._degraded = false;
-        GoToTop._missCount = 0;
         GoToTop._hasSeenDom = false;
         GoToTop._button = null;
         GoToTop._injectionMode = null;
         GoToTop._scrollContainer = null;
         GoToTop._scrollPromise = null;
-        GoToTop._scrollResolve = null;
         GoToTop._scrollReject = null;
         GoToTop._observer = null;
         GoToTop._routeObserver = null;
@@ -111,11 +108,8 @@ describe('GoToTop', () => {
             expect(GoToTop._injectionMode).toBeNull();
             expect(GoToTop._scrollContainer).toBeNull();
             expect(GoToTop._locked).toBe(false);
-            expect(GoToTop._degraded).toBe(false);
-            expect(GoToTop._missCount).toBe(0);
             expect(GoToTop._hasSeenDom).toBe(false);
             expect(GoToTop._scrollPromise).toBeNull();
-            expect(GoToTop._scrollResolve).toBeNull();
             expect(GoToTop._scrollReject).toBeNull();
             expect(GoToTop._wrapperObserver).toBeNull();
             expect(GoToTop._wrapperObserverTimer).toBeNull();
@@ -128,7 +122,6 @@ describe('GoToTop', () => {
             expect(GoToTop.TIMEOUT).toBe(30000);
             expect(GoToTop.ANCHOR_POLL_INTERVAL).toBe(100);
             expect(GoToTop.MAX_ANCHOR_RETRIES).toBe(5);
-            expect(GoToTop.DEGRADED_THRESHOLD).toBe(3);
             expect(GoToTop.SCROLL_STEP_FACTOR).toBe(0.9);
             expect(GoToTop.OBSERVER_DEBOUNCE).toBe(50);
             expect(GoToTop.WRAPPER_OBSERVER_DEBOUNCE).toBe(80);
@@ -177,30 +170,6 @@ describe('GoToTop', () => {
             expect(GoToTop._querySelectorWithFallback(null)).toBeNull();
         });
 
-        it('increments _missCount on failure when DOM was previously seen', () => {
-            GoToTop._missCount = 0;
-            GoToTop._hasSeenDom = true;
-            GoToTop._querySelectorWithFallback(['.nonexistent']);
-            expect(GoToTop._missCount).toBe(1);
-        });
-
-        it('does NOT increment _missCount before DOM is first seen', () => {
-            GoToTop._missCount = 0;
-            GoToTop._hasSeenDom = false;
-            GoToTop._querySelectorWithFallback(['.nonexistent']);
-            expect(GoToTop._missCount).toBe(0);
-        });
-
-        it('resets _missCount to 0 on success', () => {
-            const div = document.createElement('div');
-            div.className = 'hit';
-            document.body.appendChild(div);
-
-            GoToTop._missCount = 5;
-            GoToTop._querySelectorWithFallback(['.hit']);
-            expect(GoToTop._missCount).toBe(0);
-        });
-
         it('sets _hasSeenDom on first success', () => {
             GoToTop._hasSeenDom = false;
             const div = document.createElement('div');
@@ -211,30 +180,6 @@ describe('GoToTop', () => {
             expect(GoToTop._hasSeenDom).toBe(true);
         });
 
-        it('sets _degraded after DEGRADED_THRESHOLD misses when DOM was seen', () => {
-            GoToTop._missCount = 0;
-            GoToTop._degraded = false;
-            GoToTop._hasSeenDom = true;
-
-            for (let i = 0; i < GoToTop.DEGRADED_THRESHOLD - 1; i++) {
-                GoToTop._querySelectorWithFallback(['.nope']);
-            }
-            expect(GoToTop._degraded).toBe(false);
-
-            GoToTop._querySelectorWithFallback(['.nope']);
-            expect(GoToTop._degraded).toBe(true);
-        });
-
-        it('does not warn repeatedly once already degraded', () => {
-            GoToTop._degraded = true;
-            GoToTop._hasSeenDom = true;
-            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-            GoToTop._querySelectorWithFallback(['.nope']);
-            expect(warn).not.toHaveBeenCalled();
-
-            warn.mockRestore();
-        });
     });
 
     // ─────────────────────────────────────
@@ -1905,8 +1850,6 @@ describe('GoToTop', () => {
 
                 await expect(promise).rejects.toEqual({ success: false, reason: 'aborted' });
                 expect(GoToTop._locked).toBe(false);
-                expect(GoToTop._missCount).toBe(0);
-                expect(GoToTop._degraded).toBe(false);
             } finally {
                 vi.useRealTimers();
             }
@@ -1985,8 +1928,6 @@ describe('GoToTop', () => {
             expect(GoToTop._scrollContainer).toBeNull();
             expect(GoToTop._injectionMode).toBeNull();
             expect(GoToTop._hasSeenDom).toBe(false);
-            expect(GoToTop._missCount).toBe(0);
-            expect(GoToTop._degraded).toBe(false);
         });
 
         it('disable is idempotent when called twice', () => {
@@ -2101,9 +2042,7 @@ describe('GoToTop', () => {
     // ─────────────────────────────────────
 
     describe('_onRouteChange', () => {
-        it('resets missCount, degraded, hasSeenDom, and cleans up button', () => {
-            GoToTop._missCount = 5;
-            GoToTop._degraded = true;
+        it('resets hasSeenDom, and cleans up button', () => {
             GoToTop._hasSeenDom = true;
             GoToTop._scrollContainer = document.createElement('div');
             const btn = document.createElement('div');
@@ -2113,8 +2052,6 @@ describe('GoToTop', () => {
 
             GoToTop._onRouteChange();
 
-            expect(GoToTop._missCount).toBe(0);
-            expect(GoToTop._degraded).toBe(false);
             expect(GoToTop._hasSeenDom).toBe(false);
             expect(GoToTop._scrollContainer).toBeNull();
             expect(GoToTop._button).toBeNull();

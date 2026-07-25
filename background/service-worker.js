@@ -21,8 +21,6 @@ const RETRY_ALARM_NAME = 'dss-delete-retry';
 const MAX_ATTEMPTS = 3;
 // 重試間隔（分鐘），0.5 = 30 秒
 const RETRY_DELAY_MINUTES = 0.5;
-// 舊版本機佇列鍵（僅供一次性清理）
-const OLD_PENDING_LOCAL_KEY = 'dss-pending-deletes';
 // 同 content/temporary-chat-constants.js
 const SCHEDULE_DELETE_RETRY = 'DSS_SCHEDULE_DELETE_RETRY';
 // onChanged 掃描重入防護（記憶體內）
@@ -126,11 +124,10 @@ chrome.runtime.onStartup.addListener(() => {
     })();
 });
 
-// 安裝／更新時建立定期重試 alarm，並立即嘗試一次補推；同時清理舊版本機佇列
+// 安裝／更新時建立定期重試 alarm，並立即嘗試一次補推
 chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create(SYNC_RETRY_ALARM_NAME, { periodInMinutes: SYNC_RETRY_PERIOD_MINUTES });
     retryParkedSync();
-    chrome.storage.local.remove(OLD_PENDING_LOCAL_KEY);
 });
 
 // 監聽雲端同步重試 alarm，與現有刪除重試 alarm 監聽器互不干擾

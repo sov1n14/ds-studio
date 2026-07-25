@@ -293,14 +293,6 @@
         },
 
         /**
-         * 以新 map 完整取代 chatPresetMap。
-         * @param {Object} map
-         */
-        async saveChatPresetMap(map) {
-            return this.mutateChatPresetMap(() => map);
-        },
-
-        /**
          * 讀取完整的 chatPresetMap（經由寫入佇列序列化，確保讀寫順序正確）。
          * @returns {Promise<Object>}
          */

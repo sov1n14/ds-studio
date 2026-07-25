@@ -81,15 +81,15 @@
          * 有界 CAS 重試單一 chunk 寫入（熱路徑操作）。
          * 每次嘗試前重新讀取 chunk 及 meta.version；
          * 若 meta.version 已前進（表示其他 context 已提交），則使快取失效並重試，
-         * 最多重試 retryBudget 次。
+         * 最多重試 RECONCILIATION_RETRY_BUDGET 次。
          *
          * @param {Object} opts
          * @param {number} opts.chunkIdx - 目標 chunk 索引
          * @param {(chunk: Object) => void} opts.applyDelta - 冪等的 chunk 修改函式
-         * @param {number} [opts.retryBudget=RECONCILIATION_RETRY_BUDGET] - 最大重試次數
          * @throws {WriteReconciliationExhaustedError} 超過重試預算後拋出
          */
-        async _writeChunkWithReconciliation({ chunkIdx, applyDelta, retryBudget = RECONCILIATION_RETRY_BUDGET }) {
+        async _writeChunkWithReconciliation({ chunkIdx, applyDelta }) {
+            const retryBudget = RECONCILIATION_RETRY_BUDGET;
             let attempt = 0;
             while (attempt <= retryBudget) {
                 await this._ensureChunkCachesLoaded();

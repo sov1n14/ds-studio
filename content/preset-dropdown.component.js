@@ -374,13 +374,6 @@
             setValue(isValueStillValid ? currentValue : '');
         }
 
-        // ── 公開 API：getValue ───────────────────────────────────────────────
-
-        /** @returns {string} 目前選中的選項 value */
-        function getValue() {
-            return currentValue;
-        }
-
         // ── 公開 API：getNaturalWidth ─────────────────────────────────────────
 
         /**
@@ -428,7 +421,6 @@
             menu,
             setOptions,
             setValue,
-            getValue,
             getNaturalWidth,
             open,
             close,
