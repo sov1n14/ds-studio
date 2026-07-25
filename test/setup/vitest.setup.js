@@ -18,6 +18,7 @@ import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';
+import '../../content/censor-reply-restore.thinkblock.js';
 import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.js';

@@ -3,10 +3,11 @@
  * 攔截 XHR SSE 回應、偵測 DOM 審查，並將原始模型回覆重新注入頁面。
  *
  * 載入順序（manifest.json 中 bundle 必須先於 entry）：
- *   1. censor-reply-restore.markdown.js  → globalThis.__DS_CensorReplyRestore_markdown
- *   2. censor-reply-restore.dom.js       → globalThis.__DS_CensorReplyRestore_dom
- *   3. censor-reply-restore.storage.js   → globalThis.__DS_CensorReplyRestore_storage
- *   4. censor-reply-restore.js           （本檔，Object.assign 合入以上三個 bundle）
+ *   1. censor-reply-restore.markdown.js    → globalThis.__DS_CensorReplyRestore_markdown
+ *   2. censor-reply-restore.dom.js         → globalThis.__DS_CensorReplyRestore_dom
+ *   3. censor-reply-restore.thinkblock.js  → globalThis.__DS_CensorReplyRestore_thinkblock
+ *   4. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
+ *   5. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
  */
 const CensorReplyRestore = {
     RESTORED_MESSAGES_KEY: 'restored_messages',
@@ -309,6 +310,7 @@ const CensorReplyRestore = {
     Object.assign(CensorReplyRestore,
         root.__DS_CensorReplyRestore_markdown || {},
         root.__DS_CensorReplyRestore_dom || {},
+        root.__DS_CensorReplyRestore_thinkblock || {},
         root.__DS_CensorReplyRestore_storage || {});
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 
