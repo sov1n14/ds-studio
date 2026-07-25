@@ -37,3 +37,5 @@
 - [Tombstone Object-Shape Tests](project_tombstone_object_shape_tests.md) — tombstone entries {ts,deleted} not bare number; clearPresetTombstones writes {deleted:false} not key-delete.
 - [Orphan Test Cleanup 2026-07-25](project_orphan_test_cleanup_2026-07-25.md) — literal-pattern grep to find unique coverage before deleting; 86 files/1736 tests/0 fail.
 - [Go-Top Test Suite Split 2026-07-26](project_gotop_test_suite_split_2026_07_26.md) — go-top.spec.js retired, split verbatim into 7 spec files (locate/button/visibility/inject/transitions/reconnect/enable) + go-top-fixtures.js helper.
+- [Go-Top Test Harness Addendum](project_test_harness.md) — "enable / disable" beforeEach mocks addEventListener as no-op spy; build a real container to test scroll-listener teardown.
+- [Go-Top Teardown Bugs 2026-07-26](gotop-teardown-bugs.md) — 2 confirmed disable() bugs (route-change timer survives, in-flight scroll poll survives), red tests in go-top.enable.spec.js.

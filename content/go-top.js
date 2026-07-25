@@ -78,6 +78,8 @@ const GoToTop = {
     _observerTimer: null,
     // 問題 1：enable() 重試計時器
     _enableRetryTimer: null,
+    // route change 後排程重連 DOM 的計時器（供 disable() 中止，避免關閉後仍重新注入）
+    _routeChangeTimer: null,
     _enableRetryCount: 0,
     _lastPath: '',
 
@@ -216,7 +218,8 @@ const GoToTop = {
         this._scrollContainer = null;
 
         // DOM 穩定後驅動 gated 重試迴圈：等待 .aaff8b8f／原生按鈕就緒後再注入並重連容器、監聽器與視覺狀態
-        setTimeout(() => {
+        clearTimeout(this._routeChangeTimer);
+        this._routeChangeTimer = setTimeout(() => {
             this._tryConnectDom();
         }, 100);
     },
@@ -246,6 +249,8 @@ const GoToTop = {
      * 若尚未就緒則排程重試，最多 120 次（約 60 秒）；超過上限直接放棄，不注入任何按鈕。
      */
     _tryConnectDom() {
+        if (!this.enabled) return;
+
         const MAX_RETRIES = 120;
         const RETRY_INTERVAL = 500;
 
@@ -281,7 +286,7 @@ const GoToTop = {
         }
         clearTimeout(this._enableRetryTimer);
         this._enableRetryTimer = setTimeout(() => {
-            if (this.enabled) this._tryConnectDom();
+            this._tryConnectDom();
         }, RETRY_INTERVAL);
     },
 
@@ -308,8 +313,15 @@ const GoToTop = {
         this._enableRetryTimer = null;
         this._enableRetryCount = 0;
 
+        clearTimeout(this._routeChangeTimer);
+        this._routeChangeTimer = null;
+
         this._scrollContainer = null;
         this._scrollPromise = null;
+        // 中止進行中的滾動，而非任由其跑到自身 timeout 才結束
+        if (this._scrollReject) {
+            this._scrollReject({ success: false, reason: 'aborted' });
+        }
         this._scrollReject = null;
         this._hasSeenDom = false;
     },

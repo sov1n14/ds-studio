@@ -69,7 +69,8 @@
 - **顯示/隱藏邏輯**：採用遲滯（hysteresis）設計避免邊界閃爍——首訊息底部離開視窗頂部（`getBoundingClientRect().bottom < 0`）時顯示；可驗證到達頂部（`scrollTop <= 1` 或 `[data-virtual-list-item-key="1"]` 完全可見）時隱藏；中間狀態維持當前顯示狀態。
 - **原生按鈕偵測**：主選擇器 `._0706cde:not(.dsw-gotop)`；結構式降級鏈（scoped to `.aaff8b8f`）全部要求 `ds-button--floating`，並在回傳前對非 `_0706cde` 來源的匹配結果進行後驗證，排除 `ds-button--primary` / `ds-button--filled` / `ds-button--disabled` 按鈕，防止誤匹配同一容器內的其他圓形按鈕。
 - **SPA 韌性**：wrapper observer 監控外層容器（`._871cbca`），偵測 React re-render 後自動重新注入或模式轉換。模式轉換（solo ↔ stacked）複用同一元素（不重新建立），避免閃爍。
-- **路由變更**：切換對話時中止進行中的捲動、重設狀態、移除舊按鈕，待 DOM 穩定後經由 `_tryConnectDom()` 閘控重試迴圈重新注入——持續重試至輸入區包裝容器或原生按鈕就緒為止（每 500ms × 最多 120 次），取代舊有的一次性無重試注入，從根本上消除 SPA 路由切換時因 DOM 未就緒而按鈕不顯示的競爭問題。
+- **路由變更**：切換對話時中止進行中的捲動、重設狀態、移除舊按鈕，待 DOM 穩定後經由 `_tryConnectDom()` 閘控重試迴圈重新注入——持續重試至輸入區包裝容器或原生按鈕就緒為止（每 500ms × 最多 120 次），取代舊有的一次性無重試注入，從根本上消除 SPA 路由切換時因 DOM 未就緒而按鈕不顯示的競爭問題。等待 DOM 穩定的計時器 handle 保存於 `_routeChangeTimer`，可由 `disable()` 取消。
+- **停用行為**：呼叫 `disable()` 時必須不留下任何仍會作用於頁面的殘留物——停止三個 observer（DOM、路由、wrapper）、移除 scroll 監聽器與按鈕、清除三個計時器（`_observerTimer`、`_enableRetryTimer`、`_routeChangeTimer`），並**呼叫** `_scrollReject` 以中止進行中的捲動（僅將其設為 null 不會停止捲動迴圈）。`_tryConnectDom()` 進入點的 `if (!this.enabled) return;` 為第二道防線，確保任何漏網的延遲回呼都不會在停用後重新注入按鈕或重啟 observer——停用後才建立的 wrapper observer 不會再被拆除，其自動補回邏輯會使按鈕在使用者重新整理前無法擺脫。
 - **捲動至頂部（可點擊中止）**：`scrollToTopAndWait()` 提供公開 API（供 Markdown 匯出整合），分段 `scrollBy(0, -0.9 * viewportHeight)` 搭配 MutationObserver 等待延遲載入，最長 30 秒逾時。捲動期間按鈕**全程維持可點**（`aria-disabled` 恆為 `"false"`，不再於捲動期間禁用）；若捲動進行中再次點擊，會以 `reason: 'stopped-by-user'` 中止目前捲動於當下位置、**不重新開始**（切換式），再次點擊才會重新捲動。
 - **鍵盤與無障礙**：`<div role="button" tabindex="0">`，支援 Enter / Space 鍵盤觸發；`aria-label="回到頂部"`；`aria-disabled` 全程維持 `"false"`。
 - **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動動畫引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
