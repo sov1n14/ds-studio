@@ -42,6 +42,7 @@ ds-studio/
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
 │   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
+│   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression
 │   ├── preset-dropdown.css  ─  Overlay dropdown component styles
