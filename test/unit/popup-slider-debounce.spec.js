@@ -23,7 +23,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 function getPopupCode() {
-    return readFileSync(resolve(__dirname, '../../popup/popup.js'), 'utf-8');
+    return readFileSync(resolve(__dirname, '../../popup/popup.width-sliders.js'), 'utf-8');
 }
 
 // ─────────────────────────────────────────────

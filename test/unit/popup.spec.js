@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 // ─────────────────────────────────────────────
 
 function getPopupCode() {
-    return readFileSync(resolve(__dirname, '../../popup/popup.js'), 'utf-8');
+    return readFileSync(resolve(__dirname, '../../popup/popup.editor-window.js'), 'utf-8');
 }
 
 // Extract updateEditPresetBtnState and its dependency from inside DOMContentLoaded

@@ -184,6 +184,9 @@ In `popup.html`, the script tags appear in this order:
 <script src="popup.preset-manager.js"></script>
 <script src="popup.backup-manager.js"></script>
 <script src="popup.live-sync.js"></script>
+<script src="popup.editor-window.js"></script>
+<script src="popup.width-sliders.js"></script>
+<script src="popup.markdown-export.js"></script>
 <script src="popup.js"></script>
 <script src="popup.locale.js"></script>
 ```
@@ -204,6 +207,8 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
 - `popup.toast.js` (v4.11.10 split) registers the `Toast` key on that same `window.__DS_PopupModal` object. `popup.modal.js` previously held both `Modal` and `Toast` in one file — two unrelated components sharing a file, contrary to `coding-guidelines` §8. Both files now self-mount via `Object.assign(window.__DS_PopupModal || {}, { … })` rather than a single object literal, so neither clobbers the other's key and the two are order-independent. `popup.js:35` still destructures `const { Modal, Toast } = window.__DS_PopupModal;` unchanged. The manager bundles receive `Modal`/`Toast` through their `ctx` parameter, not the global, and were unaffected.
 - `popup.live-sync.js` (v4.8.0) registers `window.__DS_PopupLiveSync`, exposing `createLiveSyncListener(ctx)` — see the Live Sync Listener section below.
+- `popup.editor-window.js` / `popup.width-sliders.js` / `popup.markdown-export.js` (v4.11.16 split) expose `createEditorWindowManager(ctx)` / `createWidthSliderManager(ctx)` / `createMarkdownExportManager(ctx)`, following the same ctx-factory convention as the preset and backup managers. `popup.js` was 572 lines — 122 over the `coding-guidelines` §8 threshold — and these three were self-contained concerns bundled inside its `DOMContentLoaded` handler; extracting them brings the entry file to 441 lines. `popup.editor-window.js` owns `openEditorWindow` plus the two edit-button bindings and the `globalEditorWindowId`/`presetEditorWindowId` singleton state; `popup.width-sliders.js` owns the `debounce` helper and both width toggle/slider bindings (the DOM element `const`s stay in `popup.js`, since the live-sync wiring still references them); `popup.markdown-export.js` owns the export button binding.
+- Two specs extract functions from raw source text with `readFileSync` + regex rather than importing them, so they had to follow the code: `test/unit/popup-slider-debounce.spec.js` now reads `popup.width-sliders.js`, and `test/unit/popup.spec.js` now reads `popup.editor-window.js`. Only the paths changed — every regex still matches, because the moves were verbatim including indentation. Anything moved out of `popup.js` in future must check these two specs.
 - `popup.js` (entry) loads second-to-last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 - `popup.locale.js` (v4.3.3) loads last, wiring `#localeSwitcherBtn` click to panel toggle and radio change to `dsI18n.setLocale()` — see the Language / Locale Switcher section below.
 
