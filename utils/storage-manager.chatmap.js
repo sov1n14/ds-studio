@@ -10,6 +10,78 @@
 
     const bundle = {
         /**
+         * 將 deletedKeys/changedKeys/addedKeys 差異套用至 chunks 工作副本與 meta 工作副本，
+         * 並同步更新 _chunkIndexCache。供 mutateChatPresetMap 的鎖外快速路徑與鎖內路徑共用，
+         * 避免同一段三步驟 diff 邏輯重複兩次。
+         *
+         * @param {Object[]} chunks - chunk 陣列的工作副本（將被原地修改）
+         * @param {Object} meta - meta 工作副本，chunkSizes/chunkCount 將被原地修改
+         * @param {string[]} deletedKeys
+         * @param {string[]} changedKeys
+         * @param {string[]} addedKeys
+         * @param {Object} finalMap - mutator 執行後的最終 map，供讀取 changed/added 的值
+         * @returns {Set<number>} 被修改過的 chunk 索引
+         */
+        _applyChatPresetMapDiff(chunks, meta, deletedKeys, changedKeys, addedKeys, finalMap) {
+            const modifiedChunks = new Set();
+
+            // 1. 刪除已移除的 uuid
+            for (const key of deletedKeys) {
+                if (this._chunkIndexCache.has(key)) {
+                    const idx = this._chunkIndexCache.get(key);
+                    if (idx < chunks.length) {
+                        delete chunks[idx][key];
+                        modifiedChunks.add(idx);
+                    }
+                    this._chunkIndexCache.delete(key);
+                }
+            }
+
+            // 2. 原地更新已變更的 uuid
+            for (const key of changedKeys) {
+                if (this._chunkIndexCache.has(key)) {
+                    const idx = this._chunkIndexCache.get(key);
+                    if (idx < chunks.length) {
+                        chunks[idx][key] = finalMap[key];
+                        modifiedChunks.add(idx);
+                    }
+                }
+            }
+
+            // 3. 新增 uuid：先嘗試填入既有 chunk，否則附加新 chunk
+            for (const key of addedKeys) {
+                const entrySize = this._byteLen({ [key]: finalMap[key] });
+                let placed = false;
+
+                for (let i = 0; i < chunks.length; i++) {
+                    const currentSize = i < meta.chunkSizes.length && meta.chunkSizes[i] > 0
+                        ? meta.chunkSizes[i]
+                        : this._byteLen(chunks[i]);
+
+                    if (currentSize + entrySize < CHUNK_SOFT_LIMIT_BYTES) {
+                        chunks[i][key] = finalMap[key];
+                        modifiedChunks.add(i);
+                        meta.chunkSizes[i] = this._byteLen(chunks[i]);
+                        this._chunkIndexCache.set(key, i);
+                        placed = true;
+                        break;
+                    }
+                }
+
+                if (!placed) {
+                    const newIdx = chunks.length;
+                    chunks.push({ [key]: finalMap[key] });
+                    meta.chunkSizes.push(this._byteLen(chunks[newIdx]));
+                    meta.chunkCount = newIdx + 1;
+                    modifiedChunks.add(newIdx);
+                    this._chunkIndexCache.set(key, newIdx);
+                }
+            }
+
+            return modifiedChunks;
+        },
+
+        /**
          * 透過 mutator 函式安全地讀取-修改-寫入 chatPresetMap。
          * 所有 chatPresetMap 的寫入皆經由內部 promise-chain 佇列序列化，
          * 避免同 context 內的競爭條件。
@@ -55,61 +127,8 @@
                 const newChunks = chunksByIdx.map(c => ({ ...c }));
                 let newMeta = this._buildNextMeta(metaCopy, {});
 
-                // 追蹤被修改過的 chunk 索引
-                const modifiedChunks = new Set();
-
-                // 1. 刪除已移除的 uuid
-                for (const key of deletedKeys) {
-                    if (this._chunkIndexCache.has(key)) {
-                        const idx = this._chunkIndexCache.get(key);
-                        if (idx < newChunks.length) {
-                            delete newChunks[idx][key];
-                            modifiedChunks.add(idx);
-                        }
-                        this._chunkIndexCache.delete(key);
-                    }
-                }
-
-                // 2. 原地更新已變更的 uuid
-                for (const key of changedKeys) {
-                    if (this._chunkIndexCache.has(key)) {
-                        const idx = this._chunkIndexCache.get(key);
-                        if (idx < newChunks.length) {
-                            newChunks[idx][key] = finalMap[key];
-                            modifiedChunks.add(idx);
-                        }
-                    }
-                }
-
-                // 3. 新增 uuid：先嘗試填入既有 chunk，否則附加新 chunk
-                for (const key of addedKeys) {
-                    const entrySize = this._byteLen({ [key]: finalMap[key] });
-                    let placed = false;
-
-                    for (let i = 0; i < newChunks.length; i++) {
-                        const currentSize = i < newMeta.chunkSizes.length && newMeta.chunkSizes[i] > 0
-                            ? newMeta.chunkSizes[i]
-                            : this._byteLen(newChunks[i]);
-
-                        if (currentSize + entrySize < CHUNK_SOFT_LIMIT_BYTES) {
-                            newChunks[i][key] = finalMap[key];
-                            modifiedChunks.add(i);
-                            newMeta.chunkSizes[i] = this._byteLen(newChunks[i]);
-                            this._chunkIndexCache.set(key, i);
-                            placed = true;
-                            break;
-                        }
-                    }
-
-                    if (!placed) {
-                        const newIdx = newChunks.length;
-                        newChunks.push({ [key]: finalMap[key] });
-                        newMeta.chunkSizes.push(this._byteLen(newChunks[newIdx]));
-                        newMeta.chunkCount = newIdx + 1;
-                        modifiedChunks.add(newIdx);
-                        this._chunkIndexCache.set(key, newIdx);
-                    }
-                }
+                // 套用差異並取得被修改過的 chunk 索引
+                const modifiedChunks = this._applyChatPresetMapDiff(newChunks, newMeta, deletedKeys, changedKeys, addedKeys, finalMap);
 
                 // === Phase C+D: 路徑選擇 — 單 chunk diff vs 多 chunk / 重新平衡 ===
                 const isSingleChunkPath = modifiedChunks.size === 1
@@ -166,60 +185,9 @@
                     // 建立工作副本
                     const lockNewChunks = lockChunksByIdx.map(c => ({ ...c }));
                     let lockNewMeta = this._buildNextMeta(lockMetaCopy, {});
-                    const lockModifiedChunks = new Set();
 
-                    // 1. 刪除已移除的 uuid
-                    for (const key of lockDeletedKeys) {
-                        if (this._chunkIndexCache.has(key)) {
-                            const idx = this._chunkIndexCache.get(key);
-                            if (idx < lockNewChunks.length) {
-                                delete lockNewChunks[idx][key];
-                                lockModifiedChunks.add(idx);
-                            }
-                            this._chunkIndexCache.delete(key);
-                        }
-                    }
-
-                    // 2. 原地更新已變更的 uuid
-                    for (const key of lockChangedKeys) {
-                        if (this._chunkIndexCache.has(key)) {
-                            const idx = this._chunkIndexCache.get(key);
-                            if (idx < lockNewChunks.length) {
-                                lockNewChunks[idx][key] = lockFinalMap[key];
-                                lockModifiedChunks.add(idx);
-                            }
-                        }
-                    }
-
-                    // 3. 新增 uuid：先嘗試填入既有 chunk，否則附加新 chunk
-                    for (const key of lockAddedKeys) {
-                        const entrySize = this._byteLen({ [key]: lockFinalMap[key] });
-                        let placed = false;
-
-                        for (let i = 0; i < lockNewChunks.length; i++) {
-                            const currentSize = i < lockNewMeta.chunkSizes.length && lockNewMeta.chunkSizes[i] > 0
-                                ? lockNewMeta.chunkSizes[i]
-                                : this._byteLen(lockNewChunks[i]);
-
-                            if (currentSize + entrySize < CHUNK_SOFT_LIMIT_BYTES) {
-                                lockNewChunks[i][key] = lockFinalMap[key];
-                                lockModifiedChunks.add(i);
-                                lockNewMeta.chunkSizes[i] = this._byteLen(lockNewChunks[i]);
-                                this._chunkIndexCache.set(key, i);
-                                placed = true;
-                                break;
-                            }
-                        }
-
-                        if (!placed) {
-                            const newIdx = lockNewChunks.length;
-                            lockNewChunks.push({ [key]: lockFinalMap[key] });
-                            lockNewMeta.chunkSizes.push(this._byteLen(lockNewChunks[newIdx]));
-                            lockNewMeta.chunkCount = newIdx + 1;
-                            lockModifiedChunks.add(newIdx);
-                            this._chunkIndexCache.set(key, newIdx);
-                        }
-                    }
+                    // 套用差異並取得被修改過的 chunk 索引
+                    const lockModifiedChunks = this._applyChatPresetMapDiff(lockNewChunks, lockNewMeta, lockDeletedKeys, lockChangedKeys, lockAddedKeys, lockFinalMap);
 
                     // 4. 重新計算被修改 chunk 的大小
                     for (const idx of lockModifiedChunks) {
