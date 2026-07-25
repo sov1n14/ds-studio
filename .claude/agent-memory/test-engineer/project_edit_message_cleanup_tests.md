@@ -7,6 +7,8 @@ metadata:
 
 62 tests in Groups A–F in `test/unit/edit-message-cleanup.spec.js`. All pass; suite-wide 969/969.
 
+**UPDATE (2026-07-25):** file grew to 78 tests (Group G added, see [[project_edit_message_cleanup_tests]] MEMORY.md line), then dropped to 76 after constant-mirror redundancy cleanup — see [[project_constant_mirror_redundancy_test]]. Current count is 76; always verify with `npx vitest run unit/edit-message-cleanup.spec.js` rather than trusting this number, it has drifted twice already.
+
 - Module loaded via `createRequire` (CJS guard pattern).
 - Group A (14): `extractUserInput` + constants — asserts all new constants: `REMOVE_MAX_HEIGHT_SELECTOR` (`.cc852ac5`), `DYNAMIC_MAX_HEIGHT_SELECTOR` (`._646a522`), `HEIGHT_SOURCE_SELECTOR_A` (`._2be88ba`), `HEIGHT_SOURCE_SELECTOR_B` (`._871cbca`), `MAX_HEIGHT_OFFSET_PX` (32).
 - Group B (9): `computeDynamicMaxHeight` — pure arithmetic; typical case, zero sources, negative result (no clamp), fractional, individual source contributions.

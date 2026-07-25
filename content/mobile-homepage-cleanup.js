@@ -133,13 +133,6 @@ const MobileHomepageCleanup = {
     },
 
     /**
-     * 完整清理：停用模組並移除所有監聽器。
-     */
-    destroy() {
-        this.disable();
-    },
-
-    /**
      * 初始化模組：確認行動裝置、從 storage 讀取主開關，
      * 設置 storage 變更監聽器，並在條件滿足時啟用。
      */

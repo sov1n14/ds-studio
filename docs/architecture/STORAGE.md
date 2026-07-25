@@ -14,6 +14,10 @@
 >
 > **v4.10.2 墓碑合併演算法修正**：修復 `clearPresetTombstones()`（JSON 匯入還原時清除墓碑）直接 `delete tombstones[id]` 造成的缺陷——鍵不存在時無時間戳可供 `_mergeTombstones()` 的 `MAX(deletedAt)` 比較機制判定勝負，導致任一側仍持有舊墓碑條目時，該條目永遠「贏」，已清除的墓碑會在下次合併時被舊資料復活，使已還原的提示詞組再次遭刪除。修正方式：墓碑條目形狀由裸數字改為物件 `{ ts: number, deleted: boolean }`（`dsPresetTombstones` 型別見下表）。`recordPresetTombstones()`（實際刪除）寫入 `{ ts, deleted: true }`；`clearPresetTombstones()`（匯入還原）改為寫入 `{ ts, deleted: false }`，不再刪除鍵。`_mergeTombstones()` 改為依 `entry.ts` 比較，`ts` 較新的一側整組（含 `deleted` 值）勝出——「清除」與「刪除」現在是同一時間軸上的兩次普通寫入，較新的一次必定勝出。`_isTombstonedAway()` 改為檢查 `entry.deleted === true`（而非鍵是否存在）。`_pruneTombstones()` 改為比較 `entry.ts`，`deleted:true`／`deleted:false` 兩種狀態均依相同保留期（30 天）過期。新增向後相容正規化：舊版裸數字條目在讀取時自動轉換為 `{ ts: <該數字>, deleted: true }`（舊格式僅代表「已刪除」)，確保升級後仍能與新格式正確合併。
 
+> **v4.11.x 稽核瘦身：方法包版圖變更（讀本文件前務必先看這段）**：上面幾條版本註記描述的是各機制**當時**的落點，檔案名稱已不再對應現況。方法包由九個併為六個：`storage-manager.chunking.js` 與 `storage-manager.lock.js` 併為 `storage-manager.chunk-lock.js`；`storage-manager.tombstones.js` 併入 `storage-manager.presets.js`（`_mergeTombstones`／`_pruneTombstones`／`_isTombstonedAway`／`recordPresetTombstones()`／`clearPresetTombstones()` 與 `TOMBSTONE_RETENTION_MS` 現位於此）；`storage-manager.syncnow.js` 併入 `storage-manager.sync.js`（`syncNow()` 現位於此）。所有機制的行為完全未變，僅檔案落點改變。另有 `saveChatPresetMap()` 已刪除——它只是 `mutateChatPresetMap()` 的薄包裝，且僅被測試引用，無任何生產端呼叫者。
+>
+> 此次合併同時修復了一個潛伏的生產缺陷：`background/service-worker.js` 的 `importScripts` 從未載入 `storage-manager.tombstones.js`，但 `resolveSyncConflict()` 會呼叫 `_mergeTombstones()`，因此背景同步重試（`onStartup`／`onInstalled`／alarm）在衝突可自動解決時一直靜默失效——錯誤被一個標註「best-effort，全部吞掉」的空 `catch` 吃掉。詳見 `docs/changelog/v4.md`（4.11.3）與 `docs/architecture/POPUP.md` 的「Load-order invariant」段落。
+
 ## State Management
 
 User settings and prompt presets are managed across `chrome.storage.sync` (primary) and `chrome.storage.local` (fallback + local-authoritative tracking).
@@ -78,7 +82,7 @@ interface PromptPreset {
 - `_enqueueChatPresetMapWrite(taskFn)` — appends `taskFn` to the chain; returns a promise for the task's result. One task's rejection does NOT block subsequent tasks (`.catch(() => {})` on the tail only).
 - `mutateChatPresetMap(mutator)` — the public transactional API. Reads the freshest map from storage inside the queue, calls `mutator(map)`, writes back. If `mutator` returns `undefined`, the in-place-mutated `map` is written; otherwise the returned value is written.
 
-All four write entry points (`saveChatPresetMap`, `bindChatToPreset`, `unbindChat`, and the `chatPresetMap` branch of `restoreSettings`) route through this queue. Same-context calls from popup.js and content-script.js are fully serialized. Cross-context races (Tab A vs Tab B vs Popup) remain possible and are deferred to later phases.
+All three write entry points (`bindChatToPreset`, `unbindChat`, and the `chatPresetMap` branch of `restoreSettings`) route through this queue. (A fourth, `saveChatPresetMap`, was deleted in the v4.11.x audit — it was a thin wrapper over `mutateChatPresetMap` with no production caller.) Same-context calls from popup.js and content-script.js are fully serialized. Cross-context races (Tab A vs Tab B vs Popup) remain possible and are deferred to later phases.
 
 ### ChatPresetMap Physical Chunking (v2.4.0)
 
@@ -120,8 +124,7 @@ flowchart TB
         Op1[bindChatToPreset]
         Op2[unbindChat]
         Op3[mutateChatPresetMap]
-        Op4[saveChatPresetMap]
-        Op5[getChatPresetMap]
+        Op4[getChatPresetMap]
     end
 
     queue --> Logic{Operation type}
@@ -210,7 +213,7 @@ On the first run after upgrade, the extension compares `promptPresets` between l
 
 ### Preset Merging (`mergePresets`)
 
-Both sync conflict resolution and JSON import use `mergePresets(basePresets, newPresets, baseOrderMeta, incOrderMeta, tombstones)`: a Map-based deduplication by `id`. For each preset in both arrays, the one with the newer `updatedAt` timestamp is kept. Presets with new IDs (not in the base array) are appended. This prevents data loss when merging from multiple sources. (v4.8.3) Before the recency-based merge runs, any id that is "tombstoned away" (`_isTombstonedAway`: the id has a tombstone whose `deletedAt` is not older than that side's `updatedAt`) is dropped from both sides — this is what prevents a preset deleted on one device from being silently resurrected by a stale copy still present on another device or in a JSON import/backup. (v4.10.1) `restoreSettings()` does NOT pass a `tombstones` map to `mergePresets()` for JSON import, so an imported preset is never blocked by a tombstone at import time — but its ID could still carry a stale, unexpired tombstone from an earlier deletion, which the next `resolveSyncConflict()` would then use to delete it again. To prevent this, `restoreSettings()` now calls the new `clearPresetTombstones(ids)` (in `utils/storage-manager.tombstones.js`) right after `savePromptPresets()`, removing tombstone entries for exactly the IDs present in the imported preset list (unmatched IDs are silently skipped) from both `local` and `sync` storage. (v4.10.2) `_isTombstonedAway` now checks `entry.deleted === true` (the tombstone entry shape changed from a bare `deletedAt` number to `{ ts, deleted }`) instead of key-presence, and `clearPresetTombstones()` no longer deletes the key — it writes `{ ts: now, deleted: false }`, giving the "clear" a timestamp that can correctly win merge arbitration against a stale "delete" entry from the other side.
+Both sync conflict resolution and JSON import use `mergePresets(basePresets, newPresets, baseOrderMeta, incOrderMeta, tombstones)`: a Map-based deduplication by `id`. For each preset in both arrays, the one with the newer `updatedAt` timestamp is kept. Presets with new IDs (not in the base array) are appended. This prevents data loss when merging from multiple sources. (v4.8.3) Before the recency-based merge runs, any id that is "tombstoned away" (`_isTombstonedAway`: the id has a tombstone whose `deletedAt` is not older than that side's `updatedAt`) is dropped from both sides — this is what prevents a preset deleted on one device from being silently resurrected by a stale copy still present on another device or in a JSON import/backup. (v4.10.1) `restoreSettings()` does NOT pass a `tombstones` map to `mergePresets()` for JSON import, so an imported preset is never blocked by a tombstone at import time — but its ID could still carry a stale, unexpired tombstone from an earlier deletion, which the next `resolveSyncConflict()` would then use to delete it again. To prevent this, `restoreSettings()` now calls the new `clearPresetTombstones(ids)` (in `utils/storage-manager.presets.js` since the v4.11.3 merge) right after `savePromptPresets()`, removing tombstone entries for exactly the IDs present in the imported preset list (unmatched IDs are silently skipped) from both `local` and `sync` storage. (v4.10.2) `_isTombstonedAway` now checks `entry.deleted === true` (the tombstone entry shape changed from a bare `deletedAt` number to `{ ts, deleted }`) instead of key-presence, and `clearPresetTombstones()` no longer deletes the key — it writes `{ ts: now, deleted: false }`, giving the "clear" a timestamp that can correctly win merge arbitration against a stale "delete" entry from the other side.
 
 ### Content Script Runtime State
 

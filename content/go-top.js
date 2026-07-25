@@ -18,9 +18,13 @@
  *   3. go-top.scroll.js → 掛載 globalThis.__DS_GoToTop_scroll
  *   4. go-top.js        → Object.assign 合併後呼叫 GoToTop.init()
  */
+
+// 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DSSelectorsGoTop = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const GoToTop = {
     // === 常數 ===
-    SCROLL_STEP_FACTOR: 0.9,
     TIMEOUT: 30000,
     OBSERVER_DEBOUNCE: 50,
     ANCHOR_POLL_INTERVAL: 100,
@@ -45,14 +49,12 @@ const GoToTop = {
     // 訊息選擇器：先用雜湊組合，再退回 class-substring 比對
     // confirmed in full-page.html line 328: <div class="d29f3d7d ds-message _63c77b1">
     FIRST_MSG_SELECTOR: '.ds-message._63c77b1',
-    // 虛擬列表容器：用於找到正確的滾動容器
-    // confirmed in full-page.html line 323: <div class="ds-virtual-list-items _6f2c522">
-    VIRTUAL_LIST_SELECTOR: '.ds-virtual-list-items._6f2c522',
-    VIRTUAL_LIST_FALLBACK: '[class*="ds-virtual-list-items"]',
+    // 虛擬列表容器：用於找到正確的滾動容器（單一來源定義於 content/ds-selectors.js）
+    VIRTUAL_LIST_SELECTOR: __DSSelectorsGoTop.VIRTUAL_LIST_SELECTOR,
+    VIRTUAL_LIST_FALLBACK: __DSSelectorsGoTop.VIRTUAL_LIST_FALLBACK,
     // 原生按鈕選擇器：精確雜湊 class 優先，再退回穩定 ds-* class 組合
     // confirmed in go-bottom.html: <div role="button" class="ds-button ... ds-button--floating _0706cde ...">
     NATIVE_BTN_SELECTOR: '._0706cde:not(.dsw-gotop)',
-    DEGRADED_THRESHOLD: 3,
     INJECT_PARENT_SELECTOR: '.aaff8b8f',
     INJECT_PARENT_FALLBACK: '._871cbca > div:nth-child(2)',
     OUTER_WRAPPER_SELECTOR: '._871cbca',
@@ -71,17 +73,16 @@ const GoToTop = {
     _wrapperObserverTimer: null,
     _scrollListener: null,
     _locked: false,
-    _degraded: false,
-    _missCount: 0,
     // 首次成功找到 DOM 後才開始累積 miss 計數
     _hasSeenDom: false,
     _scrollPromise: null,
-    _scrollResolve: null,
     _scrollReject: null,
     _popstateHandler: null,
     _observerTimer: null,
     // 問題 1：enable() 重試計時器
     _enableRetryTimer: null,
+    // route change 後排程重連 DOM 的計時器（供 disable() 中止，避免關閉後仍重新注入）
+    _routeChangeTimer: null,
     _enableRetryCount: 0,
     _lastPath: '',
 
@@ -203,10 +204,7 @@ const GoToTop = {
         // 重設所有狀態
         this._locked = false;
         this._scrollPromise = null;
-        this._scrollResolve = null;
         this._scrollReject = null;
-        this._missCount = 0;
-        this._degraded = false;
         // 路由切換後 DOM 重新掛載，重設首次見到 DOM 的旗標
         this._hasSeenDom = false;
 
@@ -223,55 +221,10 @@ const GoToTop = {
         this._scrollContainer = null;
 
         // DOM 穩定後驅動 gated 重試迴圈：等待 .aaff8b8f／原生按鈕就緒後再注入並重連容器、監聽器與視覺狀態
-        setTimeout(() => {
+        clearTimeout(this._routeChangeTimer);
+        this._routeChangeTimer = setTimeout(() => {
             this._tryConnectDom();
         }, 100);
-    },
-
-    // ─────────────────────────────
-    //  Public: Export overlay helpers
-    // ─────────────────────────────
-
-    /**
-     * Show a loading overlay while the full conversation is being loaded.
-     * @param {string} [text] - Custom text; defaults to Chinese loading message.
-     */
-    _showExportOverlay(text) {
-        let overlay = document.getElementById('dss-export-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'dss-export-overlay';
-            overlay.style.cssText = [
-                'position:fixed',
-                'top:0',
-                'left:0',
-                'width:100%',
-                'height:100%',
-                'z-index:9999',
-                'display:flex',
-                'align-items:center',
-                'justify-content:center',
-                'background:rgba(0,0,0,0.5)',
-                'color:#fff',
-                'font-size:16px',
-                'font-family:sans-serif',
-            ].join(';') + ';';
-            overlay.textContent = text || dsI18n.t('exportOverlayLoading');
-            document.body.appendChild(overlay);
-        } else {
-            overlay.style.display = 'flex';
-            if (text) overlay.textContent = text;
-        }
-    },
-
-    /**
-     * Hide the export loading overlay.
-     */
-    _hideExportOverlay() {
-        const overlay = document.getElementById('dss-export-overlay');
-        if (overlay) {
-            overlay.style.display = 'none';
-        }
     },
 
     // ─────────────────────────────
@@ -299,6 +252,8 @@ const GoToTop = {
      * 若尚未就緒則排程重試，最多 120 次（約 60 秒）；超過上限直接放棄，不注入任何按鈕。
      */
     _tryConnectDom() {
+        if (!this.enabled) return;
+
         const MAX_RETRIES = 120;
         const RETRY_INTERVAL = 500;
 
@@ -334,7 +289,7 @@ const GoToTop = {
         }
         clearTimeout(this._enableRetryTimer);
         this._enableRetryTimer = setTimeout(() => {
-            if (this.enabled) this._tryConnectDom();
+            this._tryConnectDom();
         }, RETRY_INTERVAL);
     },
 
@@ -361,12 +316,16 @@ const GoToTop = {
         this._enableRetryTimer = null;
         this._enableRetryCount = 0;
 
+        clearTimeout(this._routeChangeTimer);
+        this._routeChangeTimer = null;
+
         this._scrollContainer = null;
         this._scrollPromise = null;
-        this._scrollResolve = null;
+        // 中止進行中的滾動，而非任由其跑到自身 timeout 才結束
+        if (this._scrollReject) {
+            this._scrollReject({ success: false, reason: 'aborted' });
+        }
         this._scrollReject = null;
-        this._missCount = 0;
-        this._degraded = false;
         this._hasSeenDom = false;
     },
 

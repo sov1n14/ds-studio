@@ -1,6 +1,6 @@
 /**
  * DS Studio — StorageManager 初始化與資料遷移方法群組
- * 負責 initialize()：預設值補齊、跨版本資料遷移（promptPresets / promptPrefix /
+ * 負責 initialize()：預設值補齊、跨版本資料遷移（promptPresets /
  * chatPresetMap 分塊化）、首次同步衝突偵測，以及 chunk 快取失效監聽器安裝。
  */
 (function (root) {
@@ -97,23 +97,10 @@
                 });
             }
 
-            // 3. Migration from v1.2.x (promptPrefix) to v1.7.0
+            // 3. 若尚未有預設集索引，補上預設值（原 v1.2.x promptPrefix 遷移分支已移除）
             if (data[this.KEYS.PRESET_INDEX] === undefined) {
-                const oldData = await this._safeGet('local', 'promptPrefix');
-                if (oldData && oldData.promptPrefix !== undefined && oldData.promptPrefix !== '') {
-                    const migratedPreset = {
-                        id: 'preset-migrated-' + Date.now(),
-                        name: dsI18n.t('migratedPresetName'),
-                        content: oldData.promptPrefix,
-                        createdAt: Date.now(),
-                        updatedAt: Date.now()
-                    };
-                    await this.savePromptPresets([migratedPreset]);
-                    updates[this.KEYS.ACTIVE_PRESET_ID] = migratedPreset.id;
-                } else {
-                    updates[this.KEYS.PRESET_INDEX] = this.DEFAULTS.dsPresetIndex;
-                    updates[this.KEYS.ACTIVE_PRESET_ID] = this.DEFAULTS.activePresetId;
-                }
+                updates[this.KEYS.PRESET_INDEX] = this.DEFAULTS.dsPresetIndex;
+                updates[this.KEYS.ACTIVE_PRESET_ID] = this.DEFAULTS.activePresetId;
             }
 
             // 4. Fill other defaults

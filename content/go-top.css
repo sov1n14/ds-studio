@@ -91,24 +91,3 @@
   color: #ffd166;
   font-weight: 600;
 }
-
-/* ─── 匯出中的載入遮罩（go-top.js 使用，保留舊有 id 選擇器） ─── */
-
-/* 匯出中的載入遮罩 */
-#dss-export-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#dss-export-overlay .dss-export-overlay-text {
-  background: #fff;
-  color: #333;
-  padding: 20px 32px;
-  border-radius: 8px;
-  font-size: 14px;
-}

@@ -1,32 +1,11 @@
 /**
  * DS studio — Popup Controller（入口）
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
- *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）
+ *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）、
+ *       popup.editor-window.js（createEditorWindowManager）、popup.width-sliders.js（createWidthSliderManager）、
+ *       popup.markdown-export.js（createMarkdownExportManager）
  * 需在本檔案之前以 <script> 載入上述模組。
  */
-
-// ────────────────────────────────────────────
-// 防抖工具（與 popup-utils.js 邏輯一致，
-// 因 popup-utils.js 採用 ES module export 無法
-// 在 classic script 環境下直接取用，故於此複製）
-// ────────────────────────────────────────────
-
-/**
- * 建立防抖包裝函式。
- * @param {Function} fn - 要延遲執行的函式
- * @param {number} delayMs - 延遲毫秒數
- * @returns {Function} 防抖後的函式
- */
-function debounce(fn, delayMs) {
-    let timer = null;
-    return function (...args) {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-            timer = null;
-            fn.apply(this, args);
-        }, delayMs);
-    };
-}
 
 // ────────────────────────────────────────────
 // Main popup logic
@@ -56,7 +35,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthSlider          = document.getElementById('inputWidthSlider');
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
-    const syncStatusEl              = document.getElementById('syncStatus');
 
     let saveTimeout;
     let customSelect;
@@ -71,10 +49,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activePresetId = null;
     let chatPresetMap  = {};
     let currentTabUuid = undefined;
-
-    // --- 編輯器視窗 ID 追蹤（各保留一個 slot） ---
-    let globalEditorWindowId = null;
-    let presetEditorWindowId = null;
 
     // --- 主開關 UI 輔助 ---
     function applyMasterSwitchUI(isEnabled) {
@@ -127,47 +101,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const preset  = presets.find(p => p.id === activePresetId);
         const content = preset?.content ?? '';
         window.DSVMessaging?.broadcastActivePreset(activePresetId, content);
-    }
-
-    /**
-     * 開啟（或聚焦）編輯器視窗（singleton per target）
-     * @param {'global'|'preset'} target - 編輯目標類型
-     * @param {string} [presetId] - 僅在 target==='preset' 時使用
-     */
-    async function openEditorWindow(target, presetId) {
-        const baseUrl = chrome.runtime.getURL('popup/editor/editor.html');
-        const url = target === 'global'
-            ? `${baseUrl}?target=global`
-            : `${baseUrl}?target=preset&id=${encodeURIComponent(presetId)}`;
-
-        // 根據 target 選取對應的視窗 ID slot
-        const isGlobal      = target === 'global';
-        const trackedId     = isGlobal ? globalEditorWindowId : presetEditorWindowId;
-
-        if (trackedId !== null) {
-            try {
-                // 嘗試聚焦現有視窗
-                await chrome.windows.update(trackedId, { focused: true });
-                return;
-            } catch {
-                // 視窗已關閉，清除追蹤 ID 並重新建立
-                if (isGlobal) {
-                    globalEditorWindowId = null;
-                } else {
-                    presetEditorWindowId = null;
-                }
-            }
-        }
-
-        try {
-            const win = await chrome.windows.create({ url, type: 'popup', width: 1280, height: 720 });
-            if (isGlobal) {
-                globalEditorWindowId = win.id;
-            } else {
-                presetEditorWindowId = win.id;
-            }
-        } catch (err) {
-        }
     }
 
     // --- 建立 preset manager（透過 factory 接收上下文） ---
@@ -405,20 +338,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         sendActivePresetToContentScript();
     });
 
-    // --- 編輯提示詞組內容（開啟編輯器視窗） ---
-    if (editPresetBtn) {
-        editPresetBtn.addEventListener('click', () => {
-            if (!activePresetId) return;
-            openEditorWindow('preset', activePresetId);
-        });
-    }
-
-    // --- 編輯全域提示詞（開啟編輯器視窗） ---
-    if (editGlobalPromptBtn) {
-        editGlobalPromptBtn.addEventListener('click', () => {
-            openEditorWindow('global');
-        });
-    }
+    // --- 編輯器視窗（委派至 popup.editor-window.js） ---
+    const editorWindowManager = window.__DS_PopupEditorWindow.createEditorWindowManager({
+        getActivePresetId: () => activePresetId,
+    });
+    editorWindowManager.bindEditPresetButton(editPresetBtn);
+    editorWindowManager.bindEditGlobalPromptButton(editGlobalPromptBtn);
 
     // --- 全域提示詞開關 ---
     if (globalPromptToggle) {
@@ -477,81 +402,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 對話區域寬度開關與 slider
-    if (chatWidthToggle && chatWidthSliderContainer) {
-        chatWidthToggle.addEventListener('change', async () => {
-            const isEnabled = chatWidthToggle.checked;
-            chatWidthSliderContainer.classList.toggle('collapsed', !isEnabled);
-            await StorageManager.saveChatWidthEnabled(isEnabled);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-    // 防抖儲存對話區域寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
-    const debouncedSaveChatWidth = debounce(async (widthValue) => {
-        await StorageManager.saveChatWidth(widthValue);
-        await refreshSyncStatus();
-        showSaveStatus();
-    }, 500);
+    // --- 寬度滑桿（委派至 popup.width-sliders.js） ---
+    const widthSliderManager = window.__DS_PopupWidthSliders.createWidthSliderManager({
+        refreshSyncStatus,
+        showSaveStatus,
+        StorageManager,
+    });
+    widthSliderManager.bindChatWidthControls(chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer);
+    widthSliderManager.bindInputWidthControls(inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer);
 
-    if (chatWidthSlider && chatWidthValue) {
-        chatWidthSlider.addEventListener('input', () => {
-            chatWidthValue.textContent = chatWidthSlider.value + '%';
-        });
-        chatWidthSlider.addEventListener('change', () => {
-            debouncedSaveChatWidth(parseInt(chatWidthSlider.value, 10));
-        });
-    }
-
-    // 編輯輸入框寬度開關與 slider
-    if (inputWidthToggle && inputWidthSliderContainer) {
-        inputWidthToggle.addEventListener('change', async () => {
-            const isEnabled = inputWidthToggle.checked;
-            inputWidthSliderContainer.classList.toggle('collapsed', !isEnabled);
-            await StorageManager.saveInputWidthEnabled(isEnabled);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-    // 防抖儲存編輯輸入框寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
-    const debouncedSaveInputWidth = debounce(async (widthValue) => {
-        await StorageManager.saveInputWidth(widthValue);
-        await refreshSyncStatus();
-        showSaveStatus();
-    }, 500);
-
-    if (inputWidthSlider && inputWidthValue) {
-        inputWidthSlider.addEventListener('input', () => {
-            inputWidthValue.textContent = inputWidthSlider.value + '%';
-        });
-        inputWidthSlider.addEventListener('change', () => {
-            debouncedSaveInputWidth(parseInt(inputWidthSlider.value, 10));
-        });
-    }
-
-    // --- 匯出 Markdown ---
-    const exportMdBtn = document.getElementById('exportMdBtn');
-    if (exportMdBtn) {
-        exportMdBtn.addEventListener('click', async () => {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs[0] && tabs[0].url && tabs[0].url.includes('chat.deepseek.com')) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: "EXPORT_MARKDOWN",
-                    includeThinking:   includeThinkingToggle   ? includeThinkingToggle.checked   : true,
-                    includeReferences: includeReferencesToggle ? includeReferencesToggle.checked : true
-                }).catch(() => {
-                    Toast.show(dsI18n.t('exportFailedRefreshToast'));
-                });
-            } else {
-                await Modal.confirm({
-                    title: dsI18n.t('notOnDeepseekTitle'),
-                    message: dsI18n.t('notOnDeepseekMessage'),
-                    confirmText: dsI18n.t('confirmButton'),
-                    cancelText: null
-                });
-            }
-        });
-    }
+    // --- 匯出 Markdown（委派至 popup.markdown-export.js） ---
+    const markdownExportManager = window.__DS_PopupMarkdownExport.createMarkdownExportManager({ Modal, Toast });
+    markdownExportManager.bindExportButton(
+        document.getElementById('exportMdBtn'),
+        includeThinkingToggle,
+        includeReferencesToggle
+    );
 
     // --- JSON 備份與復原訊息備份（委派至 popup.backup-manager.js） ---
     const backupManager = window.__DS_PopupBackupManager.createBackupManager({

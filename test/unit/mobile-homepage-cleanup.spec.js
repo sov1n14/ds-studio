@@ -244,27 +244,6 @@ describe('disable()', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  6. destroy()
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('destroy()', () => {
-    it('calls disable()', () => {
-        stubMobileTouch();
-        MobileHomepageCleanup.enable();
-        const disableSpy = vi.spyOn(MobileHomepageCleanup, 'disable');
-        MobileHomepageCleanup.destroy();
-        expect(disableSpy).toHaveBeenCalledOnce();
-    });
-
-    it('leaves the module disabled after destroy()', () => {
-        stubMobileTouch();
-        MobileHomepageCleanup.enable();
-        MobileHomepageCleanup.destroy();
-        expect(MobileHomepageCleanup.enabled).toBe(false);
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  7. _startObserver()
 // ─────────────────────────────────────────────────────────────────────────────
 

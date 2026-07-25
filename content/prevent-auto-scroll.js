@@ -50,36 +50,11 @@
     }
 
     /**
-     * 取得元素（或 window）的 scrollHeight。
-     * @param {Element|Window} el
-     * @returns {number}
-     */
-    function _getScrollHeight(el) {
-        if (el === window) {
-            return document.documentElement.scrollHeight || document.body.scrollHeight;
-        }
-        return el.scrollHeight;
-    }
-
-    /**
-     * 取得元素（或 window）的 clientHeight。
-     * @param {Element|Window} el
-     * @returns {number}
-     */
-    function _getClientHeight(el) {
-        if (el === window) {
-            return document.documentElement.clientHeight || window.innerHeight;
-        }
-        return el.clientHeight;
-    }
-
-    /**
      * 判斷 scrollTo/scrollBy 的目標 Y 值（支援 {top, behavior} 與 (x, y) 兩種呼叫形式）。
      * @param {IArguments|Array} args
-     * @param {'to'|'by'} mode
      * @returns {number|undefined} 目標 Y 或 undefined（無法判斷時）
      */
-    function _extractTargetY(args, mode) {
+    function _extractTargetY(args) {
         if (args.length === 0) return undefined;
 
         // scrollTo({top, left, behavior}) / scrollBy({top, left, behavior})
@@ -102,7 +77,7 @@
      * @returns {boolean}
      */
     function _isScrollToDownward(el, args) {
-        const targetY = _extractTargetY(args, 'to');
+        const targetY = _extractTargetY(args);
         if (targetY === undefined) return false;
         return targetY > _getScrollTop(el);
     }
@@ -113,7 +88,7 @@
      * @returns {boolean}
      */
     function _isScrollByDownward(args) {
-        const deltaY = _extractTargetY(args, 'by');
+        const deltaY = _extractTargetY(args);
         if (deltaY === undefined) return false;
         return deltaY > 0;
     }

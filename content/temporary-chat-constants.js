@@ -4,7 +4,7 @@
  * 避免硬編碼重複字串（coding-guidelines §7 反模式：Hardcoded message type strings）。
  */
 
-// sessionStorage key：臨時對話功能啟用狀態；值為字串 'true' 或 'false'；缺少時預設為停用
+// chrome.storage.local key：臨時對話功能啟用狀態；值為 boolean；缺少時預設為停用
 const DSS_TEMP_CHAT_STORAGE_KEY = 'dss-temporary-chat-enabled';
 
 // CustomEvent：切換開關後由 toggle 模組 dispatch，detail: { isEnabled: boolean }

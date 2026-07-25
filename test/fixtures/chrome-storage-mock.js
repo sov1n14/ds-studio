@@ -1,6 +1,6 @@
 /**
  * Standalone in-memory Chrome storage mock.
- * Used as a fallback if jest-chrome's storage mock is insufficient
+ * Used by test/setup/vitest.setup.js in place of a real chrome.storage area
  * (e.g. for onChanged area discrimination, quota error simulation, etc.).
  */
 export class InMemoryStorageMock {

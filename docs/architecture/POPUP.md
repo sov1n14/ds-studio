@@ -18,7 +18,7 @@ The popup includes a preset selector row composed of:
 
 **Content editing (v3.0.0, timing updated v4.8.1)**: The popup no longer hosts a content textarea. A pencil button (`#editPresetBtn`, rightmost in the controls row, disabled when `activePresetId === ''`) opens the standalone editor window at `popup/editor/editor.html?target=preset&id=<activePresetId>` (1280×720, singleton focus-or-create). The editor auto-saves via dirty flag + debounced input (500 ms) + `blur`/`visibilitychange`/`pagehide`, and broadcasts `ACTIVE_PRESET_CHANGED` after each preset save.
 
-**Chat/input width sliders (debounced write, v4.8.1)**: `chatWidthSlider` and `inputWidthSlider` separate their `input` event (updates the live percentage label synchronously, no storage write) from their `change` event (calls a 500 ms debounced wrapper — `debouncedSaveChatWidth` / `debouncedSaveInputWidth` — that persists the value via `StorageManager.saveChatWidth()` / `saveInputWidth()`, then refreshes sync status). This aligns the slider write cadence with the editor's 500 ms auto-save debounce, reducing `chrome.storage` write pressure during drag. The corresponding toggle switches (`chatWidthToggle`, `inputWidthToggle`) remain synchronous/undebounced. `popup.js` carries its own local `debounce(fn, delayMs)` copy (same reasoning as `editor.js` — classic script, cannot `import` from the ES-module `popup-utils.js`).
+**Chat/input width sliders (debounced write, v4.8.1)**: `chatWidthSlider` and `inputWidthSlider` separate their `input` event (updates the live percentage label synchronously, no storage write) from their `change` event (calls a 500 ms debounced wrapper — `debouncedSaveChatWidth` / `debouncedSaveInputWidth` — that persists the value via `StorageManager.saveChatWidth()` / `saveInputWidth()`, then refreshes sync status). This aligns the slider write cadence with the editor's 500 ms auto-save debounce, reducing `chrome.storage` write pressure during drag. The corresponding toggle switches (`chatWidthToggle`, `inputWidthToggle`) remain synchronous/undebounced. `popup.js` carries its own local `debounce(fn, delayMs)` copy (same reasoning as `editor.js`: it is a classic script and cannot `import`).
 
 ## Custom Modal System
 
@@ -143,7 +143,7 @@ Drag uses the Pointer Events API for unified mouse+touch handling, bypassing the
 3. **Insertion line**: `_updateInsertionLine()` iterates all non-dragging list items, finds the one closest to the cursor's Y position (bisected by each item's vertical midpoint), and places a `div.ds-select__insertion-line` at the appropriate position. This line is a thin visual indicator showing where the dragged preset will land.
 
 4. **Completion**: `_onPointerUp` finalizes the drag:
-   - If a ghost was created (meaning the 5px threshold was crossed), it calls `_reorderPresets()` (the private helper, not `popup-utils.js`'s `reorderPresets`, though they share identical logic) and invokes the `onReorder` callback with the new array.
+   - If a ghost was created (meaning the 5px threshold was crossed), it calls the private `_reorderPresets()` helper and invokes the `onReorder` callback with the new array.
    - If no ghost was created (a tap rather than a drag), it treats the interaction as a selection click and calls `onSelect(drag.id)` + `close()`.
    - `_removeDragVisuals()` cleans up all drag artifacts.
 
@@ -155,7 +155,7 @@ Drag uses the Pointer Events API for unified mouse+touch handling, bypassing the
 
 - **`_debounce(fn, delayMs)`**: Standard debounce wrapper. Returns a function that delays invocation until `delayMs` of inactivity. The search input uses a 400ms debounce, balancing responsiveness against filtering cost during typing.
 
-Note: `custom-select.js` contains its own private copies of `_fuzzyMatch()` and `_debounce()` (prefixed with `_`). Exported ES-module versions also exist in `popup-utils.js` as `fuzzyMatch()` and `debounce()` for unit testing and potential reuse.
+Note: `custom-select.js` contains its own private copies of `_fuzzyMatch()` and `_debounce()` (prefixed with `_`). The former ES-module duplicates in `popup/popup-utils.js` were deleted in the v4.11.x audit — that file existed only to be imported by tests, never by production code, so the tests were retargeted onto the real `_`-prefixed implementations and the duplicate removed.
 
 ### Delete-All Button (blank item, v4.10.0)
 
@@ -167,40 +167,52 @@ In `popup.html`, the script tags appear in this order:
 
 ```html
 <script src="../utils/logger.js"></script>
-<script src="../utils/storage-manager.chunking.js"></script>
-<script src="../utils/storage-manager.lock.js"></script>
+<script src="../utils/storage-manager.chunk-lock.js"></script>
 <script src="../utils/storage-manager.sync.js"></script>
 <script src="../utils/storage-manager.presets.js"></script>
-<script src="../utils/storage-manager.tombstones.js"></script>
 <script src="../utils/storage-manager.chatmap.js"></script>
 <script src="../utils/storage-manager.local.js"></script>
 <script src="../utils/storage-manager.init.js"></script>
-<script src="../utils/storage-manager.syncnow.js"></script>
 <script src="../utils/storage-manager.js"></script>
 <script src="../utils/messaging.js"></script>
+<script src="../utils/i18n.locales.js"></script>
 <script src="../utils/i18n.js"></script>
 <script src="preset-item-renderer.js"></script>
 <script src="custom-select.js"></script>
 <script src="popup.modal.js"></script>
+<script src="popup.toast.js"></script>
 <script src="popup.preset-manager.js"></script>
 <script src="popup.backup-manager.js"></script>
 <script src="popup.live-sync.js"></script>
+<script src="popup.editor-window.js"></script>
+<script src="popup.width-sliders.js"></script>
+<script src="popup.markdown-export.js"></script>
 <script src="popup.js"></script>
 <script src="popup.locale.js"></script>
 ```
 
-- `utils/logger.js` loads first, providing structured logging. The nine `storage-manager.*.js` bundles (chunking, lock, sync, presets, tombstones, chatmap, local, init, syncnow) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split).
+- `utils/logger.js` loads first, providing structured logging. The six `storage-manager.*.js` bundles (chunk-lock, sync, presets, chatmap, local, init) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split; consolidated from nine bundles to six in v4.11.3).
 - `storage-manager.js` (entry) loads next and runs `Object.assign(StorageManager, ...)` to merge the bundles before exposing `window.StorageManager`. Both custom-select.js users and popup.js depend on it at runtime.
+
+**Load-order invariant (v4.11.3).** The only ordering constraint is that **every bundle must be loaded before the entry file**. The order *among* the bundles is irrelevant: no bundle executes anything at IIFE top level beyond assigning its own global, and every cross-bundle call goes through `this.<method>()` inside an `async` body, resolved at call time rather than load time.
+
+This invariant is load-bearing and fails **silently** when violated. The entry file merges each bundle as `root.__DS_StorageManager_X || {}`, so a bundle that has not loaded yet mixes in as an empty object: every method it provides is simply absent for the lifetime of that context, with no error and no console warning. This is not hypothetical — before v4.11.3, `background/service-worker.js` omitted `storage-manager.tombstones.js` from its `importScripts` list while `resolveSyncConflict()` called `_mergeTombstones()`, so background sync retry threw `TypeError` into a deliberately swallowing `catch` and had been silently dead. See `docs/changelog/v4.md` (4.11.3).
+
+Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, `popup/editor/editor.html`, `background/service-worker.js` (`importScripts`), and `test/setup/vitest.setup.js`. `test/unit/storage-manager.loader-contract.spec.js` enforces this automatically — it discovers the bundle set from the entry file's `Object.assign` call and from the `utils/` directory listing, then asserts every loader lists every bundle and places it before the entry file. Adding or renaming a bundle without updating a loader fails that test rather than silently breaking a runtime context.
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js for the `ACTIVE_PRESET_CHANGED` broadcast).
-- `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with locale string maps, `setLocale()`, and `t(key)` lookup — see the Language / Locale Switcher section below.
+- `utils/i18n.locales.js` (v4.11.14 split) holds the `zh_TW` and `en` translation dictionaries as pure data and registers `globalThis.__DS_I18N_Locales`. It carries no logic.
+- `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with `setLocale()` and `t(key)` lookup — see the Language / Locale Switcher section below. As of v4.11.14 the ~340 lines of locale string maps no longer live here; the engine reads them off `__DS_I18N_Locales` synchronously at the top of its IIFE, with a `require('./i18n.locales.js')` fallback guarded by `typeof require !== 'undefined'` for the Node/vitest path. **The browser has no such fallback**, so every loader must place `i18n.locales.js` immediately before `i18n.js` or `zh_TW`/`en` resolve to undefined and every translated string breaks silently. Four loaders must stay in agreement: `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, `popup/editor/editor.html`, and `test/setup/vitest.setup.js`.
 - `preset-item-renderer.js` (v4.10.0) registers `window.__DS_PresetItemRenderer` (`escapeHtml`, `buildPresetItemMarkup`) and must load before `custom-select.js`, which destructures it.
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
+- `popup.toast.js` (v4.11.10 split) registers the `Toast` key on that same `window.__DS_PopupModal` object. `popup.modal.js` previously held both `Modal` and `Toast` in one file — two unrelated components sharing a file, contrary to `coding-guidelines` §8. Both files now self-mount via `Object.assign(window.__DS_PopupModal || {}, { … })` rather than a single object literal, so neither clobbers the other's key and the two are order-independent. `popup.js:35` still destructures `const { Modal, Toast } = window.__DS_PopupModal;` unchanged. The manager bundles receive `Modal`/`Toast` through their `ctx` parameter, not the global, and were unaffected.
 - `popup.live-sync.js` (v4.8.0) registers `window.__DS_PopupLiveSync`, exposing `createLiveSyncListener(ctx)` — see the Live Sync Listener section below.
+- `popup.editor-window.js` / `popup.width-sliders.js` / `popup.markdown-export.js` (v4.11.16 split) expose `createEditorWindowManager(ctx)` / `createWidthSliderManager(ctx)` / `createMarkdownExportManager(ctx)`, following the same ctx-factory convention as the preset and backup managers. `popup.js` was 572 lines — 122 over the `coding-guidelines` §8 threshold — and these three were self-contained concerns bundled inside its `DOMContentLoaded` handler; extracting them brings the entry file to 441 lines. `popup.editor-window.js` owns `openEditorWindow` plus the two edit-button bindings and the `globalEditorWindowId`/`presetEditorWindowId` singleton state; `popup.width-sliders.js` owns the `debounce` helper and both width toggle/slider bindings (the DOM element `const`s stay in `popup.js`, since the live-sync wiring still references them); `popup.markdown-export.js` owns the export button binding.
+- Two specs extract functions from raw source text with `readFileSync` + regex rather than importing them, so they had to follow the code: `test/unit/popup-slider-debounce.spec.js` now reads `popup.width-sliders.js`, and `test/unit/popup.spec.js` now reads `popup.editor-window.js`. Only the paths changed — every regex still matches, because the moves were verbatim including indentation. Anything moved out of `popup.js` in future must check these two specs.
 - `popup.js` (entry) loads second-to-last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 - `popup.locale.js` (v4.3.3) loads last, wiring `#localeSwitcherBtn` click to panel toggle and radio change to `dsI18n.setLocale()` — see the Language / Locale Switcher section below.
 
-The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, the nine `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.js`, then `editor.js` — all classic scripts, no inline JS (MV3 CSP-safe). `popup-utils.js` is an ES module (top-level `export`) and is deliberately NOT loaded as a classic script anywhere; `editor.js` carries its own local `debounce` copy for this reason.
+The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, the six `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, then `editor.js` — 12 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` carries its own local `debounce` copy because it is a classic script and cannot `import`.
 
 ### Data Flow Integration
 

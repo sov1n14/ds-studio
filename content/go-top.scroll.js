@@ -12,8 +12,11 @@
         // ─────────────────────────────
 
         /**
-         * Smoothly scroll to the top of the conversation.
-         * Uses scrollBy steps and waits for lazy-loaded content via MutationObserver.
+         * Scroll to the top of the conversation.
+         * Jumps the resolved scroll container directly to scrollTop 0 on each poll,
+         * re-jumping while the virtualized list keeps lazily mounting older messages
+         * above, and resolves once the scroll height has stabilised and the top
+         * anchor is verified via MutationObserver-driven polling.
          *
          * @param {Object} [options]
          * @param {number} [options.timeout] - Max scroll duration in ms (default TIMEOUT)
@@ -34,7 +37,6 @@
             const effectiveTimeout = options.timeout || this.TIMEOUT;
 
             this._scrollPromise = new Promise((resolve, reject) => {
-                this._scrollResolve = resolve;
                 this._scrollReject = reject;
 
                 let consecutiveMisses = 0;
@@ -73,15 +75,23 @@
 
                 tempObserver.observe(scrollContainer, { childList: true, subtree: true });
 
+                // 儲存呼叫前狀態並「僅在尚未啟用時」開啟，而非盲目切換：
+                // harvest.js 可能已在更大範圍的匯出流程中啟用 PreventAutoScroll，
+                // 內部再呼叫本函式，若在此無條件 disable() 會提前關閉保護，
+                // 中斷 harvest 仍在進行中的匯出（無參照計數，disable() 為全域開關）
+                const preventAutoScroll = window.DSstudio?.PreventAutoScroll;
+                const wasAlreadyEnabled = preventAutoScroll?.isEnabled() ?? false;
+                if (preventAutoScroll && !wasAlreadyEnabled) preventAutoScroll.enable();
+
                 const cleanup = () => {
                     tempObserver.disconnect();
                     if (mutationTimer !== null) {
                         clearTimeout(mutationTimer);
                         mutationTimer = null;
                     }
+                    if (preventAutoScroll && !wasAlreadyEnabled) preventAutoScroll.disable();
                     this._locked = false;
                     this._scrollPromise = null;
-                    this._scrollResolve = null;
                     this._scrollReject = null;
                     if (this._button) {
                         this._button.setAttribute('aria-disabled', 'false');
@@ -98,7 +108,9 @@
                         return;
                     }
 
-                    scrollContainer.scrollBy(0, -window.innerHeight * this.SCROLL_STEP_FACTOR);
+                    // 直接跳至頂端而非逐步位移：距離越長，逐步位移所需的輪詢次數越多，
+                    // 直接寫入 scrollTop = 0 讓抵達時間與對話長度無關（僅取決於收斂閘門）。
+                    scrollContainer.scrollTop = 0;
 
                     const currentScrollTop = scrollContainer.scrollTop;
                     const currentScrollHeight = scrollContainer.scrollHeight;

@@ -1,6 +1,6 @@
 ---
 name: syncnow-persist-gap
-description: syncNow() (utils/storage-manager.syncnow.js) does not persist remote-newer overwrites to chrome.storage.local; getSettings()/_get() is read-only.
+description: syncNow() (originally in a standalone utils/storage-manager.syncnow.js, absorbed into utils/storage-manager.sync.js in v4.11.3) does not persist remote-newer overwrites to chrome.storage.local; getSettings()/_get() is read-only.
 metadata:
   type: project
 ---

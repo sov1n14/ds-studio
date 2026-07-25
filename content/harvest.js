@@ -5,8 +5,24 @@
  * 架構決策：
  *   - 此模組純屬 content 層，僅做 DOM 操作，不呼叫 chrome.storage。
  *   - 所有公開函式透過 window.DSstudio.Harvest 暴露，供同層其他模組呼叫。
- *   - 三大單責模組：(a) 擷取/捲動、(b) 進度遮罩 UI、(c) (由外部呼叫者) Markdown 組裝。
+ *   - 三大單責模組：(a) 擷取/捲動（本檔）、(b) 進度遮罩 UI（harvest.toast.js）、
+ *     (c) (由外部呼叫者) Markdown 組裝。
+ *
+ * 載入順序（manifest.json content_scripts）：
+ *   1. content/harvest.toast.js → 掛載 globalThis.__DS_Harvest_toast
+ *   2. content/harvest.js       （本檔，合入以上 bundle）
  */
+
+// 合併 Toast Bundle（瀏覽器：由 harvest.toast.js 在前載入設定 globalThis；Node.js 測試：直接 require）
+const __DSHarvestToast = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_Harvest_toast ||
+    (typeof require !== 'undefined' ? require('./harvest.toast.js') : {});
+const showHarvestToastScrolling = __DSHarvestToast.showHarvestToastScrolling;
+const showHarvestToastCapturing = __DSHarvestToast.showHarvestToastCapturing;
+const hideHarvestToast = __DSHarvestToast.hideHarvestToast;
+
+// 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DSSelectorsHarvest = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 // ─────────────────────────────────────────────────────────────────
 //  常數
@@ -41,7 +57,7 @@ const HARVEST_BOTTOM_CONFIRM_COUNT = 3;
 const HARVEST_SCROLL_JUMP_THRESHOLD_FACTOR = 1.5;
 
 // ─────────────────────────────────────────────────────────────────
-//  選擇器（與 go-top.js 保持一致，提供回退）
+//  選擇器
 // ─────────────────────────────────────────────────────────────────
 
 /** 虛擬列表可見項目容器 */
@@ -53,9 +69,9 @@ const MESSAGE_SELECTOR = '.ds-message';
 /** 虛擬列表項目包裝（攜帶 data-virtual-list-item-key） */
 const ITEM_KEY_ATTR = 'data-virtual-list-item-key';
 
-/** 虛擬列表外容器（用於定位滾動容器） */
-const VIRTUAL_LIST_SELECTOR = '.ds-virtual-list-items._6f2c522';
-const VIRTUAL_LIST_FALLBACK = '[class*="ds-virtual-list-items"]';
+/** 虛擬列表外容器（用於定位滾動容器；單一來源定義於 content/ds-selectors.js） */
+const VIRTUAL_LIST_SELECTOR = __DSSelectorsHarvest.VIRTUAL_LIST_SELECTOR;
+const VIRTUAL_LIST_FALLBACK = __DSSelectorsHarvest.VIRTUAL_LIST_FALLBACK;
 
 // ─────────────────────────────────────────────────────────────────
 //  (a) 擷取/捲動邏輯
@@ -77,7 +93,7 @@ function _findHarvestScrollContainer() {
         let el = virtualList.parentElement;
         while (el && el !== document.body) {
             if (
-                el.classList.contains('ds-scroll-area') &&
+                el.classList.contains(__DSSelectorsHarvest.SCROLL_AREA_CLASS) &&
                 el.scrollHeight > el.clientHeight
             ) {
                 return el;
@@ -187,17 +203,20 @@ function _waitForDomStability(container, stepTimeout) {
  * 捲動到頂部並等待 DOM 穩定。
  * 優先使用 GoToTop.scrollToTopAndWait（已有完整的 lazy-load 等待邏輯），
  * 若不可用則直接設 scrollTop = 0。
+ * 回傳值必須讓呼叫端檢查：scrollToTopAndWait 可能因逾時或使用者中途按下
+ * GoToTop 按鈕中斷捲動而 resolve 為 { success:false }，若呼叫端忽略此值
+ * 直接從目前捲動位置擷取，匯出的 Markdown 會靜默遺漏最舊的訊息。
  * @param {Element} container - 滾動容器
- * @returns {Promise<void>}
+ * @returns {Promise<{success: boolean, reason?: string}>}
  */
 async function _scrollToTopAndSettle(container) {
     const goTop = window.DSstudio?.GoToTop;
     if (goTop && typeof goTop.scrollToTopAndWait === 'function') {
-        await goTop.scrollToTopAndWait({ timeout: 30000 });
-    } else {
-        container.scrollTop = 0;
-        await _waitForDomStability(container, 3000);
+        return await goTop.scrollToTopAndWait({ timeout: 30000 });
     }
+    container.scrollTop = 0;
+    await _waitForDomStability(container, 3000);
+    return { success: true };
 }
 
 /**
@@ -287,7 +306,15 @@ async function harvestAllMessages() {
 
         // 捲動至頂部階段：顯示捲動提示，不顯示數量（尚未擷取，顯示 0 則具誤導性）
         showHarvestToastScrolling();
-        await _scrollToTopAndSettle(container);
+        const scrollResult = await _scrollToTopAndSettle(container);
+        // 必須檢查回傳值再擷取：忽略 success:false 會從目前（未必是頂部）的
+        // 捲動位置擷取，靜默漏收最舊的訊息。中止時原樣傳回失敗原因，
+        // 且不擷取任何內容；finally 區塊仍會執行（PreventAutoScroll 停用、
+        // 捲動位置還原、Toast 隱藏），因為此 return 位於 try 區塊內。
+        if (scrollResult && scrollResult.success === false) {
+            reason = scrollResult.reason;
+            return { items: [], isComplete: false, reason };
+        }
         captureVisible();
         // 抵達頂部後切換至擷取階段，顯示數量與警示
         showHarvestToastCapturing(capturedMap.size);
@@ -371,93 +398,6 @@ async function harvestAllMessages() {
     const items = sortedKeys.map(k => capturedMap.get(k));
 
     return { items, isComplete, reason };
-}
-
-// ─────────────────────────────────────────────────────────────────
-//  (b) 進度遮罩 UI
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * 確保 Toast 容器存在並回傳它（若不存在則建立）。
- * 建立時同時產生 __text 與 __warn 兩個子元素。
- * @returns {Element} Toast 根節點
- */
-function _ensureHarvestToast() {
-    let toast = document.querySelector('.dss-harvest-toast');
-    if (toast) return toast;
-
-    toast = document.createElement('div');
-    toast.className = 'dss-harvest-toast';
-
-    // 第一行：主要進度文字
-    const text = document.createElement('p');
-    text.className = 'dss-harvest-toast__text';
-    toast.appendChild(text);
-
-    // 第二行：操作警示（擷取階段才顯示）
-    const warn = document.createElement('p');
-    warn.className = 'dss-harvest-toast__warn';
-    toast.appendChild(warn);
-
-    document.body.appendChild(toast);
-    return toast;
-}
-
-/**
- * 【捲動至頂部階段】顯示 Toast，文字為「正在捲動至對話頂端…」，不顯示數量。
- * 警示行保持隱藏，避免使用者在尚未開始擷取時看到不相干警告。
- */
-function showHarvestToastScrolling() {
-    const toast = _ensureHarvestToast();
-
-    const text = toast.querySelector('.dss-harvest-toast__text');
-    if (text) {
-        text.textContent = dsI18n.t('harvestScrollingToast');
-    }
-
-    // 捲動階段不顯示警示行
-    const warn = toast.querySelector('.dss-harvest-toast__warn');
-    if (warn) {
-        warn.style.display = 'none';
-    }
-
-    toast.style.display = 'block';
-}
-
-/**
- * 【擷取階段】切換至擷取狀態並更新已擷取數量，同時顯示操作警示。
- * 在向下掃描的每一步呼叫，N 隨實際擷取數量即時更新。
- * @param {number} capturedCount - 已擷取訊息數
- */
-function showHarvestToastCapturing(capturedCount) {
-    if (typeof capturedCount !== 'number') return;
-
-    const toast = _ensureHarvestToast();
-
-    // 第一行：進度數量
-    const text = toast.querySelector('.dss-harvest-toast__text');
-    if (text) {
-        text.textContent = dsI18n.t('harvestCapturingToast', { count: capturedCount });
-    }
-
-    // 第二行：警示——整個擷取階段持續可見
-    const warn = toast.querySelector('.dss-harvest-toast__warn');
-    if (warn) {
-        warn.textContent = dsI18n.t('harvestWarning');
-        warn.style.display = '';
-    }
-
-    toast.style.display = 'block';
-}
-
-/**
- * 隱藏 Toast（擷取結束時呼叫，finally 區塊保證執行）。
- */
-function hideHarvestToast() {
-    const toast = document.querySelector('.dss-harvest-toast');
-    if (toast) {
-        toast.style.display = 'none';
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────

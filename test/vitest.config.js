@@ -11,10 +11,5 @@ export default defineConfig({
             include: ['../utils/**/*.js', '../content/**/*.js'],
             reporter: ['text', 'html'],
         },
-        server: {
-            deps: {
-                inline: ['jest-chrome'],
-            },
-        },
     },
 });

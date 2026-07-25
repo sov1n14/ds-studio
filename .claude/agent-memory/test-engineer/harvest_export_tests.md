@@ -53,3 +53,13 @@ metadata:
 ## Pre-existing exit-code-1 noise
 
 Runner exits with code 1 due to unhandled `ECONNREFUSED :3000` (fixture server) and re-thrown errors from intentional throw tests. This does NOT reflect test failures. As of 2026-05-29: 605 tests pass across 37 files.
+
+**happy-dom SyncFetch noise (separate from the above):** happy-dom itself emits harmless `SyncFetch` `ECONNREFUSED` errors targeting `127.0.0.1:3000` during the suite run — unrelated to the fixture-server noise above and unrelated to any test's own logic. Count roughly doubled to ~96 occurrences as of the v4.11.4 suite run (was lower in earlier versions/smaller suites). Never affects pass/fail — treat any occurrence count as informational only, not a regression signal.
+
+## Discarded-return-value defect red phase (2026-07-26)
+
+`harvestAllMessages` calls `await goTop.scrollToTopAndWait({ timeout: 30000 })` and discards the result, so a `{ success:false, reason:X }` resolution is silently ignored and harvest proceeds to capture from wherever the viewport is. Wrote 2 new tests in `harvestAllMessages` describe block: mock `window.DSstudio.GoToTop.scrollToTopAndWait` to `vi.fn().mockResolvedValue({ success:false, reason:'stopped-by-user' })`, then assert `result.isComplete===false`, `result.reason==='stopped-by-user'`, `result.items` is `[]`.
+
+**Vacuous-pass trap to watch for on this exact defect:** the pre-fix code's `finally` block already runs `PreventAutoScroll.disable()` + scrollTop-restore unconditionally on EVERY exit path, including its own unrelated internal capture-loop timeout (which independently resolves with `reason:'timeout'`). So a teardown-only test (checking `pas.isEnabled()===false` / scrollTop restored, without also checking `result.reason`) passes on the buggy code by coincidence — it's not exercising the abort path at all, just re-confirming existing unconditional-teardown coverage. Fix: use a distinctive reason string in the mock (not `'timeout'`, which collides with the module's own real timeout reason) and assert `result.reason` equals that exact string IN THE SAME test as the teardown checks. Only a correct fix makes both hold together.
+
+**Runner note**: root has no `package.json` — must `cd test/` first, then `npx vitest run unit/harvest.spec.js` (or via `npm run test:unit` from `test/`). Running from repo root gives `ReferenceError: document is not defined` (wrong/no environment config picked up).

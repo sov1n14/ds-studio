@@ -159,10 +159,6 @@
             _unregisterOutsideClick();
         }
 
-        function isOpen() {
-            return state.isOpen;
-        }
-
         function setActive(presetId) {
             _updateTrigger();
             if (!state.isOpen) return;
@@ -423,22 +419,12 @@
             }
         }
 
-        // ── Destroy ───────────────────────────────────────────────────
-
-        function destroy() {
-            _unregisterOutsideClick();
-            if (state.drag) {
-                _removeDragVisuals();
-                state.drag = null;
-            }
-        }
-
         // ── Init ──────────────────────────────────────────────────────
 
         _bindEvents();
         render();
 
-        return { render, open, close, isOpen, setActive, destroy };
+        return { render, open, close, setActive };
     }
 
     global.__DSSCustomSelect = { createPresetCustomSelect };

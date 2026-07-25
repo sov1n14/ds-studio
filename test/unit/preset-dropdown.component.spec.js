@@ -5,7 +5,7 @@
  *
  * §4.2 / §4.3 contract:
  *   createPresetDropdown({ onChange }) → { el, trigger, label, menu,
- *     setOptions, setValue, getValue, getNaturalWidth,
+ *     setOptions, setValue, getNaturalWidth,
  *     open, close, toggle, destroy }
  */
 
@@ -148,17 +148,6 @@ describe('createPresetDropdown — setValue() / getValue()', () => {
         dd.setValue('p1');   // set something first
         dd.setValue('');
         expect(dd.label.classList.contains('dss-preset-label--placeholder')).toBe(true);
-    });
-
-    it('getValue() reflects current value after setValue', () => {
-        dd.setValue('p2');
-        expect(dd.getValue()).toBe('p2');
-    });
-
-    it("getValue() returns '' after setValue('')", () => {
-        dd.setValue('p1');
-        dd.setValue('');
-        expect(dd.getValue()).toBe('');
     });
 
     it('setValue does NOT fire onChange', () => {
@@ -396,13 +385,6 @@ describe('createPresetDropdown — getNaturalWidth()', () => {
         expect(typeof w).toBe('number');
         expect(isFinite(w)).toBe(true);
         expect(w).toBeGreaterThanOrEqual(0);
-    });
-
-    it('does not leave probe nodes in document.body after measurement', () => {
-        const before = document.body.childElementCount;
-        dd.getNaturalWidth();
-        // The probe span is appended then immediately removed; count must be same
-        expect(document.body.childElementCount).toBe(before);
     });
 
     it('does not throw when label has no text', () => {

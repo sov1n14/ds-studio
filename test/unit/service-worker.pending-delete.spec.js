@@ -10,7 +10,6 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const RETRY_ALARM_NAME = 'dss-delete-retry';
 const SCHEDULE_DELETE_RETRY = 'DSS_SCHEDULE_DELETE_RETRY';
-const OLD_PENDING_LOCAL_KEY = 'dss-pending-deletes';
 
 function flushMicrotasks() {
     return new Promise((resolve) => setTimeout(resolve, 0));
@@ -204,16 +203,5 @@ describe('onChanged (sync, dss-pending-deletes-sync) — safeguard + loop guard 
         await flushMicrotasks();
 
         expect(pendingStoreStub.getPendingDeletes).not.toHaveBeenCalled();
-    });
-});
-
-describe('onInstalled', () => {
-    it('removes the old dss-pending-deletes local key', async () => {
-        const removeSpy = vi.spyOn(chrome.storage.local, 'remove');
-        chrome.runtime.onInstalled.callListeners();
-        await flushMicrotasks();
-
-        expect(removeSpy).toHaveBeenCalledWith(OLD_PENDING_LOCAL_KEY);
-        removeSpy.mockRestore();
     });
 });

@@ -106,7 +106,6 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
         await SM._writeChunkWithReconciliation({
             chunkIdx: 0,
             applyDelta,
-            retryBudget: 3,
         });
 
         // applyDelta was called twice (first attempt + retry)
@@ -125,9 +124,9 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
     });
 
     // -----------------------------------------------------------------------
-    // 3. Three conflicts, succeeds on retry 4 (at budget boundary)
+    // 3. Three conflicts, succeeds on retry 4 (at the fixed retry budget of 3)
     // -----------------------------------------------------------------------
-    it('3. Three conflicts — succeeds on retry 4 at budget boundary', async () => {
+    it('3. Three conflicts — succeeds on retry 4, the fixed module retry budget of 3', async () => {
         await setupSingleChunk(5, { 'uuid-1': 'pid1' });
 
         const origSafeGet = SM._safeGet;
@@ -161,7 +160,6 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
         await SM._writeChunkWithReconciliation({
             chunkIdx: 0,
             applyDelta,
-            retryBudget: 3,
         });
 
         // applyDelta called 4 times (first attempt + 3 retries)
@@ -209,7 +207,6 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
             SM._writeChunkWithReconciliation({
                 chunkIdx: 0,
                 applyDelta: (chunk) => { chunk['uuid-2'] = 'pid2'; },
-                retryBudget: 3,
             }),
         ).rejects.toThrow();
     });
@@ -246,7 +243,6 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
         await SM._writeChunkWithReconciliation({
             chunkIdx: 0,
             applyDelta: (chunk) => { chunk['uY'] = 'pY'; },
-            retryBudget: 3,
         });
 
         // All three entries present in the final chunk
@@ -289,7 +285,6 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
         await SM._writeChunkWithReconciliation({
             chunkIdx: 0,
             applyDelta: (chunk) => { delete chunk['u1']; },
-            retryBudget: 3,
         });
 
         // u1 deleted, uX preserved
@@ -333,7 +328,6 @@ describe('StorageManager _writeChunkWithReconciliation (Method D)', () => {
         await SM._writeChunkWithReconciliation({
             chunkIdx: 0,
             applyDelta: (chunk) => { chunk['uuid-2'] = 'pid2'; },
-            retryBudget: 3,
         });
 
         // _ensureChunkCachesLoaded was called at least twice: initial + retry

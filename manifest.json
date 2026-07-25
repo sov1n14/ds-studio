@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "zh_TW",
   "name": "__MSG_extName__",
-  "version": "4.11.0",
+  "version": "4.11.17",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5m3yyRKn27CeKs8JGkaVRTRHLvqdyacX4c/WMpYohs1PXPY+xcB2CP9SDlPtocX5qZjmP7B+Qs/pWFc/vEvOWcorQhbebm6jiGS+ZAe75NemUSt7MCJV61THdtb30k1nPGxL8viEYb09B8ZWh+QEN4t+hHAHsMFf9EA9UPrJb7YgIrulQVIkWPT+2afjdlwe6oUeogpdN6QJK19qe52vf9dZXTt0AFw/ORk1c3PLKBIitM1l3RZYbrBiG2DwgJw6N5iSVgHwEq5qPCdkFXlEl9LnFWa4wviFV8OpaAdCC0B3Ud+QNWNJrBWeiVAMi4wamg34f0P6gXAbvS4nEfEkKwIDAQAB",
   "description": "__MSG_extDesc__",
   "background": {
@@ -42,17 +42,15 @@
         "*://chat.deepseek.com/*"
       ],
       "js": [
+        "utils/i18n.locales.js",
         "utils/i18n.js",
         "utils/logger.js",
-        "utils/storage-manager.chunking.js",
-        "utils/storage-manager.lock.js",
+        "utils/storage-manager.chunk-lock.js",
         "utils/storage-manager.sync.js",
         "utils/storage-manager.presets.js",
-        "utils/storage-manager.tombstones.js",
         "utils/storage-manager.chatmap.js",
         "utils/storage-manager.local.js",
         "utils/storage-manager.init.js",
-        "utils/storage-manager.syncnow.js",
         "utils/storage-manager.js",
         "content/sidebar-auto-hide.js",
         "content/chat-width.js",
@@ -60,9 +58,12 @@
         "content/hide-thinking.js",
         "content/censor-reply-restore.markdown.js",
         "content/censor-reply-restore.dom.js",
+        "content/censor-reply-restore.thinkblock.js",
         "content/censor-reply-restore.storage.js",
         "content/censor-reply-restore.js",
         "content/prevent-auto-scroll-bridge.js",
+        "content/ds-selectors.js",
+        "content/harvest.toast.js",
         "content/harvest.js",
         "content/content-script.export.js",
         "content/preset-dropdown.position.js",
@@ -72,6 +73,7 @@
         "content/preset-settle.scheduler.js",
         "content/preset-overlay.controller.js",
         "content/temporary-chat-constants.js",
+        "content/prompt-injector.controller.js",
         "content/content-script.js",
         "content/temporary-chat-pending-store.js",
         "content/temporary-chat-delete-api.js",
@@ -87,7 +89,7 @@
         "content/mobile-homepage-cleanup.js",
         "content/auto-retry.js"
       ],
-      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css", "content/temporary-chat-toggle.css"],
+      "css": ["content/censor-reply-restore.css", "content/go-top.css", "content/preset-dropdown.css", "content/quote-reply.css", "content/temporary-chat-toggle.css"],
       "run_at": "document_end"
     }
   ]

@@ -3,14 +3,12 @@
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
 // 注意：不載入 utils/i18n.js 與 utils/logger.js，避免觸碰 window / 選用性 __DS_Logger 之外的載入期副作用
 importScripts(
-    '../utils/storage-manager.chunking.js',
-    '../utils/storage-manager.lock.js',
+    '../utils/storage-manager.chunk-lock.js',
     '../utils/storage-manager.sync.js',
     '../utils/storage-manager.presets.js',
     '../utils/storage-manager.chatmap.js',
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',
-    '../utils/storage-manager.syncnow.js',
     '../utils/storage-manager.js',
     '../content/temporary-chat-pending-store.js'
 );
@@ -21,8 +19,6 @@ const RETRY_ALARM_NAME = 'dss-delete-retry';
 const MAX_ATTEMPTS = 3;
 // 重試間隔（分鐘），0.5 = 30 秒
 const RETRY_DELAY_MINUTES = 0.5;
-// 舊版本機佇列鍵（僅供一次性清理）
-const OLD_PENDING_LOCAL_KEY = 'dss-pending-deletes';
 // 同 content/temporary-chat-constants.js
 const SCHEDULE_DELETE_RETRY = 'DSS_SCHEDULE_DELETE_RETRY';
 // onChanged 掃描重入防護（記憶體內）
@@ -126,11 +122,10 @@ chrome.runtime.onStartup.addListener(() => {
     })();
 });
 
-// 安裝／更新時建立定期重試 alarm，並立即嘗試一次補推；同時清理舊版本機佇列
+// 安裝／更新時建立定期重試 alarm，並立即嘗試一次補推
 chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create(SYNC_RETRY_ALARM_NAME, { periodInMinutes: SYNC_RETRY_PERIOD_MINUTES });
     retryParkedSync();
-    chrome.storage.local.remove(OLD_PENDING_LOCAL_KEY);
 });
 
 // 監聽雲端同步重試 alarm，與現有刪除重試 alarm 監聽器互不干擾

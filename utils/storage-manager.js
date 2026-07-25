@@ -3,16 +3,13 @@
  * Wrapper for Chrome Storage API with Sync support and Local fallback.
  *
  * 載入順序（manifest.json / popup.html / editor.html 必須依此順序）：
- *   1. storage-manager.chunking.js
- *   2. storage-manager.lock.js
- *   3. storage-manager.sync.js
- *   4. storage-manager.presets.js
- *   5. storage-manager.tombstones.js
- *   6. storage-manager.chatmap.js
- *   7. storage-manager.local.js
- *   8. storage-manager.init.js
- *   9. storage-manager.syncnow.js
- *  10. storage-manager.js  （本檔）
+ *   1. storage-manager.chunk-lock.js
+ *   2. storage-manager.sync.js
+ *   3. storage-manager.presets.js
+ *   4. storage-manager.chatmap.js
+ *   5. storage-manager.local.js
+ *   6. storage-manager.init.js
+ *   7. storage-manager.js  （本檔）
  */
 
 // === 錯誤類別（供 instanceof 檢查） ===
@@ -429,15 +426,12 @@ const StorageManager = {
 // === Bundle 合併：將各方法群組的方法 mixin 至 StorageManager ===
 (function (root) {
     Object.assign(StorageManager,
-        root.__DS_StorageManager_chunking || {},
-        root.__DS_StorageManager_lock     || {},
+        root.__DS_StorageManager_chunklock || {},
         root.__DS_StorageManager_sync     || {},
         root.__DS_StorageManager_presets  || {},
-        root.__DS_StorageManager_tombstones || {},
         root.__DS_StorageManager_chatmap  || {},
         root.__DS_StorageManager_local    || {},
-        root.__DS_StorageManager_init     || {},
-        root.__DS_StorageManager_syncnow  || {}
+        root.__DS_StorageManager_init     || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 

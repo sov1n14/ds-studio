@@ -50,47 +50,6 @@ const QuoteReply = {
 
     getButtonEl() {
         if (!_btnEl) {
-            if (!document.getElementById('dss-quote-reply-style')) {
-                const style = document.createElement('style');
-                style.id = 'dss-quote-reply-style';
-                style.textContent = `
-.dss-quote-btn {
-  position: fixed;
-  z-index: 2147483000;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  cursor: pointer;
-  user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  background: #ffffff;
-  color: #333333;
-  border: 1px solid #e0e0e0;
-  transition: opacity 0.15s;
-}
-@media (prefers-color-scheme: dark) {
-  .dss-quote-btn {
-    background: #2d2d2d;
-    color: #e0e0e0;
-    border-color: #555555;
-  }
-}
-html[data-theme="dark"] .dss-quote-btn {
-  background: #2d2d2d;
-  color: #e0e0e0;
-  border-color: #555555;
-}
-.dss-quote-btn:hover {
-  opacity: 0.85;
-}`;
-                document.head.appendChild(style);
-            }
-
             _btnEl = document.createElement('div');
             _btnEl.className = 'dss-quote-btn';
             _btnEl.style.display = 'none';
@@ -193,47 +152,6 @@ html[data-theme="dark"] .dss-quote-btn {
     },
 
     init() {
-        if (!document.getElementById('dss-quote-reply-style')) {
-            const style = document.createElement('style');
-            style.id = 'dss-quote-reply-style';
-            style.textContent = `
-.dss-quote-btn {
-  position: fixed;
-  z-index: 2147483000;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  cursor: pointer;
-  user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  background: #ffffff;
-  color: #333333;
-  border: 1px solid #e0e0e0;
-  transition: opacity 0.15s;
-}
-@media (prefers-color-scheme: dark) {
-  .dss-quote-btn {
-    background: #2d2d2d;
-    color: #e0e0e0;
-    border-color: #555555;
-  }
-}
-html[data-theme="dark"] .dss-quote-btn {
-  background: #2d2d2d;
-  color: #e0e0e0;
-  border-color: #555555;
-}
-.dss-quote-btn:hover {
-  opacity: 0.85;
-}`;
-            document.head.appendChild(style);
-        }
-
         QuoteReply.getButtonEl();
 
         document.addEventListener('mouseup', () => {

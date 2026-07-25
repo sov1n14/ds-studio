@@ -106,10 +106,18 @@ The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's
 
 - `enable()`: Sets `bridge.dataset.enabled = 'true'`. The main-world patch reads this and begins suppressing auto-scroll calls.
 - `disable()`: Sets `bridge.dataset.enabled = 'false'`. Auto-scroll resumes normally.
+- `isEnabled()`: Reads the current flag. **There is no reference counting** — `disable()` is an unconditional global off-switch. Any caller that may run nested inside another caller's enabled window MUST save the prior state via `isEnabled()` and restore it, rather than blind-toggling.
+
+### Consumers
+
+Two modules coordinate with this bridge, and they nest:
+
+- **`harvest.js`** enables it before the scroll-to-top phase and disables it in a `finally` after the entire top-to-bottom capture completes — so it stays on for the whole export.
+- **`go-top.js`** (`scrollToTopAndWait`, in `go-top.scroll.js`) enables it for the duration of a single scroll-to-top and restores the prior state in `cleanup()`. Because `harvest.js` calls `scrollToTopAndWait` from inside its own enabled window, GoToTop uses save-and-restore: it disables only if it was the call that enabled. A blind `disable()` here would strip harvest's protection mid-export.
 
 ### Design Decisions
 
-- The content script (isolated world) uses its own unpatched `Element.prototype` references for all scroll operations, so `harvest.js` and `go-top.js` can scroll freely while the page's auto-scroll is suppressed.
+- The content script (isolated world) uses its own unpatched `Element.prototype` references for all scroll operations, so `harvest.js` and `go-top.js` can scroll freely while the page's auto-scroll is suppressed. Note this describes immunity from the patch, not coordination with it — enabling the patch is a separate, explicit step each consumer must take.
 - The bridge element avoids `chrome.*` API calls from the main world (which are unavailable there).
 - The main-world script includes an idempotency guard (`window.__dsvPreventAutoScrollInstalled`) to prevent double-injection.
 - Both files are declared in `manifest.json`: `prevent-auto-scroll.js` as a `web_accessible_resource`, `prevent-auto-scroll-bridge.js` in the `content_scripts` array.

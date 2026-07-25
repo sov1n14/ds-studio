@@ -19,28 +19,12 @@
         },
 
         /**
-         * 讀取主功能開關狀態（僅本機，local-only）。
-         * @returns {Promise<Object>}
-         */
-        getEnabledState() {
-            return this._safeGet('local', this.KEYS.IS_ENABLED);
-        },
-
-        /**
          * 儲存全域預設提示詞啟用狀態
          * 僅存本機（local-only），不參與同步／備份還原，理由同上。
          * @param {boolean} enabled
          */
         async saveGlobalPromptEnabled(enabled) {
             return this._safeSet('local', { [this.KEYS.GLOBAL_PROMPT_ENABLED]: enabled });
-        },
-
-        /**
-         * 讀取全域預設提示詞啟用狀態（僅本機，local-only）。
-         * @returns {Promise<Object>}
-         */
-        getGlobalPromptEnabled() {
-            return this._safeGet('local', this.KEYS.GLOBAL_PROMPT_ENABLED);
         },
 
         getRestoredMessages() {

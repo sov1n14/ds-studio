@@ -11,7 +11,6 @@ const SidebarAutoHide = {
     COLLAPSED_WIDTH: 60,
     ENTER_DELAY_MS: 150,
     LEAVE_DELAY_MS: 400,
-    MUTATION_CHECK_INTERVAL_MS: 1000,
     RESIZE_DEBOUNCE_MS: 200,
 
     NATIVE_COLLAPSED_BAR_SELECTOR: 'div.ca6d4be1',
@@ -21,9 +20,7 @@ const SidebarAutoHide = {
     _masterEnabled: false,
     styleEl: null,
     sidebarEl: null,
-    sidebarInnerEl: null,
     originalWidth: null,
-    sidebarInnerWidth: null,
     enterTimer: null,
     leaveTimer: null,
     mutationObserver: null,
@@ -70,10 +67,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         const w = this.sidebarEl.getBoundingClientRect().width;
         if (w <= this.COLLAPSED_WIDTH) return;
         this.originalWidth = w;
-        this.sidebarInnerEl = this.sidebarEl.querySelector(this.SIDEBAR_INNER_SELECTOR);
-        this.sidebarInnerWidth = this.sidebarInnerEl
-            ? this.sidebarInnerEl.getBoundingClientRect().width
-            : null;
     },
 
     isCollapsed() {
@@ -108,8 +101,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         const innerEl = this.sidebarEl.querySelector(this.SIDEBAR_INNER_SELECTOR);
         if (!this.isNativelyCollapsed() && innerEl) {
             const innerWidth = innerEl.getBoundingClientRect().width;
-            this.sidebarInnerEl = innerEl;
-            this.sidebarInnerWidth = innerWidth;
             const shift = -(innerWidth - this.COLLAPSED_WIDTH);
             innerEl.style.marginLeft = shift + 'px';
         }
@@ -362,7 +353,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
             this._activeDropdownEl = null;
         }
         this.originalWidth = null;
-        this.sidebarInnerWidth = null;
         if (this.enterTimer) {
             clearTimeout(this.enterTimer);
             this.enterTimer = null;
