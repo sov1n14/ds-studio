@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
  * TEMPLATE_RESPONSE filtering, APPEND/short-format content accumulation, and
  * relative-path-in-BATCH censored detection are already covered with real
  * assertions in censor-xhr-hook-edit-message.spec.js (groups B3, B5, B7) and
- * censor-reply-restore.spec.js (the `_parseSseEvent()` describe blocks) —
+ * censor-reply-restore.spec.js (the `SseParser.parseLine()` describe blocks) —
  * not duplicated here.
  *
  * The fixture-based describe blocks from the original file (first/second/

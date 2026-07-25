@@ -29,3 +29,4 @@
 - [Temp-Chat Constants Unwired](project_temp_chat_constants_unwired.md) — content/temporary-chat-constants.js has zero import coupling anywhere (prod or test); its own 13-constant mirror spec is the sole tripwire — kept in full 2026-07-25.
 - [Jest-Chrome Removal](project_jest_chrome_removal.md) — replaced with hand-rolled vi.fn() mock in vitest.setup.js; full chrome API surface map; 450→115 lockfile packages, 100M→52M node_modules.
 - [Go-Top Timer Flakiness](project_gotop_timer_flakiness.md) — pre-existing uncancelled setTimeout in go-top.js causes intermittent post-teardown "document is not defined"; unrelated to chrome mocking, doesn't affect pass/fail counts.
+- [Loader contract bug](project_loader_contract_bug.md) — service-worker.js importScripts omits storage-manager.tombstones.js; new spec catches it, don't touch the test.

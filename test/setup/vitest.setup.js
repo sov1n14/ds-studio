@@ -10,15 +10,12 @@ import '../../utils/i18n.js';
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the
 // entry's Object.assign finds the bundles already populated.
-import '../../utils/storage-manager.chunking.js';
-import '../../utils/storage-manager.lock.js';
+import '../../utils/storage-manager.chunk-lock.js';
 import '../../utils/storage-manager.sync.js';
 import '../../utils/storage-manager.presets.js';
-import '../../utils/storage-manager.tombstones.js';
 import '../../utils/storage-manager.chatmap.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
-import '../../utils/storage-manager.syncnow.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.storage.js';

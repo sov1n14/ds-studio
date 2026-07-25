@@ -18,32 +18,29 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 14 script tags', () => {
-        expect(scriptSrcs).toHaveLength(14);
+    it('has exactly 11 script tags', () => {
+        expect(scriptSrcs).toHaveLength(11);
     });
 
     it.each([
         ['logger.js first', 0, '../../utils/logger.js'],
-        ['storage-manager.chunking.js second', 1, '../../utils/storage-manager.chunking.js'],
-        ['storage-manager.lock.js third', 2, '../../utils/storage-manager.lock.js'],
-        ['storage-manager.sync.js fourth', 3, '../../utils/storage-manager.sync.js'],
-        ['storage-manager.presets.js fifth', 4, '../../utils/storage-manager.presets.js'],
-        ['storage-manager.tombstones.js sixth', 5, '../../utils/storage-manager.tombstones.js'],
-        ['storage-manager.chatmap.js seventh', 6, '../../utils/storage-manager.chatmap.js'],
-        ['storage-manager.local.js eighth', 7, '../../utils/storage-manager.local.js'],
-        ['storage-manager.init.js ninth', 8, '../../utils/storage-manager.init.js'],
-        ['storage-manager.syncnow.js tenth', 9, '../../utils/storage-manager.syncnow.js'],
-        ['storage-manager.js eleventh', 10, '../../utils/storage-manager.js'],
-        ['messaging.js twelfth', 11, '../../utils/messaging.js'],
-        ['i18n.js thirteenth (between messaging.js and editor.js)', 12, '../../utils/i18n.js'],
-        ['editor.js last (fourteenth)', 13, 'editor.js'],
+        ['storage-manager.chunk-lock.js second', 1, '../../utils/storage-manager.chunk-lock.js'],
+        ['storage-manager.sync.js third', 2, '../../utils/storage-manager.sync.js'],
+        ['storage-manager.presets.js fourth', 3, '../../utils/storage-manager.presets.js'],
+        ['storage-manager.chatmap.js fifth', 4, '../../utils/storage-manager.chatmap.js'],
+        ['storage-manager.local.js sixth', 5, '../../utils/storage-manager.local.js'],
+        ['storage-manager.init.js seventh', 6, '../../utils/storage-manager.init.js'],
+        ['storage-manager.js eighth', 7, '../../utils/storage-manager.js'],
+        ['messaging.js ninth', 8, '../../utils/messaging.js'],
+        ['i18n.js tenth (between messaging.js and editor.js)', 9, '../../utils/i18n.js'],
+        ['editor.js last (eleventh)', 10, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });
 
     it('ensures logger.js loads before the storage-manager bundle', () => {
         const loggerIdx = scriptSrcs.indexOf('../../utils/logger.js');
-        const smFirstIdx = scriptSrcs.indexOf('../../utils/storage-manager.chunking.js');
+        const smFirstIdx = scriptSrcs.indexOf('../../utils/storage-manager.chunk-lock.js');
         expect(loggerIdx).toBeGreaterThanOrEqual(0);
         expect(loggerIdx).toBeLessThan(smFirstIdx);
     });

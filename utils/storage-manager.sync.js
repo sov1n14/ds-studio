@@ -376,6 +376,29 @@
             const active = presetData[this._presetKey(activeId)];
             return active?.content ?? '';
         },
+
+        /**
+         * 統一同步進入點。
+         *
+         * 流程：
+         *   1. 推送任何因先前暫時性失敗而擱置於 dsLocalAuth 的本機較新項目
+         *      （retrySync() 內部已依 _shouldPushPreset / orderUpdatedAt 逐項判斷，
+         *      並尊重既有的同步寫入配額守衛）。
+         *   2. 從雲端拉取最新設定（getSettings() → _get()，內部已完成
+         *      sync-wins 合併 + 逐項 updatedAt 收斂 + dsLocalAuth pin）。
+         *
+         * 每個項目的決策彼此獨立：同一次呼叫中，項目 A 可能判定為「遠端較新」，
+         * 項目 B 可能同時判定為「本機較新並已推送」。
+         *
+         * 設計原則：不重新實作任何比較邏輯，僅重用既有的 retrySync() / getSettings()，
+         * 避免與既有 tie-break 語意產生分歧。
+         *
+         * @returns {Promise<Object>} 收斂後的最新設定物件（結構同 getSettings()）
+         */
+        async syncNow() {
+            await this.retrySync();
+            return this.getSettings();
+        },
     };
 
     root.__DS_StorageManager_sync = bundle;

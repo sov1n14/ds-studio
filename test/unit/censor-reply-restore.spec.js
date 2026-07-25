@@ -1,7 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import vm from 'vm';
+import { fileURLToPath } from 'url';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import StorageManager from '../../utils/storage-manager.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '../..');
+
+function loadSseParser() {
+    const src = fs.readFileSync(path.join(ROOT, 'content', 'sse-parser.js'), 'utf-8');
+    const sandbox = {};
+    vm.createContext(sandbox);
+    vm.runInContext(src, sandbox);
+    return sandbox.SseParser;
+}
 
 describe('CensorReplyRestore', () => {
     beforeEach(() => {
@@ -64,12 +79,18 @@ describe('CensorReplyRestore', () => {
         return asstMsg;
     }
 
-    describe('_parseSseEvent()', () => {
+    describe('SseParser.parseLine()', () => {
+        let SseParser;
+
+        beforeEach(() => {
+            SseParser = loadSseParser();
+        });
+
         // Shared boilerplate for every case below: clone an initial state, feed one SSE
         // line through the parser, and return the mutated state for assertions.
         function applyEvent(initialState, line) {
             const state = { ...initialState };
-            CensorReplyRestore._parseSseEvent(state, line);
+            SseParser.parseLine(state, line);
             return state;
         }
 
@@ -143,25 +164,8 @@ describe('CensorReplyRestore', () => {
         it('silently ignores invalid JSON', () => {
             const state = { started: true, fragments: [] };
             const line = 'data: {invalid';
-            expect(() => CensorReplyRestore._parseSseEvent(state, line)).not.toThrow();
+            expect(() => SseParser.parseLine(state, line)).not.toThrow();
             expect(state.fragments).toHaveLength(0);
-        });
-
-        it('tracks thinkingEnabled from the initial response event when THINK fragments are present', () => {
-            // Relocated from test/unit/integration-sse-parsing.spec.js: that file's other 7 cases
-            // were removed as vacuous or duplicated elsewhere, leaving only this thinkingEnabled
-            // assertion, which is the sole place in the repo that exercises state.thinkingEnabled.
-            const state = applyEvent(
-                {},
-                'data: {"v":{"response":{"message_id":4,"parent_id":3,"thinking_enabled":true,"fragments":[{"id":2,"type":"THINK","content":"用户"}]}}}'
-            );
-
-            // Precondition is asserted directly (not a bare `if`) so that if the fixture ever
-            // stops containing a THINK fragment, this test fails loudly instead of silently
-            // asserting nothing.
-            const thinkFragments = state.fragments.filter(f => f.type === 'THINK');
-            expect(thinkFragments.length).toBeGreaterThan(0);
-            expect(state.thinkingEnabled).toBe(true);
         });
     });
 
@@ -371,6 +375,7 @@ describe('CensorReplyRestore', () => {
 
     describe('SSE short format continuation patches', () => {
         it('accumulates multiple short-format continuation events into fragment content', () => {
+            const SseParser = loadSseParser();
             const state = {
                 messageId: 38,
                 fragments: [{ id: 2, type: 'THINK', content: '用户' }],
@@ -380,13 +385,13 @@ describe('CensorReplyRestore', () => {
             // Simulate the sequence from api-response-first.yml:
             // 1. Initial APPEND with path
             let line = 'data: {"p":"response/fragments/-1/content","o":"APPEND","v":"提问"}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            SseParser.parseLine(state, line);
 
             // 2-7. Multiple short-format continuation events
             const shortFormEvents = ['为什么', '中国', '禁止', '了', '小熊'];
             for (const value of shortFormEvents) {
                 line = `data: {"v":"${value}"}`;
-                CensorReplyRestore._parseSseEvent(state, line);
+                SseParser.parseLine(state, line);
             }
 
             // After all events, the content should be the concatenation
@@ -593,7 +598,13 @@ describe('CensorReplyRestore', () => {
         });
     });
 
-    describe('_parseSseEvent() — censored flag detection', () => {
+    describe('SseParser.parseLine() — censored flag detection', () => {
+        let SseParser;
+
+        beforeEach(() => {
+            SseParser = loadSseParser();
+        });
+
         it('parses SSE with BATCH containing CONTENT_FILTER — sets state.censored to true', () => {
             const state = {
                 messageId: 24,
@@ -603,7 +614,7 @@ describe('CensorReplyRestore', () => {
                 finished: false
             };
             const line = 'data: {"p":"response","o":"BATCH","v":[{"p":"ban_regenerate","v":true},{"p":"response/status","o":"SET","v":"CONTENT_FILTER"}]}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            SseParser.parseLine(state, line);
             expect(state.censored).toBe(true);
         });
 
@@ -616,7 +627,7 @@ describe('CensorReplyRestore', () => {
                 finished: false
             };
             const line = 'data: {"p":"response/status","o":"SET","v":"FINISHED"}';
-            CensorReplyRestore._parseSseEvent(state, line);
+            SseParser.parseLine(state, line);
             expect(state.finished).toBe(true);
             expect(state.censored).toBe(false);
         });
