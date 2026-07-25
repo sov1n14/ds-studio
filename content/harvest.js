@@ -187,17 +187,20 @@ function _waitForDomStability(container, stepTimeout) {
  * 捲動到頂部並等待 DOM 穩定。
  * 優先使用 GoToTop.scrollToTopAndWait（已有完整的 lazy-load 等待邏輯），
  * 若不可用則直接設 scrollTop = 0。
+ * 回傳值必須讓呼叫端檢查：scrollToTopAndWait 可能因逾時或使用者中途按下
+ * GoToTop 按鈕中斷捲動而 resolve 為 { success:false }，若呼叫端忽略此值
+ * 直接從目前捲動位置擷取，匯出的 Markdown 會靜默遺漏最舊的訊息。
  * @param {Element} container - 滾動容器
- * @returns {Promise<void>}
+ * @returns {Promise<{success: boolean, reason?: string}>}
  */
 async function _scrollToTopAndSettle(container) {
     const goTop = window.DSstudio?.GoToTop;
     if (goTop && typeof goTop.scrollToTopAndWait === 'function') {
-        await goTop.scrollToTopAndWait({ timeout: 30000 });
-    } else {
-        container.scrollTop = 0;
-        await _waitForDomStability(container, 3000);
+        return await goTop.scrollToTopAndWait({ timeout: 30000 });
     }
+    container.scrollTop = 0;
+    await _waitForDomStability(container, 3000);
+    return { success: true };
 }
 
 /**
@@ -287,7 +290,15 @@ async function harvestAllMessages() {
 
         // 捲動至頂部階段：顯示捲動提示，不顯示數量（尚未擷取，顯示 0 則具誤導性）
         showHarvestToastScrolling();
-        await _scrollToTopAndSettle(container);
+        const scrollResult = await _scrollToTopAndSettle(container);
+        // 必須檢查回傳值再擷取：忽略 success:false 會從目前（未必是頂部）的
+        // 捲動位置擷取，靜默漏收最舊的訊息。中止時原樣傳回失敗原因，
+        // 且不擷取任何內容；finally 區塊仍會執行（PreventAutoScroll 停用、
+        // 捲動位置還原、Toast 隱藏），因為此 return 位於 try 區塊內。
+        if (scrollResult && scrollResult.success === false) {
+            reason = scrollResult.reason;
+            return { items: [], isComplete: false, reason };
+        }
         captureVisible();
         // 抵達頂部後切換至擷取階段，顯示數量與警示
         showHarvestToastCapturing(capturedMap.size);

@@ -21,7 +21,11 @@
  *                                       partial harvest on timeout + isComplete flag,
  *                                       toast hidden in finally on error,
  *                                       safety-net: scroll_interrupted reason,
- *                                       no false-positive on normal in-range step
+ *                                       no false-positive on normal in-range step,
+ *                                       aborts (no capture) + propagates reason when
+ *                                       scrollToTopAndWait resolves success:false,
+ *                                       teardown (PreventAutoScroll disabled, scroll
+ *                                       restored) still runs on that abort path
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -112,6 +116,20 @@ function installPreventAutoScrollMock(overrides = {}) {
     window.DSstudio = window.DSstudio || {};
     window.DSstudio.PreventAutoScroll = mock;
     return mock;
+}
+
+/**
+ * Fake PreventAutoScroll backed by a real boolean (same convention as
+ * test/unit/go-top.prevent-auto-scroll.spec.js) so teardown assertions sample
+ * real state via isEnabled() rather than inferring it from call spies.
+ */
+function createFakePreventAutoScroll(initialEnabled) {
+    let enabled = initialEnabled;
+    return {
+        enable: () => { enabled = true; },
+        disable: () => { enabled = false; },
+        isEnabled: () => enabled,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -882,5 +900,78 @@ describe('harvestAllMessages', () => {
 
         // Must not be scroll_interrupted — either timeout or isComplete
         expect(result.reason).not.toBe('scroll_interrupted');
+    });
+
+    // ── R1: abort (no capture) + propagate reason on scroll-to-top failure ──
+
+    it('does NOT capture and propagates the reason when GoToTop.scrollToTopAndWait resolves { success:false }', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM();
+        scrollArea.scrollBy = vi.fn();
+        Object.defineProperty(scrollArea, 'scrollTop', { value: 0, writable: true, configurable: true });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
+        Object.defineProperty(scrollArea, 'scrollHeight', { value: 1000, configurable: true });
+        // A message IS present in the DOM — if the abort is not honored, it would
+        // get captured anyway, which is exactly the silent-data-loss defect.
+        appendMessage(visibleItems, 0, 'should-not-be-captured');
+
+        window.DSstudio.GoToTop = {
+            scrollToTopAndWait: vi.fn().mockResolvedValue({ success: false, reason: 'stopped-by-user' }),
+        };
+
+        const harvestPromise = harvestAllMessages();
+        await vi.runAllTimersAsync();
+        const result = await harvestPromise;
+
+        expect(result.isComplete).toBe(false);
+        // The reason must be propagated verbatim from scrollToTopAndWait's result,
+        // not replaced with a generic/unrelated harvest reason.
+        expect(result.reason).toBe('stopped-by-user');
+        expect(result.items).toEqual([]);
+    });
+
+    // ── R3: teardown still runs on the R1 abort path ─────────────────────────
+    //
+    // NOTE: this test asserts result.reason alongside the teardown checks,
+    // deliberately using the SAME distinctive reason string ('stopped-by-user')
+    // as the R1 test above rather than the generic 'timeout'. On the pre-fix
+    // code (which discards scrollToTopAndWait's return value and proceeds to
+    // capture, later resolving via its OWN internal capture-loop timeout with
+    // reason:'timeout') this reason assertion fails — proving this test is
+    // actually sensitive to the abort path, not merely re-confirming that
+    // finally-teardown runs unconditionally (which existing tests already
+    // cover and would make this test pass vacuously regardless of the fix).
+
+    it('propagates the reason AND still disables PreventAutoScroll / restores scroll position when aborting due to failed scroll-to-top', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM();
+        scrollArea.scrollBy = vi.fn();
+
+        const ORIGINAL_SCROLL_TOP = 222;
+        let scrollTopValue = ORIGINAL_SCROLL_TOP;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
+        Object.defineProperty(scrollArea, 'scrollHeight', { value: 1000, configurable: true });
+        appendMessage(visibleItems, 0, 'msg');
+
+        const pas = createFakePreventAutoScroll(false);
+        window.DSstudio.PreventAutoScroll = pas;
+        window.DSstudio.GoToTop = {
+            scrollToTopAndWait: vi.fn().mockResolvedValue({ success: false, reason: 'stopped-by-user' }),
+        };
+
+        const harvestPromise = harvestAllMessages();
+        await vi.runAllTimersAsync();
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('stopped-by-user');
+        expect(pas.isEnabled()).toBe(false);
+        expect(scrollTopValue).toBe(ORIGINAL_SCROLL_TOP);
     });
 });
