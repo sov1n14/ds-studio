@@ -36,4 +36,8 @@
 >
 > 命名空間採 `window.DSstudio.Selectors`（跨模組共用工具的慣例，同 `prevent-auto-scroll-bridge.js` 的 `window.DSstudio.PreventAutoScroll`），而非 `globalThis.__DS_*` 方法包慣例——後者是給單一模組拆成多檔、共享 `this` 綁定用的，性質不同。
 >
+> **v4.11.17 修正（重要慣例）**：初版讓 `harvest.js` 與 `go-top.js` 各自以 `const __DSSelectors = ...` 取得共用常數，結果兩支都在**真正的頂層**宣告同一個名字。`manifest.json` 的 `content_scripts` 全部以 classic script 身分載入、共用 isolated world 的同一個全域作用域，因此第二支（`go-top.js`）拋出 `SyntaxError: Identifier '__DSSelectors' has already been declared` 而整支不執行，「回到頂部」按鈕完全不出現。已改為各自唯一的 `__DSSelectorsHarvest` 與 `__DSSelectorsGoTop`。
+>
+> 此類缺陷**單元測試結構上抓不到**——vitest 下每個檔案是獨立模組、各有作用域，碰撞無法重現（當時 1746 個測試全綠）。守門機制改由 `test/unit/content-script-global-collisions.spec.js` 提供：它以 `manifest.json` 的清單為準，靜態掃描每支 content script 的頂層宣告，任兩支撞名即失敗（IIFE 內的宣告不計入，因此 `go-top.locate.js` 內同名的 `__DSSelectors` 不受影響）。**在未包 IIFE 的 content script 頂層新增任何 `const`／`let`／`var`／`function` 之前，請先確認名稱在全體 content scripts 中唯一。**
+>
 > **刻意未做**：`_findScrollContainer()`（go-top）與 `_findHarvestScrollContainer()`（harvest）兩個 walk-up 函式**維持各自獨立**，未合併。兩者的策略集不是包含關係（go-top 有 4 條含 anchor 起點與側邊欄防護，harvest 只有 2 條且無 anchor 概念），快取語意也不同（go-top 快取於 `this._scrollContainer` 且刻意不快取 document 退回，harvest 完全不快取）。取聯集會讓 harvest 靜默停用兩條策略、製造虛假一致性；取交集會讓 go-top 失去側邊欄防護。共用選擇器與共用 walk-up 邏輯是兩件可分離的事，前者安全，後者不是。

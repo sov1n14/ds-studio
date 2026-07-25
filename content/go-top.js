@@ -20,7 +20,7 @@
  */
 
 // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+const __DSSelectorsGoTop = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 const GoToTop = {
@@ -50,8 +50,8 @@ const GoToTop = {
     // confirmed in full-page.html line 328: <div class="d29f3d7d ds-message _63c77b1">
     FIRST_MSG_SELECTOR: '.ds-message._63c77b1',
     // 虛擬列表容器：用於找到正確的滾動容器（單一來源定義於 content/ds-selectors.js）
-    VIRTUAL_LIST_SELECTOR: __DSSelectors.VIRTUAL_LIST_SELECTOR,
-    VIRTUAL_LIST_FALLBACK: __DSSelectors.VIRTUAL_LIST_FALLBACK,
+    VIRTUAL_LIST_SELECTOR: __DSSelectorsGoTop.VIRTUAL_LIST_SELECTOR,
+    VIRTUAL_LIST_FALLBACK: __DSSelectorsGoTop.VIRTUAL_LIST_FALLBACK,
     // 原生按鈕選擇器：精確雜湊 class 優先，再退回穩定 ds-* class 組合
     // confirmed in go-bottom.html: <div role="button" class="ds-button ... ds-button--floating _0706cde ...">
     NATIVE_BTN_SELECTOR: '._0706cde:not(.dsw-gotop)',

@@ -21,7 +21,7 @@ const showHarvestToastCapturing = __DSHarvestToast.showHarvestToastCapturing;
 const hideHarvestToast = __DSHarvestToast.hideHarvestToast;
 
 // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+const __DSSelectorsHarvest = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 // ─────────────────────────────────────────────────────────────────
@@ -70,8 +70,8 @@ const MESSAGE_SELECTOR = '.ds-message';
 const ITEM_KEY_ATTR = 'data-virtual-list-item-key';
 
 /** 虛擬列表外容器（用於定位滾動容器；單一來源定義於 content/ds-selectors.js） */
-const VIRTUAL_LIST_SELECTOR = __DSSelectors.VIRTUAL_LIST_SELECTOR;
-const VIRTUAL_LIST_FALLBACK = __DSSelectors.VIRTUAL_LIST_FALLBACK;
+const VIRTUAL_LIST_SELECTOR = __DSSelectorsHarvest.VIRTUAL_LIST_SELECTOR;
+const VIRTUAL_LIST_FALLBACK = __DSSelectorsHarvest.VIRTUAL_LIST_FALLBACK;
 
 // ─────────────────────────────────────────────────────────────────
 //  (a) 擷取/捲動邏輯
@@ -93,7 +93,7 @@ function _findHarvestScrollContainer() {
         let el = virtualList.parentElement;
         while (el && el !== document.body) {
             if (
-                el.classList.contains(__DSSelectors.SCROLL_AREA_CLASS) &&
+                el.classList.contains(__DSSelectorsHarvest.SCROLL_AREA_CLASS) &&
                 el.scrollHeight > el.clientHeight
             ) {
                 return el;
