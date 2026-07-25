@@ -269,21 +269,59 @@ describe('_waitForDomStability', () => {
         await p;
     });
 
-    it('resolves on step-timeout when mutations keep resetting stable count', async () => {
-        vi.useFakeTimers();
+    // NOTE: these two tests use REAL timers, not fake ones. Empirically, when several
+    // mutations are pre-scheduled via setTimeout under vi.useFakeTimers() and flushed
+    // with a single vi.runAllTimersAsync() call, happy-dom's MutationObserver batches
+    // them into one delivery instead of one-per-mutation — later mutations go
+    // unobserved and the stable-tick counter is never reset, causing a false-early
+    // stability resolution regardless of whether the reset logic is correct. Real
+    // timers do not have this problem (confirmed empirically: each appendChild gets
+    // its own observer callback), so they are used here despite the small wall-clock
+    // cost, since fake timers would make this test insensitive to the exact defect
+    // it exists to catch.
+
+    it('resolves via the stability window (not the timeout) when mutations stop early', async () => {
         const container = document.createElement('div');
         document.body.appendChild(container);
 
-        const p = _waitForDomStability(container, 300);
+        // stepTimeout is deliberately unreachable (3000ms) if stability detection works;
+        // a single early mutation then silence should let the stable-tick path win.
+        const stepTimeout = 3000;
+        const start = performance.now();
+        const p = _waitForDomStability(container, stepTimeout);
 
-        vi.advanceTimersByTime(100);
         container.appendChild(document.createElement('span'));
-        vi.advanceTimersByTime(100);
-        container.appendChild(document.createElement('span'));
-        vi.advanceTimersByTime(200);
 
         await p;
+
+        const elapsed = performance.now() - start;
+        expect(elapsed).toBeLessThan(1500); // resolved via stability, nowhere near the 3000ms timeout
     });
+
+    it('resolves via step-timeout when mutations keep arriving right up to the deadline', async () => {
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        // mutate every 50ms — faster than the stability tick interval (150ms) — for the
+        // entire step, so the stable-tick counter is continuously reset and can never
+        // reach its threshold; only the stepTimeout fallback can resolve this.
+        const stepTimeout = 600;
+        const start = performance.now();
+        const p = _waitForDomStability(container, stepTimeout);
+
+        const spamId = setInterval(() => {
+            container.appendChild(document.createElement('span'));
+        }, 50);
+
+        await p;
+        clearInterval(spamId);
+
+        const elapsed = performance.now() - start;
+        // if mutations failed to reset the stable-tick counter, this would resolve early
+        // (~450ms, via the stability window) instead of waiting out the full stepTimeout.
+        expect(elapsed).toBeGreaterThanOrEqual(stepTimeout - 50);
+        expect(elapsed).toBeLessThan(stepTimeout + 400);
+    }, 5000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

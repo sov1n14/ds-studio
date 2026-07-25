@@ -1629,24 +1629,96 @@ describe('GoToTop', () => {
         });
 
         it('re-injects as solo when button removed and no native button', async () => {
-            vi.useFakeTimers();
-            try {
-                const { outerWrapper } = createWrapperWithoutNativeButton();
-                GoToTop._injectIntoWrapperDirect();
-                const oldBtn = GoToTop._button;
+            const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
+            GoToTop._injectIntoWrapperDirect();
+            const oldBtn = GoToTop._button;
 
-                // Simulate button being removed by React re-render
-                oldBtn.remove();
-                vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(null);
+            // Simulate button being removed by React re-render
+            oldBtn.remove();
+            vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(null);
 
-                outerWrapper.appendChild(document.createElement('span'));
-                vi.advanceTimersByTime(GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 10);
+            outerWrapper.appendChild(document.createElement('span'));
+            // Real MutationObserver + real debounce timer: fake timers don't
+            // deliver pending MutationObserver records (see happy-dom limits memory).
+            await new Promise((resolve) => setTimeout(resolve, GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 40));
 
-                expect(GoToTop._button).not.toBeNull();
-                expect(GoToTop._injectionMode).toBe('wrapper-solo');
-            } finally {
-                vi.useRealTimers();
-            }
+            // Must be a genuinely NEW, connected button — not the stale pre-removal reference.
+            expect(GoToTop._button).not.toBeNull();
+            expect(GoToTop._button).not.toBe(oldBtn);
+            expect(GoToTop._button.isConnected).toBe(true);
+            expect(GoToTop._button.parentElement).toBe(injectParent);
+            expect(GoToTop._injectionMode).toBe('wrapper-solo');
+        });
+
+        it('reconciliation no-op: injected mode with native button present does no work', async () => {
+            const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
+            const nativeBtn = createNativeButton();
+            injectParent.appendChild(nativeBtn);
+
+            GoToTop._injectIntoWrapperDirect(); // starts wrapper observer, mode = wrapper-solo
+            vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(nativeBtn);
+            vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
+            GoToTop._transitionToStacked(GoToTop._button, nativeBtn); // set up: mode = injected
+            expect(GoToTop._injectionMode).toBe('injected'); // sanity check on setup
+
+            const btn = GoToTop._button;
+            const classNameSnapshot = btn.className;
+            const styleSnapshot = btn.getAttribute('style');
+            const parentSnapshot = btn.parentElement;
+
+            const soloSpy = vi.spyOn(GoToTop, '_transitionToSolo');
+            const stackedSpy = vi.spyOn(GoToTop, '_transitionToStacked');
+            const offsetSpy = vi.spyOn(GoToTop, '_applyStackedOffset');
+            GoToTop._evaluateVisibility.mockClear();
+
+            // Unrelated childList mutation inside the observed wrapper subtree.
+            outerWrapper.appendChild(document.createElement('span'));
+            await new Promise((resolve) => setTimeout(resolve, GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 40));
+
+            expect(GoToTop._button).toBe(btn);
+            expect(GoToTop._button.isConnected).toBe(true);
+            expect(GoToTop._injectionMode).toBe('injected');
+            expect(btn.className).toBe(classNameSnapshot);
+            expect(btn.getAttribute('style')).toBe(styleSnapshot);
+            expect(btn.parentElement).toBe(parentSnapshot);
+            expect(soloSpy).not.toHaveBeenCalled();
+            expect(stackedSpy).not.toHaveBeenCalled();
+            expect(offsetSpy).not.toHaveBeenCalled();
+            expect(GoToTop._evaluateVisibility).not.toHaveBeenCalled();
+        });
+
+        it('reconciliation no-op: wrapper-solo mode with no native button does no work', async () => {
+            const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
+
+            GoToTop._injectIntoWrapperDirect(); // starts wrapper observer, mode = wrapper-solo
+            vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(null);
+            vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
+            expect(GoToTop._injectionMode).toBe('wrapper-solo'); // sanity check on setup
+
+            const btn = GoToTop._button;
+            const classNameSnapshot = btn.className;
+            const styleSnapshot = btn.getAttribute('style');
+            const parentSnapshot = btn.parentElement;
+
+            const soloSpy = vi.spyOn(GoToTop, '_transitionToSolo');
+            const stackedSpy = vi.spyOn(GoToTop, '_transitionToStacked');
+            const offsetSpy = vi.spyOn(GoToTop, '_applyStackedOffset');
+            GoToTop._evaluateVisibility.mockClear();
+
+            // Unrelated childList mutation inside the observed wrapper subtree.
+            outerWrapper.appendChild(document.createElement('span'));
+            await new Promise((resolve) => setTimeout(resolve, GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 40));
+
+            expect(GoToTop._button).toBe(btn);
+            expect(GoToTop._button.isConnected).toBe(true);
+            expect(GoToTop._injectionMode).toBe('wrapper-solo');
+            expect(btn.className).toBe(classNameSnapshot);
+            expect(btn.getAttribute('style')).toBe(styleSnapshot);
+            expect(btn.parentElement).toBe(parentSnapshot);
+            expect(soloSpy).not.toHaveBeenCalled();
+            expect(stackedSpy).not.toHaveBeenCalled();
+            expect(offsetSpy).not.toHaveBeenCalled();
+            expect(GoToTop._evaluateVisibility).not.toHaveBeenCalled();
         });
     });
 
