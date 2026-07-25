@@ -179,6 +179,7 @@ In `popup.html`, the script tags appear in this order:
 <script src="preset-item-renderer.js"></script>
 <script src="custom-select.js"></script>
 <script src="popup.modal.js"></script>
+<script src="popup.toast.js"></script>
 <script src="popup.preset-manager.js"></script>
 <script src="popup.backup-manager.js"></script>
 <script src="popup.live-sync.js"></script>
@@ -199,6 +200,7 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `preset-item-renderer.js` (v4.10.0) registers `window.__DS_PresetItemRenderer` (`escapeHtml`, `buildPresetItemMarkup`) and must load before `custom-select.js`, which destructures it.
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
+- `popup.toast.js` (v4.11.10 split) registers the `Toast` key on that same `window.__DS_PopupModal` object. `popup.modal.js` previously held both `Modal` and `Toast` in one file — two unrelated components sharing a file, contrary to `coding-guidelines` §8. Both files now self-mount via `Object.assign(window.__DS_PopupModal || {}, { … })` rather than a single object literal, so neither clobbers the other's key and the two are order-independent. `popup.js:35` still destructures `const { Modal, Toast } = window.__DS_PopupModal;` unchanged. The manager bundles receive `Modal`/`Toast` through their `ctx` parameter, not the global, and were unaffected.
 - `popup.live-sync.js` (v4.8.0) registers `window.__DS_PopupLiveSync`, exposing `createLiveSyncListener(ctx)` — see the Live Sync Listener section below.
 - `popup.js` (entry) loads second-to-last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 - `popup.locale.js` (v4.3.3) loads last, wiring `#localeSwitcherBtn` click to panel toggle and radio change to `dsI18n.setLocale()` — see the Language / Locale Switcher section below.
