@@ -21,3 +21,7 @@
 > - `content-script.js` → `content-script.js`（入口）+ `content-script.export.js`（Markdown 匯出）<!-- overlay 於 v4.2.0 進一步拆分為 6 個獨立模組，詳見 ARCHITECTURE.md 目錄樹 -->
 > - `go-top.js` → `go-top.js`（入口）+ `go-top.locate.js`（查詢/定位/可見性）+ `go-top.render.js`（渲染/注入/模式切換）+ `go-top.scroll.js`（捲動動畫引擎）
 > - `censor-reply-restore.js` → `censor-reply-restore.js`（入口）+ `censor-reply-restore.markdown.js`（Markdown 渲染）+ `censor-reply-restore.dom.js`（DOM 注入）+ `censor-reply-restore.storage.js`（持久化）
+
+> **v4.11.9 拆分**：`harvest.js` → `harvest.js`（入口，捲動擷取引擎）+ `harvest.toast.js`（進度提示 UI）。原檔 502 行超出 `coding-guidelines` §8 的 450 行 JS 主動拆分門檻，且同時承載「擷取引擎」與「toast UI」兩個關注點；拆分後為 426 行 + 102 行，行為不變。
+>
+> 此處採用的是**純函式方法包**慣例（同 `content-script.js`、`preset-overlay.controller.js`），與上述 `this` 綁定的 `Object.assign` 方法包不同：`harvest.toast.js` 以 `globalThis.__DS_Harvest_toast` 掛載，入口檔以 `globalThis.__DS_Harvest_toast || require('./harvest.toast.js')` 取得，兼容瀏覽器與 Node/vitest 兩種載入路徑。`manifest.json` 中 `harvest.toast.js` 排在 `harvest.js` 之前。
