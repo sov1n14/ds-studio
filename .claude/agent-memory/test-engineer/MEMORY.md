@@ -39,3 +39,4 @@
 - [Go-Top Test Suite Split 2026-07-26](project_gotop_test_suite_split_2026_07_26.md) — go-top.spec.js retired, split verbatim into 7 spec files (locate/button/visibility/inject/transitions/reconnect/enable) + go-top-fixtures.js helper.
 - [Go-Top Test Harness Addendum](project_test_harness.md) — "enable / disable" beforeEach mocks addEventListener as no-op spy; build a real container to test scroll-listener teardown.
 - [Go-Top Teardown Bugs 2026-07-26](gotop-teardown-bugs.md) — 2 confirmed disable() bugs (route-change timer survives, in-flight scroll poll survives), red tests in go-top.enable.spec.js.
+- [GoToTop PreventAutoScroll Coordination Red 2026-07-26](gotop-pas-coordination-red.md) — save-restore red tests; 2/5 vacuous on no-op baseline, proved via synthetic-buggy mutation stand-ins.

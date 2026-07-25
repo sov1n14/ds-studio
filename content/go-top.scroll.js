@@ -72,12 +72,21 @@
 
                 tempObserver.observe(scrollContainer, { childList: true, subtree: true });
 
+                // 儲存呼叫前狀態並「僅在尚未啟用時」開啟，而非盲目切換：
+                // harvest.js 可能已在更大範圍的匯出流程中啟用 PreventAutoScroll，
+                // 內部再呼叫本函式，若在此無條件 disable() 會提前關閉保護，
+                // 中斷 harvest 仍在進行中的匯出（無參照計數，disable() 為全域開關）
+                const preventAutoScroll = window.DSstudio?.PreventAutoScroll;
+                const wasAlreadyEnabled = preventAutoScroll?.isEnabled() ?? false;
+                if (preventAutoScroll && !wasAlreadyEnabled) preventAutoScroll.enable();
+
                 const cleanup = () => {
                     tempObserver.disconnect();
                     if (mutationTimer !== null) {
                         clearTimeout(mutationTimer);
                         mutationTimer = null;
                     }
+                    if (preventAutoScroll && !wasAlreadyEnabled) preventAutoScroll.disable();
                     this._locked = false;
                     this._scrollPromise = null;
                     this._scrollReject = null;

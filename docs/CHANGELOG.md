@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.11.6](changelog/v4.md#4116---2026-07-26) | 修復「回到頂部」上捲後彈回、始終到不了頂的缺陷：`scrollToTopAndWait()` 未與 `PreventAutoScroll` 協調，頁面自身的向下捲動不受抑制，導致收斂條件 `currentScrollTop <= 0` 恆偽、`_stableTopCount` 每輪歸零而空轉至 30 秒超時；改為在進入點保存啟用前狀態並於 `cleanup()` 還原，僅在本次呼叫為啟用者時才 `disable()`，以免踩掉 `harvest.js` 巢狀呼叫的保護 |
 | [4.11.5](changelog/v4.md#4115---2026-07-26) | 修復 GoToTop 停用後的計時器殘留：`_onRouteChange()` 的 100 毫秒計時器未保存 handle，路由切換後 100 毫秒內停用會在停用後重新注入按鈕並重啟 observer 與 scroll 監聽器；新增 `_routeChangeTimer` 欄位、`_tryConnectDom()` 進入點守衛，並讓 `disable()` 真正呼叫 `_scrollReject` 以中止進行中的捲動 |
 | [4.10.2](changelog/v4.md#4102---2026-07-12) | 修正墓碑合併演算法：`clearPresetTombstones()` 刪鍵無時間戳可仲裁，導致清除永遠輸給陳舊的刪除記錄；墓碑條目形狀改為 `{ ts, deleted }`，清除改為寫入 `deleted:false` 而非刪鍵 |
 | [4.10.1](changelog/v4.md#4101---2026-07-12) | 修正刪除全部提示詞組後再匯入 JSON 備份，於下次跨裝置同步時被舊墓碑再次刪除的缺陷；`restoreSettings()` 匯入後新增 `clearPresetTombstones()` 精準清除對應 ID 墓碑 |
