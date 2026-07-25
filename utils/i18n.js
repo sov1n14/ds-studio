@@ -157,7 +157,6 @@
     harvestWarning: '⚠ 請勿捲動對話記錄，以免擷取失敗',
 
     // ---- Content Script: Go Top ----
-    exportOverlayLoading: '正在載入完整對話，請稍候…',
     goTopAriaLabel: '回到頂部',
 
     // ---- Content Script: Quote Reply ----
@@ -328,7 +327,6 @@
     harvestWarning: '⚠ Do not scroll the conversation history to avoid capture failure',
 
     // ---- Content Script: Go Top ----
-    exportOverlayLoading: 'Loading full conversation, please wait…',
     goTopAriaLabel: 'Back to Top',
 
     // ---- Content Script: Quote Reply ----
@@ -365,12 +363,10 @@
 
     _data: null,
     _locale: DEFAULT_LOCALE,
-    _ready: false,
 
     /** Initialize — read saved locale from chrome.storage.sync.
      *  Safe to call multiple times; re-reads from storage each time. */
     async init() {
-      this._ready = true;
       try {
         const result = await chrome.storage.sync.get(STORAGE_KEY);
         if (result[STORAGE_KEY] && LOCALE_NAMES[result[STORAGE_KEY]]) {
@@ -397,7 +393,6 @@
 
     /** For testing only — reset internal state so init() re-reads storage */
     _reset() {
-      this._ready = false;
       this._locale = DEFAULT_LOCALE;
       this._data = null;
     },

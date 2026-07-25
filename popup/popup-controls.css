@@ -157,12 +157,6 @@ input:checked + .slider:before {
     background-color: #e5e7eb;
 }
 
-.icon-btn--danger:hover {
-    color: #dc2626;
-    border-color: #fca5a5;
-    background-color: #fef2f2;
-}
-
 .icon-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;

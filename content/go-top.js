@@ -229,52 +229,6 @@ const GoToTop = {
     },
 
     // ─────────────────────────────
-    //  Public: Export overlay helpers
-    // ─────────────────────────────
-
-    /**
-     * Show a loading overlay while the full conversation is being loaded.
-     * @param {string} [text] - Custom text; defaults to Chinese loading message.
-     */
-    _showExportOverlay(text) {
-        let overlay = document.getElementById('dss-export-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'dss-export-overlay';
-            overlay.style.cssText = [
-                'position:fixed',
-                'top:0',
-                'left:0',
-                'width:100%',
-                'height:100%',
-                'z-index:9999',
-                'display:flex',
-                'align-items:center',
-                'justify-content:center',
-                'background:rgba(0,0,0,0.5)',
-                'color:#fff',
-                'font-size:16px',
-                'font-family:sans-serif',
-            ].join(';') + ';';
-            overlay.textContent = text || dsI18n.t('exportOverlayLoading');
-            document.body.appendChild(overlay);
-        } else {
-            overlay.style.display = 'flex';
-            if (text) overlay.textContent = text;
-        }
-    },
-
-    /**
-     * Hide the export loading overlay.
-     */
-    _hideExportOverlay() {
-        const overlay = document.getElementById('dss-export-overlay');
-        if (overlay) {
-            overlay.style.display = 'none';
-        }
-    },
-
-    // ─────────────────────────────
     //  Public: Lifecycle
     // ─────────────────────────────
 

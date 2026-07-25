@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthSlider          = document.getElementById('inputWidthSlider');
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
-    const syncStatusEl              = document.getElementById('syncStatus');
 
     let saveTimeout;
     let customSelect;

@@ -348,16 +348,7 @@
                 }
 
                 // Use defaults if missing
-                const camelKey = internalKey.toLowerCase().replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-                // Some keys don't follow the simple camelCase mapping, manually map them
-                let settingsKey = camelKey;
-                if (internalKey === 'SIDEBAR_AUTO_HIDE') settingsKey = 'sidebarAutoHide';
-                if (internalKey === 'HIDE_THINKING') settingsKey = 'hideThinking';
-                if (internalKey === 'SHOW_SYSTEM_TIME') settingsKey = 'showSystemTime';
-                if (internalKey === 'CHAT_WIDTH') settingsKey = 'chatWidth';
-                if (internalKey === 'CHAT_WIDTH_ENABLED') settingsKey = 'chatWidthEnabled';
-                if (internalKey === 'INPUT_WIDTH') settingsKey = 'inputWidth';
-                if (internalKey === 'INPUT_WIDTH_ENABLED') settingsKey = 'inputWidthEnabled';
+                const settingsKey = internalKey.toLowerCase().replace(/_([a-z])/g, (g) => g[1].toUpperCase());
 
                 // Special handling for the ones already in DEFAULTS with different names
                 const defaultVal = this.DEFAULTS[storageKey];
