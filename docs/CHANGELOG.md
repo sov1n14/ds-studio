@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.11.19](changelog/v4.md#41119---2026-07-26) | 修復提示詞組排序在時間戳平手時被重排、拖曳結果下次開啟即消失：`mergePresets()` 原本僅在時間戳嚴格較新時採用對應側的 `order`，平手則退回合併 Map 的插入順序（本機已快取的組浮到最前面），使可見順序取決於哪些物件剛好快取在 local 而非已儲存的順序陣列；因 `_set()` 把同一物件鏡射進兩個儲存區，平手其實是常態。改為平手時採用雲端 `order`（唯一自我收斂的選擇）。同時修正 `STORAGE.md` 仍描述已於 v4.8.5 移除的 `#forceSyncBtn`、以及兩份文件仍稱 `dsLocalAuth` 影響讀取優先序（v4.7.2 已移除） |
 | [4.11.18](changelog/v4.md#41118---2026-07-26) | 修復跨裝置同步的排序回滾與「已刪除提示詞組復活」：`retrySync()` 待推送迴圈對 `dsPresetOrderMeta` 與 `dsPresetTombstones` 無條件盲推（前者因 `startsWith('dsPreset_')` 的結尾底線而不匹配任何既有守衛），陳舊本機值蓋掉雲端較新值；排序中介資料補上與 `PRESET_INDEX` 一致的 `>=` 新舊比較，墓碑改為逐 id 聯集合併（重用既有 `_mergeTombstones()`），空的本機集合不再清空雲端 |
 | [4.11.8](changelog/v4.md#4118---2026-07-26) | 「回到頂部」改為一次到頂：每輪輪詢由 `scrollBy(0, -0.9 * viewportHeight)` 逐格上捲改為直接寫入 `scrollTop = 0`，抵達時間不再與對話長度成正比（50 個視窗高的對話由約 5.9 秒降至瞬間）；收斂閘門與逾時、中止、`PreventAutoScroll` 協調全部保留，移除已無引用的 `SCROLL_STEP_FACTOR`，並首次明文記載「向上一次到頂、向下逐步前進」的刻意不對稱 |
 | [4.11.7](changelog/v4.md#4117---2026-07-26) | 修復 Markdown 匯出靜默截斷：`_scrollToTopAndSettle()` 丟棄 `scrollToTopAndWait` 的回傳值，捲動到頂失敗（逾時或使用者中途按下「回到頂部」）時仍從當下位置開始擷取，輸出悄悄漏掉最舊訊息且無錯誤提示；改為傳回並檢查結果，失敗時原樣傳回 `reason` 並中止，teardown 沿用既有 `finally` |

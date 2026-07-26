@@ -38,6 +38,11 @@
 - **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
 - **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決），清除衝突旗標。
 - **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
+- **排序仲裁（v4.11.19）**：`mergePresets()` 除了合併內容，也決定回傳陣列的**順序**，依據是雙方的 `dsPresetOrderMeta`。僅當本機 `orderUpdatedAt` **嚴格大於**雲端時採用本機順序；其餘情況（**含時間戳完全相等**）一律採用雲端的 `order` 陣列。此規則與讀取路徑的 `_pickPresetOrderByRecency()` 是兩套獨立機制，`mergePresets()` 不呼叫後者。
+  - 時間戳相等是**常態而非邊界狀況**：單次 `_set()` 先寫 `chrome.storage.sync`，再把同一個物件鏡射到 `chrome.storage.local`，因此任何一次成功儲存後兩側 `orderUpdatedAt` 必然逐位元相同。
+  - 平手時選雲端而非本機，是因為只有雲端勝出會**收斂** —— 讀取路徑從不把合併決定寫回雲端（`_get()` 只寫回 local），選本機會讓兩台裝置各自永久保留不同順序。保護「本機確實較新」的職責屬於 `dsLocalAuth` 重推佇列。
+  - v4.11.19 之前，平手時 `chosen` 保持 undefined，退回合併 Map 的插入順序（本機已快取的組在前、其餘依雲端順序在後）。這使可見順序取決於「**哪些提示詞組物件剛好快取在 `chrome.storage.local`**」而非已儲存的順序陣列，導致拖曳排序在下次合併時被靜默丟棄。
+- **重推守衛（v4.11.18）**：`retrySync()` 推送 `dsLocalAuth` 佇列中的金鑰時，`dsPresetOrderMeta` 與 `dsPresetTombstones` 過去落在無條件推送路徑，陳舊的本機值會蓋掉雲端較新值。現已補上新舊比較與逐 id 聯集合併，詳見上方 `dsLocalAuth` 說明。
 - **刪除墓碑（v4.8.3）**：刪除提示詞組時會記錄一筆帶刪除時間戳的墓碑於 `dsPresetTombstones`（本地與同步兩端）。`resolveSyncConflict()` 合併時會先合併雙邊墓碑（保留 `ts` 較新的一筆）並清理超過 30 天保留期的舊墓碑，再交給 `mergePresets()` 判斷：任一側資料的 `updatedAt` 不晚於其墓碑時間即會被排除，防止某裝置刪除的提示詞組被另一裝置（或同步備份中）仍保留的舊資料復活。
 - **墓碑合併演算法修正（v4.10.2）**：修復「清除墓碑」（JSON 匯入還原時呼叫的 `clearPresetTombstones()`）過去直接刪除墓碑鍵，導致無時間戳可供合併時仲裁勝負、任一側仍持有舊墓碑即會復活已清除紀錄的缺陷。墓碑條目形狀改為 `{ ts, deleted }`：實際刪除寫入 `{ ts, deleted: true }`，清除（還原）改為寫入 `{ ts, deleted: false }` 而非刪鍵；合併時取 `ts` 較新的一側整組勝出，「清除」與「刪除」成為同一時間軸上的兩次普通寫入，較新者必定勝出。舊版裸數字墓碑會自動正規化為 `{ ts: <該數字>, deleted: true }` 以維持相容。
 
@@ -88,7 +93,7 @@
 | `dsInputWidthEnabled` | boolean | `false` | 輸入框寬度調整是否啟用。 |
 | `dsHideThinking` | boolean | `false` | 隱藏思考過程功能是否啟用。 |
 | `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
-| `dsLocalAuth` | `string[]` | `[]` | 本地端權威金鑰清單（Plan A）。記錄上次 sync 寫入失敗、改為寫入 local 的金鑰名稱，讓後續讀取優先取用 local 值（僅本地端）。 |
+| `dsLocalAuth` | `string[]` | `[]` | 待重推佇列（僅本地端）。記錄上次 sync 寫入失敗、改為寫入 local 的金鑰名稱，供 `retrySync()` 後續重新推送至雲端。**自 v4.7.2 起，`_get()` 讀取路徑已不再依此清單釘選 local 值** —— 此鍵純粹是重試佇列，不影響讀取優先序。（v4.11.18）`retrySync()` 推送時對各金鑰施加不同守衛，並非一律無條件重推，詳見架構文件的 *Sync Write Quota Strategy*。 |
 | `syncInitialized` | boolean | `false` | 初始同步是否已完成（僅本地端）。 |
 | `syncConflictPending` | boolean | `false` | 是否有同步衝突待使用者解決（僅本地端）。 |
 | `dsPresetTombstones` | `Object<id, { ts: number, deleted: boolean }>` | `{}` | （v4.8.3）提示詞組刪除墓碑，同步於本地與雲端。合併時用於判斷某 id 是否已被刪除，避免舊資料復活。（v4.10.1）JSON 匯入後會呼叫 `clearPresetTombstones()` 清除匯入 ID 對應的墓碑，避免下次同步時被重新刪除。（v4.10.2）條目形狀由裸數字改為 `{ ts, deleted }`：`deleted: true` 表示已刪除，`deleted: false` 表示已清除（還原）。合併時取 `ts` 較新者整組勝出。舊版裸數字條目讀取時自動正規化為 `{ ts, deleted: true }`。 |
@@ -101,7 +106,7 @@
 
 - **Content Script**：從對話的 UUID 綁定透過 `updatePromptPrefixFromBinding()` 推導注入前綴。監聽 `chrome.storage.onChanged` 的 `dsPresetIndex`、`dsPreset_*`（新式獨立鍵）與 `CHAT_PRESET_MAP` 變更，不再依賴已退役的 `promptPresets` 鍵。`handleChatChange()` 中驗證 binding 的有效性時使用 `StorageManager.getSettings()` 而非直接讀取原始儲存鍵，確保正確透過新 schema 解析提示詞組資料。同時監聽來自彈出選單的 `ACTIVE_PRESET_CHANGED` 訊息，實現各分頁提示詞組追蹤。每個分頁獨立追蹤 `pendingPresetId`，避免跨分頁污染。`awaitingNewChatUuid` 旗標與 5 秒逾時控制自動綁定機制。內建 `PresetOverlay` 模組，在對話頁面標題列呈現浮動提示詞組選單，支援雙向同步與 SPA 導航自動重新掛載。
 - **儲存 API**：以 `chrome.storage.sync` 為主要儲存，在配額錯誤時自動備援至 `chrome.storage.local`。讀取時合併同步與本地端資料（衝突期間除外，僅回傳本地端）。
-- **Plan A 本地端權威追蹤**：當 sync 寫入失敗時，受影響的金鑰會被加入 `dsLocalAuth` 清單，後續讀取時這些金鑰的 local 值優先於 sync 值，防止資料遺失。成功寫入 sync 後，對應金鑰自 `dsLocalAuth` 移除。
+- **待重推佇列（`dsLocalAuth`）**：當 sync 寫入失敗時，受影響的金鑰會被加入 `dsLocalAuth` 清單，值仍寫入 local 以防資料遺失，並由 `retrySync()` 於後續嘗試重新推送至雲端。成功寫入 sync 後，對應金鑰自 `dsLocalAuth` 移除。**此清單不影響讀取優先序** —— v4.7.2 起 `_get()` 已不再依它釘選 local 值。（v4.11.18）重推時各金鑰有各自的守衛：`dsPresetIndex` 與 `dsPresetOrderMeta` 僅在本機時間戳不舊於雲端時才推送；`dsPreset_<id>` 僅在本機副本較新時才推送；`dsPresetTombstones` 一律以逐 id 聯集合併後才推送，絕不整份覆蓋雲端。
 - **事件處理**：在捕獲階段攔截輸入事件，確保注入在原始發送邏輯執行前完成。使用原生 HTMLTextAreaElement 值設定器繞過 React 的合成值追蹤。透過 `requestAnimationFrame` 重新發送被抑制的事件。
 - **對話框系統**：`Modal` 控制器物件以 `position: fixed` 覆蓋層呈現內嵌對話框。`Modal.prompt()` 強制執行必填輸入驗證。`Modal.confirm()` 支援危險變體與單按鈕（警示）模式。
 - **側邊欄自動隱藏模組**：`content/sidebar-auto-hide.js` 中的 `SidebarAutoHide` 物件。透過 CSS 類別、內聯樣式與 CSS 轉場管理側邊欄收合/展開。使用兩個 `MutationObserver` 實例（一個用於 SPA DOM 取代，一個用於原生收合/展開循環）。透過 `document` 上的捕獲階段 `mouseover` 包含下拉選單懸停偵測。
