@@ -200,6 +200,7 @@
                 const localData = await this._safeGet('local', [key]);
                 if (localData[key] !== undefined) {
                     let shouldPush = true;
+                    let pushValue = localData[key];
 
                     if (key === this.KEYS.PRESET_INDEX) {
                         // 僅在本機排序至少與雲端同新時才推送
@@ -216,10 +217,19 @@
                             shouldPush = false;
                             reconciledPresetKeys.push(key);
                         }
+                    } else if (key === this.KEYS.PRESET_ORDER_META) {
+                        // 與 PRESET_INDEX 分支一致：僅在本機排序時間戳至少與雲端同新時才推送
+                        const localOrderTs = (localData[key] || {}).orderUpdatedAt || 0;
+                        const syncOrderTs = (syncSnapshot[key] || {}).orderUpdatedAt || 0;
+                        shouldPush = localOrderTs >= syncOrderTs;
+                    } else if (key === this.KEYS.PRESET_TOMBSTONES) {
+                        // 墓碑記錄需逐 id 聯集合併（重用既有 _mergeTombstones），
+                        // 避免整包覆寫復活對方裝置已刪除的 preset
+                        pushValue = this._mergeTombstones(localData[key] || {}, syncSnapshot[key] || {});
                     }
 
                     if (shouldPush) {
-                        await this._set({ [key]: localData[key] });
+                        await this._set({ [key]: pushValue });
                     }
                 } else {
                     // 金鑰在離線期間於本機被刪除：清理 sync 與追蹤記錄

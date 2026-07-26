@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.11.18](changelog/v4.md#41118---2026-07-26) | 修復跨裝置同步的排序回滾與「已刪除提示詞組復活」：`retrySync()` 待推送迴圈對 `dsPresetOrderMeta` 與 `dsPresetTombstones` 無條件盲推（前者因 `startsWith('dsPreset_')` 的結尾底線而不匹配任何既有守衛），陳舊本機值蓋掉雲端較新值；排序中介資料補上與 `PRESET_INDEX` 一致的 `>=` 新舊比較，墓碑改為逐 id 聯集合併（重用既有 `_mergeTombstones()`），空的本機集合不再清空雲端 |
 | [4.11.8](changelog/v4.md#4118---2026-07-26) | 「回到頂部」改為一次到頂：每輪輪詢由 `scrollBy(0, -0.9 * viewportHeight)` 逐格上捲改為直接寫入 `scrollTop = 0`，抵達時間不再與對話長度成正比（50 個視窗高的對話由約 5.9 秒降至瞬間）；收斂閘門與逾時、中止、`PreventAutoScroll` 協調全部保留，移除已無引用的 `SCROLL_STEP_FACTOR`，並首次明文記載「向上一次到頂、向下逐步前進」的刻意不對稱 |
 | [4.11.7](changelog/v4.md#4117---2026-07-26) | 修復 Markdown 匯出靜默截斷：`_scrollToTopAndSettle()` 丟棄 `scrollToTopAndWait` 的回傳值，捲動到頂失敗（逾時或使用者中途按下「回到頂部」）時仍從當下位置開始擷取，輸出悄悄漏掉最舊訊息且無錯誤提示；改為傳回並檢查結果，失敗時原樣傳回 `reason` 並中止，teardown 沿用既有 `finally` |
 | [4.11.6](changelog/v4.md#4116---2026-07-26) | 修復「回到頂部」上捲後彈回、始終到不了頂的缺陷：`scrollToTopAndWait()` 未與 `PreventAutoScroll` 協調，頁面自身的向下捲動不受抑制，導致收斂條件 `currentScrollTop <= 0` 恆偽、`_stableTopCount` 每輪歸零而空轉至 30 秒超時；改為在進入點保存啟用前狀態並於 `cleanup()` 還原，僅在本次呼叫為啟用者時才 `disable()`，以免踩掉 `harvest.js` 巢狀呼叫的保護 |
