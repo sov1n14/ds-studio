@@ -187,9 +187,9 @@
             const incTs = (incOrderMeta && incOrderMeta.orderUpdatedAt) || 0;
             const baseTs = (baseOrderMeta && baseOrderMeta.orderUpdatedAt) || 0;
             let chosen;
-            if (incTs > baseTs) chosen = incOrderMeta.order;
-            else if (baseTs > incTs) chosen = baseOrderMeta.order;
-            // 兩者相等或皆未定義 → chosen 保持 undefined → 使用 map 插入順序
+            if (baseTs > incTs) chosen = baseOrderMeta.order;
+            // 時間戳相同或 incoming 較新 → 雲端優先（cloud-on-tie）：平手代表無法判斷新舊，雲端優先可讓多裝置最終收斂到同一順序
+            else chosen = incOrderMeta && incOrderMeta.order; // 皆未定義時 incOrderMeta 為 undefined，chosen 維持 undefined → 退回 map 插入順序
 
             const survivingIds = Array.from(mergedMap.keys());
             const survivingSet = new Set(survivingIds);
