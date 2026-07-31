@@ -334,6 +334,31 @@ describe('editor.js auto-save debounce wiring — source assertion', () => {
 });
 
 // ─────────────────────────────────────────────
+// Escape-to-close wiring — source assertion
+//
+// The window-level keydown listener lives inside the DOMContentLoaded closure
+// and is not exported via __DSSEditor, so we assert the literal wiring in
+// source, matching the auto-save debounce tests above.
+// ─────────────────────────────────────────────
+
+describe('editor.js Escape-to-close wiring — source assertion', () => {
+    it('registers a window-level keydown listener that closes the window on Escape', async () => {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, resolve } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
+
+        // Anchor on the distinctive Esc comment and capture through the listener's close.
+        const escBlockMatch = code.match(/\/\/ Esc 關閉視窗：pagehide 自動儲存保證未存內容先寫入[\s\S]*?\}\);/);
+        expect(escBlockMatch).not.toBeNull();
+        expect(escBlockMatch[0]).toContain("window.addEventListener('keydown'");
+        expect(escBlockMatch[0]).toContain("e.key === 'Escape'");
+        expect(escBlockMatch[0]).toContain('window.close()');
+    });
+});
+
+// ─────────────────────────────────────────────
 // renderDisabledState
 // ─────────────────────────────────────────────
 

@@ -335,6 +335,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         isDirty = false;
         saveContent(target, textareaEl.value, nameInputEl.value).catch(() => {});
     });
+
+    // Esc 關閉視窗：pagehide 自動儲存保證未存內容先寫入
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') window.close();
+    });
 });
 
 // ─────────────────────────────────────────────
