@@ -42,3 +42,4 @@
 - [GoToTop PreventAutoScroll Coordination Red 2026-07-26](gotop-pas-coordination-red.md) — save-restore red tests; 2/5 vacuous on no-op baseline, proved via synthetic-buggy mutation stand-ins.
 - [GoToTop Scroll-Engine Redesign Red 2026-07-26](gotop-scroll-engine-red.md) — jump-vs-step mechanism-agnostic container mock; R1 observed-fail, R2 pass-on-both explained (preserved gate).
 - [GoToTop scrollBy-Probe Repair 2026-07-26](gotop-scrollby-probe-repair.md) — 4 tests coupled to scrollBy broke when jump landed; re-pointed at scrollTop setter (reused existing pattern); shared-tree git-status gotcha.
+- [Order Meta Guard RED 2026-07-26](project_order_meta_guard_red_2026-07-26.md) — retrySync() pushes pending dsPresetOrderMeta with no newer-wins guard; new spec's Req1/Req3 RED, Req2 GREEN.
