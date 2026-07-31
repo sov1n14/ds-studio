@@ -44,7 +44,7 @@ ds-studio/
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
-│   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression
+│   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
 │   ├── preset-dropdown.css  ─  Overlay dropdown component styles
 │   ├── sse-parser.js *      ─  SSE stream parser (web accessible)
 │   ├── censor-xhr-hook.js * ─  XHR monkey-patch for SSE interception (web accessible)
@@ -172,9 +172,9 @@ sequenceDiagram
     Content->>Content: PresetOverlay.render() / updateActiveId()
 
     Note over Popup,Content: 一般流程 — UI 調整
-    Popup->>Storage: 儲存 dsSidebarAutoHide / dsChatWidth / dsInputWidth / dsHideThinking
+    Popup->>Storage: 儲存 dsSidebarAutoHide / dsChatWidth / dsInputWidth / dsHideThinking / dsPreventAutoScroll
     Storage-->>Content: onChanged
-    Content->>Content: SidebarAutoHide / ChatWidth / InputWidth / HideThinking 即時啟用/停用
+    Content->>Content: SidebarAutoHide / ChatWidth / InputWidth / HideThinking / PreventAutoScroll 即時啟用/停用
 
     Note over Popup,Content: 一般流程 — Markdown 匯出
     Popup->>Content: sendMessage EXPORT_MARKDOWN

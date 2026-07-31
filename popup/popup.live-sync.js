@@ -95,6 +95,10 @@ function createLiveSyncListener(ctx) {
             applyToggle(dom.hideThinkingToggle, changes[KEYS.HIDE_THINKING].newValue);
         }
 
+        if (changes[KEYS.PREVENT_AUTO_SCROLL]) {
+            applyToggle(dom.preventAutoScrollToggle, changes[KEYS.PREVENT_AUTO_SCROLL].newValue);
+        }
+
         if (changes[KEYS.SHOW_SYSTEM_TIME]) {
             applyToggle(dom.showSystemTimeToggle, changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false);
         }

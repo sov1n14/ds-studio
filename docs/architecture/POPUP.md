@@ -243,7 +243,7 @@ The popup previously only read storage once at open time (via `StorageManager.sy
 
 **Coverage**:
 - `isEnabled` / `globalPromptEnabled` (local-only, v4.7.3) → toggle checkbox + `applyMasterSwitchUI()`.
-- `includeThinking`, `includeReferences`, `dsSidebarAutoHide`, `dsHideThinking`, `dsShowSystemTime` → matching toggle checkbox.
+- `includeThinking`, `includeReferences`, `dsSidebarAutoHide`, `dsHideThinking`, `dsPreventAutoScroll` (v4.12.0), `dsShowSystemTime` → matching toggle checkbox.
 - `dsChatWidth`/`dsChatWidthEnabled` and `dsInputWidth`/`dsInputWidthEnabled` → slider value, label text, and collapsed-container class.
 - `dsPresetIndex` / preset order meta / any `dsPreset_<id>` key → re-fetches `StorageManager.getSettings()` and re-renders the custom select (preset add/rename/delete/reorder/content edit from elsewhere).
 - ChatPresetMap chunk/meta keys → re-fetches `StorageManager.getChatPresetMap()`.

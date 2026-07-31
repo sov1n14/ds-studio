@@ -89,6 +89,7 @@ In the popup menu's **UI Adjustments** section, you can adjust the following set
 |-|-|
 | **Auto-hide Sidebar** | Automatically collapses the sidebar to 60px width when the mouse leaves it, and expands on mouse hover, saving screen space |
 | **Collapse Thinking Process** | Automatically collapses DeepSeek's thinking blocks (reasoning process) when they appear; manually expanded blocks are unaffected |
+| **Prevent Auto-Scroll** | Suppresses the page's downward auto-scroll at all times, instead of only during back-to-top and Markdown export. **Trade-off**: the view no longer follows a streaming AI reply downward, so you scroll yourself; native wheel/trackpad scrolling is unaffected. Off by default |
 | **Conversation Area Width** | After enabling the toggle, use the slider to adjust the conversation message display width (30%–100% viewport width) |
 | **Input Box Width** | After enabling the toggle, use the slider to independently adjust the input box display width (30%–100% viewport width); the input box width is automatically constrained by the conversation area width and will not exceed it |
 
@@ -202,6 +203,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 
 - Auto-hide sidebar
 - Collapse thinking process
+- Prevent auto-scroll
 - System time injection
 - Conversation area and input box width adjustment
 - In-page overlay dropdown

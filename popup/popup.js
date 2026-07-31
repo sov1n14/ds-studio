@@ -7,6 +7,8 @@
  * 需在本檔案之前以 <script> 載入上述模組。
  */
 
+// ponytail: file past the 450-line proactive-split threshold; extract the feature-toggle bindings into popup.toggles.js when next touched
+
 // ────────────────────────────────────────────
 // Main popup logic
 // ────────────────────────────────────────────
@@ -35,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthSlider          = document.getElementById('inputWidthSlider');
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
+    const preventAutoScrollToggle   = document.getElementById('preventAutoScrollToggle');
 
     let saveTimeout;
     let customSelect;
@@ -57,7 +60,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             hideThinkingToggle,
             showSystemTimeToggle,
             chatWidthToggle, chatWidthSlider,
-            inputWidthToggle, inputWidthSlider
+            inputWidthToggle, inputWidthSlider,
+            preventAutoScrollToggle
         ];
         subControls.forEach(el => {
             if (el) el.disabled = !isEnabled;
@@ -167,6 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (sidebarAutoHideToggle)   sidebarAutoHideToggle.checked   = settings.sidebarAutoHide;
     if (hideThinkingToggle)      hideThinkingToggle.checked      = settings.hideThinking;
     if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.showSystemTime;
+    if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
 
     // 全域提示詞開關初始值
     if (globalPromptToggle) {
@@ -271,6 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sidebarAutoHideToggle, hideThinkingToggle,
             chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
             inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
+            preventAutoScrollToggle,
         },
         applyMasterSwitchUI,
         updateEditPresetBtnState,
@@ -397,6 +403,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (showSystemTimeToggle) {
         showSystemTimeToggle.addEventListener('change', async () => {
             await StorageManager.saveShowSystemTime(showSystemTimeToggle.checked);
+            await refreshSyncStatus();
+            showSaveStatus();
+        });
+    }
+
+    if (preventAutoScrollToggle) {
+        preventAutoScrollToggle.addEventListener('change', async () => {
+            await StorageManager.savePreventAutoScroll(preventAutoScrollToggle.checked);
             await refreshSyncStatus();
             showSaveStatus();
         });
