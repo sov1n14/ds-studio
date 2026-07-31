@@ -42,6 +42,17 @@ function makeCheckbox(checked = false) {
     el.checked = checked;
     return el;
 }
+function makeRadio(value, checked = false) {
+    const el = document.createElement('input');
+    el.type = 'radio';
+    el.value = value;
+    el.checked = checked;
+    return el;
+}
+
+function makeWebsearchRadios(checkedValue = '') {
+    return ['default', 'on', 'off'].map((value) => makeRadio(value, value === checkedValue));
+}
 
 function makeSlider(value = '70') {
     const el = document.createElement('input');
@@ -77,6 +88,8 @@ function makeDom(overrides = {}) {
         inputWidthSlider: makeSlider('70'),
         inputWidthValue: makeSpan('70%'),
         inputWidthSliderContainer: makeDiv(),
+        preventAutoScrollToggle: makeCheckbox(false),
+        websearchRadios: makeWebsearchRadios(),
         ...overrides,
     };
 }
@@ -189,6 +202,7 @@ describe('createLiveSyncListener — simple toggle keys', () => {
         ['INCLUDE_REFERENCES', 'includeReferencesToggle'],
         ['SIDEBAR_AUTO_HIDE', 'sidebarAutoHideToggle'],
         ['HIDE_THINKING', 'hideThinkingToggle'],
+        ['PREVENT_AUTO_SCROLL', 'preventAutoScrollToggle'],
     ];
 
     it.each(cases)('updates %s -> dom.%s checkbox', (keyName, domField) => {
@@ -234,6 +248,67 @@ describe('createLiveSyncListener — simple toggle keys', () => {
 
         expect(dom.includeThinkingToggle.checked).toBe(before.includeThinking);
         expect(dom.includeReferencesToggle.checked).toBe(before.includeReferences);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group B2 — WEBSEARCH_TOGGLE radio group
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('createLiveSyncListener — WEBSEARCH_TOGGLE radio group', () => {
+    it("checks the 'on' radio and unchecks the others when WEBSEARCH_TOGGLE becomes 'on'", () => {
+        const dom = makeDom();
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'on' } }, 'local');
+
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
+        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(false);
+        expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
+    });
+
+    it("checks the 'off' radio and unchecks the others when WEBSEARCH_TOGGLE becomes 'off'", () => {
+        const dom = makeDom();
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'off' } }, 'local');
+
+        expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(true);
+        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(false);
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(false);
+    });
+
+    it("falls back to 'default' when newValue is undefined (?? 'default')", () => {
+        const dom = makeDom({ websearchRadios: makeWebsearchRadios('on') });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'on', newValue: undefined } }, 'local');
+
+        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(true);
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(false);
+        expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
+    });
+
+    it('re-applying an equal value is a no-op (no feedback loop, DOM unchanged)', () => {
+        const dom = makeDom();
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        // first application: the popup's own save echoing back via onChanged
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'on' } }, 'local');
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
+
+        // re-application of the same value must not throw and must leave the DOM as-is
+        expect(() => {
+            listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'on', newValue: 'on' } }, 'local');
+        }).not.toThrow();
+
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
+        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(false);
+        expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
     });
 });
 
@@ -586,6 +661,7 @@ describe('popup.js — Live Sync wiring block', () => {
             'sidebarAutoHideToggle', 'hideThinkingToggle',
             'chatWidthToggle', 'chatWidthSlider', 'chatWidthValue', 'chatWidthSliderContainer',
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
+            'preventAutoScrollToggle', 'websearchRadios',
         ];
         for (const field of expectedDomFields) {
             expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));

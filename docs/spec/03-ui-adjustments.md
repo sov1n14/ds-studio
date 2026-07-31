@@ -108,3 +108,32 @@
 - **功能**：自動移除/隱藏特定類別選擇器（`._9579690`）的 DOM 元素。
 - **主開關連動**：完全跟隨擴充功能主開關（`isEnabled`），無獨立開關。
 - **SPA 韌性**：透過 MutationObserver 監控 DOM 變化，在 SPA 導航後重新套用清理邏輯。
+
+## 21. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
+
+- **目的**：讓原本僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為**常駐**。此開關不新增任何攔截機制，只改變既有 `PreventAutoScroll` 補丁的生效期間。
+- **開關位置**：彈出選單「UI 調整」卡片中的 `#preventAutoScrollToggle` 核取方塊。
+- **儲存鍵**：`dsPreventAutoScroll`（布林值，預設 `false`）。
+- **常駐狀態的存放位置**：與既有的 `enabled` 旗標並存於同一個隱藏 bridge 元素（`#dss-prevent-auto-scroll-bridge`）的 `dataset` 上，不使用模組層可變狀態。
+- **`disable()` 在常駐模式下為 no-op**：此守衛是必要的，而非防禦性冗餘。該旗標**沒有引用計數**，且 `harvest.js` 在 `finally` 中**無條件**呼叫 `disable()`；若不加守衛，使用者開啟常駐後只要匯出一次 Markdown，保護就會在匯出結束時被靜默關掉。`setPersistent(false)` 則刻意繞過此守衛直接寫入 `dataset`，否則關閉常駐將永遠無法解除保護。
+- **呼叫端零改動**：常駐邏輯完全收斂在共用節流點 `content/prevent-auto-scroll-bridge.js`。`harvest.js` 與 `go-top.scroll.js` 兩個既有呼叫端不需修改 —— go-top 既有的 `wasAlreadyEnabled` 保存還原邏輯在常駐模式下自然短路（`isEnabled()` 恆為真，故它不會 enable 也不會 disable）。
+- **即時切換**：`chrome.storage.onChanged` 監聽器同時監控 `dsPreventAutoScroll` 與 `isEnabled`（僅 `local` 命名空間），可在不重新整理頁面的情況下即時生效。兩個鍵的任一變更都會重新自儲存空間讀取後重算，不快取部分狀態。
+- **主開關感知**：僅當主開關（`isEnabled`）為真**且** `dsPreventAutoScroll` 為真時才常駐。主開關關閉時常駐一律解除，即使自身開關為開。主開關鍵不存在時視為關閉。
+- **已知取捨（刻意接受，故預設關閉）**：既有 MAIN-world 補丁是 `Element.prototype` 層級的**全域**攔截，只擋**向下**捲動，且**無法區分**程式觸發與使用者觸發（無 `isTrusted`／呼叫堆疊判定）。因此常駐開啟時：
+  - DeepSeek 串流回覆的「自動跟隨捲到最新」會一併被擋，需自行向下捲動。
+  - 切換或開啟對話時若需向下定位才能落在正確位置，該定位也會被擋；向上定位不受影響。
+  - 原生滾輪／觸控板／捲軸拖曳不經這些 JS API，不受影響；但頁面上任何以 JS 呼叫這些 API 實作的「捲到底部」按鈕會被擋。
+- **實作位置**：`content/prevent-auto-scroll-bridge.js`（新增 `setPersistent()` / `isPersistent()` / `start()`，`disable()` 加入守衛）；公開 API 掛載於 `window.DSstudio.PreventAutoScroll`。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。
+
+## 22. 連網搜索 (Web Search) — v4.13.0
+
+- **目的**：讓使用者指定 DeepSeek 頁面「智能搜索」切換按鈕的保持狀態 —— `開啟`（保持 `aria-pressed="true"`）、`關閉`（保持 `"false"`）、`預設`（完全不干擾頁面）。此設定不新增任何頁面元素，只強制既有按鈕的狀態。
+- **開關位置**：彈出選單「UI 調整」卡片中的單選群組（`input[name="websearchToggle"]`，三選項 `預設` / `開啟` / `關閉`，沿用 `.locale-option` 樣式）。
+- **儲存鍵**：`dsWebSearchToggle`（字串，`'default'` | `'on'` | `'off'`，預設 `'default'`）。
+- **核心規則 —— 只在狀態不符時點擊**：`aria-pressed` 已等於目標狀態時絕不點擊，因為點擊是切換操作，相符時點擊反而把狀態切換走。狀態判定：`getAttribute('aria-pressed') === 'true'`。
+- **元素辨識（實測後修正）**：實頁有**兩個外觀相同**的 `.ds-toggle-button[aria-pressed]` 元素（深度思考與智能搜索），`document.querySelector` 固定取到第一個（錯的）。`to-do/samples/websearch.html` 樣本僅含一個元素，未反映實頁。`findButton()` 以 **label 文字含「搜索」** 者為準（`_pickByLabel()`），順序無關；找不到時退回第一個匹配；`.ds-toggle-button` 不存在時對通用 `[aria-pressed="true"], [aria-pressed="false"]` 執行相同兩段式邏輯。不使用建置版雜湊類別（`f79352dc` / `_6dbc175` 每次部署會變）。
+- **點擊節流**：`CLICK_COOLDOWN_MS`（500ms）抑制冷卻窗內的再次點擊。自己點擊觸發的 mutation 落在冷卻窗內被跳過，防止頁面若強制回寫屬性時形成點擊 ping-pong。
+- **SPA 韌性**：單一 `MutationObserver` 雙目標 —— body `childList + subtree`（SPA 重渲染的節點替換）與按鈕本身 `attributes, attributeFilter: ['aria-pressed']`（使用者手動點擊／頁面邏輯的原地翻轉，childList-only 會漏）。callback 內先重新 arm 再套用，使 attribute 目標永遠指向存活元素。
+- **主開關感知**：僅當主開關（`isEnabled`）為真且模式非 `default` 時才動作。`chrome.storage.onChanged`（僅 `local` 命名空間）同時監控 `isEnabled` 與 `dsWebSearchToggle`，支援免重整即時切換；模式在 `on`/`off` 間互換時直接重新套用，不需 disable。
+- **`disable()` 不還原按鈕狀態**：與 `hide-thinking` 不同，本功能不擁有任何可還原的狀態 —— 停止強制即把按鈕留在現況，不做額外點擊。
+- **實作位置**：`content/websearch-toggle.js`；公開 API 掛載於 `window.DSstudio.WebSearchToggle`（測試以 `module.exports` 取用）。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。

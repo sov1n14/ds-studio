@@ -10,7 +10,7 @@ DS studio is a **Chrome extension** that enhances the experience of using **[cha
 |-|-|
 | **Prompt System** | Multi-prompt-group management, auto-injection, global default prompt, conversation binding, blank option mode |
 | **Quick Switching** | In-page Overlay dropdown with search filtering and drag-to-reorder, bidirectional sync with popup menu |
-| **UI Adjustments** | Auto-hide sidebar, conversation/input box width adjustment, collapse thinking process, back-to-top button |
+| **UI Adjustments** | Auto-hide sidebar, conversation/input box width adjustment, collapse thinking process, web search toggle, prevent auto-scroll, back-to-top button |
 | **Conversation Export** | One-click export full conversation as Markdown, with toggle for thinking process and reference links |
 | **Quote Reply** | Select AI reply text and convert it to Markdown blockquote with one click |
 | **System Time Injection** | Automatically append current system time and timezone offset to each message |

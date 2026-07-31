@@ -92,7 +92,9 @@
 | `dsInputWidth` | number | `70` | 輸入框寬度百分比（30–100）。 |
 | `dsInputWidthEnabled` | boolean | `false` | 輸入框寬度調整是否啟用。 |
 | `dsHideThinking` | boolean | `false` | 隱藏思考過程功能是否啟用。 |
+| `dsPreventAutoScroll` | boolean | `false` | （v4.12.0）防止自動回滾是否常駐啟用。開啟時 `PreventAutoScroll` 全時抑制向下自動捲動，而非僅在「回到頂部」與 Markdown 匯出期間生效。 |
 | `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
+| `dsWebSearchToggle` | string | `'default'` | （v4.13.0）連網搜索按鈕狀態強制模式：`'default'` 不干擾、`'on'` 保持頁面智能搜索按鈕 `aria-pressed="true"`、`'off'` 保持 `"false"`。只在狀態不符時點擊。受主開關連動。 |
 | `dsLocalAuth` | `string[]` | `[]` | 待重推佇列（僅本地端）。記錄上次 sync 寫入失敗、改為寫入 local 的金鑰名稱，供 `retrySync()` 後續重新推送至雲端。**自 v4.7.2 起，`_get()` 讀取路徑已不再依此清單釘選 local 值** —— 此鍵純粹是重試佇列，不影響讀取優先序。（v4.11.18）`retrySync()` 推送時對各金鑰施加不同守衛，並非一律無條件重推，詳見架構文件的 *Sync Write Quota Strategy*。 |
 | `syncInitialized` | boolean | `false` | 初始同步是否已完成（僅本地端）。 |
 | `syncConflictPending` | boolean | `false` | 是否有同步衝突待使用者解決（僅本地端）。 |

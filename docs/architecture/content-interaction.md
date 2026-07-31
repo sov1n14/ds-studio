@@ -95,7 +95,7 @@ Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynam
 
 ## PreventAutoScroll Module
 
-The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's automatic scroll-to-latest behavior during controlled operations like Markdown export.
+The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's automatic scroll-to-latest behavior. It is active in two distinct modes: **transient**, for the duration of a controlled operation like Markdown export or go-top, and **persistent** (v4.12.0), for as long as the user leaves the `dsPreventAutoScroll` setting on.
 
 ### Architecture
 
@@ -104,16 +104,22 @@ The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's
 
 ### Control Flow
 
-- `enable()`: Sets `bridge.dataset.enabled = 'true'`. The main-world patch reads this and begins suppressing auto-scroll calls.
-- `disable()`: Sets `bridge.dataset.enabled = 'false'`. Auto-scroll resumes normally.
-- `isEnabled()`: Reads the current flag. **There is no reference counting** — `disable()` is an unconditional global off-switch. Any caller that may run nested inside another caller's enabled window MUST save the prior state via `isEnabled()` and restore it, rather than blind-toggling.
+- `enable()`: Sets `bridge.dataset.enabled = 'true'`. The main-world patch reads this and begins suppressing auto-scroll calls. Never touches persistent state, so it stays idempotent in either mode.
+- `disable()`: Sets `bridge.dataset.enabled = 'false'` — **unless persistent mode is on, in which case it is a no-op** (v4.12.0).
+- `isEnabled()`: Reads the current flag. **There is no reference counting** — outside persistent mode, `disable()` is an unconditional global off-switch. Any caller that may run nested inside another caller's enabled window MUST save the prior state via `isEnabled()` and restore it, rather than blind-toggling.
+- `setPersistent(shouldPersist)` (v4.12.0): When true, enables protection and marks `bridge.dataset.persistent = 'true'`. When false, clears the mark and force-writes `dataset.enabled = 'false'` directly — deliberately bypassing `disable()`'s own persistent guard, which would otherwise make turning persistence off unable to ever release the protection.
+- `isPersistent()` (v4.12.0): Reads the persistent flag. Persistent state lives on the same hidden bridge element's dataset as `enabled`, so the module keeps no module-scope mutable state.
+- `start()` (v4.12.0): Auto-invoked at module load, mirroring `content/hide-thinking.js`'s bootstrap convention. Reads `dsPreventAutoScroll` and the `isEnabled` master switch from `chrome.storage.local`, applies the result, then subscribes to `chrome.storage.onChanged` (ignoring namespaces other than `local`). Persistent mode is on only when the master switch is enabled AND the setting is true; an absent master key counts as disabled. Every relevant change re-reads both keys from storage rather than caching partial state.
 
 ### Consumers
 
-Two modules coordinate with this bridge, and they nest:
+Three consumers coordinate with this bridge, and the first two nest:
 
-- **`harvest.js`** enables it before the scroll-to-top phase and disables it in a `finally` after the entire top-to-bottom capture completes — so it stays on for the whole export.
-- **`go-top.js`** (`scrollToTopAndWait`, in `go-top.scroll.js`) enables it for the duration of a single scroll-to-top and restores the prior state in `cleanup()`. Because `harvest.js` calls `scrollToTopAndWait` from inside its own enabled window, GoToTop uses save-and-restore: it disables only if it was the call that enabled. A blind `disable()` here would strip harvest's protection mid-export.
+- **`harvest.js`** enables it before the scroll-to-top phase and disables it in a `finally` after the entire top-to-bottom capture completes — so it stays on for the whole export. Note that `finally` block calls `disable()` **unconditionally**; combined with the absence of reference counting, that is precisely why `disable()` had to become a no-op under persistent mode. Without that guard, one Markdown export would silently switch off a user-enabled permanent lock.
+- **`go-top.js`** (`scrollToTopAndWait`, in `go-top.scroll.js`) enables it for the duration of a single scroll-to-top and restores the prior state in `cleanup()`. Because `harvest.js` calls `scrollToTopAndWait` from inside its own enabled window, GoToTop uses save-and-restore: it disables only if it was the call that enabled. A blind `disable()` here would strip harvest's protection mid-export. Under persistent mode this logic short-circuits naturally — `isEnabled()` is already true, so GoToTop neither enables nor disables.
+- **The `dsPreventAutoScroll` popup toggle** (v4.12.0) drives `setPersistent()` via `start()`'s storage subscription. Neither of the two transient consumers was modified to support it: the persistent flag lives at the shared choke point, which is the only place a caller-agnostic mode switch can be correct given that callers do not refcount.
+
+**Scope caveat.** The main-world patch is a global `Element.prototype`-level interception that blocks **downward** scrolls only and cannot distinguish page-initiated from user-initiated calls. Under persistent mode this means DeepSeek's streaming follow-scroll is also suppressed, and any conversation-switch that needs to scroll down to land correctly will be blocked too. Native wheel/trackpad scrolling does not route through these JS APIs and is unaffected. This trade-off is why the setting defaults to `false`.
 
 ### Design Decisions
 

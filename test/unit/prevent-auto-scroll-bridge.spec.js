@@ -43,6 +43,8 @@ const FAKE_SCRIPT_URL = 'chrome-extension://fake-ext-id/content/prevent-auto-scr
 //    3. Let enable/disable re-create them as needed.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import '../../utils/storage-manager.js';
+
 import bridgeModule from '../../content/prevent-auto-scroll-bridge.js';
 const { enable, disable, isEnabled } = bridgeModule;
 

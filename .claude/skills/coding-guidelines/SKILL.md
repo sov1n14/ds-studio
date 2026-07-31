@@ -157,11 +157,11 @@ This repository follows a shared-utils pattern. Each extension's `utils/` direct
 | `SPEC.md` | Traditional Chinese (繁體中文) | Product specification: features, acceptance criteria, roadmap |
 | `README.md` | Traditional Chinese (繁體中文) | User manual: install, configure, operate |
 | `ARCHITECTURE.md` | English | Developer guide: code structure, design decisions, onboarding |
-| `CHANGELOG.md` | English | Change log: all notable changes per version |
+| `docs/CHANGELOG.md` | English | Change log: all notable changes per version. Per-line detail entries live in `docs/changelog/v<major>.md`; `docs/CHANGELOG.md` itself holds the version-summary table that links into them. There is deliberately NO root-level `CHANGELOG.md` — it was removed as an orphaned duplicate that no user-facing doc linked to. |
 
 **Planning — MANDATORY:** All plans, task breakdowns, and implementation directives MUST be written in English.
 
-**CHANGELOG bootstrap rule:** If creating `CHANGELOG.md` for the first time, draft it based on `git diff` against the previous commit.
+**CHANGELOG bootstrap rule:** If creating `docs/CHANGELOG.md` for the first time, draft it based on `git diff` against the previous commit.
 
 ---
 

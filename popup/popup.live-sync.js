@@ -95,6 +95,17 @@ function createLiveSyncListener(ctx) {
             applyToggle(dom.hideThinkingToggle, changes[KEYS.HIDE_THINKING].newValue);
         }
 
+        if (changes[KEYS.PREVENT_AUTO_SCROLL]) {
+            applyToggle(dom.preventAutoScrollToggle, changes[KEYS.PREVENT_AUTO_SCROLL].newValue);
+        }
+
+        if (changes[KEYS.WEBSEARCH_TOGGLE]) {
+            const val = changes[KEYS.WEBSEARCH_TOGGLE].newValue ?? 'default';
+            (dom.websearchRadios || []).forEach(r => {
+                if (r.checked !== (r.value === val)) r.checked = (r.value === val);
+            });
+        }
+
         if (changes[KEYS.SHOW_SYSTEM_TIME]) {
             applyToggle(dom.showSystemTimeToggle, changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false);
         }

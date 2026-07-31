@@ -12,6 +12,8 @@
  *   7. storage-manager.js  （本檔）
  */
 
+// ponytail: file past the 450-line proactive-split threshold; split the save<X> writers into storage-manager.setters.js when next touched
+
 // === 錯誤類別（供 instanceof 檢查） ===
 
 class LockAcquireTimeoutError extends Error {
@@ -61,6 +63,8 @@ const StorageManager = {
         CHAT_PRESET_MAP_CHUNK_PREFIX: 'chatPresetMap_',
         SIDEBAR_AUTO_HIDE: 'dsSidebarAutoHide',
         HIDE_THINKING: 'dsHideThinking',
+        PREVENT_AUTO_SCROLL: 'dsPreventAutoScroll',
+        WEBSEARCH_TOGGLE: 'dsWebSearchToggle',
         SHOW_SYSTEM_TIME: 'dsShowSystemTime',
         CHAT_WIDTH: 'dsChatWidth',
         CHAT_WIDTH_ENABLED: 'dsChatWidthEnabled',
@@ -87,6 +91,8 @@ const StorageManager = {
         chatPresetMap: {},
         dsSidebarAutoHide: false,
         dsHideThinking: false,
+        dsPreventAutoScroll: false,
+        dsWebSearchToggle: 'default',
         dsShowSystemTime: false,
         dsChatWidth: 70,
         dsChatWidthEnabled: false,
@@ -402,6 +408,12 @@ const StorageManager = {
         return this._set({ [this.KEYS.HIDE_THINKING]: enabled });
     },
 
+    async savePreventAutoScroll(enabled) {
+        return this._set({ [this.KEYS.PREVENT_AUTO_SCROLL]: enabled });
+    },
+
+    async saveWebsearchToggle(value) { return this._set({ [this.KEYS.WEBSEARCH_TOGGLE]: value }); },
+
     async saveShowSystemTime(enabled) {
         return this._set({ [this.KEYS.SHOW_SYSTEM_TIME]: enabled });
     },
@@ -444,3 +456,4 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = StorageManager;
 }
+

@@ -29,6 +29,7 @@ ds-studio/
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
+│   ├── websearch-toggle.js  ─  Enforce web-search button aria-pressed state (v4.13.0)
 │   ├── quote-reply.js       ─  Floating "引用回覆" button on text selection
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
@@ -44,7 +45,7 @@ ds-studio/
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
-│   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression
+│   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
 │   ├── preset-dropdown.css  ─  Overlay dropdown component styles
 │   ├── sse-parser.js *      ─  SSE stream parser (web accessible)
 │   ├── censor-xhr-hook.js * ─  XHR monkey-patch for SSE interception (web accessible)
@@ -108,7 +109,7 @@ DeepSeek's chat interface relies on a frontend framework (likely React) which tr
 The `isEnabled` key acts as a master switch for all extension features:
 
 - **Popup UI**: When the master toggle is turned off, `applyMasterSwitchUI()` disables all sub-controls (sidebar auto-hide checkbox, hide-thinking checkbox, system time toggle, chat width toggle + slider, input width toggle + slider) via `el.disabled = true`.
-- **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, GoToTop, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true.
+- **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, WebSearchToggle, GoToTop, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true.
 - **System time injection**: When `isEnabled` is false, `showSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
@@ -172,9 +173,9 @@ sequenceDiagram
     Content->>Content: PresetOverlay.render() / updateActiveId()
 
     Note over Popup,Content: 一般流程 — UI 調整
-    Popup->>Storage: 儲存 dsSidebarAutoHide / dsChatWidth / dsInputWidth / dsHideThinking
+    Popup->>Storage: 儲存 dsSidebarAutoHide / dsChatWidth / dsInputWidth / dsHideThinking / dsPreventAutoScroll
     Storage-->>Content: onChanged
-    Content->>Content: SidebarAutoHide / ChatWidth / InputWidth / HideThinking 即時啟用/停用
+    Content->>Content: SidebarAutoHide / ChatWidth / InputWidth / HideThinking / PreventAutoScroll 即時啟用/停用
 
     Note over Popup,Content: 一般流程 — Markdown 匯出
     Popup->>Content: sendMessage EXPORT_MARKDOWN

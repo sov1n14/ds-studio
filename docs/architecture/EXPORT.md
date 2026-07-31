@@ -13,7 +13,7 @@ Since v2.6.0, the export engine uses a scroll-and-harvest loop to capture the fu
 1. The popup sends `{ action: "EXPORT_MARKDOWN", includeThinking, includeReferences }` to the active tab via `chrome.tabs.sendMessage`.
 2. The content script (`content-script.js`) receives the message and delegates to `Harvest.harvestAllMessages()`.
 3. The harvest module coordinates with two other modules:
-   - **PreventAutoScroll** — disables DeepSeek's auto-scroll-to-latest behavior, preventing the virtual list from jumping away from the controlled scroll.
+   - **PreventAutoScroll** — disables DeepSeek's auto-scroll-to-latest behavior, preventing the virtual list from jumping away from the controlled scroll. (v4.12.0) If the user has turned the `dsPreventAutoScroll` setting on, this protection is already permanently active and the export's own enable/disable pair becomes a no-op.
    - **GoToTop** — calls `GoToTop.scrollToTopAndWait()` to anchor the virtual list at position 0.
 4. A non-blocking floating progress toast is shown to the user (styled via `go-top.css`, `pointer-events: none` so it does not block interaction).
 5. The harvest loop incrementally scrolls from top to bottom, waiting for DOM stability after each step via `MutationObserver` (see the Harvest Module section below for details).
@@ -69,7 +69,7 @@ The popup includes a Backup & Restore card with four buttons:
 The main export entry point. Returns `{ items: Element[], isComplete: boolean, reason?: string }` — an object containing the harvested DOM nodes, a completion flag, and an optional reason string (e.g., `'timeout'`, `'scroll_interrupted'`).
 
 **Pre-harvest setup:**
-1. Enables PreventAutoScroll to suppress DeepSeek's live-scroll behavior.
+1. Enables PreventAutoScroll to suppress DeepSeek's live-scroll behavior. This call is unconditional, and so is the matching `disable()` in the teardown `finally` — which is why `disable()` is a no-op while persistent mode is on (v4.12.0), since the flag has no reference counting and an export would otherwise switch off a user-enabled permanent lock.
 2. Calls `GoToTop.scrollToTopAndWait()` to anchor the virtual list at position 0.
 3. Shows a non-blocking floating progress toast (`pointer-events: none`, styled by `go-top.css`).
 
@@ -87,7 +87,7 @@ The main export entry point. Returns `{ items: Element[], isComplete: boolean, r
 - Tracks the expected scroll position after each step. If the actual `scrollTop` deviates by more than `1.5 * viewportHeight` from the expected position, an external scroll jump (React re-render, user intervention) is detected. The harvest aborts and returns partial content with a warning.
 
 **Cleanup:**
-- On success: restores scroll position, disables PreventAutoScroll, hides the toast.
+- On success: restores scroll position, disables PreventAutoScroll (a no-op if the user has persistent mode on, v4.12.0), hides the toast.
 - On timeout (120s): exports partial content with a warning footer, cleans up.
 
 **Fallback:** If `GoToTop` or `PreventAutoScroll` are unavailable, Harvest falls back to a single-pass DOM query of `.ds-virtual-list-visible-items .ds-message` (capturing only currently visible messages).

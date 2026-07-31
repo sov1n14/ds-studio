@@ -37,7 +37,9 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | Physical chunks, each <= 7KB, holding a subset of the chatPresetMap entries (v2.4.0+). |
 | `dsSidebarAutoHide` | boolean | `false` | Whether the sidebar auto-hide feature is enabled. |
 | `dsHideThinking` | boolean | `false` | Whether the hide-thinking-process feature is enabled. |
+| `dsPreventAutoScroll` | boolean | `false` | (v4.12.0) Whether anti-scroll-back protection is permanently active. When true, `PreventAutoScroll` suppresses downward auto-scroll at all times instead of only during go-top and Markdown export. Gated by the master switch. |
 | `dsShowSystemTime` | boolean | `false` | Whether system time injection before user messages is active (added in v2.7.0). |
+| `dsWebSearchToggle` | string | `'default'` | (v4.13.0) Web-search toggle enforcement mode: `'default'` (no interference), `'on'` (keep the page's smart-search button `aria-pressed="true"`), `'off'` (keep it `"false"`). Clicks only on state mismatch. Gated by the master switch. |
 | `dsChatWidth` | number | `70` | Chat width percentage (30–100). |
 | `dsChatWidthEnabled` | boolean | `false` | Whether the chat width adjustment is active. |
 | `dsInputWidth` | number | `70` | Input width percentage (30–100). |

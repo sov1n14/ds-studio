@@ -19,6 +19,7 @@ describe('StorageManager CRUD (3.x scenarios)', () => {
             expect(settings.inputWidthEnabled).toBe(false);
             expect(settings.sidebarAutoHide).toBe(false);
             expect(settings.hideThinking).toBe(false);
+            expect(settings.preventAutoScroll).toBe(false);
         });
 
         it('returns values saved via saveEnabledState', async () => {
@@ -176,6 +177,52 @@ describe('StorageManager CRUD (3.x scenarios)', () => {
 
             const settings2 = await StorageManager.getSettings();
             expect(settings2.showSystemTime).toBe(true);
+        });
+    });
+
+    describe('preventAutoScroll toggle storage (Prevent Auto-Scroll feature)', () => {
+        it('exposes KEYS.PREVENT_AUTO_SCROLL as the exact storage key string', () => {
+            expect(StorageManager.KEYS.PREVENT_AUTO_SCROLL).toBe('dsPreventAutoScroll');
+        });
+
+        it('defaults DEFAULTS.dsPreventAutoScroll to false', () => {
+            expect(StorageManager.DEFAULTS.dsPreventAutoScroll).toBe(false);
+        });
+
+        it('returns default value false when preventAutoScroll not set', async () => {
+            const settings = await StorageManager.getSettings();
+            expect(settings.preventAutoScroll).toBe(false);
+        });
+
+        it('savePreventAutoScroll persists the enabled state', async () => {
+            await StorageManager.savePreventAutoScroll(true);
+            const settings = await StorageManager.getSettings();
+            expect(settings.preventAutoScroll).toBe(true);
+        });
+
+        it('savePreventAutoScroll can toggle from true to false', async () => {
+            await StorageManager.savePreventAutoScroll(true);
+            let settings = await StorageManager.getSettings();
+            expect(settings.preventAutoScroll).toBe(true);
+
+            await StorageManager.savePreventAutoScroll(false);
+            settings = await StorageManager.getSettings();
+            expect(settings.preventAutoScroll).toBe(false);
+        });
+
+        it('preventAutoScroll survives round-trip: save and retrieve', async () => {
+            await StorageManager.savePreventAutoScroll(true);
+            const settings1 = await StorageManager.getSettings();
+            expect(settings1.preventAutoScroll).toBe(true);
+
+            const settings2 = await StorageManager.getSettings();
+            expect(settings2.preventAutoScroll).toBe(true);
+        });
+
+        it('savePreventAutoScroll writes through the same path as sibling writers: value is readable directly from chrome.storage', async () => {
+            await StorageManager.savePreventAutoScroll(true);
+            const stored = await chrome.storage.sync.get(['dsPreventAutoScroll']);
+            expect(stored.dsPreventAutoScroll).toBe(true);
         });
     });
 });

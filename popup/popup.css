@@ -91,6 +91,10 @@ header {
     margin: 0;
     accent-color: var(--primary-color);
 }
+/* ── 連網搜索選項 ── */
+.websearch-options {
+    display: flex;
+}
 
 .card {
     background-color: var(--bg-color);
