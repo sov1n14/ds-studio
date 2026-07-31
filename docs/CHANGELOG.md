@@ -14,30 +14,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | [4.12.0](changelog/v4.md#4120---2026-08-01) | 新增「防止自動回滾」開關：原本僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為常駐。常駐模式實作在共用節流點 `prevent-auto-scroll-bridge.js`（新增 `setPersistent()` / `isPersistent()` / `start()`，狀態存於既有隱藏 bridge 元素的 `dataset`），`harvest.js` 與 `go-top.scroll.js` 兩個呼叫端零改動；`disable()` 於常駐模式改為 no-op，否則該旗標無引用計數，`harvest.js` 在 `finally` 的無條件 `disable()` 會在每次匯出結束後靜默關掉使用者開啟的保護。受主開關連動，支援免重整即時切換。取捨：既有補丁為 `Element.prototype` 層級全域攔截且無法區分程式與使用者觸發，常駐時串流回覆的自動跟隨捲動一併被擋（原生滾輪不受影響），故預設關閉 |
 | [4.11.19](changelog/v4.md#41119---2026-07-26) | 修復提示詞組排序在時間戳平手時被重排、拖曳結果下次開啟即消失：`mergePresets()` 原本僅在時間戳嚴格較新時採用對應側的 `order`，平手則退回合併 Map 的插入順序（本機已快取的組浮到最前面），使可見順序取決於哪些物件剛好快取在 local 而非已儲存的順序陣列；因 `_set()` 把同一物件鏡射進兩個儲存區，平手其實是常態。改為平手時採用雲端 `order`（唯一自我收斂的選擇）。同時修正 `STORAGE.md` 仍描述已於 v4.8.5 移除的 `#forceSyncBtn`、以及兩份文件仍稱 `dsLocalAuth` 影響讀取優先序（v4.7.2 已移除） |
 | [4.11.18](changelog/v4.md#41118---2026-07-26) | 修復跨裝置同步的排序回滾與「已刪除提示詞組復活」：`retrySync()` 待推送迴圈對 `dsPresetOrderMeta` 與 `dsPresetTombstones` 無條件盲推（前者因 `startsWith('dsPreset_')` 的結尾底線而不匹配任何既有守衛），陳舊本機值蓋掉雲端較新值；排序中介資料補上與 `PRESET_INDEX` 一致的 `>=` 新舊比較，墓碑改為逐 id 聯集合併（重用既有 `_mergeTombstones()`），空的本機集合不再清空雲端 |
+| 4.11.17 | 修復頂層識別字碰撞導致 go-top.js 整支失效、「回到頂部」按鈕消失：v4.11.13 引入共用選擇器模組後，`harvest.js` 與 `go-top.js` 各自在頂層宣告 `const __DSSelectors`，classic script 共用同一全域作用域使後載入者拋 `SyntaxError: Identifier '__DSSelectors' has already been declared`；改為各自唯一命名 `__DSSelectorsHarvest`／`__DSSelectorsGoTop`，並新增以 manifest content_scripts 清單為準的靜態守門測試（此類缺陷單元測試結構上抓不到——vitest 每檔獨立作用域） |
+| 4.11.16 | 拆分 popup.js：編輯器視窗、寬度滑桿、Markdown 匯出各自獨立成方法包（popup.editor-window.js／popup.width-sliders.js／popup.markdown-export.js），popup.js 自 572 行降至 441 行清除 450 行門檻；以正則抽取原始碼的兩個 spec 僅改讀取路徑 |
+| 4.11.15 | 拆分 content-script.js：提示詞注入獨立成 prompt-injector.controller.js，自 491 行降至 360 行；選擇抽注入側而非狀態側，是為不打斷 initSettings 的正則斷言 |
+| 4.11.14 | 拆分 i18n.js：翻譯字典獨立成純資料檔 i18n.locales.js，引擎自 501 行降至 167 行；四個載入點（manifest、popup.html、editor.html、vitest.setup.js）皆須將資料檔排在引擎之前 |
+| 4.11.13 | 集中重複的 DeepSeek 選擇器常數到 ds-selectors.js（掛載 `window.DSstudio.Selectors`），六處引用點改為共用常數、選擇器字串維持位元組相同；兩個 walk-up 函式邏輯原封不動 |
+| 4.11.12 | 拆分 censor-reply-restore.dom.js：思考區塊 widget 獨立成 censor-reply-restore.thinkblock.js，自 489 行降至 396 行 |
+| 4.11.11 | 消除 storage-manager.chatmap.js 的鍵差異套用重複邏輯：非鎖定快路徑與鎖定慢路徑重複的三步驟鍵差異套用抽成共用 helper `_applyChatPresetMapDiff`，自 456 行降至 425 行 |
+| 4.11.10 | 拆分 popup.modal.js：Toast 元件獨立成 popup.toast.js（拆分理由是關注點分離而非行數門檻）；兩檔改以 Object.assign 各自掛載，不再相依於 script 標籤順序 |
+| 4.11.9 | 拆分 harvest.js：進度提示 UI 獨立成 harvest.toast.js，harvest.js 自 502 行降至 426 行清除 450 行門檻；manifest 於 harvest.js 之前插入新檔確保載入順序 |
 | [4.11.8](changelog/v4.md#4118---2026-07-26) | 「回到頂部」改為一次到頂：每輪輪詢由 `scrollBy(0, -0.9 * viewportHeight)` 逐格上捲改為直接寫入 `scrollTop = 0`，抵達時間不再與對話長度成正比（50 個視窗高的對話由約 5.9 秒降至瞬間）；收斂閘門與逾時、中止、`PreventAutoScroll` 協調全部保留，移除已無引用的 `SCROLL_STEP_FACTOR`，並首次明文記載「向上一次到頂、向下逐步前進」的刻意不對稱 |
 | [4.11.7](changelog/v4.md#4117---2026-07-26) | 修復 Markdown 匯出靜默截斷：`_scrollToTopAndSettle()` 丟棄 `scrollToTopAndWait` 的回傳值，捲動到頂失敗（逾時或使用者中途按下「回到頂部」）時仍從當下位置開始擷取，輸出悄悄漏掉最舊訊息且無錯誤提示；改為傳回並檢查結果，失敗時原樣傳回 `reason` 並中止，teardown 沿用既有 `finally` |
 | [4.11.6](changelog/v4.md#4116---2026-07-26) | 修復「回到頂部」上捲後彈回、始終到不了頂的缺陷：`scrollToTopAndWait()` 未與 `PreventAutoScroll` 協調，頁面自身的向下捲動不受抑制，導致收斂條件 `currentScrollTop <= 0` 恆偽、`_stableTopCount` 每輪歸零而空轉至 30 秒超時；改為在進入點保存啟用前狀態並於 `cleanup()` 還原，僅在本次呼叫為啟用者時才 `disable()`，以免踩掉 `harvest.js` 巢狀呼叫的保護 |
 | [4.11.5](changelog/v4.md#4115---2026-07-26) | 修復 GoToTop 停用後的計時器殘留：`_onRouteChange()` 的 100 毫秒計時器未保存 handle，路由切換後 100 毫秒內停用會在停用後重新注入按鈕並重啟 observer 與 scroll 監聽器；新增 `_routeChangeTimer` 欄位、`_tryConnectDom()` 進入點守衛，並讓 `disable()` 真正呼叫 `_scrollReject` 以中止進行中的捲動 |
+| [4.11.4](changelog/v4.md#4114---2026-07-26) | 稽核瘦身批次 D（原生 API 改寫）：quote-reply 樣式表改為靜態 CSS 檔、preset-dropdown 以原生 `scrollWidth` 取代手寫離屏量測探針；AbortController 與原生 `<dialog>` 兩案經審查否決（happy-dom 16.8.1 靜默忽略 `signal` 選項、`HTMLDialogElement` 為空殼） |
+| [4.11.3](changelog/v4.md#4113---2026-07-26) | 稽核瘦身批次 C（結構合併）：utils/ 由 13 檔併為 10 檔；修復背景同步重試靜默失效（importScripts 從未載入 tombstones.js，`retrySync()` 路徑一律拋 `_mergeTombstones is not a function` 並被空 catch 吞掉）；新增 loader-contract 守門測試 |
+| [4.11.2](changelog/v4.md#4112---2026-07-25) | 稽核瘦身批次 A2：移除兩條舊版遷移路徑（v1.2.x promptPrefix 遷移、OLD_PENDING_LOCAL_KEY，經使用者確認接受資料遺失）、清除全倉零呼叫者符號與 popup-utils.js 影子副本 |
+| [4.11.1](changelog/v4.md#4111---2026-07-25) | 稽核瘦身批次 A1：全倉零引用死碼清除（export overlay、翻譯鍵、未用欄位與常數），行為零變更、1745 測試基準不變 |
+| [4.11.0](changelog/v4.md#4110---2026-07-25) | 新增自動重試功能：DeepSeek 回應失敗顯示重試按鈕時，每 1000ms 自動代為點擊；僅受主開關控制，無獨立開關與 storage 鍵 |
+| 4.10.5 | 修正臨時對話導向外部網址時未刪除的缺陷：beforeunload 抑制旗標被 same-URL SPA push 誤武裝且永不被消耗，跨來源導向時 keepalive 刪除遭抑制；改為僅由真正的整頁刷新（reload／鍵盤刷新）武裝旗標 |
+| 4.10.4 | 臨時對話開關列改為跟隨總開關顯示與隱藏：新增 _masterEnabled 旗標與 __setMasterEnabled，storage.onChanged 監聽 IS_ENABLED 變更 |
+| 4.10.3 | 修正編輯訊息後切換為「無提示詞組」仍注入舊提示詞組：`updatePromptPrefixFromBinding()` 在對話已有 currentChatUuid 時完全由 `chatPresetMap` 決定，不再退回殘留的 `pendingPresetId` |
 | [4.10.2](changelog/v4.md#4102---2026-07-12) | 修正墓碑合併演算法：`clearPresetTombstones()` 刪鍵無時間戳可仲裁，導致清除永遠輸給陳舊的刪除記錄；墓碑條目形狀改為 `{ ts, deleted }`，清除改為寫入 `deleted:false` 而非刪鍵 |
 | [4.10.1](changelog/v4.md#4101---2026-07-12) | 修正刪除全部提示詞組後再匯入 JSON 備份，於下次跨裝置同步時被舊墓碑再次刪除的缺陷；`restoreSettings()` 匯入後新增 `clearPresetTombstones()` 精準清除對應 ID 墓碑 |
 | [4.10.0](changelog/v4.md#4100---2026-07-12) | 提示詞組列新增鉛筆/刪除 hover 提示並修正鉛筆圖示方向；新增「(無提示詞組)」列一鍵刪除全部提示詞組按鈕與確認對話框；`custom-select.js` 拆出 `preset-item-renderer.js` |
 | [4.9.1](changelog/v4.md#491---2026-07-11) | 修正臨時對話「導向同一對話」誤刪：判定改以目的地 `/a/chat/s/{uuid}` 的 UUID 比對追蹤中對話（取代完整 URL 字串相等），導向同一對話但 query／hash 不同時不再誤刪；刷新與離開他頁行為不變 |
 | [4.9.0](changelog/v4.md#490---2026-07-11) | 臨時對話刪除機制兩層化：content script 直接 `fetch(keepalive)` 即時刪除（移除不可靠的 SW IPC 中繼）、SW `onStartup` 補刪；待刪佇列改為 `chrome.storage.sync` 單一事實來源，支援跨裝置補刪；新增 Sync-Change Safeguard 與本機開啟中對話清單防誤刪；authToken 僅存本機永不同步 |
+| [4.8.5](changelog/v4.md#485---2026-07-11) | **此版號出貨兩次**：`d75bb132`（2026-06-22）新增 MAIN world history 攔截機制（content/temporary-chat-history-hook.js，Navigation API 的備援導航偵測）並修正 init 競態條件；`60068776`（2026-07-11）移除彈出視窗手動同步按鈕簡化為純自動同步。v4.md 條目僅記錄第二次；第一次的內容於此列補記（細節見 git d75bb132） |
 | [4.8.4](changelog/v4.md#484---2026-07-11) | 移除純診斷用日誌轉發子系統（logger.js sync 機制、孤兒除錯檔 diagnostic-sidebar-log.js、temp-chat 系列除錯 log），保留告警類 console.warn/error；不影響任何使用者可見功能 |
-| [4.8.5](changelog/v4.md#485---2026-07-11) | 移除彈出視窗手動同步按鈕，簡化為純自動同步 |
 | [4.8.3](changelog/v4.md#483---2026-07-11) | 新增提示詞組刪除墓碑（Tombstone）機制，修復跨裝置同步時「已刪除提示詞組復活」的缺陷；同時修正 sync 勝出索引未落盤本機的缺口 |
+| [4.8.2](changelog/v4.md#482---2026-07-11) | 8KB 負載守衛：`_set()` 逐鍵依 UTF-8 位元組大小拆分，超限鍵在 sync 呼叫前改寫 local 並登錄新鍵 `dsOversizedKeys`（自癒），不再進入 `dsLocalAuth` 無止境重試；`_byteLen()` 改以 TextEncoder 精確計數；`refreshSyncStatus()` 新增「內容過大，僅存本機」狀態 |
+| [4.8.1](changelog/v4.md#481---2026-07-11) | debounce 對齊 500ms：編輯器自動儲存 600→500ms，chatWidth/inputWidth 滑桿 change 寫入改經 debounced 包裝，降低 chrome.storage 寫入壓力 |
+| [4.8.0](changelog/v4.md#480---2026-07-11) | 新增 popup 即時同步（popup.live-sync.js）：popup 開啟期間監聽 chrome.storage.onChanged，跨裝置／跨分頁變更即時反映到 UI，不再需要關閉重開 |
+| [4.7.4](changelog/v4.md#474---2026-07-11) | 修復 `_installChunkCacheInvalidator()` 拆分後閉包回歸：監聽器以裸 StorageManager 參照取代 this，多分頁情境下兩端監聽器共同改到同一共用實例的快取，輸家永遠讀到陳舊分塊；改為安裝時捕捉 `const self = this` |
+| [4.7.2](changelog/v4.md#472---2026-07-11) | 移除 `_get()` 的 pin-on-read 覆寫：停駐在 dsLocalAuth 的鍵不再讓陳舊本機值永久遮蔽較新的雲端編輯；dsLocalAuth 語意收斂為純待重推佇列 |
+| [4.7.1](changelog/v4.md#471---2026-07-11) | 新增 `StorageManager.syncNow()` 統一同步入口（popup 開啟與 content script 載入皆改呼叫）；修復 sync 較新值勝出後未寫回 local 的缺口 |
+| [4.6.5](changelog/v4.md#465---2026-07-10) | 修復提示詞內容跨裝置同步失效並強化同步韌性 |
+| [4.6.4](changelog/v4.md#464---2026-07-10) | 修復同步收斂時較新編輯遭較舊版本覆蓋 |
+| [4.6.3](changelog/v4.md#463---2026-07-06) | 新增統一診斷記錄輸出至 Service Worker console |
 | [4.6.2](changelog/v4.md#462---2026-06-28) | 修復跨裝置雲同步：提示詞組順序（dsPresetOrderMeta 時間戳）與內容（dsLocalAuth 精確 pinning）現可正確同步；初始化衝突偵測改為 auto/manual 分類；手動同步改為推+拉；chatmap 模組獨立拆分 |
-| [4.6.3](changelog/v4.md#463---2026-06-28) | 新增統一診斷記錄輸出至 Service Worker console |
-| [4.6.4](changelog/v4.md#464---2026-06-29) | 修復同步收斂時較新編輯遭較舊版本覆蓋 |
-| [4.6.5](changelog/v4.md#465---2026-06-30) | 修復提示詞內容跨裝置同步失效並強化同步韌性 |
-| [4.6.1](changelog/v4.md#461---2026-06-22) | 修復行動版編輯訊息發送按鈕 textarea 解析順序 |
-| [4.6.0](changelog/v4.md#460---2026-06-20) | 整合 React Fiber 原生對話刪除機制 |
+| [4.6.1](changelog/v4.md#461---2026-06-21) | 修復行動版編輯訊息發送按鈕 textarea 解析順序 |
+| [4.6.0](changelog/v4.md#460---2026-06-21) | 整合 React Fiber 原生對話刪除機制 |
+| 4.5.5 | 修復臨時對話因導航時序造成的刪除競態：co-occurrence 達成時若已在對話頁面則立即追蹤 UUID，避免 SPA 導航事件先於 co-occurrence 完成而錯失追蹤 |
+| 4.5.4 | 修復臨時對話三項缺陷：改用 chrome.storage.local（content script 無法存取 session storage）、補上 handleToggleChanged 同步 _enabledFlagCache、移除 navigate 事件的過早 tryInject 呼叫 |
+| 4.5.3 | 加入除錯 log 追蹤臨時對話開關回首頁後變 OFF 的問題（追蹤 _enabledFlagCache 變化路徑，僅診斷無行為變更） |
+| 4.5.2 | 修補臨時對話五項需求缺口：SW keepalive 刪除請求與 alarms 重試（最多 3 次、每 30 秒）、§3 跨分頁同步、§6 1000ms 雙 API 共現視窗、§9 導航刪除重試與 toast、§10 beforeunload 路由至 Service Worker |
 | [4.5.1](changelog/v4.md#451---2026-06-18) | 修正「臨時對話」：僅刪除（呼叫 create API）新建的對話、歷史對話永不刪除；離開首頁移除開關、回首頁重注入；網址列輸入目前網址／重整不刪除；關閉開關仍刪除已標記對話 |
 | [4.5.0](changelog/v4.md#450---2026-06-18) | 新增「臨時對話」功能：首頁開關控制，開啟時離開對話自動呼叫刪除 API（重新整理／導向當前網址不刪除），狀態存於 sessionStorage |
+| 4.4.2 | 修復重新整理偵測：改用語意正確的 `navigationType === 'reload'`（取代 URL 相等比對）並移除 else，使鍵盤快捷鍵監聽（F5/Ctrl+R/Cmd+R）與 Navigation API 並行生效 |
+| 4.4.1 | POC：補上離開網站時的刪除觸發（beforeunload + fetch keepalive），並以 Navigation API 偵測重新整理（同 URL 導航）避免誤刪 |
+| 4.4.0 | POC：擷取授權 Token（XHR hook 攔截 authorization header，postMessage 傳遞）並於離開聊天時呼叫刪除 API |
+| 4.3.8 | 修復 originalWidth 被錯誤捕捉為收合寬度導致側欄展開時無法推開同層元素：storeOriginalWidth() 雙重防護（收合狀態跳過、寬度 ≤60px 不覆寫），expand() 無效 originalWidth 安全網 |
+| 4.3.7 | 修復 sidebar-auto-hide 在 Edge 瀏覽器上的溢位裁切：applyOverflow() 僅在側欄收合狀態才套用 overflow:hidden，避免展開過渡期間重新裁切 |
+| 4.3.6 | 修復三個回歸錯誤：editor.html 缺 i18n.js script 標籤（dsI18n ReferenceError）、broadcastActivePreset 視窗查詢範圍、pendingPresetId 條件過嚴、編輯發送按鈕 textarea 遍歷 fallback（React portal） |
+| 4.3.5 | 修正語系切換時下拉選單「無」選項未即時更新（updateLocale() 使用錯誤的 DOM selector） |
+| 4.3.4 | 補上 4.3.3 遺漏的版本升版（覆蓋 7b3c245 的 optionData 同步修復：下拉選單「無」即時切換時同步更新 optionData 陣列） |
+| 4.3.3 | 實現即時語系切換：i18n 核心加入 chrome.storage.onChanged 監聽、preset 下拉選單新增 updateLocale() 公開方法、quote-reply 按鈕與 overlay controller 即時反應語系變更 |
+| 4.3.2 | 實作完整 i18n 國際化系統：中英文翻譯資料（_locales/messages.json）、語言切換機制、popup 與 content script 全面導入 `dsI18n.t()` 查詢、manifest 加入 default_locale 與 __MSG_*。**註記**：此版號曾於 commit `0d357e8` 意外倒退回 4.3.1（該 commit 訊息未提及版號變更），下一 commit `34c68fd` 補回 i18n 註冊並恢復 4.3.2 |
+| 4.3.1 | 重構文件結構：精簡 README、新增 FEATURES.md、校正 ARCHITECTURE.md 檔案樹與跨文件參照（ARIA 章節移至 content-navigation.md 等）。**註記**：此版號出貨兩次——`16f2e80c`（文件重構）與 `0d357e8`（manifest 自 4.3.2 意外倒回） |
 | [4.3.0](changelog/v4.md#430---2026-06-14) | 系統時間注入新增時區偏移顯示 — 格式從 `yyyy/mm/dd hh:mm:ss` 改為 `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` |
+| 4.2.4 | 移除 Overlay settle 收斂除錯日誌（settle loop onDone 回呼中的 console.log） |
+| [4.2.3](changelog/v4.md#423---2026-06-14) | 清除全部 [DSS-DIAG] 診斷 log；修復 preset-settle.scheduler.js onLog→onDone API 不匹配（導致 runSettle() 在守衛子句拋錯、下拉選單空白）並補 API 契約回歸測試 |
+| [4.2.2](changelog/v4.md#422---2026-06-14) | 修復行動版 overlay 位置競態：新增有界 settle 重試迴圈（preset-settle.scheduler.js）逐幀量測新對話按鈕 left 直到連續 K 幀穩定，解決頁面載入時按鈕位置位移不被 ResizeObserver 偵測的問題 |
 | [4.2.1](changelog/v4.md#421---2026-06-14) | 修復下拉選單位置計算子像素抖動問題並強化冪等性（Math.round + 捨去尾數重複） |
 | [4.2.0](changelog/v4.md#420---2026-06-14) | 重構預設集覆蓋層：拆分大型模組為職責單一的小型檔案（controller、resolvers、position、styles、component） |
-| [4.1.0](changelog/v4.md#410---2026-06-14) | 新增行動版首頁清理模組 v4.1.0 |
+| [4.1.0](changelog/v4.md#410---2026-06-13) | 新增行動版首頁清理模組 v4.1.0 |
 | [4.0.0](changelog/v4.md#400---2026-06-13) | 大型檔案模組化重構：storage-manager、go-top、censor-reply-restore、content-script、popup 拆分為單一職責模組；行為不變、985 測試全綠 |
 
 ### v3.x — 編輯器與架構精煉
