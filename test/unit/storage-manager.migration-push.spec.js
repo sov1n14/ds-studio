@@ -24,6 +24,7 @@ async function populateDefaults() {
         [K.SIDEBAR_AUTO_HIDE]: false,
         [K.HIDE_THINKING]: false,
         [K.PREVENT_AUTO_SCROLL]: false,
+        [K.WEBSEARCH_TOGGLE]: 'default',
         [K.CHAT_WIDTH]: 70,
         [K.CHAT_WIDTH_ENABLED]: false,
         [K.INPUT_WIDTH]: 70,
@@ -193,6 +194,28 @@ describe('StorageManager migration push regression', () => {
             // dsLocalAuth either does not exist or does not include preventAutoScroll
             const authList2 = localAfter[K.LOCAL_AUTHORITATIVE] || [];
             expect(authList2).not.toContain(K.PREVENT_AUTO_SCROLL);
+        });
+
+        it('pushes missing dsWebSearchToggle key to sync and does not mark it as LOCAL_AUTHORITATIVE (mirrors PREVENT_AUTO_SCROLL as a synced key)', async () => {
+            await populateDefaults();
+
+            // Arrange with the literal storage key: KEYS.WEBSEARCH_TOGGLE does not
+            // exist yet in the red phase, so the literal keeps the arrange step honest.
+            await chrome.storage.local.set({ 'dsWebSearchToggle': 'on' });
+            await chrome.storage.sync.remove('dsWebSearchToggle');
+
+            await expect(StorageManager.initialize()).resolves.toBeUndefined();
+
+            // Assert
+            const syncAfter = await chrome.storage.sync.get(null);
+            const localAfter = await chrome.storage.local.get(null);
+
+            // websearchToggle appears in sync
+            expect(syncAfter[K.WEBSEARCH_TOGGLE]).toBe('on');
+
+            // dsLocalAuth either does not exist or does not include websearchToggle
+            const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
+            expect(authList).not.toContain(K.WEBSEARCH_TOGGLE);
         });
 
         it('regression guard (report.md §4.3 Step 3): never pushes isEnabled/globalPromptEnabled to sync, even when missing from sync and present in local', async () => {

@@ -64,6 +64,7 @@ const StorageManager = {
         SIDEBAR_AUTO_HIDE: 'dsSidebarAutoHide',
         HIDE_THINKING: 'dsHideThinking',
         PREVENT_AUTO_SCROLL: 'dsPreventAutoScroll',
+        WEBSEARCH_TOGGLE: 'dsWebSearchToggle',
         SHOW_SYSTEM_TIME: 'dsShowSystemTime',
         CHAT_WIDTH: 'dsChatWidth',
         CHAT_WIDTH_ENABLED: 'dsChatWidthEnabled',
@@ -91,6 +92,7 @@ const StorageManager = {
         dsSidebarAutoHide: false,
         dsHideThinking: false,
         dsPreventAutoScroll: false,
+        dsWebSearchToggle: 'default',
         dsShowSystemTime: false,
         dsChatWidth: 70,
         dsChatWidthEnabled: false,
@@ -410,6 +412,8 @@ const StorageManager = {
         return this._set({ [this.KEYS.PREVENT_AUTO_SCROLL]: enabled });
     },
 
+    async saveWebsearchToggle(value) { return this._set({ [this.KEYS.WEBSEARCH_TOGGLE]: value }); },
+
     async saveShowSystemTime(enabled) {
         return this._set({ [this.KEYS.SHOW_SYSTEM_TIME]: enabled });
     },
@@ -452,3 +456,4 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = StorageManager;
 }
+

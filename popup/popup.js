@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
     const preventAutoScrollToggle   = document.getElementById('preventAutoScrollToggle');
+    const websearchRadios           = Array.from(document.querySelectorAll('input[name="websearchToggle"]'));
 
     let saveTimeout;
     let customSelect;
@@ -61,7 +62,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSystemTimeToggle,
             chatWidthToggle, chatWidthSlider,
             inputWidthToggle, inputWidthSlider,
-            preventAutoScrollToggle
+            preventAutoScrollToggle,
+            ...websearchRadios,
         ];
         subControls.forEach(el => {
             if (el) el.disabled = !isEnabled;
@@ -172,6 +174,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (hideThinkingToggle)      hideThinkingToggle.checked      = settings.hideThinking;
     if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.showSystemTime;
     if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
+    if (websearchRadios.length) {
+        websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle ?? 'default')); });
+    }
 
     // 全域提示詞開關初始值
     if (globalPromptToggle) {
@@ -277,6 +282,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
             inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
             preventAutoScrollToggle,
+            websearchRadios,
         },
         applyMasterSwitchUI,
         updateEditPresetBtnState,
@@ -415,6 +421,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSaveStatus();
         });
     }
+    websearchRadios.forEach(r => {
+        r.addEventListener('change', async () => {
+            if (!r.checked) return;
+            await StorageManager.saveWebsearchToggle(r.value);
+            await refreshSyncStatus();
+            showSaveStatus();
+        });
+    });
 
     // --- 寬度滑桿（委派至 popup.width-sliders.js） ---
     const widthSliderManager = window.__DS_PopupWidthSliders.createWidthSliderManager({

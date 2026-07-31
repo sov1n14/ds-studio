@@ -161,7 +161,7 @@ function extractApplyMasterSwitchUI() {
 const CLOSURE_VAR_NAMES = [
     "sidebarAutoHideToggle", "hideThinkingToggle", "showSystemTimeToggle",
     "chatWidthToggle", "chatWidthSlider", "inputWidthToggle", "inputWidthSlider",
-    "preventAutoScrollToggle",
+    "preventAutoScrollToggle", "websearchRadios",
 ];
 
 function buildApplyMasterSwitchUI(dom) {
@@ -182,6 +182,7 @@ describe("applyMasterSwitchUI - preventAutoScrollToggle master-switch disable be
             inputWidthToggle: makeCheckbox(false),
             inputWidthSlider: makeRange(),
             preventAutoScrollToggle: makeCheckbox(false),
+            websearchRadios: [],
         };
         const applyMasterSwitchUI = buildApplyMasterSwitchUI(dom);
 
@@ -201,6 +202,7 @@ describe("applyMasterSwitchUI - preventAutoScrollToggle master-switch disable be
             inputWidthToggle: makeCheckbox(true),
             inputWidthSlider: makeRange(),
             preventAutoScrollToggle: makeCheckbox(true),
+            websearchRadios: [],
         };
         const applyMasterSwitchUI = buildApplyMasterSwitchUI(dom);
 
