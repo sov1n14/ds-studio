@@ -88,16 +88,23 @@ function renderDisabledState(titleEl, textareaEl, message) {
 /**
  * 更新儲存狀態指示器顯示。
  * @param {HTMLElement} statusEl - 狀態文字元素
- * @param {'saving' | 'saved'} state - 目前儲存狀態
+ * @param {'saving' | 'saved' | 'error'} state - 目前儲存狀態
  */
-function updateSaveStatus(statusEl, state) {
+function updateSaveStatus(statusEl, state, message) {
     if (!statusEl) return;
 
     if (state === 'saving') {
         statusEl.textContent = dsI18n.t('savingStatus');
+        statusEl.classList.remove('save-status--error');
+        statusEl.classList.remove('save-status--hidden');
+    } else if (state === 'error') {
+        // 錯誤狀態：顯示訊息、套用錯誤樣式，且不自動隱藏（等待下次儲存觸發）
+        statusEl.textContent = message ?? '';
+        statusEl.classList.add('save-status--error');
         statusEl.classList.remove('save-status--hidden');
     } else {
         statusEl.textContent = dsI18n.t('savedStatus');
+        statusEl.classList.remove('save-status--error');
         statusEl.classList.remove('save-status--hidden');
         // 顯示 1 秒後淡出
         setTimeout(() => {
@@ -107,6 +114,23 @@ function updateSaveStatus(statusEl, state) {
 }
 
 // ─────────────────────────────────────────────
+// 重複名稱檢查
+// ─────────────────────────────────────────────
+
+/**
+ * 檢查名稱是否已被其他提示詞組使用。
+ * 大小寫視為相異；排除自身 id 以免把自己的名稱誤判為重複。
+ * @param {Array<{ id: string, name: string }>} presets - 提示詞組清單
+ * @param {string} name - 要檢查的名稱
+ * @param {string} selfId - 自身 id（不列入比較）
+ * @returns {boolean} 是否為重複名稱
+ */
+function isDuplicateName(presets, name, selfId) {
+    return presets.some(p => p.name === name && p.id !== selfId);
+}
+
+
+// ─────────────────────────────────────────────
 // 儲存邏輯
 // ─────────────────────────────────────────────
 
@@ -114,9 +138,10 @@ function updateSaveStatus(statusEl, state) {
  * 依據目標類型儲存內容。
  * @param {{ type: 'global' } | { type: 'preset', id: string }} target
  * @param {string} value - 要儲存的文字內容
+ * @param {string} [name] - 提示詞組的新名稱（僅 preset 目標使用）
  * @returns {Promise<void>}
  */
-async function saveContent(target, value) {
+async function saveContent(target, value, name) {
     if (!target) throw new Error('saveContent: target 不可為空');
 
     if (target.type === 'global') {
@@ -132,7 +157,13 @@ async function saveContent(target, value) {
             // 提示詞組已在儲存期間被刪除，靜默放棄
             return;
         }
+        const nextName = name ?? preset.name;
+        if (isDuplicateName(settings.promptPresets, nextName, target.id)) {
+            // 名稱已被其他提示詞組使用：整次儲存取消，等待使用者修正
+            throw Object.assign(new Error('duplicate preset name'), { code: 'DUPLICATE_NAME' });
+        }
         preset.content = value;
+        preset.name = nextName;
         preset.updatedAt = Date.now();
         await StorageManager.saveOnePromptPreset(preset);
 
@@ -153,7 +184,7 @@ async function saveContent(target, value) {
  * 依據目標從 StorageManager 載入初始內容。
  * 載入失敗或找不到提示詞時回傳 null，讓呼叫端轉為停用狀態。
  * @param {{ type: 'global' } | { type: 'preset', id: string }} target
- * @returns {Promise<{ content: string, title: string } | null>}
+ * @returns {Promise<{ content: string, title: string, name?: string } | null>}
  */
 async function loadContent(target) {
     if (!target) return null;
@@ -177,6 +208,7 @@ async function loadContent(target) {
         return {
             content: preset.content ?? '',
             title: preset.name,
+            name: preset.name,
         };
     }
 
@@ -191,6 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const titleEl   = document.getElementById('editorTitle');
     const statusEl  = document.getElementById('editorSaveStatus');
     const textareaEl = document.getElementById('editorTextarea');
+    const nameInputEl = document.getElementById('editorNameInput');
 
     await dsI18n.init();
 
@@ -225,6 +258,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         ? dsI18n.t('globalPlaceholder')
         : dsI18n.t('presetPlaceholder');
 
+    // 提示詞組目標：以名稱輸入框取代標題列，預先聚焦以便立即重新命名
+    if (target.type === 'preset') {
+        nameInputEl.value = loaded.name ?? '';
+        nameInputEl.setAttribute('aria-label', dsI18n.t('renamePresetTitle'));
+        nameInputEl.placeholder = dsI18n.t('renamePresetPlaceholder');
+        titleEl.classList.add('is-hidden');
+        nameInputEl.classList.remove('is-hidden');
+        nameInputEl.focus();
+        nameInputEl.select();
+    }
+
     // ── 自動儲存狀態 ──
     let isDirty = false;
 
@@ -239,11 +283,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         updateSaveStatus(statusEl, 'saving');
         try {
-            await saveContent(target, textareaEl.value);
+            await saveContent(target, textareaEl.value, nameInputEl.value);
             updateSaveStatus(statusEl, 'saved');
         } catch (err) {
             // 儲存失敗：重置 dirty flag 以便下次觸發重試
             isDirty = true;
+            if (err?.code === 'DUPLICATE_NAME') {
+                updateSaveStatus(statusEl, 'error',
+                    dsI18n.t('duplicateNameMessagePresetManager', { name: nameInputEl.value }));
+            }
         }
     }
 
@@ -262,19 +310,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         performSave().catch(() => {});
     });
 
+    // 名稱輸入框：與文字區共用同一條自動儲存管線
+    nameInputEl.addEventListener('input', () => {
+        isDirty = true;
+        debouncedSave();
+    });
+
+    nameInputEl.addEventListener('blur', () => {
+        if (!isDirty) return;
+        performSave().catch(() => {});
+    });
+
     // visibilitychange：頁面被隱藏時立即儲存（fire-and-forget）
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'hidden') return;
         if (!isDirty) return;
         isDirty = false;
-        saveContent(target, textareaEl.value).catch(() => {});
+        saveContent(target, textareaEl.value, nameInputEl.value).catch(() => {});
     });
 
     // pagehide：視窗關閉前最後儲存（fire-and-forget）
     window.addEventListener('pagehide', () => {
         if (!isDirty) return;
         isDirty = false;
-        saveContent(target, textareaEl.value).catch(() => {});
+        saveContent(target, textareaEl.value, nameInputEl.value).catch(() => {});
     });
 });
 
@@ -290,6 +349,7 @@ const __DSSEditor = {
     debounce,
     renderDisabledState,
     updateSaveStatus,
+    isDuplicateName,
 };
 
 window.__DSSEditor = __DSSEditor;

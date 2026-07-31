@@ -119,3 +119,35 @@ html, body {
 .editor-header h1.is-error {
     color: #dc2626;
 }
+
+/* 通用隱藏（名稱輸入框預設隱藏，僅提示詞組目標顯示） */
+.is-hidden {
+    display: none;
+}
+
+/* 名稱輸入框：取代標題列，佔據相同版位 */
+.editor-name-input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.editor-name-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+/* 儲存錯誤狀態：紅字、可換行、不擠壓版面 */
+.save-status--error {
+    color: #dc2626;
+    white-space: normal;
+    flex-shrink: 1;
+}

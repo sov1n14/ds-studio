@@ -58,14 +58,6 @@ describe('__DS_PresetItemRenderer', () => {
             expect(html).toContain('<span class="ds-select__item-name">&lt;b&gt;Alpha&lt;/b&gt;</span>');
         });
 
-        it('includes an edit button with SVG and correct aria-label/title from i18n', () => {
-            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' });
-            expect(html).toContain('ds-select__item-btn--edit');
-            expect(html).toContain(`aria-label="${dsI18n.t('renameAriaLabel')}"`);
-            expect(html).toContain(`title="${dsI18n.t('editPresetNameTooltip')}"`);
-            expect(html).toContain('<svg');
-        });
-
         it('includes a delete button with correct aria-label/title from i18n', () => {
             const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' });
             expect(html).toContain('ds-select__item-btn--delete"');
@@ -79,7 +71,6 @@ describe('__DS_PresetItemRenderer', () => {
             item.innerHTML = Renderer.buildPresetItemMarkup({ id: 'x', name: 'Test' });
             expect(item.querySelector('.ds-select__drag-handle')).not.toBeNull();
             expect(item.querySelector('.ds-select__item-name')?.textContent).toBe('Test');
-            expect(item.querySelector('.ds-select__item-btn--edit')).not.toBeNull();
             expect(item.querySelector('.ds-select__item-btn--delete')).not.toBeNull();
         });
     });
