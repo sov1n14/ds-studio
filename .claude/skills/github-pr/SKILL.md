@@ -96,7 +96,6 @@ Always ask — do not assume. Use AskUserQuestion or ask directly:
 
 - Who should be assigned? **Default to the current user if unspecified** (retrieve the logged-in username with `gh api user | ConvertFrom-Json | Select-Object login`).
 - Who should review? **Default to no reviewer if unspecified** (omit `--reviewer`).
-- Should the source branch be deleted after merge? Note that `--delete-branch` is **not** a valid flag for `gh pr create` — it only exists on `gh pr merge`. So ask the user's preference, but at create time there is no flag to set it. Inform the user they can check "Delete branch after merge" on the PR page, or use `gh pr merge --delete-branch` later at merge time.
 
 If the user provides a display name rather than a GitHub username, look it up first:
 
@@ -112,7 +111,6 @@ Present all of the following to the user. **Do not execute the creation until ex
 - Full description
 - Source / target branch
 - Assignee / reviewer (if any)
-- Whether the source branch will be deleted after merge
 
 After presenting the preview, **you MUST use the AskUserQuestion tool to ask whether to approve the creation** (a plain text question is not sufficient). Options must include at least "Approve and create" and "Need to modify". If the user chooses to modify, revise accordingly, re-display the preview, and ask again with AskUserQuestion.
 
