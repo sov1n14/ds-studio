@@ -69,10 +69,12 @@ async function scheduleRetryAlarm() {
 
 /**
  * 補救待刪佇列：讀取 sync 佇列，以本機 token 逐筆刪除，僅確認成功才移除。
- * @param {{excludeUuids?: string[]}} [opts] excludeUuids 內的 UUID 一律跳過（本機仍開啟的對話）
+ * @param {{excludeUuids?: string[], caller?: string}} [opts] excludeUuids 內的 UUID 一律跳過（本機仍開啟的對話）
  */
-async function remediatePendingDeletes({ excludeUuids = [] } = {}) {
+async function remediatePendingDeletes({ excludeUuids = [], caller = 'unknown' } = {}) {
     const pending = await TemporaryChatPendingStore.getPendingDeletes();
+    // [暫時診斷] 記錄本次補救的觸發來源與佇列內容
+    console.log('[DSS-DIAG] remediate', { caller, pending, excludeUuids });
     if (pending.length === 0) return;
 
     const token = await TemporaryChatPendingStore.getLastAuthToken();
@@ -85,6 +87,8 @@ async function remediatePendingDeletes({ excludeUuids = [] } = {}) {
     for (const item of pending) {
         if (exclude.has(item.chatUuid)) { stillPending.push(item); continue; }
 
+        // [暫時診斷] 記錄實際送出的刪除目標
+        console.log('[DSS-DIAG] SW deleting', { chatUuid: item.chatUuid });
         const isOk = await performDeleteFetch(item.chatUuid, token);
         if (isOk) { hasChanged = true; continue; }           // 確認成功 → 移除
 
@@ -118,7 +122,7 @@ chrome.runtime.onStartup.addListener(() => {
     retryParkedSync(); // 既有：cloud-preset 補推
     (async () => {
         await TemporaryChatPendingStore.clearOpenUuids();    // 全新工作階段，尚無活動分頁
-        await remediatePendingDeletes({ excludeUuids: [] });
+        await remediatePendingDeletes({ excludeUuids: [], caller: 'onStartup' });
     })();
 });
 
@@ -145,7 +149,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== RETRY_ALARM_NAME) return;
     (async () => {
         const openUuids = await TemporaryChatPendingStore.getOpenUuids();
-        await remediatePendingDeletes({ excludeUuids: openUuids });
+        await remediatePendingDeletes({ excludeUuids: openUuids, caller: 'alarm' });
     })();
 });
 
@@ -158,7 +162,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
         _remediationInFlight = true;
         try {
             const openUuids = await TemporaryChatPendingStore.getOpenUuids();
-            await remediatePendingDeletes({ excludeUuids: openUuids });
+            await remediatePendingDeletes({ excludeUuids: openUuids, caller: 'storageChanged' });
         } finally {
             _remediationInFlight = false;
         }

@@ -115,5 +115,6 @@
   - **Layer 1（即時路徑，content script）**：SPA 導航沿用 Fiber/API 刪除；`beforeunload`（關閉分頁／瀏覽器）改為直接 `fetch(keepalive: true)`，不再經過 Service Worker 中繼，消除 IPC 競態。刪除成功（API 明確回傳成功）才移除待刪項目。
   - **Layer 2（補救路徑，Service Worker，僅 `onStartup` 觸發）**：擴充既有的 `chrome.runtime.onStartup` 監聽器（原用於雲端預設集同步），讀取共用待刪佇列並以本機 `dss-last-auth-token` 逐筆補刪，僅確認成功後才移除項目，失敗則累加 `attemptCount` 並保留供下次補救。
   - **跨裝置單一事實來源**：待刪佇列（`dss-pending-deletes-sync`）僅存在於 `chrome.storage.sync`，不設本機獨立副本；任一登入同一 Chrome 帳戶的裝置皆可用自身的 `dss-last-auth-token` 補刪佇列中的任何項目，無論該項目是否由自己標記。
-  - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描時排除本機裝置目前開啟中的臨時對話 UUID（`dss-open-temp-uuids`，僅本機儲存），避免誤刪使用者正在使用的對話。
+  - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描時排除本機裝置目前開啟中的臨時對話 UUID（僅本機儲存），避免誤刪使用者正在使用的對話。
+  - **開啟中對話護欄的儲存版面（v4.15.1）**：每個開啟中的 UUID 各自佔用一把 `chrome.storage.local` 鍵（前綴 `dss-open-temp-uuid:`），新增只寫自己那把、移除只刪自己那把。舊版將整份清單存於單一陣列鍵 `dss-open-temp-uuids` 並在每次增刪時整份重寫，任一 context 讀到過期快照就會把其他分頁的項目一併算掉，導致使用中的對話失去護欄而被掃描刪除。新版無 read-modify-write，因此不存在此類遺失。舊陣列鍵改為唯讀並在讀取時聯集進來（升級當下仍存活的對話不致失去護欄），`clearOpenUuids()` 會一併清除之。
   - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid` 與 `attemptCount`。

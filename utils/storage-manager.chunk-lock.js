@@ -80,67 +80,97 @@
         },
 
         /**
-         * 睡眠輪詢取得 chatPresetMap 諮詢鎖（存於 chrome.storage.local）。
+         * 睡眠輪詢取得指定 key 的諮詢鎖（存於 chrome.storage.local）。
          * TTL 容錯機制：若持鎖方崩潰，鎖在 LOCK_TTL_MS 後過期，任何請求方均可接管。
-         * @returns {Promise<string>} owner token — 必須傳入 _releaseChatPresetMapLock。
+         * @param {string} [lockKey] - 鎖定的 storage key，預設為 LOCK_KEY（chatPresetMapLock）
+         * @returns {Promise<string>} owner token，必須傳入 _releaseLock。
          * @throws {LockAcquireTimeoutError} 超過 LOCK_ACQUIRE_TIMEOUT_MS 仍未取得鎖。
          */
-        async _acquireChatPresetMapLock() {
+        async _acquireLock(lockKey = LOCK_KEY) {
             const token = Math.random().toString(36).slice(2) + '-' + Date.now();
             const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
 
             while (Date.now() < deadline) {
-                const raw = await this._safeGet('local', [LOCK_KEY]);
-                const cur = raw[LOCK_KEY];
+                const raw = await this._safeGet('local', [lockKey]);
+                const cur = raw[lockKey];
                 const isFree = !cur || Date.now() > cur.expiresAt;
 
                 if (isFree) {
                     await this._safeSet('local', {
-                        [LOCK_KEY]: { owner: token, expiresAt: Date.now() + LOCK_TTL_MS }
+                        [lockKey]: { owner: token, expiresAt: Date.now() + LOCK_TTL_MS }
                     });
                     // 寫後驗證（盡力 CAS）：確認 token 已成功儲存
-                    const verify = await this._safeGet('local', [LOCK_KEY]);
-                    if (verify[LOCK_KEY]?.owner === token) {
+                    const verify = await this._safeGet('local', [lockKey]);
+                    if (verify[lockKey]?.owner === token) {
                         return token;
                     }
-                    // 同一時間有其他 context 寫入；繼續輪詢重試
+                    // 同一時間有其他 context 寫入，繼續輪詢重試
                 }
                 await new Promise(resolve => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
             }
             throw new StorageManager.errors.LockAcquireTimeoutError(
-                `Could not acquire chatPresetMap lock within ${LOCK_ACQUIRE_TIMEOUT_MS}ms`
+                `Could not acquire lock "${lockKey}" within ${LOCK_ACQUIRE_TIMEOUT_MS}ms`
             );
         },
 
         /**
-         * 冪等釋放鎖。僅在 owner token 符合時才移除鎖記錄。
+         * 冪等釋放指定 key 的鎖。僅在 owner token 符合時才移除鎖記錄。
          * owner 不符時記錄警告（表示 TTL 已被其他 context 接管）。
-         * @param {string} token - _acquireChatPresetMapLock 回傳的 owner token
+         * @param {string} lockKey - 鎖定的 storage key
+         * @param {string} token - _acquireLock 回傳的 owner token
          */
-        async _releaseChatPresetMapLock(token) {
-            const raw = await this._safeGet('local', [LOCK_KEY]);
-            const cur = raw[LOCK_KEY];
+        async _releaseLock(lockKey, token) {
+            const raw = await this._safeGet('local', [lockKey]);
+            const cur = raw[lockKey];
             if (cur && cur.owner === token) {
-                await this._safeRemove('local', [LOCK_KEY]);
+                await this._safeRemove('local', [lockKey]);
             } else {
-                console.warn('[StorageManager] lock owner mismatch on release — TTL takeover likely',
-                    { expected: token, actual: cur?.owner });
+                console.warn('[StorageManager] lock owner mismatch on release, TTL takeover likely',
+                    { lockKey, expected: token, actual: cur?.owner });
             }
         },
 
         /**
-         * 便利封裝：取得鎖 → 執行 fn → 在 finally 中釋放鎖。
+         * 便利封裝：取得指定 key 的鎖，執行 fn，並在 finally 中釋放鎖。
+         * @template T
+         * @param {string} lockKey
+         * @param {() => Promise<T>} fn
+         * @returns {Promise<T>}
+         */
+        async _withLock(lockKey, fn) {
+            const token = await this._acquireLock(lockKey);
+            try {
+                return await fn();
+            } finally {
+                await this._releaseLock(lockKey, token);
+            }
+        },
+
+        /**
+         * 向下相容封裝：睡眠輪詢取得 chatPresetMap 諮詢鎖，等同 _acquireLock(LOCK_KEY)。
+         * @returns {Promise<string>} owner token，必須傳入 _releaseChatPresetMapLock。
+         * @throws {LockAcquireTimeoutError} 超過 LOCK_ACQUIRE_TIMEOUT_MS 仍未取得鎖。
+         */
+        async _acquireChatPresetMapLock() {
+            return this._acquireLock(LOCK_KEY);
+        },
+
+        /**
+         * 向下相容封裝：冪等釋放 chatPresetMap 鎖，等同 _releaseLock(LOCK_KEY, token)。
+         * @param {string} token - _acquireChatPresetMapLock 回傳的 owner token
+         */
+        async _releaseChatPresetMapLock(token) {
+            return this._releaseLock(LOCK_KEY, token);
+        },
+
+        /**
+         * 向下相容封裝：取得 chatPresetMap 鎖，執行 fn，並在 finally 中釋放鎖。
          * @template T
          * @param {() => Promise<T>} fn
          * @returns {Promise<T>}
          */
         async _withChatPresetMapLock(fn) {
-            const token = await this._acquireChatPresetMapLock();
-            try {
-                return await fn();
-            } finally {
-                await this._releaseChatPresetMapLock(token);
-            }
+            return this._withLock(LOCK_KEY, fn);
         },
 
         /**
@@ -180,7 +210,7 @@
                 }
 
                 await this._writeChunkWithMeta(chunkIdx, chunk, newMeta);
-                // 寫入可能觸發 onChanged → 快取失效監聽器將 _chunkIndexCache 設為 null
+                // 寫入可能觸發 onChanged，快取失效監聽器將 _chunkIndexCache 設為 null
                 // 若發生此情況，重新載入快取以確保一致性
                 if (this._chunkIndexCache === null) {
                     await this._ensureChunkCachesLoaded();
