@@ -9,7 +9,11 @@
 // 同 content/temporary-chat-constants.js
 const DSS_PENDING_STORE_SYNC_KEY = 'dss-pending-deletes-sync';
 const DSS_PENDING_STORE_TOKEN_KEY = 'dss-last-auth-token';
-const DSS_PENDING_STORE_OPEN_UUIDS_KEY = 'dss-open-temp-uuids';
+// 舊版共用陣列 key —— 僅允許讀取（相容升級中裝置尚未轉移的資料），永不再寫入
+const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = 'dss-open-temp-uuids';
+// 新版：每個 uuid 各自一把獨立 key，任何呼叫端都不會讀改寫到其他 uuid 擁有的資料，
+// 因此不再需要跨 context 鎖 —— 沒有共用結構就沒有讀改寫競態可言。
+const DSS_OPEN_UUID_KEY_PREFIX = 'dss-open-temp-uuid:';
 
 function logWriteFailure(context, error) {
     // 儲存寫入失敗時僅記錄，絕不拋出以免中斷呼叫端流程
@@ -56,23 +60,37 @@ const TemporaryChatPendingStore = (() => {
         await savePendingDeletes(filtered);
     }
 
-    async function getOpenUuids() {
+    // 讀取舊版共用陣列 key（唯讀，永不寫回）
+    async function getLegacyOpenUuids() {
         try {
-            const result = await chrome.storage.local.get(DSS_PENDING_STORE_OPEN_UUIDS_KEY);
-            const uuids = result?.[DSS_PENDING_STORE_OPEN_UUIDS_KEY];
+            const result = await chrome.storage.local.get(DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY);
+            const uuids = result?.[DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY];
             return Array.isArray(uuids) ? uuids : [];
         } catch (error) {
             return [];
         }
     }
 
+    async function getOpenUuids() {
+        let prefixedUuids = [];
+        try {
+            const allLocal = await chrome.storage.local.get(null);
+            prefixedUuids = Object.keys(allLocal)
+                .filter((key) => key.startsWith(DSS_OPEN_UUID_KEY_PREFIX))
+                .map((key) => key.slice(DSS_OPEN_UUID_KEY_PREFIX.length));
+        } catch (error) {
+            prefixedUuids = [];
+        }
+        const legacyUuids = await getLegacyOpenUuids();
+        // 聯集去重：升級中裝置可能同時存在舊陣列與新 key
+        return Array.from(new Set([...prefixedUuids, ...legacyUuids]));
+    }
+
     async function addOpenUuid(chatUuid) {
         if (!chatUuid) return;
-        const uuids = await getOpenUuids();
-        if (uuids.includes(chatUuid)) return;
-        uuids.push(chatUuid);
+        const key = DSS_OPEN_UUID_KEY_PREFIX + chatUuid;
         try {
-            await chrome.storage.local.set({ [DSS_PENDING_STORE_OPEN_UUIDS_KEY]: uuids });
+            await chrome.storage.local.set({ [key]: true });
         } catch (error) {
             logWriteFailure('addOpenUuid', error);
         }
@@ -80,11 +98,9 @@ const TemporaryChatPendingStore = (() => {
 
     async function removeOpenUuid(chatUuid) {
         if (!chatUuid) return;
-        const uuids = await getOpenUuids();
-        const filtered = uuids.filter((uuid) => uuid !== chatUuid);
-        if (filtered.length === uuids.length) return;
+        const key = DSS_OPEN_UUID_KEY_PREFIX + chatUuid;
         try {
-            await chrome.storage.local.set({ [DSS_PENDING_STORE_OPEN_UUIDS_KEY]: filtered });
+            await chrome.storage.local.remove(key);
         } catch (error) {
             logWriteFailure('removeOpenUuid', error);
         }
@@ -92,7 +108,9 @@ const TemporaryChatPendingStore = (() => {
 
     async function clearOpenUuids() {
         try {
-            await chrome.storage.local.remove(DSS_PENDING_STORE_OPEN_UUIDS_KEY);
+            const allLocal = await chrome.storage.local.get(null);
+            const prefixedKeys = Object.keys(allLocal).filter((key) => key.startsWith(DSS_OPEN_UUID_KEY_PREFIX));
+            await chrome.storage.local.remove([...prefixedKeys, DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY]);
         } catch (error) {
             logWriteFailure('clearOpenUuids', error);
         }
