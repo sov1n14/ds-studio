@@ -323,14 +323,6 @@ const TemporaryChatDelete = (() => {
      * @param {NavigateEvent} event
      */
     function handleNavigationEvent(event) {
-        console.log('[DSS-DIAG] navigate', {
-            navigationType: event.navigationType,
-            destUrl: event.destination?.url,
-            currentHref: location.href,
-            tracked: _trackedTemporaryUuid,
-            isKeyboardRefresh: _isKeyboardRefresh,
-            stack: new Error().stack,
-        });
         const destinationUrl = event.destination?.url || '';
         const isReload = (event.navigationType === 'reload');
         const isSameUrl = (destinationUrl === window.location.href);
@@ -354,7 +346,6 @@ const TemporaryChatDelete = (() => {
 
         // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
         if (!isRefresh && !isSameConversation && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
-            console.log('[DSS-DIAG] DELETE via navigate', { fromUuid, destUuid });
             deleteTrackedAndClear({ keepalive: false });
         }
 
@@ -387,11 +378,6 @@ const TemporaryChatDelete = (() => {
      * keepalive=true 路由至 Service Worker 以確保關閉時請求仍能發出。
      */
     function handleBeforeUnload() {
-        console.log('[DSS-DIAG] beforeunload', {
-            currentUuid: extractUuidFromUrl(),
-            tracked: _trackedTemporaryUuid,
-            suppressNextUnloadDelete: _suppressNextUnloadDelete,
-        });
         if (_suppressNextUnloadDelete) return;
         if (_isKeyboardRefresh) return;
 

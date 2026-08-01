@@ -91,8 +91,6 @@ const TemporaryChatPendingStore = (() => {
         const key = DSS_OPEN_UUID_KEY_PREFIX + chatUuid;
         try {
             await chrome.storage.local.set({ [key]: true });
-            // TEMP 診斷：追蹤 open-uuids 寫入結果（可依 [DSS-DIAG] 全域移除）
-            console.log('[DSS-DIAG] addOpenUuid', { uuid: chatUuid, after: await getOpenUuids() });
         } catch (error) {
             logWriteFailure('addOpenUuid', error);
         }
@@ -103,8 +101,6 @@ const TemporaryChatPendingStore = (() => {
         const key = DSS_OPEN_UUID_KEY_PREFIX + chatUuid;
         try {
             await chrome.storage.local.remove(key);
-            // TEMP 診斷：追蹤 open-uuids 移除結果（可依 [DSS-DIAG] 全域移除）
-            console.log('[DSS-DIAG] removeOpenUuid', { uuid: chatUuid, after: await getOpenUuids() });
         } catch (error) {
             logWriteFailure('removeOpenUuid', error);
         }
