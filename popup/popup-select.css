@@ -5,8 +5,8 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    border: 1px solid #767676;
-    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
     background: var(--bg-color);
     padding: 1px 22px 1px 4px;
     min-height: 21px;
@@ -17,6 +17,7 @@
     font-family: inherit;
     box-sizing: border-box;
     outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .ds-select:focus {
@@ -46,7 +47,7 @@
     height: 0;
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
-    border-top: 5px solid #767676;
+    border-top: 5px solid var(--text-muted);
     pointer-events: none;
 }
 
@@ -58,8 +59,8 @@
     z-index: 200;
     background: var(--bg-color);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-pop);
     overflow: hidden;
 }
 
@@ -73,7 +74,7 @@
     width: 100%;
     box-sizing: border-box;
     border: 1px solid var(--border-color);
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     padding: 3px 6px;
     font-size: 12px;
     font-family: inherit;
@@ -97,7 +98,7 @@
 
 .ds-select__item--empty {
     padding: 4px 6px 4px 24px;
-    color: #9ca3af;
+    color: var(--text-muted);
     font-style: italic;
     border-bottom: 1px solid var(--border-color);
 }
@@ -110,12 +111,12 @@
 
 .ds-select__item--empty:hover,
 .ds-select__item:hover {
-    background-color: #f3f4f6;
+    background-color: var(--surface-hover);
 }
 
 .ds-select__item--empty.ds-select__item--selected,
 .ds-select__item--selected {
-    background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    background-color: var(--primary-soft);
     color: var(--primary-color);
     font-weight: 500;
 }
@@ -127,7 +128,7 @@
 
 .ds-select__drag-handle {
     cursor: grab;
-    color: #d1d5db;
+    color: var(--text-muted);
     font-size: 12px;
     flex-shrink: 0;
     line-height: 1;
@@ -156,8 +157,8 @@
     background: transparent;
     cursor: pointer;
     font-size: 11px;
-    color: #9ca3af;
-    border-radius: 3px;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
     padding: 0;
     line-height: 1;
 }
@@ -168,14 +169,14 @@
 }
 
 .ds-select__item-btn:hover {
-    background-color: #e5e7eb;
+    background-color: var(--surface-active);
     color: var(--text-color);
 }
 
 .ds-select__item-btn--delete:hover,
 .ds-select__item-btn--delete-all:hover {
-    background-color: #fef2f2;
-    color: #dc2626;
+    background-color: color-mix(in srgb, var(--danger-color) 12%, transparent);
+    color: var(--danger-color);
 }
 
 
@@ -189,15 +190,15 @@
     top: 0;
     left: 0;
     pointer-events: none;
-    opacity: 0.6;
+    opacity: 0.9;
     background: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border: 1px solid var(--primary-color);
+    border-radius: var(--radius-sm);
     padding: 4px 10px;
     font-size: 13px;
     font-family: inherit;
     color: var(--text-color);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-raised);
     white-space: nowrap;
     transform-origin: top left;
     z-index: 9999;
@@ -215,7 +216,7 @@
 .ds-select__empty-hint {
     padding: 8px 12px;
     font-size: 12px;
-    color: #9ca3af;
+    color: var(--text-muted);
     font-style: italic;
     text-align: center;
 }
