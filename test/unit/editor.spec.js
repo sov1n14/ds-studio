@@ -3,7 +3,7 @@
  *
  * editor.js exposes __DSSEditor (window namespace + guarded module.exports).
  * Functions under test: parseTarget, loadContent, saveContent, debounce,
- * renderDisabledState, updateSaveStatus.
+ * renderDisabledState, updateSaveStatus, isDuplicateName.
  *
  * StorageManager is loaded in the global scope by the content script import
  * mechanism. For editor.js we manually set globalThis.StorageManager before
@@ -25,7 +25,7 @@ globalThis.window = globalThis.window ?? {};
 const editor = await import('../../popup/editor/editor.js');
 
 // editor.js exports { parseTarget, loadContent, saveContent, debounce, renderDisabledState, updateSaveStatus }
-const { parseTarget, loadContent, saveContent, debounce, renderDisabledState, updateSaveStatus } = editor;
+const { parseTarget, loadContent, saveContent, debounce, renderDisabledState, updateSaveStatus, isDuplicateName } = editor;
 
 // ─────────────────────────────────────────────
 // parseTarget
@@ -299,6 +299,63 @@ describe('editor.js auto-save debounce wiring — source assertion', () => {
         expect(inputBlockMatch[0]).toContain('debouncedSave()');
         expect(inputBlockMatch[0]).not.toContain('performSave()');
     });
+
+    it('preset target flow fills the name input with the preset name, hides the title, and focuses/selects the name input', async () => {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, resolve } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
+
+        // Anchor on the distinctive name-input assignment (the 'if (target.type === "preset")'
+        // header also appears in saveContent/loadContent) and capture through the block's close.
+        const presetBlockMatch = code.match(/nameInputEl\.value = loaded\.name \?\? '';[\s\S]*?\n    \}/);
+        expect(presetBlockMatch).not.toBeNull();
+        expect(presetBlockMatch[0]).toContain("nameInputEl.value = loaded.name ?? ''");
+        expect(presetBlockMatch[0]).toContain("titleEl.classList.add('is-hidden')");
+        expect(presetBlockMatch[0]).toContain("nameInputEl.classList.remove('is-hidden')");
+        expect(presetBlockMatch[0]).toContain('nameInputEl.focus()');
+        expect(presetBlockMatch[0]).toContain('nameInputEl.select()');
+    });
+
+    it('name input "input" handler sets isDirty and calls the debounced save (not performSave directly)', async () => {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, resolve } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
+
+        const inputBlockMatch = code.match(/nameInputEl\.addEventListener\('input', \(\) => \{[\s\S]*?\}\);/);
+        expect(inputBlockMatch).not.toBeNull();
+        expect(inputBlockMatch[0]).toContain('isDirty = true');
+        expect(inputBlockMatch[0]).toContain('debouncedSave()');
+        expect(inputBlockMatch[0]).not.toContain('performSave()');
+    });
+});
+
+// ─────────────────────────────────────────────
+// Escape-to-close wiring — source assertion
+//
+// The window-level keydown listener lives inside the DOMContentLoaded closure
+// and is not exported via __DSSEditor, so we assert the literal wiring in
+// source, matching the auto-save debounce tests above.
+// ─────────────────────────────────────────────
+
+describe('editor.js Escape-to-close wiring — source assertion', () => {
+    it('registers a window-level keydown listener that closes the window on Escape', async () => {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, resolve } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
+
+        // Anchor on the distinctive Esc comment and capture through the listener's close.
+        const escBlockMatch = code.match(/\/\/ Esc 關閉視窗：pagehide 自動儲存保證未存內容先寫入[\s\S]*?\}\);/);
+        expect(escBlockMatch).not.toBeNull();
+        expect(escBlockMatch[0]).toContain("window.addEventListener('keydown'");
+        expect(escBlockMatch[0]).toContain("e.key === 'Escape'");
+        expect(escBlockMatch[0]).toContain('window.close()');
+    });
 });
 
 // ─────────────────────────────────────────────
@@ -342,7 +399,177 @@ describe('updateSaveStatus', () => {
         expect(statusEl.classList.contains('save-status--hidden')).toBe(false);
     });
 
+    it('sets text to the message and adds save-status--error for "error" state', () => {
+        const statusEl = document.createElement('span');
+        statusEl.classList.add('save-status--hidden');
+        updateSaveStatus(statusEl, 'error', '「A」已存在，請使用不同的名稱。');
+        expect(statusEl.textContent).toBe('「A」已存在，請使用不同的名稱。');
+        expect(statusEl.classList.contains('save-status--error')).toBe(true);
+        expect(statusEl.classList.contains('save-status--hidden')).toBe(false);
+    });
+
+    it('removes save-status--error when leaving the error state ("saving"/"saved")', () => {
+        const statusEl = document.createElement('span');
+        updateSaveStatus(statusEl, 'error', 'boom');
+        expect(statusEl.classList.contains('save-status--error')).toBe(true);
+
+        updateSaveStatus(statusEl, 'saving');
+        expect(statusEl.classList.contains('save-status--error')).toBe(false);
+
+        updateSaveStatus(statusEl, 'error', 'boom');
+        updateSaveStatus(statusEl, 'saved');
+        expect(statusEl.classList.contains('save-status--error')).toBe(false);
+    });
+
     it('does not throw when statusEl is null', () => {
         expect(() => updateSaveStatus(null, 'saving')).not.toThrow();
+    });
+});
+
+// ─────────────────────────────────────────────
+// isDuplicateName
+// ─────────────────────────────────────────────
+
+describe('isDuplicateName — duplicate name detection', () => {
+    it('returns true when another preset has the exact same name', () => {
+        const presets = [
+            { id: 'a', name: 'Same', content: 'x', createdAt: 1, updatedAt: 1 },
+            { id: 'b', name: 'Same', content: 'y', createdAt: 2, updatedAt: 2 },
+        ];
+        expect(isDuplicateName(presets, 'Same', 'a')).toBe(true);
+    });
+
+    it('returns false when only the preset itself matches the name', () => {
+        const presets = [
+            { id: 'a', name: 'Same', content: 'x', createdAt: 1, updatedAt: 1 },
+            { id: 'b', name: 'Other', content: 'y', createdAt: 2, updatedAt: 2 },
+        ];
+        expect(isDuplicateName(presets, 'Same', 'a')).toBe(false);
+    });
+
+    it('returns false when the match differs only by case', () => {
+        const presets = [
+            { id: 'a', name: 'Alpha', content: 'x', createdAt: 1, updatedAt: 1 },
+            { id: 'b', name: 'alpha', content: 'y', createdAt: 2, updatedAt: 2 },
+        ];
+        expect(isDuplicateName(presets, 'Alpha', 'a')).toBe(false);
+    });
+
+    it('returns false when no preset matches', () => {
+        const presets = [{ id: 'a', name: 'Alpha', content: 'x', createdAt: 1, updatedAt: 1 }];
+        expect(isDuplicateName(presets, 'Gamma', 'a')).toBe(false);
+    });
+
+    it('returns false for an empty preset list', () => {
+        expect(isDuplicateName([], 'Anything', 'a')).toBe(false);
+    });
+});
+
+// ─────────────────────────────────────────────
+// saveContent — preset rename & duplicate protection
+// ─────────────────────────────────────────────
+
+describe('saveContent — preset duplicate-name protection and rename', () => {
+    beforeEach(async () => {
+        await StorageManager.initialize();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('rejects with code DUPLICATE_NAME and does not save when renaming to a name held by another preset', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p1', name: 'Other', content: 'c1', createdAt: 1000, updatedAt: 1000 },
+            { id: 'p2', name: 'Shared', content: 'c2', createdAt: 1000, updatedAt: 1000 },
+        ]);
+        const spy = vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
+
+        const err = await saveContent({ type: 'preset', id: 'p1' }, 'new content', 'Shared').then(
+            () => null,
+            (e) => e,
+        );
+
+        expect(err).toBeInstanceOf(Error);
+        expect(err.code).toBe('DUPLICATE_NAME');
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('saves fine when the given name matches only the preset itself (own name is not a duplicate)', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p1', name: 'Shared', content: 'c1', createdAt: 1000, updatedAt: 1000 },
+            { id: 'p2', name: 'Different', content: 'c2', createdAt: 1000, updatedAt: 1000 },
+        ]);
+        const spy = vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
+
+        await saveContent({ type: 'preset', id: 'p1' }, 'new content', 'Shared');
+
+        expect(spy).toHaveBeenCalledOnce();
+        expect(spy.mock.calls[0][0].name).toBe('Shared');
+        expect(spy.mock.calls[0][0].content).toBe('new content');
+    });
+
+    it('updates the preset name and content when the new name is unique', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p1', name: 'Old', content: 'c1', createdAt: 1000, updatedAt: 1000 },
+            { id: 'p2', name: 'Other', content: 'c2', createdAt: 1000, updatedAt: 1000 },
+        ]);
+        const spy = vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
+
+        await saveContent({ type: 'preset', id: 'p1' }, 'new content', 'NewName');
+
+        expect(spy).toHaveBeenCalledOnce();
+        const saved = spy.mock.calls[0][0];
+        expect(saved.id).toBe('p1');
+        expect(saved.name).toBe('NewName');
+        expect(saved.content).toBe('new content');
+    });
+
+    it('treats a case-different name as not a duplicate and saves it', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p1', name: 'Old', content: 'c1', createdAt: 1000, updatedAt: 1000 },
+            { id: 'p2', name: 'alpha', content: 'c2', createdAt: 1000, updatedAt: 1000 },
+        ]);
+        const spy = vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
+
+        await saveContent({ type: 'preset', id: 'p1' }, 'new content', 'Alpha');
+
+        expect(spy).toHaveBeenCalledOnce();
+        expect(spy.mock.calls[0][0].name).toBe('Alpha');
+    });
+
+    it('preserves the existing name on a 2-arg call (no name argument)', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p1', name: 'Keep', content: 'c1', createdAt: 1000, updatedAt: 1000 },
+        ]);
+        const spy = vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
+
+        await saveContent({ type: 'preset', id: 'p1' }, 'new content');
+
+        expect(spy).toHaveBeenCalledOnce();
+        const saved = spy.mock.calls[0][0];
+        expect(saved.name).toBe('Keep');
+        expect(saved.content).toBe('new content');
+    });
+});
+
+// ─────────────────────────────────────────────
+// loadContent — preset name exposure
+// ─────────────────────────────────────────────
+
+describe('loadContent — preset name exposure', () => {
+    beforeEach(async () => {
+        await chrome.storage.local.clear?.();
+        await chrome.storage.sync.clear?.();
+        await StorageManager.initialize();
+    });
+
+    it('returns the preset name for a preset target', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p1', name: 'Named Preset', content: 'content', createdAt: 1000, updatedAt: 1000 },
+        ]);
+        const result = await loadContent({ type: 'preset', id: 'p1' });
+        expect(result).not.toBeNull();
+        expect(result.name).toBe('Named Preset');
     });
 });

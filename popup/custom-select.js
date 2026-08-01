@@ -55,7 +55,6 @@
         getActivePresetId,
         onSelect,
         onReorder,
-        onRequestEdit,
         onRequestDelete,
         onRequestDeleteAll,
     }) {
@@ -223,15 +222,6 @@
                 if (blankClick) {
                     onSelect('');
                     close();
-                    return;
-                }
-
-                // Edit button
-                const editBtn = e.target.closest('.ds-select__item-btn--edit');
-                if (editBtn) {
-                    e.stopPropagation();
-                    const id = editBtn.closest('[data-id]')?.dataset.id;
-                    if (id) onRequestEdit(id);
                     return;
                 }
 
@@ -430,3 +420,4 @@
     global.__DSSCustomSelect = { createPresetCustomSelect };
 
 })(window);
+

@@ -40,6 +40,16 @@ function makeOpenEditorWindow(state) {
         if (trackedId !== null) {
             try {
                 await chrome.windows.update(trackedId, { focused: true });
+                // Reload/navigate the window's tab to the requested URL (mirrors popup.editor-window.js).
+                try {
+                    const tabs = await chrome.tabs.query({ windowId: trackedId });
+                    const tab = tabs[0];
+                    if (tab && typeof tab.id === 'number') {
+                        await chrome.tabs.update(tab.id, { url });
+                    }
+                } catch {
+                    // window may have been closed concurrently; ignore
+                }
                 return;
             } catch {
                 if (isGlobal) {
@@ -111,27 +121,61 @@ describe('openEditorWindow — singleton logic with mocked chrome.windows', () =
         expect(state.presetEditorWindowId).toBe(202);
     });
 
-    // ── Second invocation focuses existing window ───────────────────────────
+    // ── Second invocation focuses existing window and reloads its tab ─────────
 
-    it('second call for global focuses tracked id via chrome.windows.update', async () => {
+    it('second call for global focuses tracked id, then queries and reloads the tab to the requested URL', async () => {
         state.globalEditorWindowId = 101;
         chrome.windows.update = vi.fn().mockResolvedValue({});
+        chrome.tabs.query = vi.fn().mockResolvedValue([{ id: 7 }]);
+        chrome.tabs.update = vi.fn().mockResolvedValue({});
         chrome.windows.create = vi.fn();
 
         await openEditorWindow('global');
 
         expect(chrome.windows.update).toHaveBeenCalledWith(101, { focused: true });
+        expect(chrome.tabs.query).toHaveBeenCalledWith({ windowId: 101 });
+        expect(chrome.tabs.update).toHaveBeenCalledWith(7, { url: 'chrome-extension://EXTID/popup/editor/editor.html?target=global' });
         expect(chrome.windows.create).not.toHaveBeenCalled();
     });
 
-    it('second call for preset focuses tracked id via chrome.windows.update', async () => {
+    it('second call for preset focuses tracked id, then queries and reloads the tab to the requested URL', async () => {
         state.presetEditorWindowId = 202;
         chrome.windows.update = vi.fn().mockResolvedValue({});
+        chrome.tabs.query = vi.fn().mockResolvedValue([{ id: 8 }]);
+        chrome.tabs.update = vi.fn().mockResolvedValue({});
         chrome.windows.create = vi.fn();
 
         await openEditorWindow('preset', 'any-id');
 
         expect(chrome.windows.update).toHaveBeenCalledWith(202, { focused: true });
+        expect(chrome.tabs.query).toHaveBeenCalledWith({ windowId: 202 });
+        expect(chrome.tabs.update).toHaveBeenCalledWith(8, { url: 'chrome-extension://EXTID/popup/editor/editor.html?target=preset&id=any-id' });
+        expect(chrome.windows.create).not.toHaveBeenCalled();
+    });
+
+    it('when tab query rejects, still returns without throwing and does not re-create the window', async () => {
+        state.globalEditorWindowId = 101;
+        chrome.windows.update = vi.fn().mockResolvedValue({});
+        chrome.tabs.query = vi.fn().mockRejectedValue(new Error('tabs API unavailable'));
+        chrome.tabs.update = vi.fn();
+        chrome.windows.create = vi.fn();
+
+        await expect(openEditorWindow('global')).resolves.toBeUndefined();
+
+        expect(chrome.tabs.update).not.toHaveBeenCalled();
+        expect(chrome.windows.create).not.toHaveBeenCalled();
+    });
+
+    it('when the tracked window has no usable tab, still returns without throwing', async () => {
+        state.presetEditorWindowId = 202;
+        chrome.windows.update = vi.fn().mockResolvedValue({});
+        chrome.tabs.query = vi.fn().mockResolvedValue([]);
+        chrome.tabs.update = vi.fn();
+        chrome.windows.create = vi.fn();
+
+        await expect(openEditorWindow('preset', 'any-id')).resolves.toBeUndefined();
+
+        expect(chrome.tabs.update).not.toHaveBeenCalled();
         expect(chrome.windows.create).not.toHaveBeenCalled();
     });
 

@@ -72,7 +72,6 @@ function createSelect(overrides = {}) {
     let activeId = '';
     const onSelect = vi.fn();
     const onReorder = vi.fn();
-    const onRequestEdit = vi.fn();
     const onRequestDelete = vi.fn();
     const onRequestDeleteAll = vi.fn();
 
@@ -88,13 +87,12 @@ function createSelect(overrides = {}) {
         getActivePresetId: () => activeId,
         onSelect,
         onReorder,
-        onRequestEdit,
         onRequestDelete,
         onRequestDeleteAll,
         ...overrides,
     });
 
-    return { sel, onSelect, onReorder, onRequestEdit, onRequestDelete, onRequestDeleteAll, getPresets: () => presets, setActiveId: (id) => { activeId = id; } };
+    return { sel, onSelect, onReorder, onRequestDelete, onRequestDeleteAll, getPresets: () => presets, setActiveId: (id) => { activeId = id; } };
 }
 
 describe('createPresetCustomSelect', () => {
@@ -215,15 +213,6 @@ describe('createPresetCustomSelect', () => {
     });
 
     describe('inline 按鈕', () => {
-        it('點擊 edit 按鈕呼叫 onRequestEdit 且不關閉面板', () => {
-            const { sel, onRequestEdit } = createSelect();
-            sel.open();
-            const editBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--edit');
-            editBtn.click();
-            expect(onRequestEdit).toHaveBeenCalledWith('a');
-            expect(document.getElementById('panel').hidden).toBe(false);
-        });
-
         it('點擊 delete 按鈕呼叫 onRequestDelete 且不關閉面板', () => {
             const { sel, onRequestDelete } = createSelect();
             sel.open();
@@ -314,13 +303,9 @@ describe('createPresetCustomSelect', () => {
             expect(() => deleteAllBtn.click()).not.toThrow();
         });
 
-        it('新增刪除全部分支後，per-item 的 edit/delete 按鈕仍正確運作（回歸測試）', () => {
-            const { sel, onRequestEdit, onRequestDelete } = createSelect();
+        it('新增刪除全部分支後，per-item 的 delete 按鈕仍正確運作（回歸測試）', () => {
+            const { sel, onRequestDelete } = createSelect();
             sel.open();
-            const editBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--edit');
-            editBtn.click();
-            expect(onRequestEdit).toHaveBeenCalledWith('a');
-
             const deleteBtn = document.querySelector('#list .ds-select__item[data-id="b"] .ds-select__item-btn--delete');
             deleteBtn.click();
             expect(onRequestDelete).toHaveBeenCalledWith('b');

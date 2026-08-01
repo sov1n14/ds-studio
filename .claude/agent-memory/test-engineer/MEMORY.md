@@ -1,3 +1,1 @@
-- [Environment quoting pitfalls](environment-quoting-pitfalls.md) — Bash tool collapses `\`→`\` in heredocs/-e strings; python is a dead stub; use node + fromCharCode(92)
-- [Vitest fake-timers pitfalls](vitest-fake-timers-pitfalls.md) — fake clock base is epoch 0; reset Date.now()-derived module state and advance clock before first cooldown-triggering call
-- [code-testing-policy skill location](code-testing-policy-location.md) — skill is in global ~/.claude/skills/, not repo; cleanup = Recycle Bin
+- [Bash tool quoting quirk](bash-tool-quoting.md) — heredoc bodies with backticks break the Bash tool wrapper; use sed + plain heredoc appends

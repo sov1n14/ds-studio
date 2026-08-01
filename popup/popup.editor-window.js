@@ -35,6 +35,17 @@ function createEditorWindowManager(ctx) {
             try {
                 // 嘗試聚焦現有視窗
                 await chrome.windows.update(trackedId, { focused: true });
+                // 重新載入／導向分頁：相同 URL 即重新整理，不同 URL 則切換至目前啟用的提示詞組。
+                // 此舉安全無資料遺失之虞，因編輯器在 pagehide 時會先自動儲存未存內容。
+                try {
+                    const tabs = await chrome.tabs.query({ windowId: trackedId });
+                    const tab = tabs[0];
+                    if (tab && typeof tab.id === 'number') {
+                        await chrome.tabs.update(tab.id, { url });
+                    }
+                } catch {
+                    // 視窗可能並行關閉，忽略錯誤
+                }
                 return;
             } catch {
                 // 視窗已關閉，清除追蹤 ID 並重新建立

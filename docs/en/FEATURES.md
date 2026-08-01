@@ -39,8 +39,8 @@ Prompt Groups are the core feature of DS studio, allowing you to create multiple
 4. Action buttons to the right of the dropdown:
    - **+**: Add a new prompt group (a naming dialog appears; name is required).
    - **Pencil**: Edit the currently selected prompt group's content; disabled when no prompt group is selected.
-   - When hovering over a prompt group, additional pencil (rename, tooltip "Rename Prompt Group") and **✕** (delete, with confirmation, tooltip "Delete Prompt") buttons appear.
-5. Click the pencil button to edit prompt content in a dedicated 1280×720 editor window, providing ample editing space with auto-save. Repeatedly clicking the pencil button focuses the existing editor window rather than opening a new one.
+   - When hovering over a prompt group, a **✕** (delete, with confirmation, tooltip "Delete Prompt") button appears.
+5. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused, so typing renames the group directly; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first).
 6. The system allows deleting all custom prompt groups: the dropdown always retains a blank option as the default, and hovering over it reveals a **✕** (delete all prompt groups, with confirmation) button that clears every custom prompt group at once.
 
 ## Global Default Prompt

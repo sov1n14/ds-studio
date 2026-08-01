@@ -132,9 +132,7 @@
 
     // ---- Custom Select ----
     noPresetOptionCustomSelect: '（無提示詞組）',
-    renameAriaLabel: '重新命名',
     deleteAriaLabel: '刪除',
-    editPresetNameTooltip: '編輯提示詞組名稱',
     deletePresetTooltip: '刪除提示詞',
     deleteAllPresetsTooltip: '刪除全部提示詞組',
 
@@ -307,9 +305,7 @@
 
     // ---- Custom Select ----
     noPresetOptionCustomSelect: '(No Prompt Group)',
-    renameAriaLabel: 'Rename',
     deleteAriaLabel: 'Delete',
-    editPresetNameTooltip: 'Edit prompt group name',
     deletePresetTooltip: 'Delete prompt',
     deleteAllPresetsTooltip: 'Delete all prompt groups',
 

@@ -1,6 +1,6 @@
 /**
  * DS studio — Popup Preset Manager 模組
- * 封裝提示詞組的重新命名、刪除等操作。
+ * 封裝提示詞組的刪除等操作。
  * 使用 factory 模式接收 ctx 上下文物件，以保持與 popup.js 的共享狀態同步。
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -23,37 +23,6 @@
  * @param {Object} ctx.StorageManager - StorageManager 實例
  */
 function createPresetManager(ctx) {
-    // --- 重新命名提示詞組 ---
-    async function requestEditPreset(id) {
-        const presets = ctx.getPresets();
-        const current = presets.find(p => p.id === id);
-        if (!current) return;
-
-        const newName = await ctx.Modal.prompt({
-            title: dsI18n.t('renamePresetTitle'),
-            value: current.name,
-            placeholder: dsI18n.t('renamePresetPlaceholder')
-        });
-
-        if (!newName || newName === current.name) return;
-
-        if (presets.some(p => p.name === newName && p.id !== current.id)) {
-            await ctx.Modal.confirm({
-                title: dsI18n.t('duplicateNameTitlePresetManager'),
-                message: dsI18n.t('duplicateNameMessagePresetManager', { name: newName }),
-                confirmText: dsI18n.t('confirmButtonPresetManager'),
-                cancelText: null
-            });
-            return;
-        }
-
-        current.name      = newName;
-        current.updatedAt = Date.now();
-        await ctx.StorageManager.savePromptPresets(presets);
-        await ctx.refreshSyncStatus();
-        ctx.getCustomSelect().render();
-        ctx.showSaveStatus();
-    }
 
     // --- 刪除提示詞組 ---
     async function requestDeletePreset(id) {
@@ -157,7 +126,6 @@ function createPresetManager(ctx) {
     }
 
     return {
-        requestEditPreset,
         requestDeletePreset,
         requestDeleteAllPresets,
         getPendingPresetIdFromContentScript,

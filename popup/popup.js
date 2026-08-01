@@ -263,7 +263,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             await refreshSyncStatus();
             customSelect.render();
         },
-        onRequestEdit:      (id) => presetManager.requestEditPreset(id),
         onRequestDelete:    (id) => presetManager.requestDeletePreset(id),
         onRequestDeleteAll: ()   => presetManager.requestDeleteAllPresets(),
     });

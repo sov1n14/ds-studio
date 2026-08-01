@@ -213,7 +213,6 @@ describe('dsI18n', () => {
             // key resolves to real text (not a raw-key fallback), plus that the
             // en/zh_TW pair for every key differs (locale actually switched).
             const keys = [
-                'editPresetNameTooltip',
                 'deletePresetTooltip',
                 'deleteAllPresetsTooltip',
                 'deleteAllPresetsTitle',

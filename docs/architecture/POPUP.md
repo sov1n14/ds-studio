@@ -8,15 +8,15 @@
 
 The popup includes a preset selector row composed of:
 - A custom combobox component (`custom-select.js`) replacing the old native `<select id="presetList">`. See the Custom Preset Dropdown section below for detailed architecture.
-- Inline action buttons: edit (`✎`) and delete (`✕`) rendered inside each dropdown row, and a standalone `+` button for adding new presets.
+- Inline action buttons: delete (`✕`) rendered inside each dropdown row, and a standalone `+` button for adding new presets. (v4.14.0 — the per-row rename pencil was removed; renaming now happens inside the standalone editor window.)
 
 **Add flow**: Click `+` → `Modal.prompt('新增提示詞組')` with required-field validation → user enters name → preset created with empty content → auto-selected → if on a bound conversation, updates the binding → user edits content in textarea.
 
-**Rename flow**: Click `✎` → `Modal.prompt('重新命名', { value: currentName })` → user edits → preset name updated → dropdown refreshes.
+**Rename flow (v4.14.0)**: Renaming happens in the standalone editor window. Click `#editPresetBtn` → the editor opens with the preset name shown in a focused, selected name input (`#editorNameInput`) in the header → editing the name joins the same auto-save pipeline as the content (500 ms debounce + flush on blur/close). Duplicate names are rejected at save time (`DUPLICATE_NAME`) and surfaced as a red error in the save-status area; the save is blocked until the name is unique. The open popup's dropdown refreshes automatically via live-sync. (Pre-v4.14.0 the flow was: click `✎` in the dropdown row → `Modal.prompt('重新命名', { value: currentName })`.)
 
 **Delete flow**: Click `✕` → `Modal.confirm('刪除提示詞組', { variant: 'danger' })` → confirmed → preset removed from array, any `chatPresetMap` bindings pointing to the deleted preset are cleaned up. If the deleted preset was the active one, `activePresetId` is cleared to `''` (empty state). Delete is disabled when the empty state is selected. The system allows deleting all custom presets, as the empty option always remains as a fallback. (v4.8.3) Deletion also records a tombstone in `dsPresetTombstones` (local + sync) so the deletion propagates correctly to other devices during conflict-resolution merge instead of being resurrected by a stale copy.
 
-**Content editing (v3.0.0, timing updated v4.8.1)**: The popup no longer hosts a content textarea. A pencil button (`#editPresetBtn`, rightmost in the controls row, disabled when `activePresetId === ''`) opens the standalone editor window at `popup/editor/editor.html?target=preset&id=<activePresetId>` (1280×720, singleton focus-or-create). The editor auto-saves via dirty flag + debounced input (500 ms) + `blur`/`visibilitychange`/`pagehide`, and broadcasts `ACTIVE_PRESET_CHANGED` after each preset save.
+**Content editing (v3.0.0, timing updated v4.8.1, name editing v4.14.0)**: The popup no longer hosts a content textarea. A pencil button (`#editPresetBtn`, rightmost in the controls row, disabled when `activePresetId === ''`) opens the standalone editor window at `popup/editor/editor.html?target=preset&id=<activePresetId>` (1280×720, singleton focus-or-create). The editor auto-saves via dirty flag + debounced input (500 ms) + `blur`/`visibilitychange`/`pagehide`, and broadcasts `ACTIVE_PRESET_CHANGED` after each preset save. Since v4.14.0 the editor is also the rename surface: preset targets show a focused name input in the header (the `#editorTitle` h1 is hidden), wired into the same auto-save pipeline, with duplicate-name rejection (`isDuplicateName` check in `saveContent`, error surfaced in `#editorSaveStatus`). Global targets keep the read-only h1.
 
 **Chat/input width sliders (debounced write, v4.8.1)**: `chatWidthSlider` and `inputWidthSlider` separate their `input` event (updates the live percentage label synchronously, no storage write) from their `change` event (calls a 500 ms debounced wrapper — `debouncedSaveChatWidth` / `debouncedSaveInputWidth` — that persists the value via `StorageManager.saveChatWidth()` / `saveInputWidth()`, then refreshes sync status). This aligns the slider write cadence with the editor's 500 ms auto-save debounce, reducing `chrome.storage` write pressure during drag. The corresponding toggle switches (`chatWidthToggle`, `inputWidthToggle`) remain synchronous/undebounced. `popup.js` carries its own local `debounce(fn, delayMs)` copy (same reasoning as `editor.js`: it is a classic script and cannot `import`).
 
@@ -61,7 +61,7 @@ This design allows the component to be loaded as a plain `<script>` tag in `popu
 
 | Method | Description |
 |-|-|
-| `render()` | Re-renders the trigger text and the dropdown list from current state. Called after any preset list mutation (add, rename, delete, reorder, active change). |
+| `render()` | Re-renders the trigger text and the dropdown list from current state. Called after any preset list mutation (add, delete, reorder, active change); renames from the editor window arrive via live-sync. |
 | `open()` | Opens the dropdown panel. Clears search input, resets filter, re-renders full list, focuses search input. Registers an outside-click listener. |
 | `close()` | Closes the dropdown panel. Unregisters outside-click listener. |
 | `isOpen()` | Returns `true` if the panel is currently open. |
@@ -85,7 +85,6 @@ The factory receives a configuration object with the following properties:
 | `getActivePresetId` | `Function` | Returns the current `activePresetId`. |
 | `onSelect` | `Function` | Called with `(presetId)` when a user clicks a preset item. The caller (popup.js) handles storage persistence and chat binding. |
 | `onReorder` | `Function` | Called with `(newPresets)` after a drag-reorder completes. The caller persists the new order to storage. |
-| `onRequestEdit` | `Function` | Called with `(presetId)` when the edit button is clicked. popup.js opens a rename modal. |
 | `onRequestDelete` | `Function` | Called with `(presetId)` when the delete button is clicked. popup.js opens a delete confirmation modal. |
 | `onRequestDeleteAll` | `Function` (v4.10.0) | Called with no arguments when the "delete all" button on the blank `(無提示詞組)` item is clicked. popup.js opens a "delete all presets" confirmation modal via `presetManager.requestDeleteAllPresets()`. The panel click handler stops propagation on this button before the blank-item `onSelect('')` branch runs, so a delete-all click never also selects the blank option. |
 
@@ -110,10 +109,10 @@ The component maintains a single `state` object with the following fields:
 - **`_renderList()`**: Rebuilds the dropdown list DOM. Iterates presets, filters by `filteredIds`, and creates `div.ds-select__item` elements with three child regions:
   - Drag handle (`⠿` character, class `ds-select__drag-handle`)
   - Item name (class `ds-select__item-name`, HTML-escaped)
-  - Inline action buttons (edit / delete, classes `ds-select__item-btn--edit` / `ds-select__item-btn--delete`), each carrying an i18n `title`/`aria-label` (edit: `編輯提示詞組名稱`; delete: `刪除提示詞`)
+  - Inline action buttons (delete only since v4.14.0, class `ds-select__item-btn--delete`), carrying an i18n `title`/`aria-label` (delete: `刪除提示詞`; the per-row rename pencil was removed in v4.14.0 — renaming moved into the editor window)
   - Skips rendering when a drag is in progress (`state.drag !== null`) to avoid DOM churn during drag.
   - Calls `_bindDrag()` after populating the list to attach pointer event handlers to each drag handle.
-  - Row markup is built by `buildPresetItemMarkup(preset)` in `popup/preset-item-renderer.js` (v4.10.0 — extracted from `custom-select.js` to stay under the 450-line proactive-split threshold). The edit button now reuses the outer pencil's hand-drawn SVG path (shrunk to 12×12 via `.ds-select__item-btn--edit svg` in `popup-select.css`) instead of the `✎` glyph, so its stroke direction matches `#editPresetBtn` exactly; the delete button keeps the `✕` glyph.
+  - Row markup is built by `buildPresetItemMarkup(preset)` in `popup/preset-item-renderer.js` (v4.10.0 — extracted from `custom-select.js` to stay under the 450-line proactive-split threshold). The delete button keeps the `✕` glyph.
 
 - **`_applyFilter()`**: Reads the current search input value, iterates all presets with `_fuzzyMatch()`, updates `filteredIds`, and calls `_renderList()`. Called via a debounced wrapper `_debouncedFilter`.
 
@@ -222,7 +221,7 @@ The component sits between the DOM and popup.js's storage layer:
 popup.html (DOM elements)
     ↓  reads/writes DOM
 custom-select.js (interaction state, rendering)
-    ↓  callbacks (onSelect, onReorder, onRequestEdit, onRequestDelete)
+    ↓  callbacks (onSelect, onReorder, onRequestDelete)
 popup.js (business logic, storage calls)
     ↓  async storage API
 storage-manager.js (chrome.storage wrapper)
@@ -230,7 +229,7 @@ storage-manager.js (chrome.storage wrapper)
 
 1. User interacts with the dropdown (click, search, drag).
 2. `custom-select.js` handles the interaction, updates its internal state, re-renders the DOM.
-3. For actions that require persistence (select, reorder, edit, delete), it calls the appropriate callback.
+3. For actions that require persistence (select, reorder, delete), it calls the appropriate callback.
 4. popup.js executes the storage operation, then calls `customSelect.render()` to sync the UI to the new state.
 
 This one-way data flow (DOM → component → callback → storage → re-render) keeps state management predictable and testable.
@@ -273,7 +272,7 @@ Prompt content editing lives in `popup/editor/` — an extension page opened as 
 
 - Two pencil buttons in the popup: `#editGlobalPromptBtn` (Global Prompt card) and `#editPresetBtn` (Prompt Group card, disabled when `activePresetId === ''`).
 - `openEditorWindow()` in `popup.js` builds the URL via `chrome.runtime.getURL('popup/editor/editor.html')` plus the query string, then creates the window with `chrome.windows.create({ url, type: 'popup', width: 1280, height: 720 })`.
-- **Singleton per target**: module-level slots (`globalEditorWindowId` / `presetEditorWindowId`) track open windows. A repeat click tries `chrome.windows.update(id, { focused: true })` first; if that rejects (window closed), the slot is cleared and a new window is created. `chrome.windows.create` requires no extra permission, and no `web_accessible_resources` entry is needed for extension-origin pages.
+- **Singleton per target**: module-level slots (`globalEditorWindowId` / `presetEditorWindowId`) track open windows. A repeat click tries `chrome.windows.update(id, { focused: true })` first; if that rejects (window closed), the slot is cleared and a new window is created. Since v4.14.0, after focusing an existing window its tab is also navigated to the requested URL via `chrome.tabs.query({ windowId })` + `chrome.tabs.update(tab.id, { url })` (same URL = reload, different URL = switch to the now-active preset). This makes the name input's focus-on-open fire on every pencil click and fixes the stale-preset trap where a window opened for preset A stayed on A after the user switched to preset B. No data loss: the editor's `pagehide` handler flushes dirty content before unload. `chrome.windows.create` requires no extra permission, and no `web_accessible_resources` entry is needed for extension-origin pages.
 
 ### Query-string contract
 
@@ -286,7 +285,7 @@ Invalid targets and presets that no longer exist (deleted while the link was sta
 
 ### Auto-save pipeline (editor side)
 
-A standalone window can be closed directly by the OS, so saving is defensive: `input` sets a dirty flag and schedules a 600 ms debounced save; `blur`, `visibilitychange` (hidden), and `pagehide` flush immediately (fire-and-forget). Saves only fire when dirty. Routing: global → `StorageManager.saveGlobalDefaultPrompt()`; preset → re-fetch the preset, stamp `content` + `updatedAt`, then `StorageManager.saveOnePromptPreset()` followed by `DSVMessaging.broadcastActivePreset()`. All persistence goes through `StorageManager` — the editor never touches `chrome.storage` directly.
+A standalone window can be closed directly by the OS, so saving is defensive: `input` sets a dirty flag and schedules a 600 ms debounced save; `blur`, `visibilitychange` (hidden), and `pagehide` flush immediately (fire-and-forget). Saves only fire when dirty. Since v4.15.0, pressing `Esc` closes the window (window-level `keydown` listener → `window.close()`); the `pagehide` flush writes any dirty content first, so the shortcut never loses data. Routing: global → `StorageManager.saveGlobalDefaultPrompt()`; preset → re-fetch the preset, stamp `content` + `updatedAt` (+ `name` when the name input changed, v4.14.0), then `StorageManager.saveOnePromptPreset()` followed by `DSVMessaging.broadcastActivePreset()`. The name input (`#editorNameInput`) shares this pipeline: its `input`/`blur` handlers set the same dirty flag and call the same debounced/flush save, and `saveContent` rejects with `code: 'DUPLICATE_NAME'` when the new name collides with another preset (exact-match, case-sensitive, self-excluded) — the save-status area shows a red error and nothing is written. All persistence goes through `StorageManager` — the editor never touches `chrome.storage` directly.
 
 ### Propagation
 
@@ -297,7 +296,7 @@ sequenceDiagram
     participant Storage as chrome.storage sync+local
     participant Content as Content Script (chat.deepseek.com)
 
-    Popup->>Editor: pencil click → chrome.windows.create / update(focused)
+    Popup->>Editor: pencil click → chrome.windows.create / update(focused) + tabs.update(reload)
     Editor->>Storage: StorageManager.initialize() + load target content
     Editor->>Storage: auto-save (debounced input / blur / pagehide)
     Storage-->>Content: onChanged → globalDefaultPrompt / dsPreset_* updated
