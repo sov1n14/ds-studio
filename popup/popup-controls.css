@@ -150,20 +150,21 @@ input:checked + .slider:before {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: transparent;
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
     padding: 0;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
     color: var(--text-color);
     font-family: inherit;
 }
 
 .icon-btn:hover {
     background-color: var(--surface-hover);
+    border-color: var(--border-strong);
 }
 
 .icon-btn:active {

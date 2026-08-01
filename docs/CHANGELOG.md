@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.16.1](changelog/v4.md#4161---2026-08-02) | 彈出視窗視覺改版第二輪：核取方塊與單選鈕改為 `appearance: none` 自繪（方框／圓框、選取態為淡藍底配藍勾與藍點，皆補上 hover、焦點環與停用態），連網搜索三選項改為單一帶邊框的分段控制、內距與字級收緊，並還原第一輪誤刪的圖示按鈕細邊框。純 CSS，DOM 與 class 名稱未動 |
 | [4.16.0](changelog/v4.md#4160---2026-08-02) | 彈出視窗視覺改版：新增 `popup/popup-theme.css` 作為唯一設計 token 來源（品牌藍 `#4d6bfe` 不變，另定義表面層、文字三階、邊框兩階、陰影三階、圓角與間距刻度），四支樣式表改為全 token 取色、零硬編碼色碼，並以 `@media (prefers-color-scheme: dark)` 覆寫同一組 token 首次支援深色模式（無手動切換、無 JS、無新 storage 鍵）。視覺上卡片改為 hairline 邊框加柔和陰影與較大圓角、標題層級收斂，控制項統一圓角與焦點環，下拉選中項改為淡藍底配藍字取代實心藍條。純樣式改版：未新增或重新命名任何選擇器，`popup.html` 僅多一行 `<link>` |
 | [4.15.1](changelog/v4.md#4151---2026-08-01) | 修復臨時對話在另一分頁開啟新對話時被誤刪：開啟中對話護欄原以單一陣列鍵 `dss-open-temp-uuids` 儲存並在每次增刪時整份 read-modify-write，任一 context 讀到過期快照就會靜默算掉其他分頁的項目，該對話失去護欄後即被 Service Worker 補救掃描刪除（現場探針證實分頁 A 的項目已落地，數秒後被分頁 B 的寫回抹除）。改為每 UUID 一把獨立鍵（前綴 `dss-open-temp-uuid:`），新增只寫自己那把、移除只刪自己那把，此類遺失在結構上不再可能；舊陣列鍵轉為唯讀並於讀取時聯集去重，`clearOpenUuids()` 一併清除。連帶移除已無用途的 `withOpenUuidsLock` 及其 1000ms／5000ms 逾時不對稱造成的孤兒鎖隱患；`utils/storage-manager.chunk-lock.js` 的 TTL 鎖泛化為可指定鍵並保留原有薄包裝 |
 | [4.15.0](changelog/v4.md#4150---2026-08-01) | 獨立編輯視窗新增 `Esc` 關閉快捷鍵：window 層級 `keydown` 監聽器偵測 `Escape` 呼叫 `window.close()`；關閉前既有 `pagehide` 自動儲存先寫入未存內容，快捷關閉不遺失資料 |

@@ -77,12 +77,67 @@ header {
     background: var(--surface-hover);
 }
 .locale-option input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
     margin: 0;
-    accent-color: var(--primary-color);
+    flex-shrink: 0;
+    position: relative;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background-color: var(--surface-sunken);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-/* ── 連網搜索選項 ── */
+.locale-option input[type="radio"]:hover {
+    border-color: var(--primary-color);
+}
+.locale-option input[type="radio"]:checked {
+    border-color: var(--primary-color);
+}
+.locale-option input[type="radio"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    transform: translate(-50%, -50%);
+}
+.locale-option input[type="radio"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.locale-option input[type="radio"]:disabled {
+    border-color: var(--text-muted);
+    cursor: not-allowed;
+}
+/* ── 連網搜索選項（緊湊分段控制項） ── */
 .websearch-options {
     display: flex;
+    width: fit-content;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.websearch-options .locale-option {
+    padding: 3px 10px;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.websearch-options .locale-option:not(:last-child) {
+    border-right: 1px solid var(--border-color);
+}
+
+.websearch-options .locale-option:has(input:checked) {
+    color: var(--text-color);
+    background-color: var(--surface-hover);
 }
 
 .card {
@@ -151,9 +206,46 @@ h1 {
 }
 
 .checkbox-group input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
     margin: 0;
+    flex-shrink: 0;
+    position: relative;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-sunken);
     cursor: pointer;
-    accent-color: var(--primary-color);
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.checkbox-group input[type="checkbox"]:hover {
+    border-color: var(--primary-color);
+}
+.checkbox-group input[type="checkbox"]:checked {
+    background-color: var(--primary-soft);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.checkbox-group input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+.checkbox-group input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.checkbox-group input[type="checkbox"]:disabled {
+    border-color: var(--text-muted);
+    background-color: var(--surface-sunken);
+    cursor: not-allowed;
 }
 
 .checkbox-group label {
