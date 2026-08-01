@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.16.3](changelog/v4.md#4163---2026-08-02) | 修復臨時對話開關重整後自行變回開啟：現場探針證實關閉時確實寫入 `false`，重整後該鍵卻變成 `true`，即重整過程中發生了一次真實寫入；全倉唯一寫入路徑只有 checkbox 自身的 `change` 監聽器且無任何合成事件，判定為 Chromium 對動態注入表單控制項的狀態還原發出 `isTrusted` 的 `change` 事件被誤認為使用者操作，加上 `autocomplete="off"` 退出還原。同時修正 `writeEnabledFlag()` 的 `chrome.storage.local.set()` 為 fire-and-forget、外層同步 `try/catch` 抓不到 promise rejection 而靜默吞掉寫入失敗的缺陷 |
 | [4.16.2](changelog/v4.md#4162---2026-08-02) | 連網搜索的標籤與三段式分段控制改為同排：以 `.input-group:has(> .websearch-options)` 結構選擇器將該群組覆寫為 flex row、右對齊垂直置中，同卡片其餘群組不受影響，未新增 class、`popup.html` 零改動 |
 | [4.16.1](changelog/v4.md#4161---2026-08-02) | 彈出視窗視覺改版第二輪：核取方塊與單選鈕改為 `appearance: none` 自繪（方框／圓框、選取態為淡藍底配藍勾與藍點，皆補上 hover、焦點環與停用態），連網搜索三選項改為單一帶邊框的分段控制、內距與字級收緊，並還原第一輪誤刪的圖示按鈕細邊框。純 CSS，DOM 與 class 名稱未動 |
 | [4.16.0](changelog/v4.md#4160---2026-08-02) | 彈出視窗視覺改版：新增 `popup/popup-theme.css` 作為唯一設計 token 來源（品牌藍 `#4d6bfe` 不變，另定義表面層、文字三階、邊框兩階、陰影三階、圓角與間距刻度），四支樣式表改為全 token 取色、零硬編碼色碼，並以 `@media (prefers-color-scheme: dark)` 覆寫同一組 token 首次支援深色模式（無手動切換、無 JS、無新 storage 鍵）。視覺上卡片改為 hairline 邊框加柔和陰影與較大圓角、標題層級收斂，控制項統一圓角與焦點環，下拉選中項改為淡藍底配藍字取代實心藍條。純樣式改版：未新增或重新命名任何選擇器，`popup.html` 僅多一行 `<link>` |

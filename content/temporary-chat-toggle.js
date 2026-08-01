@@ -69,7 +69,14 @@ const TemporaryChatToggle = (() => {
         _enabledFlagCache = isEnabled;
         const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
         try {
-            chrome.storage.local.set({ [key]: isEnabled });
+            chrome.storage.local.set({ [key]: isEnabled }).catch((error) => {
+                // 非同步寫入失敗時記錄，避免被同步 try/catch 靜默吞掉
+                if (globalThis.__DS_Logger?.warn) {
+                    globalThis.__DS_Logger.warn('temp-chat-toggle:write-fail', error);
+                } else {
+                    console.warn('temp-chat-toggle:write-fail', error);
+                }
+            });
         } catch {
             // storage 不可用時靜默忽略；快取已更新，同分頁行為仍正常
         }
@@ -113,6 +120,9 @@ const TemporaryChatToggle = (() => {
         input.className = 'dss-temp-chat-switch__input';
         input.checked = isEnabled;
         input.setAttribute('aria-label', '臨時對話');
+        // 停用瀏覽器表單狀態自動還原：Chromium 會在重新整理後對動態注入的表單控制項
+        // 還原先前狀態並觸發真實的 change 事件，若不關閉會被 writeEnabledFlag() 誤判為使用者操作而寫回 true
+        input.setAttribute('autocomplete', 'off');
 
         const track = document.createElement('span');
         track.className = 'dss-temp-chat-switch__track';

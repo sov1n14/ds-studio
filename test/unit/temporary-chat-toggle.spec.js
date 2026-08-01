@@ -683,3 +683,57 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 });
+
+// ── Group M: browser form-state restoration opt-out ──────────────────────────
+// REQUIREMENT: the injected checkbox must opt out of Chromium's autofill/
+// form-state restoration for dynamically-injected inputs, since Chromium
+// restores such state on reload and fires a genuine `change` event that would
+// otherwise be persisted as if it were a real user action.
+
+describe('M — injected checkbox opts out of browser form-state restoration', () => {
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('M1: the injected checkbox input has autocomplete="off"', () => {
+        const row = TemporaryChatToggle.createToggleRow(false);
+        const input = row.querySelector('.dss-temp-chat-switch__input');
+        expect(input.getAttribute('autocomplete')).toBe('off');
+    });
+});
+
+// ── Group N: async storage-write failure is observed and reported ───────────
+// REQUIREMENT: when chrome.storage.local.set() rejects, the rejection must be
+// observed and reported via globalThis.__DS_Logger.warn rather than surfacing
+// as an unhandled promise rejection (previously fire-and-forget).
+
+describe('N — writeEnabledFlag reports async storage-write failures', () => {
+    let originalSet;
+    let originalLogger;
+
+    beforeEach(() => {
+        chromeStorageLocalMock._reset();
+        originalSet = chromeStorageLocalMock.set;
+        originalLogger = globalThis.__DS_Logger;
+    });
+
+    afterEach(() => {
+        chromeStorageLocalMock.set = originalSet;
+        globalThis.__DS_Logger = originalLogger;
+        vi.restoreAllMocks();
+    });
+
+    it('N1: a rejected chrome.storage.local.set() is reported through __DS_Logger.warn, not left unhandled', async () => {
+        const writeError = new Error('storage quota exceeded');
+        chromeStorageLocalMock.set = vi.fn(() => Promise.reject(writeError));
+        const warnSpy = vi.fn();
+        globalThis.__DS_Logger = { warn: warnSpy };
+
+        TemporaryChatToggle.writeEnabledFlag(true);
+        // Flush the microtask queue so the rejection handler runs.
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(warnSpy).toHaveBeenCalled();
+    });
+});
