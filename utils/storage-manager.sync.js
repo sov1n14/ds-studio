@@ -108,7 +108,22 @@
             await this._set({ [this.KEYS.PRESET_TOMBSTONES]: mergedTombstones });
 
             // 2. 解決其他設定：雲端設定覆寫本機 UI 設定
-            const updates = { ...localRaw, ...syncRaw };
+            // 只保留 StorageManager 實際擁有的金鑰（KEYS 靜態成員 + dsPreset_ 動態 preset 金鑰）。
+            // 原因：localRaw/syncRaw 是 chrome.storage.*.get(null) 的完整未過濾快照，
+            // 可能內含其他模組自行管理的 chrome.storage.local 金鑰（例如
+            // content/temporary-chat-toggle.js 的 dss-temporary-chat-enabled）。
+            // 若直接 spread 整包快照，這些「外來金鑰」會被誤判為需調和的資料，
+            // 導致某一側的舊值透過此處寫回而復活、覆蓋另一側裝置剛設定的新值。
+            // 因此改為以 ownership 白名單重建 updates，而非直接展開原始快照。
+            const ownedKeys = new Set(Object.values(this.KEYS));
+            const isOwnedKey = (key) => ownedKeys.has(key) || key.startsWith('dsPreset_');
+            const updates = {};
+            for (const key of Object.keys(localRaw)) {
+                if (isOwnedKey(key)) updates[key] = localRaw[key];
+            }
+            for (const key of Object.keys(syncRaw)) {
+                if (isOwnedKey(key)) updates[key] = syncRaw[key];
+            }
 
             // 清理：若舊金鑰存在則移除
             delete updates[this.KEYS.PROMPT_PRESETS];

@@ -281,4 +281,130 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
             expect(syncAfter[K.ACTIVE_PRESET_ID]).toBe('');
         });
     });
+
+    // ----------------------------------------------------------------
+    // Foreign-key exclusion: resolveSyncConflict() must only reconcile
+    // keys it actually owns (StorageManager.KEYS, plus dynamically-named
+    // dsPreset_* entries). A key belonging to another module entirely
+    // (e.g. content/temporary-chat-toggle.js's own storage key) must
+    // never be written back by reconciliation, in either direction.
+    // ----------------------------------------------------------------
+    describe('Foreign-key exclusion — keys outside StorageManager.KEYS must not be reconciled', () => {
+        const FOREIGN_KEY = 'dss-temporary-chat-enabled';
+
+        it('does not write the foreign key to sync or local when local=false, sync=true', async () => {
+            await populateDefaults();
+
+            // Local: user has explicitly turned the toggle off.
+            // Sync: a stale value from a previous session says it was on.
+            await chrome.storage.local.set({
+                [K.SYNC_CONFLICT_PENDING]: true,
+                [FOREIGN_KEY]: false,
+            });
+            await chrome.storage.sync.set({
+                [FOREIGN_KEY]: true,
+            });
+
+            await StorageManager.resolveSyncConflict();
+
+            const localAfter = await chrome.storage.local.get(null);
+            const syncAfter = await chrome.storage.sync.get(null);
+
+            // The user's local value must survive untouched — reconciliation
+            // must not let the stale sync value win and overwrite it.
+            expect(localAfter[FOREIGN_KEY]).toBe(false);
+
+            // The pre-existing stale sync value must not be MODIFIED by
+            // reconciliation. It is not StorageManager's key to touch -- it
+            // may legitimately be owned by another module (e.g. i18n.js
+            // writes its own keys to sync). Reconciliation must leave it
+            // exactly as it already was, not overwrite it with local=false
+            // and not delete it.
+            expect(syncAfter[FOREIGN_KEY]).toBe(true);
+        });
+
+        it('does not introduce a foreign key into sync when it exists only in local', async () => {
+            await populateDefaults();
+
+            await chrome.storage.local.set({
+                [K.SYNC_CONFLICT_PENDING]: true,
+                [FOREIGN_KEY]: false,
+            });
+
+            await StorageManager.resolveSyncConflict();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            expect(syncAfter).not.toHaveProperty(FOREIGN_KEY);
+        });
+    });
+
+    // ----------------------------------------------------------------
+    // Guard: dynamically-named dsPreset_* keys are legitimately owned
+    // by StorageManager despite not being static members of KEYS.
+    // A fix for the foreign-key leak must not drop these.
+    // ----------------------------------------------------------------
+    describe('Guard — dsPreset_* dynamic keys still survive reconciliation', () => {
+        it('keeps dsPreset_* entries present in sync after resolve', async () => {
+            await populateDefaults();
+
+            await chrome.storage.local.set({
+                [K.SYNC_CONFLICT_PENDING]: true,
+                [K.PRESET_INDEX]: ['a'],
+                dsPreset_a: { id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 },
+            });
+            await chrome.storage.sync.set({
+                [K.PRESET_INDEX]: ['a'],
+                dsPreset_a: { id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 },
+            });
+
+            await StorageManager.resolveSyncConflict();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            expect(syncAfter).toHaveProperty('dsPreset_a');
+            expect(syncAfter.dsPreset_a).toEqual({ id: 'a', name: 'A', content: 'a', createdAt: 1, updatedAt: 100 });
+        });
+    });
+
+    // ----------------------------------------------------------------
+    // Guard: legitimate StorageManager.KEYS members must still merge
+    // exactly as today — a fix for the foreign-key leak must not become
+    // an over-aggressive filter that also drops owned keys.
+    // ----------------------------------------------------------------
+    describe('Guard — legitimate StorageManager.KEYS members still reconcile unchanged', () => {
+        it('merges every listed KEYS member with sync taking precedence, per existing behavior', async () => {
+            await populateDefaults();
+
+            await chrome.storage.local.set({
+                [K.SYNC_CONFLICT_PENDING]: true,
+                [K.SIDEBAR_AUTO_HIDE]: false,
+                [K.HIDE_THINKING]: false,
+                [K.PREVENT_AUTO_SCROLL]: false,
+                [K.WEBSEARCH_TOGGLE]: false,
+                [K.SHOW_SYSTEM_TIME]: false,
+                [K.CHAT_WIDTH]: 50,
+                [K.CHAT_WIDTH_ENABLED]: false,
+            });
+            await chrome.storage.sync.set({
+                [K.SIDEBAR_AUTO_HIDE]: true,
+                [K.HIDE_THINKING]: true,
+                [K.PREVENT_AUTO_SCROLL]: true,
+                [K.WEBSEARCH_TOGGLE]: true,
+                [K.SHOW_SYSTEM_TIME]: true,
+                [K.CHAT_WIDTH]: 90,
+                [K.CHAT_WIDTH_ENABLED]: true,
+            });
+
+            await StorageManager.resolveSyncConflict();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            expect(syncAfter[K.SIDEBAR_AUTO_HIDE]).toBe(true);
+            expect(syncAfter[K.HIDE_THINKING]).toBe(true);
+            expect(syncAfter[K.PREVENT_AUTO_SCROLL]).toBe(true);
+            expect(syncAfter[K.WEBSEARCH_TOGGLE]).toBe(true);
+            expect(syncAfter[K.SHOW_SYSTEM_TIME]).toBe(true);
+            expect(syncAfter[K.CHAT_WIDTH]).toBe(90);
+            expect(syncAfter[K.CHAT_WIDTH_ENABLED]).toBe(true);
+        });
+    });
+
 });
