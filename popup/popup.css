@@ -198,6 +198,13 @@ h1 {
     gap: 0;
 }
 
+/* 連網搜索列：讓標籤與分段控制項同排，右對齊、垂直置中 */
+.input-group:has(> .websearch-options) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .header-left,
 .checkbox-group {
     display: flex;
