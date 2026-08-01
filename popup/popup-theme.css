@@ -1,0 +1,72 @@
+/* ── 設計 Token（Design Tokens）：亮色／暗色模式的唯一真實來源 ── */
+:root {
+  color-scheme: light dark;
+
+  /* 品牌色 — 固定值，不可變動 */
+  --primary-color: #4d6bfe;
+  --primary-hover: color-mix(in srgb, var(--primary-color) 80%, black);
+  --primary-active: color-mix(in srgb, var(--primary-color) 65%, black);
+  --primary-soft: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  --focus-ring: color-mix(in srgb, var(--primary-color) 22%, transparent);
+
+  /* 表面色 */
+  --body-bg: #f4f5f7;
+  --bg-color: #ffffff;
+  --surface-sunken: #f9fafb;
+  --surface-hover: #f3f4f6;
+  --surface-active: #e9eaed;
+
+  /* 文字色 */
+  --text-color: #14161a;
+  --text-secondary: #5b6270;
+  --text-muted: #9aa1ad;
+
+  /* 邊框色 */
+  --border-color: #e6e8ec;
+  --border-strong: #d3d7de;
+
+  /* 狀態色 */
+  --success-color: #16a34a;
+  --danger-color: #dc2626;
+  --danger-hover: #b91c1c;
+  --toggle-off-bg: #cfd3da;
+
+  /* 陰影層次 */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04);
+  --shadow-raised: 0 2px 6px rgba(16, 24, 40, 0.07), 0 6px 16px rgba(16, 24, 40, 0.06);
+  --shadow-pop: 0 8px 28px rgba(16, 24, 40, 0.14);
+
+  /* 圓角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* 間距尺度 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --body-bg: #131417;
+    --bg-color: #1c1e22;
+    --surface-sunken: #232629;
+    --surface-hover: #2a2d32;
+    --surface-active: #33373d;
+    --text-color: #eceef1;
+    --text-secondary: #a3aab6;
+    --text-muted: #6f7681;
+    --border-color: #2c2f34;
+    --border-strong: #3a3e45;
+    --success-color: #22c55e;
+    --danger-color: #f05252;
+    --danger-hover: #dc2626;
+    --toggle-off-bg: #4a4f57;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-raised: 0 2px 6px rgba(0, 0, 0, 0.45), 0 8px 20px rgba(0, 0, 0, 0.35);
+    --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.55);
+  }
+}
