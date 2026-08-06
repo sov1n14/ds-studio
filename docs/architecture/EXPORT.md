@@ -37,7 +37,7 @@ HTML-to-Markdown conversion (`parseHtmlToMarkdown`) handles:
 - **Lists**: `<ul>` → `- ` items; `<ol>` → numbered items
 - **Code**: `<div class="md-code-block">` → extracts `<pre><span>` content into fenced code blocks with language; standalone `<pre>` → fenced code blocks; inline `<code>` → backtick-wrapped
 - **Inline formatting**: `<strong>`/`<b>` → `**bold**`; `<em>`/`<i>` → `*italic*`
-- **Links**: `<a>` with `.ds-markdown-cite` children → `[[link-N]](url)` (gated by `includeReferences`); ordinary links → `[text](url)`
+- **Links**: `<a>` with `.ds-markdown-cite` children → `[[link-N]](url)` (gated by `includeReferences`); ordinary links → `[text]` immediately followed by `(url)`
 - **Text nodes**: Collapsed whitespace normalization
 
 **File output:**

@@ -1,31 +1,46 @@
 /**
  * popup radio group - "Web Search" (websearchToggle)
  *
- * Requirement contract under test:
- *   1. popup.html defines a radio group named "websearchToggle" (values
- *      'default'/'on'/'off') inside the "UI Adjustments" card, in a new
+ * Requirement contract under test (updated - 'default' option removed):
+ *   1. popup.html defines a radio group named "websearchToggle" with ONLY two
+ *      values 'on'/'off' inside the "UI Adjustments" card, in a new
  *      input-group placed after the preventAutoScrollToggle input-group;
- *      the group is labeled with data-i18n="websearchToggleLabel".
- *   2. popup.js holds a DOM ref websearchRadios = Array.from(...) over the
+ *      the group is labeled with data-i18n="websearchToggleLabel". The
+ *      legacy 'default' radio and its i18n label key no longer exist.
+ *   2. The 'on' radio is the pre-checked / default-selected option in the
+ *      markup.
+ *   3. popup.js holds a DOM ref websearchRadios = Array.from(...) over the
  *      websearchToggle radios.
- *   3. On popup load, the checked radio reflects settings.websearchToggle
- *      with 'default' as the fallback (settings.websearchToggle ?? 'default').
- *   4. A change handler persists the selected value via
+ *   4. On popup load, the checked radio reflects settings.websearchToggle,
+ *      falling back to 'on' when missing, and normalizing the legacy stored
+ *      value 'default' to 'on' (backward compatibility).
+ *   5. A change handler persists the selected value via
  *      StorageManager.saveWebsearchToggle(r.value), then runs
  *      refreshSyncStatus() and showSaveStatus(); the deselected radio is
- *      ignored (if (!r.checked) return;).
- *   5. The radios are gated by the master switch (applyMasterSwitchUI
- *      subControls), exactly like the other UI-adjustment controls.
+ *      ignored (if (!r.checked) return;). Only 'on'/'off' can be persisted
+ *      going forward, but this wiring itself is unchanged.
+ *   6. The radios are gated by the master switch (applyMasterSwitchUI
+ *      subControls), exactly like the other UI-adjustment controls. This
+ *      behavior is UNCHANGED and its coverage is preserved as-is.
+ *   7. popup.live-sync.js mirrors chrome.storage.onChanged updates for the
+ *      websearchToggle key onto the radios' checked state, and must also
+ *      normalize a legacy 'default' newValue to 'on', falling back to 'on'
+ *      when newValue is missing.
  *
  * The storage-layer contract (KEYS.WEBSEARCH_TOGGLE = 'dsWebSearchToggle',
- * saveWebsearchToggle, 'default' default) is certified by
- * storage-manager.websearch-toggle.spec.js and is NOT re-asserted here.
+ * saveWebsearchToggle) is certified by storage-manager.websearch-toggle.spec.js
+ * and is NOT re-asserted here.
  *
- * Testing strategy for popup.js (requirements 2/3/4/5): identical to
- * popup-prevent-auto-scroll-toggle.spec.js — static source-pattern assertions
- * on the wiring text for the DOM ref / load restore / change handler, and a
- * genuine runtime extraction of applyMasterSwitchUI via new Function(...)
- * against live DOM radio elements.
+ * Testing strategy: static source-pattern assertions for markup/DOM-ref/
+ * change-handler wiring (identical style to popup-prevent-auto-scroll-toggle.spec.js),
+ * plus genuine runtime extraction via new Function(...) for (a) the existing
+ * applyMasterSwitchUI behavior, (b) the NEW load-restore normalization block
+ * in popup.js, and (c) the NEW live-sync normalization block in
+ * popup.live-sync.js. The runtime extractions execute the real block against
+ * real DOM radio elements / plain objects and assert on resulting .checked
+ * values for a matrix of stored inputs - never on the internal statement
+ * shape - so the test tolerates any implementation that produces the correct
+ * outcome for 'on', 'off', missing, and legacy 'default' inputs.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "fs";
@@ -43,13 +58,22 @@ function readPopupJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.js"), "utf-8");
 }
 
+function readPopupLiveSyncJs() {
+    return readFileSync(resolve(__dirname, "../../popup/popup.live-sync.js"), "utf-8");
+}
+
 // -----------------------------------------------------------------------------
-// Requirement 1 - popup.html markup
+// Requirement 1/2 - popup.html markup
 // -----------------------------------------------------------------------------
 
 /** Matches a single <input> tag carrying both name="websearchToggle" and the given value, regardless of attribute order. */
 function radioTagRegex(value) {
     return new RegExp(`<input\\b(?=[^>]*\\bname="websearchToggle")(?=[^>]*\\bvalue="${value}")[^>]*>`);
+}
+
+/** Matches a single <input> tag carrying name="websearchToggle", the given value, AND a bare "checked" attribute. */
+function checkedRadioTagRegex(value) {
+    return new RegExp(`<input\\b(?=[^>]*\\bname="websearchToggle")(?=[^>]*\\bvalue="${value}")(?=[^>]*\\bchecked\\b)[^>]*>`);
 }
 
 function uiAdjustmentsCardHtml(html) {
@@ -71,48 +95,86 @@ describe("popup.html - websearchToggle radio group markup", () => {
         expect(websearchIdx, "websearchToggle radio group must come after the preventAutoScrollToggle input-group").toBeGreaterThan(preventIdx);
     });
 
-    it("defines radio inputs named websearchToggle with values 'default', 'on' and 'off'", () => {
+    it("defines radio inputs named websearchToggle with ONLY the values 'on' and 'off'", () => {
         const cardHtml = uiAdjustmentsCardHtml(readPopupHtml());
 
-        for (const value of ["default", "on", "off"]) {
+        for (const value of ["on", "off"]) {
             expect(cardHtml, `missing <input name="websearchToggle" value="${value}">`).toMatch(radioTagRegex(value));
         }
+    });
+
+    it("no longer defines a radio input with value=\"default\" anywhere in popup.html", () => {
+        expect(readPopupHtml()).not.toMatch(radioTagRegex("default"));
+    });
+
+    it("pre-checks the 'on' radio in the markup", () => {
+        const cardHtml = uiAdjustmentsCardHtml(readPopupHtml());
+        expect(cardHtml, "the 'on' radio must carry the checked attribute in the markup").toMatch(checkedRadioTagRegex("on"));
     });
 
     it("labels the radio group with data-i18n=\"websearchToggleLabel\"", () => {
         expect(uiAdjustmentsCardHtml(readPopupHtml())).toMatch(/data-i18n="websearchToggleLabel"/);
     });
+
+    it("no longer references the removed 'default' option's i18n key (websearchDefaultLabel) anywhere in popup.html", () => {
+        expect(readPopupHtml()).not.toMatch(/websearchDefaultLabel/);
+    });
 });
 
 // -----------------------------------------------------------------------------
-// Requirements 2 and 3 - popup.js DOM ref + initial load reflects settings
+// Requirement 3 - popup.js DOM ref
 // -----------------------------------------------------------------------------
 
-describe("popup.js - websearchRadios DOM ref and load wiring", () => {
-    let popupCode;
-
-    beforeAll(() => {
-        popupCode = readPopupJs();
-    });
-
+describe("popup.js - websearchRadios DOM ref", () => {
     it("declares the websearchRadios DOM ref via Array.from over the websearchToggle radios", () => {
-        expect(popupCode).toMatch(
+        expect(readPopupJs()).toMatch(
             /const\s+websearchRadios\s*=\s*Array\.from\(\s*document\.querySelectorAll\(\s*['"]input\[name="websearchToggle"\]/
         );
     });
+});
 
-    it("restores the checked radio from settings.websearchToggle on load", () => {
-        expect(popupCode).toMatch(/settings\.websearchToggle/);
-        expect(popupCode).toMatch(/r\.checked\s*=\s*\(?r\.value\s*===\s*\(?settings\.websearchToggle/);
-    });
+// -----------------------------------------------------------------------------
+// Requirement 4 - load-restore normalization (genuine runtime behavior test)
+// -----------------------------------------------------------------------------
 
-    it("falls back to 'default' when settings.websearchToggle is undefined", () => {
-        expect(popupCode).toMatch(/settings\.websearchToggle\s*\?\?\s*['"]default['"]/);
+function makeToggleRadio(value, isChecked) {
+    const el = document.createElement("input");
+    el.type = "radio";
+    el.name = "websearchToggle";
+    el.value = value;
+    el.checked = isChecked || false;
+    return el;
+}
+
+function buildLoadRestoreWebsearchRadios() {
+    const code = readPopupJs();
+    const match = code.match(/if \(websearchRadios\.length\) \{[\s\S]*?\n {4}\}/);
+    expect(match, "could not locate the load-restore block in popup.js").not.toBeNull();
+    const factory = new Function("websearchRadios", "settings", match[0]);
+    return factory;
+}
+
+describe("popup.js - websearchToggle load-restore checked state", () => {
+    it.each([
+        { stored: "on", expectedChecked: "on" },
+        { stored: "off", expectedChecked: "off" },
+        { stored: undefined, expectedChecked: "on" },
+        { stored: "default", expectedChecked: "on" },
+    ])("stored websearchToggle=$stored results in the correct radio being checked", ({ stored, expectedChecked }) => {
+        const onRadio = makeToggleRadio("on", false);
+        const offRadio = makeToggleRadio("off", false);
+        const websearchRadios = [onRadio, offRadio];
+        const restore = buildLoadRestoreWebsearchRadios();
+
+        restore(websearchRadios, { websearchToggle: stored });
+
+        expect(onRadio.checked).toBe(expectedChecked === "on");
+        expect(offRadio.checked).toBe(expectedChecked === "off");
     });
 });
 
 // -----------------------------------------------------------------------------
-// Requirement 4 - change handler persists via StorageManager.saveWebsearchToggle
+// Requirement 5 - change handler persists via StorageManager.saveWebsearchToggle
 // -----------------------------------------------------------------------------
 
 describe("popup.js - websearchToggle change handler persistence", () => {
@@ -139,8 +201,8 @@ describe("popup.js - websearchToggle change handler persistence", () => {
 });
 
 // -----------------------------------------------------------------------------
-// Requirement 5 - applyMasterSwitchUI disables/enables the websearch radios
-// (real runtime behavior, not text matching)
+// Requirement 6 - applyMasterSwitchUI disables/enables the websearch radios
+// (real runtime behavior, not text matching) - UNCHANGED, preserved as-is.
 // -----------------------------------------------------------------------------
 
 function makeCheckbox(disabled) {
@@ -194,7 +256,7 @@ describe("applyMasterSwitchUI - websearchToggle radios master-switch disable beh
             inputWidthToggle: makeCheckbox(false),
             inputWidthSlider: makeRange(),
             preventAutoScrollToggle: makeCheckbox(false),
-            websearchRadios: [makeRadio(false), makeRadio(false), makeRadio(false)],
+            websearchRadios: [makeRadio(false), makeRadio(false)],
         };
         const applyMasterSwitchUI = buildApplyMasterSwitchUI(dom);
 
@@ -217,7 +279,7 @@ describe("applyMasterSwitchUI - websearchToggle radios master-switch disable beh
             inputWidthToggle: makeCheckbox(true),
             inputWidthSlider: makeRange(),
             preventAutoScrollToggle: makeCheckbox(true),
-            websearchRadios: [makeRadio(true), makeRadio(true), makeRadio(true)],
+            websearchRadios: [makeRadio(true), makeRadio(true)],
         };
         const applyMasterSwitchUI = buildApplyMasterSwitchUI(dom);
 
@@ -228,5 +290,39 @@ describe("applyMasterSwitchUI - websearchToggle radios master-switch disable beh
         for (const radio of dom.websearchRadios) {
             expect(radio.disabled).toBe(false);
         }
+    });
+});
+
+// -----------------------------------------------------------------------------
+// Requirement 7 - popup.live-sync.js normalizes legacy 'default' to 'on'
+// (genuine runtime behavior test)
+// -----------------------------------------------------------------------------
+
+function buildLiveSyncWebsearchHandler() {
+    const code = readPopupLiveSyncJs();
+    const match = code.match(/if \(changes\[KEYS\.WEBSEARCH_TOGGLE\]\) \{[\s\S]*?\n {8}\}/);
+    expect(match, "could not locate the WEBSEARCH_TOGGLE onChanged block in popup.live-sync.js").not.toBeNull();
+    const factory = new Function("KEYS", "changes", "dom", match[0]);
+    return factory;
+}
+
+describe("popup.live-sync.js - websearchToggle onChanged normalization", () => {
+    it.each([
+        { newValue: "on", expectedChecked: "on" },
+        { newValue: "off", expectedChecked: "off" },
+        { newValue: undefined, expectedChecked: "on" },
+        { newValue: "default", expectedChecked: "on" },
+    ])("onChanged newValue=$newValue results in the correct radio being checked", ({ newValue, expectedChecked }) => {
+        const onRadio = makeToggleRadio("on", false);
+        const offRadio = makeToggleRadio("off", false);
+        const KEYS = { WEBSEARCH_TOGGLE: "dsWebSearchToggle" };
+        const changes = { [KEYS.WEBSEARCH_TOGGLE]: { newValue } };
+        const dom = { websearchRadios: [onRadio, offRadio] };
+        const handler = buildLiveSyncWebsearchHandler();
+
+        handler(KEYS, changes, dom);
+
+        expect(onRadio.checked).toBe(expectedChecked === "on");
+        expect(offRadio.checked).toBe(expectedChecked === "off");
     });
 });

@@ -92,7 +92,7 @@ const StorageManager = {
         dsSidebarAutoHide: false,
         dsHideThinking: false,
         dsPreventAutoScroll: false,
-        dsWebSearchToggle: 'default',
+        dsWebSearchToggle: 'on',
         dsShowSystemTime: false,
         dsChatWidth: 70,
         dsChatWidthEnabled: false,

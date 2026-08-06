@@ -19,7 +19,7 @@
   - [Quote Reply](#quote-reply)
   - [System Time Injection](#system-time-injection)
   - [Restoring Censored Replies](#restoring-censored-replies)
-  - [Backup \& Restore Settings](#backup--restore-settings)
+  - [Backup and Restore Settings](#backup-and-restore-settings)
   - [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
   - [Master Switch Linkage](#master-switch-linkage)
   - [Temporary Conversation](#temporary-conversation)
@@ -90,7 +90,7 @@ In the popup menu's **UI Adjustments** section, you can adjust the following set
 | **Auto-hide Sidebar** | Automatically collapses the sidebar to 60px width when the mouse leaves it, and expands on mouse hover, saving screen space |
 | **Collapse Thinking Process** | Automatically collapses DeepSeek's thinking blocks (reasoning process) when they appear; manually expanded blocks are unaffected |
 | **Prevent Auto-Scroll** | Suppresses the page's downward auto-scroll at all times, instead of only during back-to-top and Markdown export. **Trade-off**: the view no longer follows a streaming AI reply downward, so you scroll yourself; native wheel/trackpad scrolling is unaffected. Off by default |
-| **Web Search** | Enforces the state of the page's smart-search toggle: `On` keeps `aria-pressed="true"`, `Off` keeps `"false"`, `Default` never interferes. Clicks only on state mismatch, so it never toggles the state away. Controlled by the master switch |
+| **Web Search** | Sets the starting state of the page's smart-search toggle: `On` starts it at `aria-pressed="true"`, `Off` starts it at `"false"`. Applied exactly once per activation event — entering the page, changing this setting in the popup, or turning the master switch back on. After each application the extension releases control, so your own manual toggling sticks until the next activation event. Clicks only on state mismatch, so it never toggles the state away. Controlled by the master switch |
 | **Conversation Area Width** | After enabling the toggle, use the slider to adjust the conversation message display width (30%–100% viewport width) |
 | **Input Box Width** | After enabling the toggle, use the slider to independently adjust the input box display width (30%–100% viewport width); the input box width is automatically constrained by the conversation area width and will not exceed it |
 
@@ -175,7 +175,7 @@ When DeepSeek replaces the original model reply with messages like "I'm sorry, I
 - **Cross-Refresh Persistence**: Restored records are automatically saved locally (up to 200 entries). After refreshing the page or returning to the conversation later, censored messages will still be automatically restored.
 - **Backup Management**: In the popup menu's **Backup & Restore** section, you can export/import restoration record backups or clear all restored records with one click.
 
-## Backup & Restore Settings
+## Backup and Restore Settings
 
 In the popup menu's **Backup & Restore** section:
 

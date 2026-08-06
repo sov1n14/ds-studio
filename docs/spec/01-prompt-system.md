@@ -20,16 +20,16 @@
 
 - **注入內容**：當功能啟用時，系統會在使用者輸入前加入組合前綴（全域預設提示詞 + 各提示詞組內容），以 XML 標籤包裹：
   ```
-  <system-prompt>
+  <system-reminder>
   [全域預設提示詞 + 各提示詞組內容（以 \n\n 連接）]
-  </system-prompt>
+  </system-reminder>
 
   <user-input>
   [使用者原始輸入]
   </user-input>
   ```
   - `globalDefaultPrompt` 與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。`globalDefaultPrompt` 僅在全域提示詞開關（`globalPromptEnabled`）開啟時納入組合（v3.0.0）。
-  - 若兩者皆為空，則完全省略 `<system-prompt>` 區塊，但仍保留 `<user-input>` 包裹。
+  - 若兩者皆為空，則完全省略 `<system-reminder>` 區塊，但仍保留 `<user-input>` 包裹。
   - 系統不會自動插入 `---` 分隔線。使用者對注入內容有完整控制權 — 任何分隔線、換行或格式都必須包含在提示詞文字中。
 - **注入觸發**：在以下情況執行注入：
   - 使用者按下 `Enter` 鍵（排除 `Shift + Enter` 換行及 IME 組字狀態）。
@@ -37,11 +37,11 @@
 - **防護條件**：以下情況跳過注入：
   - 透過開關停用功能。
   - 使用者輸入為空（僅含空白字元）。
-  - 文字輸入區已含有先前注入的前綴（開頭為 `<system-prompt>` 或 `<user-input>`）時，系統會**擷取 `<user-input>` 內的原文後重新注入**（含更新後的提示詞內容與時間戳），而非完全跳過注入。
+  - 文字輸入區已含有先前注入的前綴（開頭為 `<system-reminder>` 或 `<user-input>`）時，系統會**擷取 `<user-input>` 內的原文後重新注入**（含更新後的提示詞內容與時間戳），而非完全跳過注入。
 
 ## 3. 編輯訊息清理（解除包裹）
 
-- **目的**：使用者送出的訊息會被注入邏輯（§2）包裹為 `<system-prompt>...</system-prompt>` 與 `<user-input>\n...\n</user-input>` 結構。當使用者點擊 DeepSeek 的編輯按鈕重新編輯該訊息時，編輯框會載入**完整的包裹內容**。此功能負責解除包裹，使使用者僅編輯自己的原始文字。（實作於 `content/edit-message-cleanup.js`，v3.2.1）
+- **目的**：使用者送出的訊息會被注入邏輯（§2）包裹為 `<system-reminder>...</system-reminder>` 與 `<user-input>\n...\n</user-input>` 結構。當使用者點擊 DeepSeek 的編輯按鈕重新編輯該訊息時，編輯框會載入**完整的包裹內容**。此功能負責解除包裹，使使用者僅編輯自己的原始文字。（實作於 `content/edit-message-cleanup.js`，v3.2.1）
 - **觸發**：文件層級委派的 `click` 監聽器，透過 `e.target.closest('.d4910adc')` 辨識編輯按鈕（混淆類別 `d4910adc`）。非編輯按鈕的點擊直接忽略。
 - **非同步偵測（快照式）**：編輯框 textarea 於點擊後才渲染。點擊當下唯一的 textarea 是頁面底部主輸入框，故不可用「往上找含 textarea 的祖先」策略（會誤抓主輸入框）。改為：點擊當下先以 `new Set(document.querySelectorAll('textarea'))` 建立快照，再以 `MutationObserver` 觀察 `document.body`，挑出**不在快照內的新 textarea**即為編輯框。硬性逾時 2000ms；若新 textarea 的 value 尚未填入，另以最多 800ms 的次級觀察等待其填值。
 - **展開編輯區（max-height 調整）**：偵測到編輯框當下計算並套用一次（不隨視窗縮放重算、離開編輯後不還原）：
@@ -70,7 +70,7 @@
 - **專屬注入開關**（v3.0.0）：卡片右緣的 `#globalPromptToggle` 開關（外觀與主開關相同，與上方主開關垂直對齊）。開啟時注入全域預設提示詞；關閉時不注入。儲存於 `globalPromptEnabled` 鍵（預設 `true`，既有使用者升級後行為不變）。
 - **優先權**：主開關（`isEnabled`）優先權最高 — 主開關關閉時，無論 `globalPromptEnabled` 狀態為何，全域預設提示詞一律不注入（由 `injectPrefix()` 的 early return 保證）。
 - **儲存**：獨立儲存在 `globalDefaultPrompt` 鍵下，透過 `chrome.storage.sync` 同步。
-- **與各提示詞組的互動**：在 `buildInjectionPrefix()` 中，全域預設提示詞（開關開啟時）與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。合併結果在注入前以 `<system-prompt>` 標籤包裹。
+- **與各提示詞組的互動**：在 `buildInjectionPrefix()` 中，全域預設提示詞（開關開啟時）與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。合併結果在注入前以 `<system-reminder>` 標籤包裹。
 - **提示詞組獨立性**：變更全域預設提示詞不會影響任何提示詞組的內容，反之亦然。`globalPromptEnabled` 開關也不影響提示詞組內容的注入。
 - **裝置層級限制（v4.7.3）**：`globalPromptEnabled` 與 `isEnabled` 同為裝置層級的本地專屬設定，不參與雲端同步與衝突解決，確保各裝置可獨立控制啟用狀態。
 

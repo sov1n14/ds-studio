@@ -100,7 +100,8 @@ function createLiveSyncListener(ctx) {
         }
 
         if (changes[KEYS.WEBSEARCH_TOGGLE]) {
-            const val = changes[KEYS.WEBSEARCH_TOGGLE].newValue ?? 'default';
+            const rawVal = changes[KEYS.WEBSEARCH_TOGGLE].newValue;
+            const val = rawVal === 'default' ? 'on' : (rawVal ?? 'on');
             (dom.websearchRadios || []).forEach(r => {
                 if (r.checked !== (r.value === val)) r.checked = (r.value === val);
             });

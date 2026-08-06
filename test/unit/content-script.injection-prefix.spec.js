@@ -11,27 +11,27 @@ describe('buildInjectionPrefix (1.1.x, 1.2.x, 1.3.x scenarios)', () => {
         expect(contentScript.buildInjectionPrefix()).toBe('');
     });
 
-    it('returns only globalDefaultPrompt wrapped in system-prompt tags', () => {
+    it('returns only globalDefaultPrompt wrapped in system-reminder tags', () => {
         contentScript.__setState({ globalDefaultPrompt: 'You are a helpful assistant.' });
         expect(contentScript.buildInjectionPrefix()).toBe(
-            '<system-prompt>\nYou are a helpful assistant.\n</system-prompt>'
+            '<system-reminder>\nYou are a helpful assistant.\n</system-reminder>'
         );
     });
 
-    it('returns only promptPrefix wrapped in system-prompt tags', () => {
+    it('returns only promptPrefix wrapped in system-reminder tags', () => {
         contentScript.__setState({ promptPrefix: 'Speak in Chinese.' });
         expect(contentScript.buildInjectionPrefix()).toBe(
-            '<system-prompt>\nSpeak in Chinese.\n</system-prompt>'
+            '<system-reminder>\nSpeak in Chinese.\n</system-reminder>'
         );
     });
 
-    it('joins both with double newline inside system-prompt tags', () => {
+    it('joins both with double newline inside system-reminder tags', () => {
         contentScript.__setState({
             globalDefaultPrompt: 'You are a helpful assistant.',
             promptPrefix: 'Speak in Chinese.',
         });
         expect(contentScript.buildInjectionPrefix()).toBe(
-            '<system-prompt>\nYou are a helpful assistant.\n\nSpeak in Chinese.\n</system-prompt>'
+            '<system-reminder>\nYou are a helpful assistant.\n\nSpeak in Chinese.\n</system-reminder>'
         );
     });
 
@@ -68,7 +68,7 @@ describe('buildInjectionPrefix (1.1.x, 1.2.x, 1.3.x scenarios)', () => {
             promptPrefix: 'Only this',
         });
         expect(contentScript.buildInjectionPrefix()).toBe(
-            '<system-prompt>\nOnly this\n</system-prompt>'
+            '<system-reminder>\nOnly this\n</system-reminder>'
         );
     });
 });
@@ -104,17 +104,17 @@ describe('injectPrefix edge cases (1.2.2, 1.3.x scenarios)', () => {
 
         // First call — injects
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toContain('<system-prompt>');
+        expect(ta.value).toContain('<system-reminder>');
 
         // Second call on already-injected value — extraction logic extracts original message and re-injects
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toContain('<system-prompt>');
+        expect(ta.value).toContain('<system-reminder>');
         expect(ta.value).toContain('<user-input>\nhello\n</user-input>');
 
         // User removes prefix and types new text
         ta.value = 'new message';
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toContain('<system-prompt>');
+        expect(ta.value).toContain('<system-reminder>');
     });
 
     it('returns false when isEnabled is false', () => {
@@ -137,7 +137,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         contentScript.__resetState();
     });
 
-    it('prepends system time before <system-prompt> when showSystemTime enabled and prompt present', () => {
+    it('prepends system time before <system-reminder> when showSystemTime enabled and prompt present', () => {
         contentScript.__setState({
             isEnabled: true,
             globalDefaultPrompt: 'You are helpful.',
@@ -145,7 +145,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         });
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-prompt>/);
+        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>/);
     });
 
     it('prepends system time before <user-input> when showSystemTime enabled and no prompt', () => {
@@ -169,7 +169,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).not.toMatch(/^Current Time:/);
-        expect(ta.value).toMatch(/^<system-prompt>/);
+        expect(ta.value).toMatch(/^<system-reminder>/);
     });
 
     it('does not prepend time when isEnabled is false', () => {
@@ -205,7 +205,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         const ta = makeTextarea('user input');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         const result = ta.value;
-        expect(result).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-prompt>/);
+        expect(result).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>/);
         expect(result).toContain('<user-input>\nuser input\n</user-input>');
     });
 });
@@ -226,7 +226,7 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
         const ta = makeTextarea('<user-input>\noriginal message\n</user-input>');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toBe(
-            '<system-prompt>\nMyPrompt\n</system-prompt>\n\n<user-input>\noriginal message\n</user-input>'
+            '<system-reminder>\nMyPrompt\n</system-reminder>\n\n<user-input>\noriginal message\n</user-input>'
         );
     });
 
@@ -246,11 +246,11 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
     it('re-injects with updated prompt when textarea has old injection and prompt changed', () => {
         contentScript.__setState({ isEnabled: true, promptPrefix: 'NewPrompt', showSystemTime: false });
         const ta = makeTextarea(
-            '<system-prompt>\nOldPrompt\n</system-prompt>\n\n<user-input>\nmy message\n</user-input>'
+            '<system-reminder>\nOldPrompt\n</system-reminder>\n\n<user-input>\nmy message\n</user-input>'
         );
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toBe(
-            '<system-prompt>\nNewPrompt\n</system-prompt>\n\n<user-input>\nmy message\n</user-input>'
+            '<system-reminder>\nNewPrompt\n</system-reminder>\n\n<user-input>\nmy message\n</user-input>'
         );
     });
 
@@ -403,12 +403,12 @@ describe('onSelectChange: promptPrefix updates synchronously (v2.8.1)', () => {
         // Assert: promptPrefix must be cleared, not re-populated from pendingPresetId
         expect(contentScript.__getState().promptPrefix).toBe('');
 
-        // Assert end-to-end: a resubmit textarea gets no <system-prompt> wrapper injected
+        // Assert end-to-end: a resubmit textarea gets no <system-reminder> wrapper injected
         contentScript.__setState({ isEnabled: true });
         const ta = document.createElement('textarea');
         ta.value = 'resubmitted message';
         expect(contentScript.injectPrefix(ta)).toBe(true);
-        expect(ta.value).not.toContain('<system-prompt>');
+        expect(ta.value).not.toContain('<system-reminder>');
     });
 });
 
