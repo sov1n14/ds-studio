@@ -1,7 +1,11 @@
 /**
  * DS studio — 連網搜索開關維持
  * 依「連網搜索」二態設定（開啟 / 關閉），在頁面進入時一次性套用智能搜索按鈕的 aria-pressed 狀態。
- * 套用僅發生一次（one-shot）：套用之後即使使用者手動翻轉按鈕、設定變更或主開關重開，皆不再回點。
+ * 套用為一次性（one-shot）：套用完成後即釋放控制權，讓使用者手動翻轉按鈕不會被回點。
+ * 但每次「啟用事件」發生時會重新武裝一次性旗標，再次套用一次後繼續釋放控制權：
+ *   (A) start() 時主開關為開啟
+ *   (B) 主開關開啟期間，dsWebSearchToggle 設定透過 storage.onChanged 變更
+ *   (C) 主開關透過 storage.onChanged 轉為開啟
  */
 const WebSearchToggle = {
     STORAGE_KEY: 'dsWebSearchToggle', // 對應 StorageManager.KEYS.WEBSEARCH_TOGGLE
@@ -9,7 +13,7 @@ const WebSearchToggle = {
     enabled: false,
     mode: 'on',
     _masterEnabled: false,
-    _isSpent: false, // 一次性套用是否已完成（完成後永不再點擊）
+    _isSpent: false, // 一次性套用是否已完成（完成後直到下次重新武裝前不再點擊）
     _observer: null,
 
     // 在符合選擇器的元素中，優先挑選標籤文字含「搜索」者；找不到時回傳 null（避免誤點深度思考按鈕）
@@ -98,6 +102,15 @@ const WebSearchToggle = {
         this._stopObserver();
     },
 
+    // 重新武裝一次性旗標：先在 enabled 仍誠實反映狀態時執行 disable() 卸除監看，
+    // 避免 disable() 因 enabled 提前被設為 false 而提早 return 導致 observer 洩漏，
+    // 再重置 _isSpent 並重新計算，讓下一次啟用事件能再套用一次。
+    _rearm() {
+        this.disable();
+        this._isSpent = false;
+        this._recompute();
+    },
+
     // 監聽儲存變更（僅 local；專案的 _set() 會同步寫入 local）
     setupStorageListener() {
         chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -105,12 +118,12 @@ const WebSearchToggle = {
 
             if (changes[StorageManager.KEYS.IS_ENABLED]) {
                 this._masterEnabled = !!changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                this._recompute();
+                this._rearm();
             }
 
             if (changes[this.STORAGE_KEY]) {
                 this.mode = this._normalizeMode(changes[this.STORAGE_KEY].newValue);
-                this._recompute();
+                this._rearm();
             }
         });
     },

@@ -125,17 +125,19 @@
   - 原生滾輪／觸控板／捲軸拖曳不經這些 JS API，不受影響；但頁面上任何以 JS 呼叫這些 API 實作的「捲到底部」按鈕會被擋。
 - **實作位置**：`content/prevent-auto-scroll-bridge.js`（新增 `setPersistent()` / `isPersistent()` / `start()`，`disable()` 加入守衛）；公開 API 掛載於 `window.DSstudio.PreventAutoScroll`。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。
 
-## 22. 連網搜索 (Web Search) — v4.13.0（v4.17.0 改為一次性進場預設）
+## 22. 連網搜索 (Web Search) — v4.13.0（v4.17.0 改為一次性進場預設；v4.17.1 設定變更即時同步）
 
-- **目的**：讓使用者指定每次進入頁面時 DeepSeek「智能搜索」切換按鈕的**起始狀態** —— `開啟`（起始為 `aria-pressed="true"`）、`關閉`（起始為 `"false"`）。此設定不新增任何頁面元素，只在進場時校正既有按鈕一次。
-- **語意（v4.17.0 變更）**：此設定是**進場預設值，不是強制狀態**。每次頁面載入套用一次後即完全放手；使用者之後手動點擊該按鈕的結果會保留到本次頁面生命週期結束，擴充功能不再回點。重新整理或重新進入頁面時才回到設定的預設值。
+- **目的**：讓使用者指定 DeepSeek「智能搜索」切換按鈕的**起始狀態** —— `開啟`（起始為 `aria-pressed="true"`）、`關閉`（起始為 `"false"`）。此設定不新增任何頁面元素，只在每個啟動事件發生時校正既有按鈕一次。
+- **語意（v4.17.0 變更、v4.17.1 擴充）**：此設定是**預設值，不是強制狀態**。每個啟動事件套用一次後即完全放手；使用者之後手動點擊該按鈕的結果會保留下來，擴充功能不再回點，直到下一個啟動事件發生。
+- **啟動事件（v4.17.1 新增 B、C）**：三種事件各自觸發一次套用並重新武裝一次性旗標 —— (A) 內容腳本 `start()` 且主開關為開；(B) `chrome.storage.onChanged` 在 `local` 命名空間帶來 `dsWebSearchToggle` 新值且主開關為開；(C) 主開關由關轉開。這是 v4.17.1 修掉的缺陷：v4.17.0 只有 (A)，`_isSpent` 一旦用掉便永不重置，於是使用者在彈出選單改了設定，已開啟的頁面毫無反應，必須重整才生效。
 - **開關位置**：彈出選單「UI 調整」卡片中的單選群組（`input[name="websearchToggle"]`，兩選項 `開啟` / `關閉`，沿用 `.locale-option` 樣式）。`開啟` 為標記中預先勾選者。
 - **儲存鍵**：`dsWebSearchToggle`（字串，`'on'` | `'off'`，預設 `'on'`）。舊版三態的 `'default'` 值已移除；讀取到殘留的 `'default'` 一律當作 `'on'`，不寫回儲存區。
 - **核心規則 —— 只在狀態不符時點擊**：`aria-pressed` 已等於目標狀態時絕不點擊，因為點擊是切換操作，相符時點擊反而把狀態切換走。狀態判定：`getAttribute('aria-pressed') === 'true'`。目標狀態由公開的 `mode` 屬性導出（`'on'` 對應 `true`）。
-- **一次性機制**：內部 `_isSpent` 旗標標記該次頁面載入的套用是否已用掉。找到按鈕並比對（不論是否需要點擊）後即設為已用掉並中止觀察器。已用掉之後，任何來源都不再觸發點擊 —— 使用者手動翻轉、頁面重渲染掛上新按鈕、`chrome.storage.onChanged` 帶來新值、主開關關掉再打開，皆不回點。
+- **一次性機制**：內部 `_isSpent` 旗標標記當前啟動事件的套用是否已用掉。找到按鈕並比對（不論是否需要點擊）後即設為已用掉並中止觀察器。已用掉之後，使用者手動翻轉與頁面重渲染掛上新按鈕都不再觸發點擊；只有新的啟動事件會透過 `_rearm()` 重置旗標，再套用一次，然後同樣放手。
+- **`_rearm()` 的順序不可調換**：`_rearm()` 依序執行 `disable()`、重置 `_isSpent`、`_recompute()`。`disable()` 的守衛是 `if (!this.enabled) return;`，所以絕不能先把 `enabled` 設為 `false` 再呼叫它 —— 那會讓守衛提前返回，把掛在 `document.body` 上的 `MutationObserver` 留成洩漏。同理，單獨重置 `_isSpent` 也不夠：`enable()` 的守衛是 `if (this.enabled) return;`，前一次套用後 `enabled` 仍為真，會提前返回而不重新套用。
 - **元素辨識（實測後修正）**：實頁有**兩個外觀相同**的 `.ds-toggle-button[aria-pressed]` 元素（深度思考與智能搜索），`document.querySelector` 固定取到第一個（錯的）。`findButton()` 以 **label 文字含「搜索」** 者為準（`_pickByLabel()`），順序無關；**找不到含「搜索」的候選時回傳 `null`，不退回第一個匹配** —— 退回第一個會誤點「深度思考」，把使用者的推理模式翻掉。`.ds-toggle-button` 不存在時對通用 `[aria-pressed="true"], [aria-pressed="false"]` 執行相同的 label 篩選。不使用建置版雜湊類別（`f79352dc` / `_6dbc175` 每次部署會變）。
-- **觀察器僅用於等待按鈕出現**：`MutationObserver` 只掛在 body 的 `childList + subtree`，用途是等按鈕首次出現在 DOM。按鈕本身的 `attributes` / `attributeFilter: ['aria-pressed']` 觀察已移除 —— 那是舊版回點使用者手動翻轉的來源，與一次性語意衝突。套用一次後觀察器即中止。
+- **觀察器僅用於等待按鈕出現**：`MutationObserver` 只掛在 body 的 `childList + subtree`，用途是等按鈕首次出現在 DOM。按鈕本身的 `attributes` / `attributeFilter: ['aria-pressed']` 觀察已移除 —— 那是舊版回點使用者手動翻轉的來源，與一次性語意衝突。套用一次後觀察器即中止，直到下一個啟動事件重新武裝。
 - **點擊節流已移除**：舊版的 `CLICK_COOLDOWN_MS`（500ms）是為了抑制連續強制點擊造成的 ping-pong。一次性模型下每次頁面載入最多點擊一次，該常數與其守衛皆為死碼，已刪除。
-- **主開關感知**：僅當主開關（`isEnabled`）為真時才動作。`chrome.storage.onChanged`（僅 `local` 命名空間）同時監控 `isEnabled` 與 `dsWebSearchToggle`。套用**尚未**發生時（按鈕還沒出現，或主開關起始為關），這些變更仍然有效，該次唯一的套用會採用當下最新的值；套用已發生後，變更只更新記憶體狀態，不再觸發點擊。主開關在套用尚未發生時被關掉，會取消待處理的套用並中止觀察器。
+- **主開關感知**：僅當主開關（`isEnabled`）為真時才動作。`chrome.storage.onChanged`（僅 `local` 命名空間）同時監控 `isEnabled` 與 `dsWebSearchToggle`，兩個分支都走 `_rearm()`。套用**尚未**發生時（按鈕還沒出現，或主開關起始為關），變更仍然有效，該次套用會採用當下最新的值。主開關轉為**關**時同樣重新武裝，但緊接的 `_recompute()` 會正確落在 `disable()`：不點擊任何按鈕，並取消待處理的套用與觀察器。
 - **`disable()` 不還原按鈕狀態**：與 `hide-thinking` 不同，本功能不擁有任何可還原的狀態 —— 停止動作即把按鈕留在現況，不做額外點擊。
 - **實作位置**：`content/websearch-toggle.js`；公開 API 掛載於 `window.DSstudio.WebSearchToggle`（測試以 `module.exports` 取用）。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。

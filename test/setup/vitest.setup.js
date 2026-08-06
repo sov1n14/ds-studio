@@ -94,6 +94,16 @@ const storageOnChanged = {
     },
 };
 
+// Opt-in test helper: removes every currently-registered chrome.storage.onChanged
+// listener. NOT called from the global beforeEach above (that would strip the
+// module-load-time listener other specs may depend on) -- a spec that re-invokes
+// a content module start() repeatedly (registering a new listener each time)
+// must import this and call it from its OWN beforeEach to keep exactly one
+// listener live per test.
+export function resetStorageOnChangedListeners() {
+    [...onChangedListeners].forEach((listener) => storageOnChanged.removeListener(listener));
+}
+
 globalThis.chrome = {
     storage: {
         local: storageMock.local,
