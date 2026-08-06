@@ -266,7 +266,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         titleEl.classList.add('is-hidden');
         nameInputEl.classList.remove('is-hidden');
         nameInputEl.focus();
-        nameInputEl.select();
     }
 
     // ── 自動儲存狀態 ──
