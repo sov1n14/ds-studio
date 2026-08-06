@@ -18,4 +18,3 @@ DS studio 是一個 Chrome 擴充功能，旨在優化 `chat.deepseek.com` 的�
 
 - 📐 技術架構：[ARCHITECTURE.md](ARCHITECTURE.md)
 - 📝 版本記錄：[CHANGELOG.md](CHANGELOG.md)
-- 🗂️ DOM 參考樣本：[../samples/](../samples/)

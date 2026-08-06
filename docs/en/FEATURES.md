@@ -19,7 +19,7 @@
   - [Quote Reply](#quote-reply)
   - [System Time Injection](#system-time-injection)
   - [Restoring Censored Replies](#restoring-censored-replies)
-  - [Backup \& Restore Settings](#backup--restore-settings)
+  - [Backup and Restore Settings](#backup-and-restore-settings)
   - [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
   - [Master Switch Linkage](#master-switch-linkage)
   - [Temporary Conversation](#temporary-conversation)
@@ -175,7 +175,7 @@ When DeepSeek replaces the original model reply with messages like "I'm sorry, I
 - **Cross-Refresh Persistence**: Restored records are automatically saved locally (up to 200 entries). After refreshing the page or returning to the conversation later, censored messages will still be automatically restored.
 - **Backup Management**: In the popup menu's **Backup & Restore** section, you can export/import restoration record backups or clear all restored records with one click.
 
-## Backup & Restore Settings
+## Backup and Restore Settings
 
 In the popup menu's **Backup & Restore** section:
 
