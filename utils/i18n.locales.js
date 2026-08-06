@@ -133,6 +133,10 @@
     noPresetOptionCustomSelect: '（無提示詞組）',
     deleteAriaLabel: '刪除',
     deletePresetTooltip: '刪除提示詞',
+    pinPresetAriaLabel: '設為預設（新對話自動選用）',
+    pinPresetTooltip: '設為預設（新對話自動選用）',
+    unpinPresetAriaLabel: '取消預設',
+    unpinPresetTooltip: '取消預設',
     deleteAllPresetsTooltip: '刪除全部提示詞組',
 
     // ---- Content Script: Censor Reply Restore ----
@@ -305,6 +309,10 @@
     noPresetOptionCustomSelect: '(No Prompt Group)',
     deleteAriaLabel: 'Delete',
     deletePresetTooltip: 'Delete prompt',
+    pinPresetAriaLabel: 'Set as default (auto-selected for new conversations)',
+    pinPresetTooltip: 'Set as default (auto-selected for new conversations)',
+    unpinPresetAriaLabel: 'Unset default',
+    unpinPresetTooltip: 'Unset default',
     deleteAllPresetsTooltip: 'Delete all prompt groups',
 
     // ---- Content Script: Censor Reply Restore ----

@@ -103,14 +103,58 @@
         };
     }
 
+    /**
+     * 依候選標籤寬度計算 dropdown 的自然寬度。
+     * 純函式：不修改輸入陣列，相同輸入永遠回傳相同結果。
+     * 不做上限裁切（裁切至可用空間是 computePlacement() 的職責，超出本函式範圍）。
+     *
+     * @param {Object} [input]
+     * @param {number[]} [input.labelWidths] - 候選標籤寬度陣列；非數字/非有限值會被忽略
+     * @param {number} [input.arrowWidth]    - 箭頭寬度（px），預設 0
+     * @param {number} [input.paddingLeft]   - 左內距（px），預設 0
+     * @param {number} [input.paddingRight]  - 右內距（px），預設 0
+     * @param {number} [input.gap]           - 間距（px），預設 0
+     * @param {number} [input.minWidth]      - 最小寬度下限（px），預設 80
+     * @returns {number} 自然寬度（px），恆為有限數字
+     */
+    function pickNaturalWidth(input) {
+        // Guard: 允許無參數呼叫，一律視為空物件
+        var options = input || {};
+
+        var labelWidths  = Array.isArray(options.labelWidths) ? options.labelWidths : [];
+        var arrowWidth   = (typeof options.arrowWidth   === 'number') ? options.arrowWidth   : 0;
+        var paddingLeft  = (typeof options.paddingLeft  === 'number') ? options.paddingLeft  : 0;
+        var paddingRight = (typeof options.paddingRight === 'number') ? options.paddingRight : 0;
+        var gap          = (typeof options.gap          === 'number') ? options.gap          : 0;
+        var minWidth     = (typeof options.minWidth      === 'number') ? options.minWidth     : 80;
+
+        // 從候選寬度中挑出最大的有效（有限數字）值，忽略 NaN / null / undefined / 字串等無效項
+        var maxLabelWidth = -Infinity;
+        for (var i = 0; i < labelWidths.length; i++) {
+            var candidate = labelWidths[i];
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > maxLabelWidth) {
+                maxLabelWidth = candidate;
+            }
+        }
+
+        // 無任何有效候選寬度：直接回傳 minWidth
+        if (maxLabelWidth === -Infinity) {
+            return minWidth;
+        }
+
+        var total = maxLabelWidth + arrowWidth + paddingLeft + paddingRight + gap;
+
+        return Math.max(total, minWidth);
+    }
+
     // ── 匯出 ─────────────────────────────────────────────────────────────────
 
     // 掛載至全域命名空間（瀏覽器 classic script 環境）
-    root.__DS_PresetPosition = { computePlacement };
+    root.__DS_PresetPosition = { computePlacement, pickNaturalWidth };
 
     // Node.js / Vitest 測試環境：同時以 module.exports 匯出
     if (typeof module !== 'undefined' && module.exports) {
-        module.exports = { computePlacement };
+        module.exports = { computePlacement, pickNaturalWidth };
     }
 
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));

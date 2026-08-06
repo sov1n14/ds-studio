@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 狀態 ---
     let presets        = [];
     let activePresetId = null;
+    let pinnedPresetId = '';
     let chatPresetMap  = {};
     let currentTabUuid = undefined;
 
@@ -109,12 +110,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.DSVMessaging?.broadcastActivePreset(activePresetId, content);
     }
 
+    // --- 建立 pin manager（釘選預設提示詞組） ---
+    const { createPinManager } = window.__DS_PopupPinManager;
+    const pinManager = createPinManager({
+        StorageManager,
+        getPinnedPresetId: () => pinnedPresetId,
+        setPinnedPresetId: (v) => { pinnedPresetId = v; },
+        onPinChanged:      () => customSelect?.render(),
+    });
+
     // --- 建立 preset manager（透過 factory 接收上下文） ---
     const presetManager = window.__DS_PopupPresetManager.createPresetManager({
         getPresets:          () => presets,
         setPresets:          (v) => { presets = v; },
         getActivePresetId:   () => activePresetId,
         setActivePresetId:   (v) => { activePresetId = v; },
+        getPinnedPresetId:   () => pinnedPresetId,
+        setPinnedPresetId:   (v) => { pinnedPresetId = v; },
         getChatPresetMap:    () => chatPresetMap,
         setChatPresetMap:    (v) => { chatPresetMap = v; },
         getCustomSelect:     () => customSelect,
@@ -124,6 +136,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         sendActivePresetToContentScript,
         Modal,
         StorageManager,
+        pinManager,
     });
 
     // --- 載入初始設定 ---
@@ -153,6 +166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     presets        = settings.promptPresets;
     activePresetId = settings.activePresetId;
+    pinnedPresetId = settings.pinnedPresetId ?? '';
     chatPresetMap  = settings.chatPresetMap;
 
     // 清除已失效的 chatPresetMap 條目
@@ -237,6 +251,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         emptyHintEl:  document.getElementById('presetSelectEmptyHint'),
         getPresets:        () => presets,
         getActivePresetId: () => activePresetId,
+        getPinnedPresetId: () => pinnedPresetId,
+        onRequestTogglePin: (id) => pinManager.togglePin(id),
         onSelect: async (id) => {
             Modal.dismissActive();
 

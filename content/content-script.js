@@ -41,6 +41,7 @@ const PresetOverlay = __overlayFactory.createPresetOverlay({
     getChatPresetMap:          () => chatPresetMap,
     setChatPresetMap:          (v) => { chatPresetMap = v; },
     setPendingPresetId:        (v) => { pendingPresetId = v; },
+    getPendingPresetId:        () => pendingPresetId,
     updatePromptPrefixFromBinding: (...a) => updatePromptPrefixFromBinding(...a),
     isExtensionContextValid:   () => isExtensionContextValid(),
 });
@@ -173,11 +174,24 @@ async function handleChatChange() {
 
     if (!newUuid) {
         currentChatUuid = null;
-        promptPrefix = '';
-        pendingPresetId = null;
         awaitingNewChatUuid = false;
         clearTimeout(awaitingNewChatUuidTimer);
-        PresetOverlay.updateActiveId('');
+
+        // 新對話：若有已釘選的預設提示詞組且該組仍存在，預先選中它
+        const settings = await StorageManager.getSettings();
+        const pinnedId = settings.pinnedPresetId;
+        const pinnedPreset = pinnedId && settings.promptPresets.find(p => p.id === pinnedId);
+
+        if (pinnedPreset) {
+            pendingPresetId = pinnedId;
+            await StorageManager.saveActivePresetId(pinnedId);
+            await updatePromptPrefixFromBinding();
+            PresetOverlay.updateActiveId(pinnedId);
+        } else {
+            promptPrefix = '';
+            pendingPresetId = null;
+            PresetOverlay.updateActiveId('');
+        }
         return;
     }
 
@@ -303,7 +317,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (e?.message?.includes('Extension context invalidated')) return;
         });
     } else if (request.action === 'ACTIVE_PRESET_CHANGED') {
-        pendingPresetId = request.presetId || null;
+        pendingPresetId = request.presetId ?? null;
         updatePromptPrefixFromBinding();
         PresetOverlay.updateActiveId(request.presetId || '');
     } else if (request.action === 'GET_PENDING_PRESET') {

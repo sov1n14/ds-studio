@@ -146,9 +146,12 @@
     pointer-events: none;
 }
 
+/* 按鈕的排版框永遠存在（display 保持 flex），未 hover 時只用 visibility 隱藏。
+   這樣釘選按鈕在 hover / 非 hover 狀態下的版面大小完全一致，
+   離開列時不會因為刪除按鈕的 display 切換而讓釘選圖示位移（defect 2 根因修正）。 */
 .ds-select__item-btn {
     flex-shrink: 0;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     width: 18px;
@@ -161,11 +164,12 @@
     border-radius: var(--radius-sm);
     padding: 0;
     line-height: 1;
+    visibility: hidden;
 }
 
 .ds-select__item:hover .ds-select__item-btn,
 .ds-select__item--empty:hover .ds-select__item-btn {
-    display: flex;
+    visibility: visible;
 }
 
 .ds-select__item-btn:hover {
@@ -179,6 +183,25 @@
     color: var(--danger-color);
 }
 
+/* 釘選按鈕：不論列是否 hover 都保持 visibility: visible，
+   版面框大小與 hover 狀態相同，因此不會有位移問題（defect 2）。 */
+.ds-select__item-btn--pinned {
+    visibility: visible;
+    color: var(--primary-color);
+    background-color: var(--primary-soft);
+}
+
+.ds-select__item--selected .ds-select__item-btn--pinned {
+    background-color: color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+/* 提高特異度，確保 hover 在已釘選的釘選按鈕上時，
+   點亮樣式仍會覆蓋通用的 .ds-select__item-btn:hover（defect 3 修正），
+   並加強視覺回饋讓使用者知道再次點擊會取消釘選。 */
+.ds-select__item-btn--pin.ds-select__item-btn--pinned:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 28%, transparent);
+    color: var(--primary-color);
+}
 
 .ds-select__item--dragging {
     opacity: 0.6;

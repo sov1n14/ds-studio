@@ -225,4 +225,34 @@ describe('StorageManager CRUD (3.x scenarios)', () => {
             expect(stored.dsPreventAutoScroll).toBe(true);
         });
     });
+
+    describe('pinnedPresetId — default group pin feature', () => {
+        it('exposes KEYS.PINNED_PRESET_ID as the exact storage key string', () => {
+            expect(StorageManager.KEYS.PINNED_PRESET_ID).toBe('pinnedPresetId');
+        });
+
+        it('returns empty string when nothing was ever stored', async () => {
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('');
+        });
+
+        it('savePinnedPresetId persists the id and getSettings reflects it', async () => {
+            await StorageManager.savePinnedPresetId('preset-x');
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('preset-x');
+        });
+
+        it('savePinnedPresetId with empty string clears the default', async () => {
+            await StorageManager.savePinnedPresetId('preset-x');
+            await StorageManager.savePinnedPresetId('');
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('');
+        });
+
+        it('savePinnedPresetId writes through the same path as sibling writers: value is readable directly from chrome.storage', async () => {
+            await StorageManager.savePinnedPresetId('preset-y');
+            const stored = await chrome.storage.sync.get(['pinnedPresetId']);
+            expect(stored.pinnedPresetId).toBe('preset-y');
+        });
+    });
 });

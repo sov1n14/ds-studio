@@ -308,6 +308,7 @@
             // 其餘設定直接覆寫，除非 mergePresetsOnly 為 true
             if (!mergePresetsOnly) {
                 if (importedSettings.activePresetId !== undefined) updates[this.KEYS.ACTIVE_PRESET_ID] = importedSettings.activePresetId;
+                if (importedSettings.pinnedPresetId !== undefined) updates[this.KEYS.PINNED_PRESET_ID] = importedSettings.pinnedPresetId;
                 // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
                 // 匯入備份不應覆寫當前裝置的開關狀態，故不從 importedSettings 還原。
                 if (importedSettings.includeThinking !== undefined) updates[this.KEYS.INCLUDE_THINKING] = importedSettings.includeThinking;

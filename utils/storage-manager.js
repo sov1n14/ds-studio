@@ -53,6 +53,7 @@ const StorageManager = {
         LOCAL_AUTHORITATIVE: 'dsLocalAuth',    // new: Plan A tracking
         OVERSIZED_KEYS: 'dsOversizedKeys',     // keys permanently blocked from sync (> QUOTA_BYTES_PER_ITEM)
         ACTIVE_PRESET_ID: 'activePresetId',
+        PINNED_PRESET_ID: 'pinnedPresetId',
         IS_ENABLED: 'isEnabled',
         GLOBAL_PROMPT_ENABLED: 'globalPromptEnabled',
         INCLUDE_THINKING: 'includeThinking',
@@ -83,6 +84,7 @@ const StorageManager = {
     DEFAULTS: {
         dsPresetIndex: [],
         activePresetId: '',
+        pinnedPresetId: '',
         isEnabled: false,
         globalPromptEnabled: true,
         includeThinking: true,
@@ -378,6 +380,14 @@ const StorageManager = {
      */
     async saveActivePresetId(id) {
         return this._set({ [this.KEYS.ACTIVE_PRESET_ID]: id });
+    },
+
+    /**
+     * Save the pinned (default) preset group ID
+     * @param {string} id
+     */
+    async savePinnedPresetId(id) {
+        return this._set({ [this.KEYS.PINNED_PRESET_ID]: id });
     },
 
     /**

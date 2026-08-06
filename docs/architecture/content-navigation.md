@@ -28,7 +28,7 @@ This ensures merely opening a popup on a new chat page and selecting a preset, t
 
 ## Overlay Preset Selector
 
-The `PresetOverlay` module (coordinated by `content/content-script.js` via factory, with UI logic split across `preset-overlay.controller.js`, `preset-overlay.resolvers.js`, `preset-overlay.styles.js`, `preset-dropdown.component.js`, `preset-dropdown.position.js`, and `preset-settle.scheduler.js`) renders a floating dropdown centered on the chat title bar (`div._2be88ba`) on the DeepSeek page, enabling preset switching without opening the popup.
+The `PresetOverlay` module (coordinated by `content/content-script.js` via factory, with UI logic split across `preset-overlay.controller.js`, `preset-overlay.resolvers.js`, `preset-overlay.styles.js`, `preset-viewport-sync.js`, `preset-id.resolver.js`, `preset-dropdown.component.js`, `preset-dropdown.position.js`, `preset-dropdown.menu-position.js`, `preset-dropdown.width.js`, `preset-dropdown.options.js`, `preset-dropdown.keyboard.js`, and `preset-settle.scheduler.js`) renders a floating dropdown centered on the chat title bar (`div._2be88ba`) on the DeepSeek page, enabling preset switching without opening the popup.
 
 **DOM Structure**:
 - A `<div id="dss-preset-overlay" role="combobox">` wrapper acts as the custom combobox container. Its positioning is dynamically computed per-frame by `content/preset-dropdown.position.js`'s `computePlacement()` (not static CSS) — see positioning modes below.
@@ -43,13 +43,38 @@ The overlay uses three placement modes computed by `content/preset-dropdown.posi
 - **Gap mode** (< 768px): Positioned in the gap between the chat title's right edge and the new-chat button's left edge. A bounded settle retry loop (`preset-settle.scheduler.js`) polls the button's `left` position every animation frame until it stabilizes for 3 consecutive frames, preventing incorrect early measurements during page load.
 - **Hidden mode**: Overlay hidden entirely when the gap is too small.
 
-Supporting infrastructure includes a `ResizeObserver` on the target element and a window resize listener with rAF throttling.
+Supporting infrastructure includes a `ResizeObserver` on the target element and a window resize listener with rAF throttling. Both, plus the settle-loop wiring, live in `content/preset-viewport-sync.js` (v4.18.1) — the controller keeps ownership of the state fields and of the DOM writes themselves, and passes element refs and the apply callback in as explicit parameters, so no mutable state is shared at module level.
+
+#### Trigger Width (v4.18.1)
+
+The width the overlay occupies hugs the **widest** candidate label rather than the currently displayed one. `content/preset-dropdown.width.js` builds the candidate list from every option name plus the placeholder text, measures each by temporarily writing it into the real label span and reading `scrollWidth` (so the measurement carries the label's own computed font), restores the original text in a `finally`, and feeds the widths to the pure `pickNaturalWidth()` in `preset-dropdown.position.js`. That function returns `max(labelWidths) + arrowWidth + paddingLeft + paddingRight + gap`, floored at `minWidth` (80) and deliberately **uncapped** — capping to the available horizontal space stays with `computePlacement()`, which clamps to `maxWidth` (200) and, in gap mode, to the measured gap.
+
+Because `getNaturalWidth()` sits on the placement path that the settle loop runs every animation frame, the measurer caches its result per dropdown instance and only recomputes when the inputs change: the cache is invalidated in `setOptions()` (option data rebuilt) and in `updateLocale()` (placeholder text changed). A per-frame remeasure would rewrite the label text N times and force N reflows every frame.
+
+> Before v4.2.x this control was a native `<select>` sized by the browser to its widest `<option>` (`min-width: 80px; max-width: 200px`, no `width`). When it became a custom combobox that native content-hugging was lost and never reintroduced — the measurement only ever read the single visible label — so the width sat at the 200px cap. `pickNaturalWidth()` restores the original behavior explicitly.
 
 **Lifecycle**:
 1. `start(presets, activeId, enable)` — called from `initSettings()` after `setupNavigationDetection()`. Injects overlay styles, sets up the DOM observer, finds and mounts to the title bar, renders the preset list, and sets initial visibility based on the `enable` parameter (tied to the master switch `isEnabled`).
 2. `findAndMount()` — queries `._2be88ba`. If found and different from the current target, calls `mountTo()` which builds the DOM and appends it to the title bar, then syncs visibility from `isEnabled` and reads storage to render the current state.
-3. `setupDomObserver()` — a `MutationObserver` on `document.body` debounced at 150ms watches for DOM changes (SPA navigation) and re-triggers `findAndMount()` when the title bar is replaced.
-4. `setVisible(enabled)` — toggles `display: none` on the wrapper. Called on master switch changes and on SPA remount to respect the current `isEnabled` state.
+3. `mountTo()` applies placement **synchronously in the same task as the `appendChild`**, via `_applyPlacementSync()`, before the settle loop starts (v4.18.1). Appending first and waiting for an animation frame let the browser paint one frame at the element's unsized default geometry, and the jump from that frame to the first measured placement read as an "expand" animation on page load. There is no CSS transition on the overlay at all — the only transition in `preset-dropdown.css` is on `.dss-preset-arrow` for the open/close rotation — so the fix is purely one of ordering, not of masking. The settle loop still runs afterwards, because the DeepSeek host page's own layout genuinely keeps moving during load.
+4. `setupDomObserver()` — a `MutationObserver` on `document.body` debounced at 150ms watches for DOM changes (SPA navigation) and re-triggers `findAndMount()` when the title bar is replaced.
+5. `setVisible(enabled)` — toggles `display: none` on the wrapper. Called on master switch changes and on SPA remount to respect the current `isEnabled` state.
+
+#### Which Preset Id the Overlay Displays (v4.18.1)
+
+`findAndMount()` used to compute the id to render with a hardcoded ternary — `currentChatUuid ? (chatPresetMap[currentChatUuid] || '') : ''`. The `else` branch was a literal empty string, so it never consulted `pendingPresetId` or `pinnedPresetId`. Since React replaces the title bar when the user starts a new conversation by clicking inside the page, that remount deterministically overwrote whatever `handleChatChange()` had just pushed in through `updateActiveId()` — the pinned default only survived a full page refresh (where `initSettings()` seeds the render from the persisted `activePresetId` and the title bar is never replaced) or the first sent message (where a UUID now exists, so the ternary takes the correct branch).
+
+That decision now lives in the pure module `content/preset-id.resolver.js`:
+
+    resolveOverlayPresetId({ chatUuid, chatPresetMap, pendingPresetId, pinnedPresetId, presets })
+
+- A non-empty `chatUuid` takes the id **only** from `chatPresetMap`, and `pendingPresetId` / `pinnedPresetId` can never influence it. This is what keeps an existing conversation's preset immune to the pinned default.
+- With no chat id, the pending id is **three-valued**: a non-empty string whose preset still exists wins; the empty string `''` means the user explicitly chose the empty (no-op) preset and must **not** fall back to the pinned default; `null` / `undefined` means nothing has been chosen yet, so the pinned default applies (again only if that preset still exists).
+- A stale id on either path — the preset was deleted — degrades to `''`.
+
+The controller reads the live pending id through an optional `ctx.getPendingPresetId()` getter supplied by `content/content-script.js`, and takes `pinnedPresetId` and the presets array from the `getSettings()` call `findAndMount()` already performs — no second storage read. An absent getter degrades to `undefined`, which the resolver correctly reads as "nothing chosen yet".
+
+> Preserving the three-valued signal requires `??`, not `||`. Both `onSelectChange()` in the controller and the `ACTIVE_PRESET_CHANGED` handler in `content-script.js` previously wrote `id || null`, and `'' || null` is `null` — which collapsed "the user explicitly chose empty" into "nothing chosen yet" and let the pinned default reappear over an explicit choice on the next remount.
 
 **Bidirectional Sync**:
 - **Overlay → Popup**: `onSelectChange(newId)` calls `StorageManager.saveActivePresetId(newId)` and, if a UUID is bound, `StorageManager.bindChatToPreset(uuid, newId)` to update `chatPresetMap`. The popup reads these values from storage on open.
@@ -75,7 +100,7 @@ The empty preset mode provides an explicit way to disable per-preset injection w
 
 - **Always visible**: An empty `<option value="">` is permanently present at the top of the preset dropdown in the popup, regardless of page context or UUID binding status. This ensures a consistent UI even when no custom presets exist.
 - **Behavior when selected**: The prompt content textarea is disabled (grayed out, `cursor: not-allowed`) and the rename/delete buttons are disabled.
-- **Auto-selection**: On new conversations (no UUID), `activePresetId` is cleared to `''`, so the empty option is selected by default. On preset deletion, if the active preset was deleted, the system resets to the empty state.
+- **Auto-selection**: On new conversations (no UUID), `activePresetId` is cleared to `''`, so the empty option is selected by default — unless a pinned default preset exists (v4.18.0). When `pinnedPresetId` names a preset that still exists, `handleChatChange()`'s no-UUID branch instead seeds `pendingPresetId` with it, persists it as `activePresetId`, and updates the overlay, so a new conversation opens with that preset preselected. A stale pinned id (the preset was deleted) falls back to the empty-option behavior described above. This branch is reached only when the URL carries no chat id, which is what keeps existing conversations untouched — no extra guard is involved. On preset deletion, if the active preset was deleted, the system resets to the empty state.
 - **Global prompt interaction**: The global default prompt (if set) is still injected even when the empty preset is selected — only per-preset injection is skipped.
 
 ## Toast Notification System & Save Status Indicator
