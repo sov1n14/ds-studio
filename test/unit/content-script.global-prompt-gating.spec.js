@@ -119,7 +119,7 @@ describe('injectPrefix — master toggle priority over isGlobalPromptEnabled', (
         // No prefix produced — still wraps in <user-input>
         const result = contentScript.injectPrefix(ta);
         expect(result).toBe(true);
-        expect(ta.value).not.toContain('<system-prompt>');
+        expect(ta.value).not.toContain('<system-reminder>');
         expect(ta.value).toContain('<user-input>');
     });
 });

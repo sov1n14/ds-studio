@@ -50,8 +50,8 @@ function makeRadio(value, checked = false) {
     return el;
 }
 
-function makeWebsearchRadios(checkedValue = '') {
-    return ['default', 'on', 'off'].map((value) => makeRadio(value, value === checkedValue));
+function makeWebsearchRadios(checkedValue = 'on') {
+    return ['on', 'off'].map((value) => makeRadio(value, value === checkedValue));
 }
 
 function makeSlider(value = '70') {
@@ -256,39 +256,47 @@ describe('createLiveSyncListener — simple toggle keys', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('createLiveSyncListener — WEBSEARCH_TOGGLE radio group', () => {
-    it("checks the 'on' radio and unchecks the others when WEBSEARCH_TOGGLE becomes 'on'", () => {
+    it("checks the 'on' radio and unchecks 'off' when WEBSEARCH_TOGGLE becomes 'on'", () => {
         const dom = makeDom();
         const { ctx } = buildCtx({ dom });
         const listener = startAndCapture(ctx);
 
-        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'on' } }, 'local');
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'off', newValue: 'on' } }, 'local');
 
         expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
-        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(false);
         expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
     });
 
-    it("checks the 'off' radio and unchecks the others when WEBSEARCH_TOGGLE becomes 'off'", () => {
+    it("checks the 'off' radio and unchecks 'on' when WEBSEARCH_TOGGLE becomes 'off'", () => {
         const dom = makeDom();
         const { ctx } = buildCtx({ dom });
         const listener = startAndCapture(ctx);
 
-        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'off' } }, 'local');
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'on', newValue: 'off' } }, 'local');
 
         expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(true);
-        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(false);
         expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(false);
     });
 
-    it("falls back to 'default' when newValue is undefined (?? 'default')", () => {
-        const dom = makeDom({ websearchRadios: makeWebsearchRadios('on') });
+    it("falls back to 'on' when newValue is nullish (?? 'on')", () => {
+        const dom = makeDom({ websearchRadios: makeWebsearchRadios('off') });
         const { ctx } = buildCtx({ dom });
         const listener = startAndCapture(ctx);
 
-        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'on', newValue: undefined } }, 'local');
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'off', newValue: undefined } }, 'local');
 
-        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(true);
-        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(false);
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
+        expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
+    });
+
+    it("maps the legacy stored value 'default' to the 'on' radio", () => {
+        const dom = makeDom({ websearchRadios: makeWebsearchRadios('off') });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'default' } }, 'local');
+
+        expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
         expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
     });
 
@@ -298,7 +306,7 @@ describe('createLiveSyncListener — WEBSEARCH_TOGGLE radio group', () => {
         const listener = startAndCapture(ctx);
 
         // first application: the popup's own save echoing back via onChanged
-        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'default', newValue: 'on' } }, 'local');
+        listener({ [K.WEBSEARCH_TOGGLE]: { oldValue: 'off', newValue: 'on' } }, 'local');
         expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
 
         // re-application of the same value must not throw and must leave the DOM as-is
@@ -307,11 +315,9 @@ describe('createLiveSyncListener — WEBSEARCH_TOGGLE radio group', () => {
         }).not.toThrow();
 
         expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
-        expect(dom.websearchRadios.find((r) => r.value === 'default').checked).toBe(false);
         expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
     });
 });
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Group C — CHAT_WIDTH / INPUT_WIDTH sliders
 // ─────────────────────────────────────────────────────────────────────────────

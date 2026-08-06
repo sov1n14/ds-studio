@@ -67,12 +67,12 @@ describe('A. extractUserInput', () => {
     it.each([
         [
             'A2: extracts inner content from a real injected message shape',
-            '<system-prompt>\nYou are helpful.\n</system-prompt>\n\n<user-input>\n你好\n</user-input>',
+            '<system-reminder>\nYou are helpful.\n</system-reminder>\n\n<user-input>\n你好\n</user-input>',
             '你好',
         ],
         [
             'A3: extracts multi-line inner content correctly',
-            '<system-prompt>\nSys\n</system-prompt>\n\n<user-input>\nLine 1\nLine 2\nLine 3\n</user-input>',
+            '<system-reminder>\nSys\n</system-reminder>\n\n<user-input>\nLine 1\nLine 2\nLine 3\n</user-input>',
             'Line 1\nLine 2\nLine 3',
         ],
     ])('%s', (_title, text, expected) => {
@@ -90,7 +90,7 @@ describe('A. extractUserInput', () => {
         expect(extractUserInput(input)).toBeNull();
     });
 
-    it('A10: wrapper without system-prompt preamble is still matched', () => {
+    it('A10: wrapper without system-reminder preamble is still matched', () => {
         const text = '<user-input>\nbare input\n</user-input>';
         expect(extractUserInput(text)).toBe('bare input');
     });
@@ -399,7 +399,7 @@ describe('D. applyTextareaCleanup', () => {
 
     it('D1: replaces textarea value with only the inner content when wrapper present', () => {
         const wrapped =
-            '<system-prompt>\nSys\n</system-prompt>\n\n' +
+            '<system-reminder>\nSys\n</system-reminder>\n\n' +
             '<user-input>\nmy message\n</user-input>';
         const ta = makeTextarea(wrapped);
 
@@ -699,7 +699,7 @@ describe('F. handleEditButtonClick', () => {
 
         // DeepSeek asynchronously mounts the edit textarea pre-filled with wrapped content
         const wrappedValue =
-            '<system-prompt>\nSys\n</system-prompt>\n\n' +
+            '<system-reminder>\nSys\n</system-reminder>\n\n' +
             '<user-input>\noriginal user text\n</user-input>';
         const editTextarea = document.createElement('textarea');
         editTextarea.value = wrappedValue;

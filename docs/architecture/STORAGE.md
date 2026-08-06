@@ -39,7 +39,7 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `dsHideThinking` | boolean | `false` | Whether the hide-thinking-process feature is enabled. |
 | `dsPreventAutoScroll` | boolean | `false` | (v4.12.0) Whether anti-scroll-back protection is permanently active. When true, `PreventAutoScroll` suppresses downward auto-scroll at all times instead of only during go-top and Markdown export. Gated by the master switch. |
 | `dsShowSystemTime` | boolean | `false` | Whether system time injection before user messages is active (added in v2.7.0). |
-| `dsWebSearchToggle` | string | `'default'` | (v4.13.0) Web-search toggle enforcement mode: `'default'` (no interference), `'on'` (keep the page's smart-search button `aria-pressed="true"`), `'off'` (keep it `"false"`). Clicks only on state mismatch. Gated by the master switch. |
+| `dsWebSearchToggle` | string | `'on'` | (v4.13.0; reduced to two states in v4.17.0) Page-entry default for the web-search toggle: `'on'` starts the page's smart-search button at `aria-pressed="true"`, `'off'` starts it at `"false"`. Applied at most once per page load; the user's later manual toggling is preserved for the rest of that page's life. Clicks only on state mismatch. The removed `'default'` value is normalized to `'on'` on read (never written back). Gated by the master switch. |
 | `dsChatWidth` | number | `70` | Chat width percentage (30–100). |
 | `dsChatWidthEnabled` | boolean | `false` | Whether the chat width adjustment is active. |
 | `dsInputWidth` | number | `70` | Input width percentage (30–100). |

@@ -29,7 +29,7 @@ ds-studio/
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
-│   ├── websearch-toggle.js  ─  Enforce web-search button aria-pressed state (v4.13.0)
+│   ├── websearch-toggle.js  ─  One-shot page-entry default for web-search button (v4.13.0)
 │   ├── quote-reply.js       ─  Floating "引用回覆" button on text selection
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
@@ -109,7 +109,7 @@ DeepSeek's chat interface relies on a frontend framework (likely React) which tr
 The `isEnabled` key acts as a master switch for all extension features:
 
 - **Popup UI**: When the master toggle is turned off, `applyMasterSwitchUI()` disables all sub-controls (sidebar auto-hide checkbox, hide-thinking checkbox, system time toggle, chat width toggle + slider, input width toggle + slider) via `el.disabled = true`.
-- **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, WebSearchToggle, GoToTop, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true.
+- **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, WebSearchToggle, GoToTop, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true. **Exception — WebSearchToggle (v4.17.0)**: its setting is a one-shot page-entry default, so once it has applied that default for the current page load, turning the master switch off and back on does NOT re-apply it. Only a page reload does.
 - **System time injection**: When `isEnabled` is false, `showSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.

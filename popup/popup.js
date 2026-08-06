@@ -175,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.showSystemTime;
     if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
     if (websearchRadios.length) {
-        websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle ?? 'default')); });
+        websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle === 'default' ? 'on' : (settings.websearchToggle ?? 'on'))); });
     }
 
     // 全域提示詞開關初始值

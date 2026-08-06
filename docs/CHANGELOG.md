@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.17.0](changelog/v4.md#4170---2026-08-06) | 注入包裹標籤 `<system-prompt>` 改名為 `<system-reminder>`（`<user-input>` 內層標籤刻意不動，故編輯訊息的解除包裹 regex 無需修改）；連網搜索由三態強制改為二態一次性進場預設：`dsWebSearchToggle` 縮為 `'on'` \| `'off'`（預設 `'on'`，殘留的舊 `'default'` 於讀取時校正為 `'on'` 而不寫回），彈出選單移除「預設」選項與 `websearchDefaultLabel` i18n 鍵。`content/websearch-toggle.js` 以 `_isSpent` 旗標讓設定每次頁面載入只套用一次，套用後即中止觀察器；移除按鈕 `aria-pressed` 屬性觀察與 `CLICK_COOLDOWN_MS` 節流，使用者手動切換智能搜索的結果保留到離開或重整，不再被回點 |
 | [4.16.4](changelog/v4.md#4164---2026-08-02) | 修復同步調和把非自有金鑰整包寫回，導致臨時對話開關重整後復活：`resolveSyncConflict()` 以 `{ ...localRaw, ...syncRaw }` 展開兩份完整未過濾快照後整包寫回，任何不屬於 `StorageManager.KEYS` 的金鑰都會搭便車，雲端殘留的舊 `true` 因而覆蓋使用者剛寫入本機的 `false` 並自我延續。改為以 `KEYS` 動態導出的 ownership 白名單（含 `dsPreset_` 前綴）重建 payload；刻意不刪除 sync 區既存的非自有金鑰，因為 `utils/i18n.js` 的語言設定同樣不屬於 `KEYS`，清除會誤刪使用者偏好 |
 | [4.16.3](changelog/v4.md#4163---2026-08-02) | 修復臨時對話開關重整後自行變回開啟：現場探針證實關閉時確實寫入 `false`，重整後該鍵卻變成 `true`，即重整過程中發生了一次真實寫入；全倉唯一寫入路徑只有 checkbox 自身的 `change` 監聽器且無任何合成事件，判定為 Chromium 對動態注入表單控制項的狀態還原發出 `isTrusted` 的 `change` 事件被誤認為使用者操作，加上 `autocomplete="off"` 退出還原。同時修正 `writeEnabledFlag()` 的 `chrome.storage.local.set()` 為 fire-and-forget、外層同步 `try/catch` 抓不到 promise rejection 而靜默吞掉寫入失敗的缺陷 |
 | [4.16.2](changelog/v4.md#4162---2026-08-02) | 連網搜索的標籤與三段式分段控制改為同排：以 `.input-group:has(> .websearch-options)` 結構選擇器將該群組覆寫為 flex row、右對齊垂直置中，同卡片其餘群組不受影響，未新增 class、`popup.html` 零改動 |

@@ -5,7 +5,7 @@
  *
  * 功能：
  *   當使用者點擊 DeepSeek 的「編輯訊息」按鈕時，
- *   自動剝除注入的 <system-prompt> / <user-input> 包裝，
+ *   自動剝除注入的 <system-reminder> / <user-input> 包裝，
  *   讓使用者只看到、編輯自己原本輸入的文字。
  *
  *   同時調整相關元素的 max-height：

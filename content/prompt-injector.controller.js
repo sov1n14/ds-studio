@@ -22,7 +22,7 @@
             if (ctx.getPromptPrefix()) parts.push(ctx.getPromptPrefix());
             const combined = parts.join('\n\n');
             if (!combined) return '';
-            return `<system-prompt>\n${combined}\n</system-prompt>`;
+            return `<system-reminder>\n${combined}\n</system-reminder>`;
         }
 
         /**
