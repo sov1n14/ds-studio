@@ -53,10 +53,12 @@
         emptyHintEl,
         getPresets,
         getActivePresetId,
+        getPinnedPresetId,
         onSelect,
         onReorder,
         onRequestDelete,
         onRequestDeleteAll,
+        onRequestTogglePin,
     }) {
         const { buildPresetItemMarkup } = global.__DS_PresetItemRenderer;
         const state = {
@@ -105,6 +107,7 @@
 
             const presets = getPresets();
             const activeId = getActivePresetId();
+            const pinnedId = getPinnedPresetId?.() || '';
             const isFiltering = state.keyword !== '';
 
             listEl.classList.toggle('ds-select__list--filtering', isFiltering);
@@ -125,7 +128,7 @@
                 item.className = 'ds-select__item' + (p.id === activeId ? ' ds-select__item--selected' : '');
                 item.setAttribute('role', 'option');
                 item.setAttribute('data-id', p.id);
-                item.innerHTML = buildPresetItemMarkup(p);
+                item.innerHTML = buildPresetItemMarkup(p, { isPinned: p.id === pinnedId });
                 listEl.appendChild(item);
             });
 
@@ -231,6 +234,15 @@
                     e.stopPropagation();
                     const id = deleteBtn.closest('[data-id]')?.dataset.id;
                     if (id) onRequestDelete(id);
+                    return;
+                }
+
+                // Pin button
+                const pinBtn = e.target.closest('.ds-select__item-btn--pin');
+                if (pinBtn) {
+                    e.stopPropagation();
+                    const id = pinBtn.closest('[data-id]')?.dataset.id;
+                    if (id) onRequestTogglePin?.(id);
                     return;
                 }
 

@@ -313,6 +313,40 @@ describe('StorageManager sync conflict & fallback (5.8, 11.x scenarios)', () => 
             const localTombstones = await chrome.storage.local.get([K.PRESET_TOMBSTONES]);
             expect(localTombstones[K.PRESET_TOMBSTONES]).toHaveProperty('unrelated-id');
         });
+
+        it('restores pinnedPresetId from imported backup', async () => {
+            await StorageManager.restoreSettings({ pinnedPresetId: 'preset-x' }, false);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('preset-x');
+        });
+
+        it('clears a previously pinned id when imported backup has pinnedPresetId of empty string', async () => {
+            await StorageManager.savePinnedPresetId('preset-old');
+
+            await StorageManager.restoreSettings({ pinnedPresetId: '' }, false);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('');
+        });
+
+        it('leaves the stored pinnedPresetId untouched when the imported backup omits the key entirely (older backup file)', async () => {
+            await StorageManager.savePinnedPresetId('preset-keep');
+
+            await StorageManager.restoreSettings({ chatWidth: 30 }, false);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('preset-keep');
+        });
+
+        it('with mergePresetsOnly=true, does not overwrite pinnedPresetId', async () => {
+            await StorageManager.savePinnedPresetId('preset-keep');
+
+            await StorageManager.restoreSettings({ pinnedPresetId: 'preset-x' }, true);
+
+            const settings = await StorageManager.getSettings();
+            expect(settings.pinnedPresetId).toBe('preset-keep');
+        });
     });
 
     describe('regression — parked stale edit must not resurface over a later, different cloud edit (report.md §4.2 Step 2)', () => {

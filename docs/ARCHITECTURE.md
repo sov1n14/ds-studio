@@ -59,6 +59,7 @@ ds-studio/
 │   ├── popup.js             ─  Entry: UI init & inline event wiring (v4.0.0 split)
 │   ├── popup.modal.js       ─  Modal + Toast components
 │   ├── popup.preset-manager.js  ─  Preset CRUD helpers (createPresetManager ctx factory)
+│   ├── popup.pin-manager.js ─  Pinned default preset toggle / clear-on-delete (createPinManager ctx factory, v4.18.0)
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
 │   ├── popup.live-sync.js   ─  chrome.storage.onChanged reactivity for the open popup (createLiveSyncListener ctx factory, v4.8.0)
 │   ├── custom-select.js        ─  Custom ARIA combobox component for preset selection (v1.9.0)

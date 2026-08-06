@@ -75,7 +75,7 @@ The empty preset mode provides an explicit way to disable per-preset injection w
 
 - **Always visible**: An empty `<option value="">` is permanently present at the top of the preset dropdown in the popup, regardless of page context or UUID binding status. This ensures a consistent UI even when no custom presets exist.
 - **Behavior when selected**: The prompt content textarea is disabled (grayed out, `cursor: not-allowed`) and the rename/delete buttons are disabled.
-- **Auto-selection**: On new conversations (no UUID), `activePresetId` is cleared to `''`, so the empty option is selected by default. On preset deletion, if the active preset was deleted, the system resets to the empty state.
+- **Auto-selection**: On new conversations (no UUID), `activePresetId` is cleared to `''`, so the empty option is selected by default — unless a pinned default preset exists (v4.18.0). When `pinnedPresetId` names a preset that still exists, `handleChatChange()`'s no-UUID branch instead seeds `pendingPresetId` with it, persists it as `activePresetId`, and updates the overlay, so a new conversation opens with that preset preselected. A stale pinned id (the preset was deleted) falls back to the empty-option behavior described above. This branch is reached only when the URL carries no chat id, which is what keeps existing conversations untouched — no extra guard is involved. On preset deletion, if the active preset was deleted, the system resets to the empty state.
 - **Global prompt interaction**: The global default prompt (if set) is still injected even when the empty preset is selected — only per-preset injection is skipped.
 
 ## Toast Notification System & Save Status Indicator

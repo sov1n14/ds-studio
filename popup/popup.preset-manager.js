@@ -21,6 +21,7 @@
  * @param {Function} ctx.sendActivePresetToContentScript - 廣播活躍提示詞組
  * @param {Object} ctx.Modal - Modal 實例
  * @param {Object} ctx.StorageManager - StorageManager 實例
+ * @param {Object} ctx.pinManager - Pin 管理器實例，需提供 async clearPinIfDeleted(deletedIds)
  */
 function createPresetManager(ctx) {
 
@@ -60,6 +61,7 @@ function createPresetManager(ctx) {
         });
         ctx.setChatPresetMap(updatedMap);
         await ctx.refreshSyncStatus();
+        await ctx.pinManager?.clearPinIfDeleted([deletedId]);
 
         ctx.getCustomSelect().render();
         ctx.updateEditPresetBtnState();
@@ -98,6 +100,7 @@ function createPresetManager(ctx) {
         });
         ctx.setChatPresetMap(updatedMap);
         await ctx.refreshSyncStatus();
+        await ctx.pinManager?.clearPinIfDeleted([...deletedIds]);
 
         ctx.getCustomSelect().render();
         ctx.updateEditPresetBtnState();

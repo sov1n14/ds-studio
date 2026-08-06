@@ -173,11 +173,24 @@ async function handleChatChange() {
 
     if (!newUuid) {
         currentChatUuid = null;
-        promptPrefix = '';
-        pendingPresetId = null;
         awaitingNewChatUuid = false;
         clearTimeout(awaitingNewChatUuidTimer);
-        PresetOverlay.updateActiveId('');
+
+        // 新對話：若有已釘選的預設提示詞組且該組仍存在，預先選中它
+        const settings = await StorageManager.getSettings();
+        const pinnedId = settings.pinnedPresetId;
+        const pinnedPreset = pinnedId && settings.promptPresets.find(p => p.id === pinnedId);
+
+        if (pinnedPreset) {
+            pendingPresetId = pinnedId;
+            await StorageManager.saveActivePresetId(pinnedId);
+            await updatePromptPrefixFromBinding();
+            PresetOverlay.updateActiveId(pinnedId);
+        } else {
+            promptPrefix = '';
+            pendingPresetId = null;
+            PresetOverlay.updateActiveId('');
+        }
         return;
     }
 

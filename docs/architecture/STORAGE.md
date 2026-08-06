@@ -27,6 +27,7 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | `dsPresetIndex` | `string[]` | `[]` | Ordered array of prompt preset IDs. |
 | `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. |
 | `activePresetId` | string | `""` | The ID of the currently active preset. |
+| `pinnedPresetId` | string | `""` | (v4.18.0) The ID of the preset pinned as the default; `""` means no default. A single scalar, so uniqueness is structural — two presets can never be pinned at once. Read only when a NEW conversation is opened (no chat id in the URL) to preselect that preset; existing conversations are never touched. Written via `savePinnedPresetId()`, which shares `saveActivePresetId()`'s `_set` path (sync primary, local fallback), and included in both backup export and import. |
 | `isEnabled` | boolean | `false` | Whether prompt injection is active (master switch). (v4.7.3) Local-only, device-scoped — excluded from sync, `resolveSyncConflict()`, and `restoreSettings()` import. |
 | `includeThinking` | boolean | `true` | Include AI thinking process in exported MD. |
 | `includeReferences` | boolean | `true` | Include citation reference links in exported MD. |

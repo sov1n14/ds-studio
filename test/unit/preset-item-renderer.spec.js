@@ -73,5 +73,44 @@ describe('__DS_PresetItemRenderer', () => {
             expect(item.querySelector('.ds-select__item-name')?.textContent).toBe('Test');
             expect(item.querySelector('.ds-select__item-btn--delete')).not.toBeNull();
         });
+
+        it('emits a pin button before the delete button, unpinned by default when called with only preset (no options object)', () => {
+            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' });
+            const pinIndex = html.indexOf('ds-select__item-btn--pin"');
+            const deleteIndex = html.indexOf('ds-select__item-btn--delete"');
+            expect(pinIndex).toBeGreaterThan(-1);
+            expect(deleteIndex).toBeGreaterThan(-1);
+            expect(pinIndex).toBeLessThan(deleteIndex);
+        });
+
+        it('unpinned pin button has aria-pressed="false" and no --pinned class', () => {
+            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' }, { isPinned: false });
+            expect(html).not.toContain('ds-select__item-btn--pinned');
+            expect(html).toContain('aria-pressed="false"');
+        });
+
+        it('pinned pin button carries --pinned class and aria-pressed="true"', () => {
+            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' }, { isPinned: true });
+            expect(html).toContain('ds-select__item-btn--pin');
+            expect(html).toContain('ds-select__item-btn--pinned');
+            expect(html).toContain('aria-pressed="true"');
+        });
+
+        it('unpinned pin button aria-label/title come from pinPresetAriaLabel/pinPresetTooltip i18n keys', () => {
+            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' }, { isPinned: false });
+            expect(html).toContain(`aria-label="${dsI18n.t('pinPresetAriaLabel')}"`);
+            expect(html).toContain(`title="${dsI18n.t('pinPresetTooltip')}"`);
+        });
+
+        it('pinned pin button aria-label/title come from unpinPresetAriaLabel/unpinPresetTooltip i18n keys', () => {
+            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: 'Alpha' }, { isPinned: true });
+            expect(html).toContain(`aria-label="${dsI18n.t('unpinPresetAriaLabel')}"`);
+            expect(html).toContain(`title="${dsI18n.t('unpinPresetTooltip')}"`);
+        });
+
+        it('still HTML-escapes the group name when a pin option is supplied', () => {
+            const html = Renderer.buildPresetItemMarkup({ id: 'a', name: '<b>Alpha</b>' }, { isPinned: true });
+            expect(html).toContain('<span class="ds-select__item-name">&lt;b&gt;Alpha&lt;/b&gt;</span>');
+        });
     });
 });

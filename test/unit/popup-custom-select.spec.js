@@ -358,6 +358,46 @@ describe('createPresetCustomSelect', () => {
         });
     });
 
+    describe('pin 按鈕 (getPinnedPresetId / onRequestTogglePin)', () => {
+        it('render() 時，preset id 等於 getPinnedPresetId() 的列顯示 pinned 狀態，其他列不顯示', () => {
+            const { sel } = createSelect({ getPinnedPresetId: () => 'b' });
+            sel.open();
+            const pinnedBtn = document.querySelector('#list .ds-select__item[data-id="b"] .ds-select__item-btn--pin');
+            const otherBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--pin');
+            expect(pinnedBtn.classList.contains('ds-select__item-btn--pinned')).toBe(true);
+            expect(pinnedBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(otherBtn.classList.contains('ds-select__item-btn--pinned')).toBe(false);
+            expect(otherBtn.getAttribute('aria-pressed')).toBe('false');
+        });
+
+        it('點擊某列的 pin 按鈕時，onRequestTogglePin 收到該列的 preset id', () => {
+            const onRequestTogglePin = vi.fn();
+            const { sel } = createSelect({ getPinnedPresetId: () => '', onRequestTogglePin });
+            sel.open();
+            const pinBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--pin');
+            pinBtn.click();
+            expect(onRequestTogglePin).toHaveBeenCalledWith('a');
+        });
+
+        it('點擊 pin 按鈕不會關閉面板，也不會觸發該列的 onSelect', () => {
+            const onRequestTogglePin = vi.fn();
+            const { sel, onSelect } = createSelect({ getPinnedPresetId: () => '', onRequestTogglePin });
+            sel.open();
+            const pinBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--pin');
+            pinBtn.click();
+            expect(document.getElementById('panel').hidden).toBe(false);
+            expect(onSelect).not.toHaveBeenCalled();
+        });
+
+        it('省略 getPinnedPresetId 與 onRequestTogglePin 時仍可正常 render，且點擊 pin 按鈕不拋出例外', () => {
+            const { sel } = createSelect({ getPinnedPresetId: undefined, onRequestTogglePin: undefined });
+            sel.open();
+            const pinBtn = document.querySelector('#list .ds-select__item[data-id="a"] .ds-select__item-btn--pin');
+            expect(pinBtn).not.toBeNull();
+            expect(() => pinBtn.click()).not.toThrow();
+        });
+    });
+
 });
 
 describe('與 Modal 整合', () => {

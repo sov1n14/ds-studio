@@ -13,6 +13,11 @@
 - **刪除流程**：點擊 `✕` 開啟確認對話框，附有紅色危險樣式按鈕。若刪除的提示詞組為當前啟用中，系統會重設為空狀態（`activePresetId = ''`），而非自動選取其他提示詞組。所有指向被刪除提示詞組的 `chatPresetMap` 綁定都會被清理。空狀態選取時刪除按鈕為停用狀態。（v4.8.3）刪除同時會記錄一筆墓碑於 `dsPresetTombstones`（本地與同步兩端），確保刪除能正確透過同步合併傳播到其他裝置，而不只是清理本機的 `chatPresetMap` 綁定。
 - **一鍵刪除全部（v4.10.0）**：下拉選單的「(無提示詞組)」空白選項列右側新增一個 `✕` 按鈕（hover 提示：`刪除全部提示詞組`），點擊會開啟確認對話框（標題「刪除全部提示詞組」、內文「確定要刪除全部提示詞組嗎？此操作無法復原。」）。確認後會清空所有提示詞組、重設 `activePresetId` 為 `''`，並清除所有指向任一已刪除提示詞組的 `chatPresetMap` 綁定（而非僅單一 id），沿用單一刪除相同的墓碑同步機制。
 - **提示詞組列 hover 提示（v4.10.0，按鈕調整 v4.14.0）**：每列的 `✕`（刪除）按鈕有原生 `title` hover 提示「刪除提示詞」。v4.14.0 移除列內重新命名鉛筆（重新命名移至編輯視窗），`renameAriaLabel`／`editPresetNameTooltip` 兩個 i18n 鍵一併刪除。
+- **預設提示詞組（圖釘，v4.18.0）**：下拉選單每列在 `✕`（刪除）按鈕左側新增一顆圖釘按鈕（`.ds-select__item-btn--pin`）。點擊即把該組設為「預設」，圖釘亮起（`.ds-select__item-btn--pinned`，`aria-pressed="true"`）並以 `var(--primary-color)` 著色；再次點擊同一顆圖釘則取消預設。`title`／`aria-label` 依狀態切換（未釘選「設為預設（新對話自動選用）」、已釘選「取消預設」，i18n 鍵 `pinPresetAriaLabel`／`pinPresetTooltip`／`unpinPresetAriaLabel`／`unpinPresetTooltip`）。
+  - **唯一性**：預設以單一純量鍵 `pinnedPresetId` 儲存（空字串代表無預設），唯一性因此為結構上的必然，不需額外驗證，也不可能出現兩組同時釘選。
+  - **僅影響新對話**：釘選只在開啟新對話（URL 無 chat id）時生效，見 §6「新對話時的選取」。切換到既有對話一律不受影響。
+  - **釘選狀態不因 hover 而改變位置**：列內按鈕改以 `visibility` 而非 `display` 切換顯隱，版面盒始終存在，故已釘選的圖釘在滑鼠移入或移出該列時位置與尺寸都不變；直接 hover 已亮起的圖釘時亮起樣式維持並略微加強，不會看起來像未釘選。
+  - **刪除連動**：刪除單一提示詞組或一鍵刪除全部時，若被刪除的組正是預設，`pinnedPresetId` 一併清為 `''`（實作於 `popup/popup.pin-manager.js` 的 `clearPinIfDeleted()`；未受影響時完全不寫入儲存）。
 - **提示詞資料模型**：每組提示詞包含 `id`（字串）、`name`（字串）、`content`（字串）、`createdAt`（數字，紀元毫秒）、`updatedAt`（數字，紀元毫秒）。`id` 以 `preset-{timestamp}-{random}` 格式產生。內容於獨立編輯視窗中自動儲存：`input` 事件設定 dirty flag 並觸發 500ms 防抖寫入（v4.8.1 從 600ms 對齊為 500ms），`blur`、`visibilitychange` 與 `pagehide` 事件提供立即寫入保險（獨立視窗可能被作業系統直接關閉），僅在 dirty 時寫入以避免耗盡 Chrome sync 配額。
 - **獨立提示詞編輯視窗**（v3.0.0，名稱編輯 v4.14.0，Esc 關閉 v4.15.0）：點擊鉛筆按鈕透過 `chrome.windows.create`（`type: 'popup'`，1280×720）開啟 `popup/editor/editor.html`。Query string 契約：`?target=global` 編輯全域預設提示詞；`?target=preset&id=<presetId>` 編輯該提示詞組內容。提示詞組目標的視窗標題處顯示已聚焦並全選的名稱輸入框（`#editorNameInput`，替代唯讀 `#editorTitle`），全域目標維持唯讀標題。每種目標各為單例 — 重複點擊鉛筆會聚焦既有視窗（`chrome.windows.update`）並將其分頁導向請求 URL（`chrome.tabs.update`，同 URL 即重新載入、不同 URL 切換至當前啟用的提示詞組；`pagehide` 自動儲存保證無資料遺失），視窗已關閉時才重新建立。提示詞組儲存後會廣播 `ACTIVE_PRESET_CHANGED` 使開啟中的 DeepSeek 分頁即時更新。無效的 query 參數或提示詞組已被刪除時，視窗呈現停用狀態並顯示說明文字。所有儲存一律經由 `StorageManager`。（v4.15.0）按 `Esc` 可關閉視窗，未存內容由 `pagehide` 自動儲存後才關閉，不會遺失。
 
@@ -56,7 +61,7 @@
 
 - **UUID 提取**：Content Script 從 URL 路徑（`/a/chat/s/{uuid}`）透過 `extractUuidFromUrl()` 提取對話 UUID。新對話（無 UUID）的 UUID 為 `null`。
 - **首次訊息自動綁定**：當新對話（無 UUID）發送第一則訊息，且 SPA 導航至帶有 UUID 的 URL 時，系統會自動將新 UUID 綁定至各分頁的 `pendingPresetId`（若非空值），透過 `chatPresetMap` 記錄。自動綁定受到 `awaitingNewChatUuid` 旗標保護——該旗標僅在使用者實際在無 UUID 頁面上觸發發送動作（Enter 鍵或點擊發送按鈕）時才會設定。單純從新對話頁面導航至其他未綁定的現有對話**不會**觸發自動綁定——每個對話維持獨立的綁定關係，絕不繼承其他對話的狀態。該旗標在 5 秒後自動清除，避免發送失敗後的殘留旗標污染。
-- **新分頁隔離**：在新分頁中開啟新對話頁面絕不會繼承其他分頁的 `activePresetId`。Content Script 在無 UUID 頁面上的 `handleChatChange()` 中會無條件清除 `promptPrefix`。
+- **新分頁隔離**：在新分頁中開啟新對話頁面絕不會繼承其他分頁的 `activePresetId`。Content Script 在無 UUID 頁面上的 `handleChatChange()` 中會清除 `promptPrefix`（v4.18.0 起唯一例外：若 `pinnedPresetId` 指向一個仍存在的提示詞組，則改以該預設組的內容作為 `promptPrefix`。這仍不是繼承其他分頁的狀態，而是各分頁各自讀取同一份使用者明示的預設）。
 - **對話記憶**：每個對話 UUID 可獨立綁定至不同的提示詞組，透過 `chatPresetMap[uuid] = presetId` 記錄。切換對話時會自動恢復正確的提示詞組綁定。
 - **彈出選單同步**：當彈出選單在已綁定的對話上開啟時，下拉選單會自動選取已綁定的提示詞組。在未綁定的對話上時，下拉選單會透過 `GET_PENDING_PRESET` 訊息查詢 Content Script 的記憶體中 `pendingPresetId`，若無待選選取則顯示空白選項。
 - **解除綁定**：在有 UUID 的對話上選取下拉選單的空白選項，會從 `chatPresetMap` 中移除綁定。
@@ -81,5 +86,5 @@
   - 不注入各提示詞組的內容——僅包含全域預設提示詞（若有設定且其開關開啟）。
   - 提示詞組的鉛筆編輯按鈕（`#editPresetBtn`）為停用狀態，無法開啟編輯視窗。
   - 列內刪除（`✕`）按鈕為停用狀態。
-- **新對話時的選取**：當彈出選單在新對話頁面（無 UUID）上開啟時，使用者明確選取或新增提示詞組的動作會透過查詢 Content Script 記憶體中的 `pendingPresetId` 在重新開啟時保留。此待選狀態在每次聊天狀態轉換時清除。若無待選選取存在，`activePresetId` 會清除為 `''`，因此預設選取空白選項。在新分頁開啟新對話頁面時，Content Script 的 `promptPrefix` 一律由當前 URL 的 UUID 綁定決定，不會繼承其他分頁的全域 `activePresetId`。
-- **刪除後的選取**：當啟用中的提示詞組被刪除時，系統會重設為空狀態，而非自動選取其他提示詞組。
+- **新對話時的選取**：當彈出選單在新對話頁面（無 UUID）上開啟時，使用者明確選取或新增提示詞組的動作會透過查詢 Content Script 記憶體中的 `pendingPresetId` 在重新開啟時保留。此待選狀態在每次聊天狀態轉換時清除。若無待選選取存在，行為依 `pinnedPresetId`（v4.18.0）而定：有已釘選且仍存在的預設組時，`handleChatChange()` 會以它填入 `pendingPresetId`、寫入 `activePresetId` 並更新 overlay，因此新對話一開啟就預選該組；無預設（`''`）或釘選的 id 已不存在（該組被刪除、或儲存中留有過期 id）時，維持原行為 —— `activePresetId` 清除為 `''`，預設選取空白選項。釘選是在「開啟新對話」的那一刻讀取的，不會回溯套用到使用者已經停留其上的新對話頁面。在新分頁開啟新對話頁面時，Content Script 的 `promptPrefix` 一律由當前 URL 的 UUID 綁定決定，不會繼承其他分頁的全域 `activePresetId`。
+- **刪除後的選取**：當啟用中的提示詞組被刪除時，系統會重設為空狀態，而非自動選取其他提示詞組。若被刪除的組同時是釘選的預設，`pinnedPresetId` 亦一併清為 `''`（v4.18.0）。

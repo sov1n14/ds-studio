@@ -78,6 +78,7 @@
 | `dsPresetIndex` | `string[]` | `[]` | 提示詞組 ID 的有序陣列（v1.7.0 新格式）。 |
 | `dsPreset_<id>` | `PromptPreset` | — | 各提示詞組獨立儲存於此鍵，繞過 sync 每項 8KB 限制。每組：`{ id, name, content, createdAt, updatedAt }`。 |
 | `activePresetId` | string | `""` | 當前啟用提示詞組的 ID。 |
+| `pinnedPresetId` | string | `""` | 釘選為「預設」的提示詞組 ID，空字串代表無預設（v4.18.0）。單一純量值，故同時只可能有一組被釘選。僅在開啟新對話（URL 無 chat id）時被讀取用來預選；既有對話不受影響。與 `activePresetId` 走相同寫入路徑（sync 為主、local 備援），並同樣納入設定備份的匯出與匯入。 |
 | `isEnabled` | boolean | `false` | 提示詞注入是否啟用（主開關）。 |
 | `includeThinking` | boolean | `true` | 匯出的 MD 是否包含 AI 思考過程。 |
 | `includeReferences` | boolean | `true` | 匯出的 MD 是否包含引用參考連結。 |

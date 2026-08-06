@@ -55,7 +55,8 @@ The popup includes a Backup & Restore card with four buttons:
 **JSON Import**: Opens a file picker (`<input type="file" accept=".json">`). After parsing the JSON, calls `StorageManager.restoreSettings(importedSettings)` which:
 - Merges `promptPresets` using `mergePresets()` (preserve newest by `updatedAt`, append new IDs).
 - Merges `chatPresetMap` (spread merge: local base + imported additions).
-- Overwrites other UI settings (global default prompt, includeThinking/References, sidebar auto-hide, chat width, input width, system time toggle, activePresetId, chatWidthEnabled, inputWidthEnabled). **isEnabled** and **globalPromptEnabled** are device-local toggles (v4.7.3) and are **NOT** overwritten by import — each device keeps its own enable state.
+- Overwrites other UI settings (global default prompt, includeThinking/References, sidebar auto-hide, chat width, input width, system time toggle, activePresetId, pinnedPresetId, chatWidthEnabled, inputWidthEnabled). **isEnabled** and **globalPromptEnabled** are device-local toggles (v4.7.3) and are **NOT** overwritten by import — each device keeps its own enable state.
+- `pinnedPresetId` (v4.18.0) travels with the backup alongside `activePresetId`: export picks it up automatically because `getSettings()` derives its key set reflectively from `StorageManager.KEYS`, while import needed an explicit entry in `restoreSettings()`'s per-key whitelist. The `!== undefined` guard means an older backup file that predates the key leaves the current device's pinned default untouched, and `mergePresetsOnly` mode skips it like every other UI setting.
 - After successful restore, shows a toast and reloads the popup after 3 seconds.
 
 **Censor-Restored Messages Backup/Restore/Clear**: The `restored_messages` dataset (stored in `chrome.storage.local` only) has dedicated buttons in the Backup & Restore card for exporting, importing, and clearing censored-message restoration data independently of general settings.
