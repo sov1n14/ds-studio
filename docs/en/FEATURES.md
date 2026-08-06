@@ -45,7 +45,7 @@ Prompt Groups are the core feature of DS studio, allowing you to create multiple
    - Only one default at a time. Clicking another group's pin moves the default there; clicking the lit pin again removes the default, and new conversations go back to preselecting nothing.
    - Deleting the group that is currently the default also clears the default.
    - The default travels with the **Export Settings** backup file and is restored on import.
-6. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused, so typing renames the group directly; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first).
+6. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused but its text is no longer selected (v4.18.2) — the caret sits at the end of the existing name, so typing appends instead of replacing it; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first).
 7. The system allows deleting all custom prompt groups: the dropdown always retains a blank option as the default, and hovering over it reveals a **✕** (delete all prompt groups, with confirmation) button that clears every custom prompt group at once.
 
 ## Global Default Prompt
