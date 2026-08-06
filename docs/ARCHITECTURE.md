@@ -11,11 +11,17 @@ ds-studio/
 │   ├── content-script.js    ─  Entry: event interception, init, prefix injection (v4.0.0 split)
 │   ├── content-script.export.js   ─  Markdown export pipeline (HTML→MD, download)
 │   ├── edit-message-cleanup.js    ─  Strip injected wrapper from edit textarea (v3.2.1)
-│   ├── preset-overlay.controller.js ─  PresetOverlay lifecycle, mount/unmount, observer setup, settle loop
+│   ├── preset-overlay.controller.js ─  PresetOverlay lifecycle, mount/unmount, observer setup, placement writes
 │   ├── preset-overlay.resolvers.js  ─  Semantic DOM resolvers for title & new-chat button
 │   ├── preset-overlay.styles.js     ─  Overlay CSS inject/remove
+│   ├── preset-viewport-sync.js      ─  ResizeObserver / window-resize / settle-loop wiring (v4.18.1)
+│   ├── preset-id.resolver.js        ─  Pure resolveOverlayPresetId(input) — which preset id to display (v4.18.1)
 │   ├── preset-dropdown.component.js ─  Custom `<select>`-like dropdown component
-│   ├── preset-dropdown.position.js  ─  Pure computePlacement(input) — no DOM access
+│   ├── preset-dropdown.position.js  ─  Pure computePlacement / pickNaturalWidth — no DOM access
+│   ├── preset-dropdown.menu-position.js ─  Open-menu placement (v4.18.1)
+│   ├── preset-dropdown.width.js     ─  Per-instance natural-width measurer with cache (v4.18.1)
+│   ├── preset-dropdown.options.js   ─  Option rendering, label & aria-selected sync (v4.18.1)
+│   ├── preset-dropdown.keyboard.js  ─  Keyboard navigation for the dropdown (v4.18.1)
 │   ├── preset-settle.scheduler.js   ─  Bounded settle retry loop (mobile position race condition)
 │   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
 │   ├── temporary-chat-constants.js  ─  Shared constants for temporary-chat feature (v4.5.0)

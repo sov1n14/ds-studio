@@ -1,8 +1,8 @@
-{
+﻿{
   "manifest_version": 3,
   "default_locale": "zh_TW",
   "name": "__MSG_extName__",
-  "version": "4.18.0",
+  "version": "4.18.1",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5m3yyRKn27CeKs8JGkaVRTRHLvqdyacX4c/WMpYohs1PXPY+xcB2CP9SDlPtocX5qZjmP7B+Qs/pWFc/vEvOWcorQhbebm6jiGS+ZAe75NemUSt7MCJV61THdtb30k1nPGxL8viEYb09B8ZWh+QEN4t+hHAHsMFf9EA9UPrJb7YgIrulQVIkWPT+2afjdlwe6oUeogpdN6QJK19qe52vf9dZXTt0AFw/ORk1c3PLKBIitM1l3RZYbrBiG2DwgJw6N5iSVgHwEq5qPCdkFXlEl9LnFWa4wviFV8OpaAdCC0B3Ud+QNWNJrBWeiVAMi4wamg34f0P6gXAbvS4nEfEkKwIDAQAB",
   "description": "__MSG_extDesc__",
   "background": {
@@ -68,10 +68,16 @@
         "content/harvest.js",
         "content/content-script.export.js",
         "content/preset-dropdown.position.js",
+        "content/preset-dropdown.menu-position.js",
+        "content/preset-dropdown.width.js",
+        "content/preset-dropdown.options.js",
+        "content/preset-dropdown.keyboard.js",
         "content/preset-dropdown.component.js",
         "content/preset-overlay.styles.js",
         "content/preset-overlay.resolvers.js",
         "content/preset-settle.scheduler.js",
+        "content/preset-id.resolver.js",
+        "content/preset-viewport-sync.js",
         "content/preset-overlay.controller.js",
         "content/temporary-chat-constants.js",
         "content/prompt-injector.controller.js",

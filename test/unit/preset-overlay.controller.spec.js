@@ -223,3 +223,78 @@ describe('settle loop integration', () => {
         expect(overlay.wrapperEl).toBeNull();
     });
 });
+
+// ── Group C: pinned-default vs explicit-empty regression (new-conversation page) ──
+
+describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)', () => {
+    let overlay, ctx, target, getSettingsSpy;
+    let pendingStore; // real-storage-like backing for getPendingPresetId/setPendingPresetId
+
+    const PINNED_PRESET = { id: 'preset-pinned', name: 'Pinned Preset' };
+
+    beforeEach(() => {
+        spyStorageManager();
+        pendingStore = undefined; // "nothing chosen yet" per resolver contract (null/undefined)
+        getSettingsSpy = vi.spyOn(StorageManager, 'getSettings').mockResolvedValue({
+            pinnedPresetId: PINNED_PRESET.id,
+            promptPresets: [PINNED_PRESET],
+        });
+
+        ctx = makeCtx({
+            getCurrentChatUuid: vi.fn(() => null), // new-conversation page: no chat id
+            getPendingPresetId: vi.fn(() => pendingStore),
+            setPendingPresetId: vi.fn((id) => { pendingStore = id; }),
+        });
+
+        overlay = createPresetOverlay(ctx);
+
+        target = document.createElement('div');
+        target.className = '_2be88ba';
+        document.body.appendChild(target);
+    });
+
+    afterEach(() => {
+        teardownOverlay(overlay, null);
+        if (target && target.parentNode) target.parentNode.removeChild(target);
+        restoreStorageManager();
+        getSettingsSpy.mockRestore();
+    });
+
+    /** Reads which option the rebuilt dropdown actually shows as selected. */
+    function getRenderedSelectedValue() {
+        const selectedLi = overlay.dropdown.menu.querySelector('[aria-selected="true"]');
+        return selectedLi ? (selectedLi.getAttribute('data-value') || '') : null;
+    }
+
+    it('keeps showing the empty preset after a title-bar rebuild when the user explicitly chose empty', async () => {
+        // Initial mount: nothing chosen yet -> pinned default is shown.
+        overlay.findAndMount();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(getRenderedSelectedValue()).toBe(PINNED_PRESET.id);
+
+        // User explicitly picks the empty / no-op option via the controller's
+        // own public selection path (the same path the dropdown component invokes).
+        overlay.onSelectChange('');
+
+        // The explicit empty choice must be stored as the empty string, not coerced to null.
+        expect(ctx.getPendingPresetId()).toBe('');
+
+        // Simulate React replacing the chat title bar: swap in a fresh target element.
+        target.parentNode.removeChild(target);
+        target = document.createElement('div');
+        target.className = '_2be88ba';
+        document.body.appendChild(target);
+
+        overlay.findAndMount();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(getRenderedSelectedValue()).toBe('');
+    });
+
+    it('companion: still falls back to the pinned preset when the user has chosen nothing', async () => {
+        overlay.findAndMount();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(getRenderedSelectedValue()).toBe(PINNED_PRESET.id);
+    });
+});

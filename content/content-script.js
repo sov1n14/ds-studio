@@ -41,6 +41,7 @@ const PresetOverlay = __overlayFactory.createPresetOverlay({
     getChatPresetMap:          () => chatPresetMap,
     setChatPresetMap:          (v) => { chatPresetMap = v; },
     setPendingPresetId:        (v) => { pendingPresetId = v; },
+    getPendingPresetId:        () => pendingPresetId,
     updatePromptPrefixFromBinding: (...a) => updatePromptPrefixFromBinding(...a),
     isExtensionContextValid:   () => isExtensionContextValid(),
 });
@@ -316,7 +317,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (e?.message?.includes('Extension context invalidated')) return;
         });
     } else if (request.action === 'ACTIVE_PRESET_CHANGED') {
-        pendingPresetId = request.presetId || null;
+        pendingPresetId = request.presetId ?? null;
         updatePromptPrefixFromBinding();
         PresetOverlay.updateActiveId(request.presetId || '');
     } else if (request.action === 'GET_PENDING_PRESET') {

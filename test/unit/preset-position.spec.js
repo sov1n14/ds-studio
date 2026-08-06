@@ -555,3 +555,143 @@ describe('computePlacement — default parameter values', () => {
         expect(result.width).toBe(60);
     });
 });
+
+// ── Group I: pickNaturalWidth ────────────────────────────────────────────
+// New pure helper: derives the desired natural width from the measured
+// pixel widths of ALL candidate labels (not just the currently displayed
+// one), so the trigger sizes itself to fit the widest available option.
+//
+//   pickNaturalWidth({ labelWidths, arrowWidth, paddingLeft, paddingRight, gap, minWidth })
+//     → largest(labelWidths) + arrowWidth + paddingLeft + paddingRight + gap,
+//       floored at minWidth (default 80). No maximum cap (out of scope here).
+
+const { pickNaturalWidth } = require('../../content/preset-dropdown.position.js');
+
+describe('pickNaturalWidth — computes width from widest candidate label', () => {
+    it('rule 1: sums widest label + arrow + paddings + gap, worked example → 132', () => {
+        const result = pickNaturalWidth({
+            labelWidths: [30, 50, 100],
+            arrowWidth: 16,
+            paddingLeft: 6,
+            paddingRight: 6,
+            gap: 4,
+            minWidth: 80,
+        });
+
+        expect(result).toBe(132);
+    });
+
+    it('rule 2: floors to minWidth when computed total is below it, worked example → 80', () => {
+        const result = pickNaturalWidth({
+            labelWidths: [10],
+            arrowWidth: 0,
+            paddingLeft: 0,
+            paddingRight: 0,
+            gap: 0,
+            minWidth: 80,
+        });
+
+        expect(result).toBe(80);
+    });
+
+    it('rule 3: undefined labelWidths returns minWidth regardless of other chrome values', () => {
+        const result = pickNaturalWidth({
+            labelWidths: undefined,
+            arrowWidth: 999,
+            paddingLeft: 999,
+            paddingRight: 999,
+            gap: 999,
+            minWidth: 80,
+        });
+
+        expect(result).toBe(80);
+    });
+
+    it('rule 3: empty labelWidths array returns minWidth regardless of other chrome values', () => {
+        const result = pickNaturalWidth({
+            labelWidths: [],
+            arrowWidth: 999,
+            paddingLeft: 999,
+            paddingRight: 999,
+            gap: 999,
+            minWidth: 80,
+        });
+
+        expect(result).toBe(80);
+    });
+
+    it('rule 4: ignores non-finite/non-numeric entries, worked example → 120', () => {
+        const result = pickNaturalWidth({
+            labelWidths: [40, NaN, null, 120, undefined],
+            arrowWidth: 0,
+            paddingLeft: 0,
+            paddingRight: 0,
+            gap: 0,
+            minWidth: 0,
+        });
+
+        expect(result).toBe(120);
+    });
+
+    it('rule 4: ignores string entries mixed with valid numbers', () => {
+        const result = pickNaturalWidth({
+            labelWidths: [40, 'not-a-number', 90],
+            arrowWidth: 0,
+            paddingLeft: 0,
+            paddingRight: 0,
+            gap: 0,
+            minWidth: 0,
+        });
+
+        expect(result).toBe(90);
+    });
+
+    it('rule 4: when every entry is invalid, behaves as rule 3 (returns minWidth)', () => {
+        const result = pickNaturalWidth({
+            labelWidths: [NaN, null, undefined, 'x'],
+            arrowWidth: 10,
+            paddingLeft: 10,
+            paddingRight: 10,
+            gap: 10,
+            minWidth: 80,
+        });
+
+        expect(result).toBe(80);
+    });
+
+    it('rule 5: always returns a finite number, never NaN', () => {
+        const result = pickNaturalWidth({ labelWidths: [NaN, undefined] });
+
+        expect(Number.isFinite(result)).toBe(true);
+        expect(Number.isNaN(result)).toBe(false);
+    });
+
+    it('rule 6: is pure — does not mutate the labelWidths array it is given', () => {
+        const labelWidths = [30, 50, 100];
+        const snapshot = [...labelWidths];
+
+        pickNaturalWidth({ labelWidths, arrowWidth: 16, paddingLeft: 6, paddingRight: 6, gap: 4, minWidth: 80 });
+
+        expect(labelWidths).toEqual(snapshot);
+    });
+
+    it('rule 6: is pure — calling twice with the same input gives the same result', () => {
+        const input = { labelWidths: [30, 50, 100], arrowWidth: 16, paddingLeft: 6, paddingRight: 6, gap: 4, minWidth: 80 };
+
+        const first = pickNaturalWidth(input);
+        const second = pickNaturalWidth(input);
+
+        expect(first).toBe(second);
+    });
+
+    it('rule 7: called with no argument at all, returns default minWidth of 80 and does not throw', () => {
+        expect(() => pickNaturalWidth()).not.toThrow();
+        expect(pickNaturalWidth()).toBe(80);
+    });
+
+    it('defaults: arrowWidth/paddingLeft/paddingRight/gap default to 0 when omitted', () => {
+        const result = pickNaturalWidth({ labelWidths: [90], minWidth: 0 });
+
+        expect(result).toBe(90);
+    });
+});
