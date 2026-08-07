@@ -26,6 +26,14 @@
 >
 > 此處採用的是**純函式方法包**慣例（同 `content-script.js`、`preset-overlay.controller.js`），與上述 `this` 綁定的 `Object.assign` 方法包不同：`harvest.toast.js` 以 `globalThis.__DS_Harvest_toast` 掛載，入口檔以 `globalThis.__DS_Harvest_toast || require('./harvest.toast.js')` 取得，兼容瀏覽器與 Node/vitest 兩種載入路徑。`manifest.json` 中 `harvest.toast.js` 排在 `harvest.js` 之前。
 
+> **v4.19.0 拆分**：`harvest.js` → `harvest.js`（入口，捲動擷取引擎，446 行）+ `harvest.policy.js`（純決策邏輯，140 行）。抽出的是「該繼續捲動還是停止、以及為什麼」的判斷：`createInitialState()`、`decideNextStep()`、`describeIncompleteReason()`。詳見 [EXPORT.md](EXPORT.md) 的 Harvest Policy Module 一節。
+>
+> 這次拆分同時解掉兩個問題，不是為拆而拆。當時 `harvest.js` 已達 430 行、逼近 §8 的 450 行門檻；而真正的動機是**該邏輯原本測不到** —— 停止決策與 DOM 捲動、`MutationObserver`、`Date.now()` 糾纏在同一個 async 迴圈裡，要驗證「連續 20 秒無進展才停」得先搭起整套虛擬列表與假計時器。抽成純函式後，時鐘以 `nowMs` 參數注入、零 DOM 依賴，29 個測試不需要任何 fixture 或 fake timer。**最需要測試的邏輯，正是最該離開這個檔案的邏輯。**
+>
+> `harvest.policy.js` 必須維持零 DOM、零 `chrome.*`、零計時器、零時鐘讀取。為了方便而在裡面讀一次 `Date.now()`，就是把這段邏輯推回測不到的狀態。命名空間採 `window.DSstudio.HarvestPolicy`（同 `window.DSstudio.Harvest` 慣例）；`manifest.json` 中排在 `harvest.js` 之前。
+>
+> 注意兩層對「`HarvestPolicy` 缺席」的處理**刻意不一致**：`harvest.js` 直接 `throw`（沒有決策邏輯就無法運作，且它是同一份 manifest 載入的硬依賴，缺席即代表 manifest 壞了，應該大聲失敗）；`content-script.export.js` 則退回通用說明並照樣下載（它仍能把使用者的資料交出去）。**不要為了一致性把這兩者統一。**
+
 > **v4.11.15 拆分**：`content-script.js` 原為 491 行，超出 `coding-guidelines` §8 的 450 行門檻，同時裝著「聊天狀態」與「提示詞注入」兩個關注點。抽出後者至 `prompt-injector.controller.js`（179 行），入口檔降至 360 行。
 >
 > 選擇抽出「提示詞注入」而非「聊天狀態」，是因為 `test/unit/storage-manager.sync-now.spec.js` 以正則比對 `content-script.js` 的**原始碼字面**，抓取其中的 `initSettings` 區塊；聊天狀態那一側的函式都環繞著 `initSettings`，搬動會打斷該斷言。抽注入側則讓 `initSettings` 原地不動、零風險。

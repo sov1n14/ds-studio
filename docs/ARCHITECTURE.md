@@ -42,7 +42,9 @@ ds-studio/
 │   ├── censor-reply-restore.dom.js       ─  Fragment extraction & DOM injection bundle
 │   ├── censor-reply-restore.storage.js   ─  Restored-message persistence bundle
 │   ├── censor-reply-restore.css ─  Restored-content display styles
-│   ├── harvest.js           ─  Scroll-and-harvest full-conversation Markdown export
+│   ├── harvest.js           ─  Entry: scroll-and-harvest full-conversation Markdown export
+│   ├── harvest.toast.js     ─  Export progress / cancel / incomplete-warning toast UI (v4.11.9 split)
+│   ├── harvest.policy.js    ─  Pure loop-termination decision logic, DOM-free (v4.19.0 split)
 │   ├── go-top.js            ─  Entry: "回到頂部" button lifecycle & observers (v4.0.0 split)
 │   ├── go-top.locate.js     ─  DOM query / locator / visibility bundle
 │   ├── go-top.render.js     ─  Button render / inject / mode-transition bundle
@@ -186,7 +188,8 @@ sequenceDiagram
 
     Note over Popup,Content: 一般流程 — Markdown 匯出
     Popup->>Content: sendMessage EXPORT_MARKDOWN
-    Content->>Content: 解析 DOM → 產生 Markdown → 觸發下載
+    Content->>Content: 捲至頂端 → 逐步捲動擷取（每步由 HarvestPolicy 裁決繼續或停止）
+    Content->>Content: 產生 Markdown → 觸發下載（不完整時附原因頁尾 + 警告 toast）
 
     Note over Popup,Content: 備份與還原
     Popup->>Storage: getSettings() → 序列化 JSON → 下載

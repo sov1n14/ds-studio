@@ -320,7 +320,7 @@ describe('_waitForDomStability', () => {
         const container = document.createElement('div');
         document.body.appendChild(container);
 
-        // mutate every 50ms — faster than the stability tick interval (150ms) — for the
+        // mutate every 50ms — faster than the stability tick interval (100ms) — for the
         // entire step, so the stable-tick counter is continuously reset and can never
         // reach its threshold; only the stepTimeout fallback can resolve this.
         const stepTimeout = 600;
@@ -336,7 +336,7 @@ describe('_waitForDomStability', () => {
 
         const elapsed = performance.now() - start;
         // if mutations failed to reset the stable-tick counter, this would resolve early
-        // (~450ms, via the stability window) instead of waiting out the full stepTimeout.
+        // (~300ms, via the stability window) instead of waiting out the full stepTimeout.
         expect(elapsed).toBeGreaterThanOrEqual(stepTimeout - 50);
         expect(elapsed).toBeLessThan(stepTimeout + 400);
     }, 5000);
@@ -804,29 +804,171 @@ describe('harvestAllMessages', () => {
         expect(document.querySelector('.dss-harvest-overlay')).toBeNull();
     });
 
-    // ── Timeout returns isComplete:false ─────────────────────────────────────
+    // ── R1 (regression guard): a harvest that keeps making progress must never
+    //    be killed by elapsed time. This directly guards the reported truncation
+    //    bug: a long conversation export that came back with the 500 newest
+    //    messages missing and isComplete:false, root-caused to the deleted
+    //    HARVEST_TOTAL_TIMEOUT (120000ms) wall-clock cap.
 
-    it('returns isComplete:false with reason:timeout when 120s elapses', async () => {
+    it('REGRESSION (truncation bug): captures every message across a long virtual-list run that would have exceeded the removed 120s wall-clock cap', async () => {
         vi.useFakeTimers();
 
-        const { scrollArea, visibleItems } = buildVirtualListDOM();
-        scrollArea.scrollBy = vi.fn();
+        const TOTAL_MESSAGES = 40;
+        const CLIENT_HEIGHT = 400;
+        const SCROLL_STEP_DELTA = (window.innerHeight || 768) * 0.9;
 
-        Object.defineProperty(scrollArea, 'scrollTop', { value: 0, writable: true, configurable: true });
-        Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
-        Object.defineProperty(scrollArea, 'scrollHeight', { value: 100000, configurable: true });
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 500, clientHeight: CLIENT_HEIGHT });
 
-        appendMessage(visibleItems, 0, 'first-msg');
+        let scrollTopValue = 0;
+        let scrollHeightValue = 500;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        Object.defineProperty(scrollArea, 'scrollHeight', {
+            get: () => scrollHeightValue,
+            configurable: true,
+        });
+
+        appendMessage(visibleItems, 0, 'msg-0');
+
+        let nextKey = 1;
+        scrollArea.scrollBy = vi.fn(() => {
+            scrollTopValue += SCROLL_STEP_DELTA;
+            if (nextKey < TOTAL_MESSAGES) {
+                appendMessage(visibleItems, nextKey, "msg-" + nextKey);
+                nextKey++;
+                scrollHeightValue = scrollTopValue + CLIENT_HEIGHT + SCROLL_STEP_DELTA;
+            }
+        });
 
         const harvestPromise = harvestAllMessages();
-        await vi.advanceTimersByTimeAsync(130000);
+        await vi.advanceTimersByTimeAsync(400000);
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('complete');
+        expect(result.isComplete).toBe(true);
+        expect(result.items.length).toBe(TOTAL_MESSAGES);
+        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        expect(texts).toEqual(Array.from({ length: TOTAL_MESSAGES }, (_, i) => "msg-" + i));
+    }, 20000);
+
+    it('stops with reason:"stalled" after 20000ms with no progress, returning the items captured before the stall', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: 400 });
+        scrollArea.scrollBy = vi.fn();
+
+        appendMessage(visibleItems, 0, 'captured-before-stall');
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(30000);
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('stalled');
+        expect(result.isComplete).toBe(false);
+        expect(result.items.length).toBeGreaterThan(0);
+        expect(result.items[0].querySelector('.fbb737a4')?.textContent).toBe('captured-before-stall');
+    }, 15000);
+
+    it('does NOT stall when fresh progress arrives before the 20000ms threshold - the stall clock resets on progress', async () => {
+        vi.useFakeTimers();
+
+        const CLIENT_HEIGHT = 400;
+        const SCROLL_STEP_DELTA = (window.innerHeight || 768) * 0.9;
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: CLIENT_HEIGHT });
+
+        let scrollTopValue = 0;
+        let scrollHeightValue = 200000;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        Object.defineProperty(scrollArea, 'scrollHeight', {
+            get: () => scrollHeightValue,
+            configurable: true,
+        });
+
+        appendMessage(visibleItems, 0, 'msg-0');
+
+        let allowProgress = false;
+        let hasAppended = false;
+        scrollArea.scrollBy = vi.fn(() => {
+            scrollTopValue += SCROLL_STEP_DELTA;
+            if (allowProgress && !hasAppended) {
+                hasAppended = true;
+                appendMessage(visibleItems, 1, 'msg-1');
+                scrollHeightValue = scrollTopValue + CLIENT_HEIGHT + SCROLL_STEP_DELTA;
+            }
+        });
+
+        const harvestPromise = harvestAllMessages();
+
+        await vi.advanceTimersByTimeAsync(15000);
+
+        allowProgress = true;
+
+        await vi.advanceTimersByTimeAsync(19000);
 
         const result = await harvestPromise;
 
-        expect(result.isComplete).toBe(false);
-        expect(result.reason).toBe('timeout');
-        expect(result.items.length).toBeGreaterThanOrEqual(1);
+        expect(result.reason).toBe('complete');
+        expect(result.isComplete).toBe(true);
+        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        expect(texts).toEqual(['msg-0', 'msg-1']);
+    }, 20000);
+
+    it('cancel callback passed to showHarvestToastScrolling is a function that, when invoked, calls back the caller', () => {
+        const onCancel = vi.fn();
+        showHarvestToastScrolling(onCancel);
+        const btn = document.querySelector('.dss-harvest-toast__cancel-btn');
+        expect(btn).not.toBeNull();
+        expect(typeof btn.__dsOnCancel).toBe('function');
+        btn.__dsOnCancel();
+        expect(onCancel).toHaveBeenCalledOnce();
     });
+
+    it('cancel callback passed to showHarvestToastCapturing is a function that, when invoked, calls back the caller', () => {
+        const onCancel = vi.fn();
+        showHarvestToastCapturing(3, onCancel);
+        const btn = document.querySelector('.dss-harvest-toast__cancel-btn');
+        expect(btn).not.toBeNull();
+        expect(typeof btn.__dsOnCancel).toBe('function');
+        btn.__dsOnCancel();
+        expect(onCancel).toHaveBeenCalledOnce();
+    });
+
+    it('stops with reason:"cancelled" and returns the messages captured so far when the toast cancel button is clicked mid-run', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: 400 });
+        scrollArea.scrollBy = vi.fn();
+
+        appendMessage(visibleItems, 0, 'keep-me-0');
+        appendMessage(visibleItems, 1, 'keep-me-1');
+
+        const harvestPromise = harvestAllMessages();
+
+        await vi.advanceTimersByTimeAsync(3500);
+
+        const cancelBtn = document.querySelector('.dss-harvest-toast__cancel-btn');
+        expect(cancelBtn).not.toBeNull();
+        cancelBtn.click();
+
+        await vi.advanceTimersByTimeAsync(9000);
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('cancelled');
+        expect(result.isComplete).toBe(false);
+        expect(result.items.length).toBeGreaterThan(0);
+        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        expect(texts).toEqual(expect.arrayContaining(['keep-me-0', 'keep-me-1']));
+    }, 15000);
 
     // ── Safety net: scroll_interrupted ───────────────────────────────────────
 

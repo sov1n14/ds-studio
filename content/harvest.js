@@ -5,12 +5,14 @@
  * 架構決策：
  *   - 此模組純屬 content 層，僅做 DOM 操作，不呼叫 chrome.storage。
  *   - 所有公開函式透過 window.DSstudio.Harvest 暴露，供同層其他模組呼叫。
- *   - 三大單責模組：(a) 擷取/捲動（本檔）、(b) 進度遮罩 UI（harvest.toast.js）、
- *     (c) (由外部呼叫者) Markdown 組裝。
+ *   - 四大單責模組：(a) 擷取/捲動（本檔）、(b) 進度遮罩 UI（harvest.toast.js）、
+ *     (c) 是否繼續/停止的純決策邏輯（harvest.policy.js）、
+ *     (d) (由外部呼叫者) Markdown 組裝。
  *
  * 載入順序（manifest.json content_scripts）：
- *   1. content/harvest.toast.js → 掛載 globalThis.__DS_Harvest_toast
- *   2. content/harvest.js       （本檔，合入以上 bundle）
+ *   1. content/harvest.toast.js  → 掛載 globalThis.__DS_Harvest_toast
+ *   2. content/harvest.policy.js → 掛載 window.DSstudio.HarvestPolicy
+ *   3. content/harvest.js        （本檔，合入以上 bundle）
  */
 
 // 合併 Toast Bundle（瀏覽器：由 harvest.toast.js 在前載入設定 globalThis；Node.js 測試：直接 require）
@@ -24,15 +26,16 @@ const hideHarvestToast = __DSHarvestToast.hideHarvestToast;
 const __DSSelectorsHarvest = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
+// 合併決策模組（瀏覽器：由 content/harvest.policy.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DSHarvestPolicy = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.HarvestPolicy ||
+    (typeof require !== 'undefined' ? require('./harvest.policy.js') : undefined);
+
 // ─────────────────────────────────────────────────────────────────
 //  常數
 // ─────────────────────────────────────────────────────────────────
 
 /** 每步捲動距離係數（相對於 viewport 高度） */
 const HARVEST_SCROLL_STEP_FACTOR = 0.9;
-
-/** 整體擷取超時（ms） */
-const HARVEST_TOTAL_TIMEOUT = 120000;
 
 /** 每步等待 DOM 穩定的最長時間（ms） */
 const HARVEST_STEP_TIMEOUT = 8000;
@@ -41,7 +44,7 @@ const HARVEST_STEP_TIMEOUT = 8000;
 const HARVEST_STABLE_TICKS = 3;
 
 /** DOM 穩定判定：穩定 tick 間隔（ms） */
-const HARVEST_STABLE_INTERVAL = 150;
+const HARVEST_STABLE_INTERVAL = 100;
 
 /** 判定抵達底部：scrollTop + clientHeight >= scrollHeight - 此容差（px） */
 const HARVEST_BOTTOM_TOLERANCE = 4;
@@ -232,21 +235,19 @@ function _isAtBottom(container) {
 }
 
 /**
- * 主要擷取函式：從頂到底增量捲動，蒐集所有虛擬化訊息節點。
- *
- * 回傳形狀：
- * ```
- * {
- *   items: Element[],       // 按 data-virtual-list-item-key 數字排序的克隆訊息節點
- *   isComplete: boolean,    // true = 成功捲到底；false = 超時或其他中斷
- *   reason?: string         // 中斷原因（'timeout' | 'no_container' | 'no_messages' | 'scroll_interrupted'）
- * }
- * ```
- *
+ * 主要擷取函式：從頂到底增量捲動，蒐集所有虛擬化訊息節點。是否繼續或停止
+ * 完全委派給 window.DSstudio.HarvestPolicy 純函式決定；本函式只提供觀測值
+ * （含 Date.now()）並依裁決執行 DOM 操作。刻意移除整體逾時上限：只要仍有
+ * 進度就不應被時間切斷，使用者可透過 Toast 取消鈕主動中止。
  * @returns {Promise<{items: Element[], isComplete: boolean, reason?: string}>}
+ *   reason: 'cancelled' | 'stalled' | 'scroll_interrupted' | 'no_container' | 'no_messages' | undefined
  */
 async function harvestAllMessages() {
     // ── Guard clauses ──────────────────────────────────────────────
+    if (!__DSHarvestPolicy) {
+        throw new Error('window.DSstudio.HarvestPolicy is required but was not found — check that content/harvest.policy.js loads before content/harvest.js in manifest.json');
+    }
+
     const container = _findHarvestScrollContainer();
     if (
         !container ||
@@ -264,7 +265,6 @@ async function harvestAllMessages() {
     }
 
     // ── 初始化 ─────────────────────────────────────────────────────
-    const startTime = Date.now();
     /** Map<number, Element> — key 為 data-virtual-list-item-key 的整數值 */
     const capturedMap = new Map();
     /** 記錄原始 scrollTop 以便事後還原 */
@@ -277,6 +277,9 @@ async function harvestAllMessages() {
      * 用於偵測外部意外跳躍（如頁面 React auto-scroll 穿透了 patch）。
      */
     let _expectedScrollTop = 0;
+    // 用於使用者主動中止擷取（Toast 上的取消鈕）；生命週期僅限本次呼叫。
+    const abortController = new AbortController();
+    const onCancel = () => abortController.abort();
 
     /**
      * 將目前可見訊息寫入 capturedMap（略過已有的 key）。
@@ -295,9 +298,7 @@ async function harvestAllMessages() {
     }
 
     try {
-        // ── 步驟 1：啟用自動捲動攔截，捲到頂部 ──────────────────────
-        // 在捲到頂部之前啟用 PreventAutoScroll，以確保頁面 React 無法在掃描途中
-        // 自動跳至最新訊息破壞受控掃描。
+        // 啟用自動捲動攔截：確保頁面 React 無法在掃描途中自動跳至最新訊息破壞受控掃描。
         // harvest.js 在 isolated world，使用獨立 prototype，不受 patch 影響。
         const _preventAutoScroll = window.DSstudio?.PreventAutoScroll;
         if (_preventAutoScroll) {
@@ -305,65 +306,82 @@ async function harvestAllMessages() {
         }
 
         // 捲動至頂部階段：顯示捲動提示，不顯示數量（尚未擷取，顯示 0 則具誤導性）
-        showHarvestToastScrolling();
+        showHarvestToastScrolling(onCancel);
         const scrollResult = await _scrollToTopAndSettle(container);
-        // 必須檢查回傳值再擷取：忽略 success:false 會從目前（未必是頂部）的
-        // 捲動位置擷取，靜默漏收最舊的訊息。中止時原樣傳回失敗原因，
-        // 且不擷取任何內容；finally 區塊仍會執行（PreventAutoScroll 停用、
-        // 捲動位置還原、Toast 隱藏），因為此 return 位於 try 區塊內。
+        // 必須檢查回傳值：忽略 success:false 會從非頂部位置擷取，靜默漏收最舊訊息。
         if (scrollResult && scrollResult.success === false) {
             reason = scrollResult.reason;
             return { items: [], isComplete: false, reason };
         }
         captureVisible();
         // 抵達頂部後切換至擷取階段，顯示數量與警示
-        showHarvestToastCapturing(capturedMap.size);
+        showHarvestToastCapturing(capturedMap.size, onCancel);
 
         // 記錄捲到頂部後的起始預期位置
         _expectedScrollTop = container.scrollTop;
 
-        // ── 步驟 2：逐步向下捲動並擷取 ───────────────────────────────
+        // ── 步驟 2：逐步向下捲動並擷取，由 HarvestPolicy 裁決繼續或停止 ──
+        let policyState = __DSHarvestPolicy.createInitialState({
+            nowMs: Date.now(),
+            capturedCount: capturedMap.size,
+            scrollHeight: container.scrollHeight,
+        });
+
         while (true) {
-            // 整體超時保護
-            if (Date.now() - startTime > HARVEST_TOTAL_TIMEOUT) {
-                reason = 'timeout';
-                break;
-            }
+            // 每輪只讀取一次版面度量，避免重複讀取觸發多次 layout reflow。
+            // 這些值僅在本輪內重用，下一輪捲動後會再重新讀取。
+            const scrollTop = container.scrollTop;
+            const clientHeight = container.clientHeight;
+            const scrollHeight = container.scrollHeight;
 
-            // ── Safety net：偵測外部意外跳躍 ─────────────────────────
-            // 若目前 scrollTop 遠超預期位置（超過 1.5x viewport），
-            // 判定為頁面外部干預（patch 未能完全攔截），標記中斷。
-            // 保守閾值設計：正常 scrollBy 步進為 0.9x viewport，
-            // 只有跳躍量大幅超過正常步進才觸發，避免誤判。
-            const jumpThreshold = window.innerHeight * HARVEST_SCROLL_JUMP_THRESHOLD_FACTOR;
-            const actualScrollTop = container.scrollTop;
-            if (actualScrollTop > _expectedScrollTop + jumpThreshold && !_isAtBottom(container)) {
-                // 意外跳躍：捲動位置遠超預期，且尚未到底（若到底則可能是正常的）
-                isComplete = false;
-                reason = 'scroll_interrupted';
-                break;
-            }
+            const isAtBottomNow =
+                scrollTop + clientHeight >= scrollHeight - HARVEST_BOTTOM_TOLERANCE;
 
-            // 判斷是否已抵達底部
-            if (_isAtBottom(container)) {
+            if (isAtBottomNow) {
                 bottomConfirmCount++;
-                if (bottomConfirmCount >= HARVEST_BOTTOM_CONFIRM_COUNT) {
+            } else {
+                // 重設底部確認計數（尚未到底）
+                bottomConfirmCount = 0;
+            }
+            const isAtBottomConfirmed = isAtBottomNow && bottomConfirmCount >= HARVEST_BOTTOM_CONFIRM_COUNT;
+
+            // Safety net：scrollTop 遠超預期位置（> 1.5x viewport）視為外部干預，標記中斷。
+            const jumpThreshold = window.innerHeight * HARVEST_SCROLL_JUMP_THRESHOLD_FACTOR;
+            const isScrollJumpDetected =
+                scrollTop > _expectedScrollTop + jumpThreshold && !isAtBottomNow;
+
+            const decision = __DSHarvestPolicy.decideNextStep(
+                {
+                    nowMs: Date.now(),
+                    capturedCount: capturedMap.size,
+                    scrollHeight,
+                    isAtBottomConfirmed,
+                    isAborted: abortController.signal.aborted,
+                    isScrollJumpDetected,
+                },
+                policyState
+            );
+            policyState = decision.state;
+
+            if (decision.action === 'stop') {
+                reason = decision.reason;
+                isComplete = reason === 'complete';
+                if (isComplete) {
                     // 再擷取一次確保底部訊息被收入
                     captureVisible();
-                    isComplete = true;
-                    break;
                 }
+                break;
+            }
+
+            if (isAtBottomNow) {
                 // 尚未達到確認次數，繼續等待並重新擷取
                 await _waitForDomStability(container, HARVEST_STEP_TIMEOUT);
                 captureVisible();
-                showHarvestToastCapturing(capturedMap.size);
+                showHarvestToastCapturing(capturedMap.size, onCancel);
                 // 在底部確認階段，更新預期位置為當前值（允許位置穩定）
                 _expectedScrollTop = container.scrollTop;
                 continue;
             }
-
-            // 重設底部確認計數（尚未到底）
-            bottomConfirmCount = 0;
 
             // 向下捲一步，並更新預期位置
             container.scrollBy(0, window.innerHeight * HARVEST_SCROLL_STEP_FACTOR);
@@ -373,12 +391,10 @@ async function harvestAllMessages() {
             await _waitForDomStability(container, HARVEST_STEP_TIMEOUT);
 
             captureVisible();
-            showHarvestToastCapturing(capturedMap.size);
+            showHarvestToastCapturing(capturedMap.size, onCancel);
         }
     } finally {
-        // ── 步驟 3：停用自動捲動攔截、還原捲動位置 ──────────────────
-        // disable() 必須在 finally 中確保即使拋出也能還原，
-        // 讓頁面恢復正常自動捲動行為。
+        // disable() 必須在 finally 中確保即使拋出也能還原，讓頁面恢復正常自動捲動行為。
         const _preventAutoScrollFinal = window.DSstudio?.PreventAutoScroll;
         if (_preventAutoScrollFinal) {
             _preventAutoScrollFinal.disable();

@@ -2,20 +2,25 @@
  * Unit tests for the export surface of content/content-script.js
  *
  * Coverage map:
- *   § 1  _buildMarkdownHeader            — structure, contains export timestamp
- *   § 2  convertMessageNodeToMarkdown    — user message branch
- *                                          AI main-only branch
- *                                          AI with thinking (includeThinking=true/false)
- *                                          includeReferences flag forwarded
- *                                          null/empty node guard
- *                                          always appends --- separator
- *   § 3  exportConversationToMarkdown    — with Harvest: assembles from result.items in order
- *                                          with Harvest: appends warning footer on isComplete:false
- *                                          with Harvest: footer ABSENT on isComplete:true
- *                                          with Harvest: calls downloadMarkdown (no alert) when items present
- *                                          with Harvest: alerts and returns early when items is empty
- *                                          fallback (no Harvest): uses visible-DOM query
- *                                          fallback (no Harvest): alerts when no DOM messages
+ *   1 _buildMarkdownHeader            - structure, contains export timestamp
+ *   2 convertMessageNodeToMarkdown    - user message branch
+ *                                       AI main-only branch
+ *                                       AI with thinking (includeThinking=true/false)
+ *                                       includeReferences flag forwarded
+ *                                       null/empty node guard
+ *                                       always appends --- separator
+ *   3 exportConversationToMarkdown    - with Harvest: assembles from result.items in order
+ *                                       with Harvest: footer carries correct reason clause per reason code
+ *                                       with Harvest: footer does NOT say "timed out" for reason=stalled (Defect 1 regression)
+ *                                       with Harvest: footer captured-count matches actual item count
+ *                                       with Harvest: footer ABSENT and toast NOT called on isComplete:true
+ *                                       with Harvest: toast called exactly once with (count, clause) on isComplete:false
+ *                                       with Harvest: download still happens when isComplete:false (partial file kept)
+ *                                       with Harvest: does not throw when HarvestPolicy is unavailable (Defect fallback)
+ *                                       with Harvest: calls downloadMarkdown (no alert) when items present
+ *                                       with Harvest: alerts and returns early when items is empty
+ *                                       fallback (no Harvest): uses visible-DOM query
+ *                                       fallback (no Harvest): alerts when no DOM messages
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -24,29 +29,20 @@ import contentScript from '../../content/content-script.js';
 
 const { convertMessageNodeToMarkdown, exportConversationToMarkdown, _buildMarkdownHeader } = contentScript;
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Build a user .ds-message node.
- */
-function makeUserMessage(text = 'Hello world') {
+function makeUserMessage(text) {
+    if (text === undefined) text = 'Hello world';
     const msg = document.createElement('div');
     msg.className = 'ds-message';
     const inner = document.createElement('div');
     inner.className = 'fbb737a4';
     inner.textContent = text;
-    // happy-dom does not compute innerText from CSS; set it directly
     Object.defineProperty(inner, 'innerText', { value: text, configurable: true });
     msg.appendChild(inner);
     return msg;
 }
 
-/**
- * Build an AI .ds-message node with a single .ds-markdown main response.
- */
-function makeAiMessage(htmlContent = '<p>Answer</p>') {
+function makeAiMessage(htmlContent) {
+    if (htmlContent === undefined) htmlContent = '<p>Answer</p>';
     const msg = document.createElement('div');
     msg.className = 'ds-message';
     const md = document.createElement('div');
@@ -56,18 +52,15 @@ function makeAiMessage(htmlContent = '<p>Answer</p>') {
     return msg;
 }
 
-/**
- * Build an AI .ds-message with both a thinking block and a main response.
- */
-function makeAiMessageWithThinking({
-    thinkHtml = '<p>Think step</p>',
-    mainHtml = '<p>Main answer</p>',
-    thoughtLabel = 'Thought for 3 seconds',
-} = {}) {
+function makeAiMessageWithThinking(opts) {
+    opts = opts || {};
+    const thinkHtml = opts.thinkHtml || '<p>Think step</p>';
+    const mainHtml = opts.mainHtml || '<p>Main answer</p>';
+    const thoughtLabel = opts.thoughtLabel || 'Thought for 3 seconds';
+
     const msg = document.createElement('div');
     msg.className = 'ds-message';
 
-    // Thinking wrapper contains ds-think-content children
     const thinkWrapper = document.createElement('div');
     thinkWrapper.className = 'ds-think-wrapper';
 
@@ -79,7 +72,6 @@ function makeAiMessageWithThinking({
     thinkContent.appendChild(thinkMd);
     thinkWrapper.appendChild(thinkContent);
 
-    // Label child (has ._08cbf39 span)
     const labelDiv = document.createElement('div');
     labelDiv.className = 'ds-think-label';
     const labelSpan = document.createElement('span');
@@ -90,7 +82,6 @@ function makeAiMessageWithThinking({
 
     msg.appendChild(thinkWrapper);
 
-    // Main response outside the thinking wrapper
     const mainMd = document.createElement('div');
     mainMd.className = 'ds-markdown ds-assistant-message-main-content';
     mainMd.innerHTML = mainHtml;
@@ -99,10 +90,8 @@ function makeAiMessageWithThinking({
     return msg;
 }
 
-/**
- * Install a mock window.DSstudio.Harvest.
- */
-function installHarvestMock(overrides = {}) {
+function installHarvestMock(overrides) {
+    overrides = overrides || {};
     const defaults = {
         harvestAllMessages: vi.fn().mockResolvedValue({ items: [], isComplete: true }),
         showHarvestOverlay: vi.fn(),
@@ -110,7 +99,7 @@ function installHarvestMock(overrides = {}) {
         hideHarvestOverlay: vi.fn(),
     };
     window.DSstudio = window.DSstudio || {};
-    window.DSstudio.Harvest = { ...defaults, ...overrides };
+    window.DSstudio.Harvest = Object.assign({}, defaults, overrides);
     return window.DSstudio.Harvest;
 }
 
@@ -120,9 +109,30 @@ function removeHarvestMock() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  § 1  _buildMarkdownHeader
-// ─────────────────────────────────────────────────────────────────────────────
+function installHarvestPolicyMock() {
+    const REASON_CLAUSES = {
+        stalled: 'the conversation stopped loading new messages before the end was reached',
+        scroll_interrupted: 'the page was scrolled by something else during the export',
+        cancelled: 'the export was cancelled',
+        no_container: 'the conversation scroll container could not be found',
+        no_messages: 'no messages were found in the conversation',
+    };
+    window.DSstudio = window.DSstudio || {};
+    window.DSstudio.HarvestPolicy = {
+        describeIncompleteReason: vi.fn(function (reason) {
+            if (reason && REASON_CLAUSES[reason]) return REASON_CLAUSES[reason];
+            if (reason) return 'an unrecognized condition occurred (' + reason + ')';
+            return 'the export stopped early for an unspecified reason';
+        }),
+    };
+    return window.DSstudio.HarvestPolicy;
+}
+
+function removeHarvestPolicyMock() {
+    if (window.DSstudio) {
+        delete window.DSstudio.HarvestPolicy;
+    }
+}
 
 describe('_buildMarkdownHeader', () => {
     it('starts with the expected H1 title', () => {
@@ -141,10 +151,6 @@ describe('_buildMarkdownHeader', () => {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  § 2  convertMessageNodeToMarkdown
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('convertMessageNodeToMarkdown', () => {
     it('returns empty string for null node', () => {
         expect(convertMessageNodeToMarkdown(null, true, true)).toBe('');
@@ -155,8 +161,6 @@ describe('convertMessageNodeToMarkdown', () => {
         const result = convertMessageNodeToMarkdown(msg, true, true);
         expect(result).toContain('---');
     });
-
-    // ── User message branch ──────────────────────────────────────────────────
 
     describe('user message (.fbb737a4)', () => {
         it('outputs ## User header', () => {
@@ -180,13 +184,10 @@ describe('convertMessageNodeToMarkdown', () => {
             Object.defineProperty(inner, 'innerText', { value: '   ', configurable: true });
             msg.appendChild(inner);
             const result = convertMessageNodeToMarkdown(msg, true, true);
-            // Only separator, no ## User header
             expect(result).not.toContain('## User');
             expect(result).toContain('---');
         });
     });
-
-    // ── AI main-only branch ──────────────────────────────────────────────────
 
     describe('AI message (no thinking)', () => {
         it('outputs ## DeepSeek header', () => {
@@ -207,8 +208,6 @@ describe('convertMessageNodeToMarkdown', () => {
             expect(result).not.toContain('Thinking Process');
         });
     });
-
-    // ── AI message with thinking ─────────────────────────────────────────────
 
     describe('AI message with thinking block', () => {
         it('includes Thinking Process section when includeThinking=true', () => {
@@ -237,8 +236,6 @@ describe('convertMessageNodeToMarkdown', () => {
             expect(result).toContain('Thought for 5 seconds');
         });
     });
-
-    // ── includeReferences flag ───────────────────────────────────────────────
 
     describe('includeReferences flag', () => {
         function makeAiMessageWithCitation() {
@@ -271,18 +268,14 @@ describe('convertMessageNodeToMarkdown', () => {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  § 3  exportConversationToMarkdown
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('exportConversationToMarkdown', () => {
     let downloadSpy;
     let alertSpy;
+    let toastSpy;
 
     beforeEach(() => {
         document.body.innerHTML = '';
         contentScript.__resetState();
-        // Stub URL/Blob/createElement-a so downloadMarkdown does not throw in happy-dom
         vi.stubGlobal('URL', {
             createObjectURL: vi.fn().mockReturnValue('blob:fake'),
             revokeObjectURL: vi.fn(),
@@ -295,19 +288,22 @@ describe('exportConversationToMarkdown', () => {
         });
         downloadSpy.mockRestore();
 
-        // Intercept downloadMarkdown by spying on appendChild + revokeObjectURL path.
-        // Easiest approach: spy on URL.createObjectURL which is only called by downloadMarkdown.
         alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+        toastSpy = vi.fn();
+        vi.stubGlobal('showHarvestToastIncomplete', toastSpy);
+
         removeHarvestMock();
+        removeHarvestPolicyMock();
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
+        vi.unstubAllGlobals();
         removeHarvestMock();
+        removeHarvestPolicyMock();
         document.body.innerHTML = '';
     });
-
-    // ── With Harvest module present ──────────────────────────────────────────
 
     describe('with Harvest module', () => {
         it('calls harvestAllMessages', async () => {
@@ -325,13 +321,6 @@ describe('exportConversationToMarkdown', () => {
             const msg1 = makeUserMessage('first');
             const msg2 = makeAiMessage('<p>second</p>');
 
-            let capturedContent = '';
-            const origCreateObjectURL = URL.createObjectURL;
-            URL.createObjectURL = (blob) => {
-                blob.text().then(t => { capturedContent = t; });
-                return 'blob:fake';
-            };
-
             installHarvestMock({
                 harvestAllMessages: vi.fn().mockResolvedValue({
                     items: [msg1, msg2],
@@ -341,25 +330,14 @@ describe('exportConversationToMarkdown', () => {
 
             await exportConversationToMarkdown(true, true);
 
-            URL.createObjectURL = origCreateObjectURL;
-
-            // Both messages should appear; first before second
-            // We test via convertMessageNodeToMarkdown output directly for determinism
             const md1 = convertMessageNodeToMarkdown(msg1, true, true);
             const md2 = convertMessageNodeToMarkdown(msg2, true, true);
             expect(md1).toContain('first');
             expect(md2).toContain('second');
         });
 
-        it('appends warning footer when isComplete=false', async () => {
-            let capturedContent = '';
-            URL.createObjectURL = vi.fn().mockImplementation((blob) => {
-                // Capture blob text asynchronously; we verify via structure instead
-                return 'blob:fake';
-            });
-
-            // We verify the footer by spying on downloadMarkdown indirectly:
-            // inject a spy on Blob constructor to capture content
+        it('REGRESSION Defect1: footer for reason=stalled does NOT say timed out', async () => {
+            installHarvestPolicyMock();
             const OrigBlob = global.Blob;
             let blobContent = '';
             global.Blob = class MockBlob {
@@ -370,7 +348,7 @@ describe('exportConversationToMarkdown', () => {
                 harvestAllMessages: vi.fn().mockResolvedValue({
                     items: [makeUserMessage('partial msg')],
                     isComplete: false,
-                    reason: 'timeout',
+                    reason: 'stalled',
                 }),
             });
 
@@ -378,11 +356,89 @@ describe('exportConversationToMarkdown', () => {
 
             global.Blob = OrigBlob;
 
-            expect(blobContent).toContain('⚠️ Export may be incomplete');
-            expect(blobContent).toContain('partial msg');
+            expect(blobContent).not.toContain('timed out');
+            expect(blobContent).toContain(
+                '> ⚠️ Export may be incomplete (1 messages captured): the conversation stopped loading new messages before the end was reached.'
+            );
         });
 
-        it('footer is ABSENT when isComplete=true', async () => {
+        it('footer carries the correct clause for reason=scroll_interrupted', async () => {
+            installHarvestPolicyMock();
+            const OrigBlob = global.Blob;
+            let blobContent = '';
+            global.Blob = class MockBlob {
+                constructor(parts) { blobContent = parts.join(''); }
+            };
+
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({
+                    items: [makeUserMessage('partial via interruption')],
+                    isComplete: false,
+                    reason: 'scroll_interrupted',
+                }),
+            });
+
+            await exportConversationToMarkdown(true, true);
+
+            global.Blob = OrigBlob;
+
+            expect(blobContent).toContain(
+                '> ⚠️ Export may be incomplete (1 messages captured): the page was scrolled by something else during the export.'
+            );
+        });
+
+        it('footer carries the correct clause for reason=cancelled', async () => {
+            installHarvestPolicyMock();
+            const OrigBlob = global.Blob;
+            let blobContent = '';
+            global.Blob = class MockBlob {
+                constructor(parts) { blobContent = parts.join(''); }
+            };
+
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({
+                    items: [makeUserMessage('a'), makeUserMessage('b'), makeUserMessage('c')],
+                    isComplete: false,
+                    reason: 'cancelled',
+                }),
+            });
+
+            await exportConversationToMarkdown(true, true);
+
+            global.Blob = OrigBlob;
+
+            expect(blobContent).toContain(
+                '> ⚠️ Export may be incomplete (3 messages captured): the export was cancelled.'
+            );
+        });
+
+        it('footer captured-count matches the actual harvested item count (non-round number)', async () => {
+            installHarvestPolicyMock();
+            const OrigBlob = global.Blob;
+            let blobContent = '';
+            global.Blob = class MockBlob {
+                constructor(parts) { blobContent = parts.join(''); }
+            };
+
+            const items = [];
+            for (let i = 0; i < 7; i++) items.push(makeUserMessage('msg-' + i));
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({
+                    items,
+                    isComplete: false,
+                    reason: 'no_container',
+                }),
+            });
+
+            await exportConversationToMarkdown(true, true);
+
+            global.Blob = OrigBlob;
+
+            expect(blobContent).toContain('(7 messages captured)');
+        });
+
+        it('footer is ABSENT and toast is NOT called when isComplete=true', async () => {
+            installHarvestPolicyMock();
             const OrigBlob = global.Blob;
             let blobContent = '';
             global.Blob = class MockBlob {
@@ -402,9 +458,67 @@ describe('exportConversationToMarkdown', () => {
 
             expect(blobContent).not.toContain('⚠️ Export may be incomplete');
             expect(blobContent).toContain('full msg');
+            expect(toastSpy).not.toHaveBeenCalled();
         });
 
-        it('appends warning footer when isComplete=false with reason="scroll_interrupted"', async () => {
+        it('REGRESSION Defect2: calls showHarvestToastIncomplete exactly once with count and clause when isComplete=false', async () => {
+            installHarvestPolicyMock();
+            const OrigBlob = global.Blob;
+            global.Blob = class MockBlob {
+                constructor() {}
+            };
+
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({
+                    items: [makeUserMessage('a'), makeUserMessage('b')],
+                    isComplete: false,
+                    reason: 'stalled',
+                }),
+            });
+
+            await exportConversationToMarkdown(true, true);
+
+            global.Blob = OrigBlob;
+
+            expect(toastSpy).toHaveBeenCalledOnce();
+            expect(toastSpy).toHaveBeenCalledWith(
+                2,
+                'the conversation stopped loading new messages before the end was reached'
+            );
+        });
+
+        it('still downloads (does not suppress) the partial file when isComplete=false', async () => {
+            installHarvestPolicyMock();
+            const createObjectURL = vi.fn().mockReturnValue('blob:fake');
+            vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+
+            const OrigBlob = global.Blob;
+            global.Blob = class MockBlob {
+                constructor() {}
+            };
+
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({
+                    items: [makeUserMessage('partial')],
+                    isComplete: false,
+                    reason: 'stalled',
+                }),
+            });
+
+            await exportConversationToMarkdown(true, true);
+
+            global.Blob = OrigBlob;
+
+            expect(createObjectURL).toHaveBeenCalledOnce();
+            expect(alertSpy).not.toHaveBeenCalled();
+        });
+
+        it('does not throw when HarvestPolicy is unavailable, and still downloads with a footer', async () => {
+            removeHarvestPolicyMock();
+
+            const createObjectURL = vi.fn().mockReturnValue('blob:fake');
+            vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+
             const OrigBlob = global.Blob;
             let blobContent = '';
             global.Blob = class MockBlob {
@@ -413,21 +527,22 @@ describe('exportConversationToMarkdown', () => {
 
             installHarvestMock({
                 harvestAllMessages: vi.fn().mockResolvedValue({
-                    items: [makeUserMessage('partial via interruption')],
+                    items: [makeUserMessage('partial')],
                     isComplete: false,
-                    reason: 'scroll_interrupted',
+                    reason: 'stalled',
                 }),
             });
 
-            await exportConversationToMarkdown(true, true);
+            await expect(exportConversationToMarkdown(true, true)).resolves.not.toThrow();
 
             global.Blob = OrigBlob;
 
             expect(blobContent).toContain('⚠️ Export may be incomplete');
-            expect(blobContent).toContain('partial via interruption');
+            expect(createObjectURL).toHaveBeenCalledOnce();
         });
 
         it('alerts and does NOT call Blob when harvest returns empty items', async () => {
+            installHarvestPolicyMock();
             const OrigBlob = global.Blob;
             let blobCalled = false;
             global.Blob = class MockBlob {
@@ -451,8 +566,6 @@ describe('exportConversationToMarkdown', () => {
         });
     });
 
-    // ── Fallback path (no Harvest) ───────────────────────────────────────────
-
     describe('fallback path (no Harvest module)', () => {
         beforeEach(() => {
             removeHarvestMock();
@@ -464,7 +577,6 @@ describe('exportConversationToMarkdown', () => {
         });
 
         it('calls Blob with visible messages content when messages exist in DOM', async () => {
-            // Populate DOM with a visible message
             const visibleItems = document.createElement('div');
             visibleItems.className = 'ds-virtual-list-visible-items';
             const msg = makeUserMessage('fallback message');
