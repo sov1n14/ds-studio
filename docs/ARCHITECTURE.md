@@ -44,7 +44,8 @@ ds-studio/
 │   ├── censor-reply-restore.css ─  Restored-content display styles
 │   ├── harvest.js           ─  Entry: scroll-and-harvest full-conversation Markdown export
 │   ├── harvest.toast.js     ─  Export progress / cancel / incomplete-warning toast UI (v4.11.9 split)
-│   ├── harvest.policy.js    ─  Pure loop-termination decision logic, DOM-free (v4.19.0 split)
+│   ├── harvest.policy.js    ─  Pure loop-termination & scroll-step decisions, DOM-free (v4.19.0 split)
+│   ├── harvest.dom.js       ─  DOM probing: container lookup, message harvest, stability observer, mount measurement (v4.19.1 split)
 │   ├── go-top.js            ─  Entry: "回到頂部" button lifecycle & observers (v4.0.0 split)
 │   ├── go-top.locate.js     ─  DOM query / locator / visibility bundle
 │   ├── go-top.render.js     ─  Button render / inject / mode-transition bundle

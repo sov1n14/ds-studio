@@ -32,6 +32,12 @@
 >
 > `harvest.policy.js` 必須維持零 DOM、零 `chrome.*`、零計時器、零時鐘讀取。為了方便而在裡面讀一次 `Date.now()`，就是把這段邏輯推回測不到的狀態。命名空間採 `window.DSstudio.HarvestPolicy`（同 `window.DSstudio.Harvest` 慣例）；`manifest.json` 中排在 `harvest.js` 之前。
 >
+> **v4.19.1 拆分**：`harvest.js` → `harvest.js`（入口，擷取編排，446 → 303 行）+ `harvest.dom.js`（DOM 探測與量測，224 行）。移出的是「讀取或觀察頁面」這個單一關注點：`_findHarvestScrollContainer`、`_harvestVisibleMessages`、`_waitForDomStability`、`_isAtBottom`、新增的 `_measureMountedBottomOffset`，以及只被它們使用的選擇器與穩定性常數。迴圈編排、policy 接線、toast 呼叫、`PreventAutoScroll` 生命週期與 `harvestAllMessages()` 本身留在入口檔。
+>
+> 拆分的觸發點是自適應步幅要加量測程式，而 `harvest.js` 當時已 446 行，加下去必越過 §8 的 450 行門檻，故先拆再加。採 v4.11.9 的**純函式方法包**慣例（同 `harvest.toast.js`）：新檔整體包在 IIFE 內、以 `root.__DS_Harvest_dom` 掛載，因此**零頂層識別字**，不可能與其他 content script 撞名；入口檔以 `globalThis.__DS_Harvest_dom || require('./harvest.dom.js')` 取得，兼容瀏覽器與 Node/vitest。
+>
+> **關鍵約束：入口檔以原名重新導出每一個移出的函式**，`module.exports` 的鍵一個不少。`test/unit/harvest.spec.js` 的 58 個測試直接從 `harvest.js` 的模組介面解構呼叫這些內部函式，重新導出讓那 58 個測試一行都不用改 —— 拆檔的風險因此降到近乎零，這也是選擇這個慣例而非直接改呼叫端的原因。
+>
 > 注意兩層對「`HarvestPolicy` 缺席」的處理**刻意不一致**：`harvest.js` 直接 `throw`（沒有決策邏輯就無法運作，且它是同一份 manifest 載入的硬依賴，缺席即代表 manifest 壞了，應該大聲失敗）；`content-script.export.js` 則退回通用說明並照樣下載（它仍能把使用者的資料交出去）。**不要為了一致性把這兩者統一。**
 
 > **v4.11.15 拆分**：`content-script.js` 原為 491 行，超出 `coding-guidelines` §8 的 450 行門檻，同時裝著「聊天狀態」與「提示詞注入」兩個關注點。抽出後者至 `prompt-injector.controller.js`（179 行），入口檔降至 360 行。

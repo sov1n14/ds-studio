@@ -90,7 +90,7 @@ Possible reasons: `'complete'`, `'stalled'`, `'cancelled'`, `'scroll_interrupted
 3. Shows a non-blocking floating progress toast (`pointer-events: none`, styled by `go-top.css`).
 
 **Scroll loop:**
-- Incrementally scrolls the conversation container using `scrollBy(0, viewportHeight * 0.9)`.
+- Incrementally scrolls the conversation container. Since v4.19.1 the step distance is **measured, not assumed**: each iteration measures the currently mounted window and asks `HarvestPolicy.computeScrollStep()` how far it may safely scroll. See the Adaptive Scroll Step section below.
 - After each scroll step, a `MutationObserver` monitors the container for DOM changes (lazy-loaded messages). The step is considered "settled" after `HARVEST_STABLE_TICKS` (3) consecutive checks at `HARVEST_STABLE_INTERVAL` (100ms) intervals without mutations.
 - Layout metrics (`scrollTop`, `clientHeight`, `scrollHeight`) are read once per iteration into locals and reused within it, rather than re-read at each decision point — repeated reads force layout reflow. They are deliberately not cached across iterations, since a scroll legitimately changes them.
 - The two `_waitForDomStability()` call sites sit on mutually exclusive branches (at-bottom-confirming vs. scrolling), so a single iteration awaits exactly one of them. This was verified rather than assumed — it looks like a doubled per-step cost and is not one. Do not "consolidate" them.
@@ -134,21 +134,30 @@ Defined in `content/harvest.js`:
 
 | Constant | Value | Description |
 |-|-|-|
-| `HARVEST_SCROLL_STEP_FACTOR` | 0.9 | Scroll step as fraction of viewport height. Calibrated against the live page — do not tune blind |
 | `HARVEST_STEP_TIMEOUT` | 8000 ms | Max wait per scroll step for DOM stability |
-| `HARVEST_STABLE_TICKS` | 3 | Consecutive stable checks before proceeding. Do not lower — see the History note above |
-| `HARVEST_STABLE_INTERVAL` | 100 ms | Interval between stability checks (was 150 ms before v4.19.0) |
-| `HARVEST_BOTTOM_TOLERANCE` | 4 px | Tolerance for bottom detection |
 | `HARVEST_BOTTOM_CONFIRM_COUNT` | 3 | Consecutive bottom confirmations required |
 | `HARVEST_SCROLL_JUMP_THRESHOLD_FACTOR` | 1.5 | Safety net: max deviation before abort |
 
+Defined in `content/harvest.dom.js`:
+
+| Constant | Value | Description |
+|-|-|-|
+| `HARVEST_STABLE_TICKS` | 3 | Consecutive stable checks before proceeding. Do not lower — see the History note above |
+| `HARVEST_STABLE_INTERVAL` | 100 ms | Interval between stability checks (was 150 ms before v4.19.0) |
+| `HARVEST_BOTTOM_TOLERANCE` | 4 px | Tolerance for bottom detection |
+
 `HARVEST_TOTAL_TIMEOUT` (120000 ms) was **removed** in v4.19.0. Do not reintroduce a total-duration cap in any form — its absence is the bug fix.
+
+`HARVEST_SCROLL_STEP_FACTOR` (0.9) was **removed** from `harvest.js` in v4.19.1. The step is now derived from a live measurement, and the fallback ratio lives in `harvest.policy.js` as `SCROLL_STEP_FALLBACK_FACTOR`. Keeping a second copy here would create two sources of truth for one value.
 
 Defined in `content/harvest.policy.js`:
 
 | Constant | Value | Description |
 |-|-|-|
 | `HARVEST_STALL_TIMEOUT_MS` | 20000 ms | Continuous no-progress time before the run stops as `'stalled'`. Boundary is inclusive |
+| `SCROLL_STEP_SAFETY_FRACTION` | 0.7 | Fraction of the measured safe limit actually used as the step |
+| `SCROLL_STEP_FALLBACK_FACTOR` | 0.9 | Fraction of viewport height used when the measurement is unavailable |
+| `SCROLL_STEP_MIN_FACTOR` | 0.25 | Floor for the step, as a fraction of viewport height |
 
 Defined in `content/harvest.toast.js`:
 
@@ -205,3 +214,51 @@ Pure. Maps a stop reason to the English clause used in both the Markdown footer 
 | `'no_messages'` | no messages were found in the conversation |
 
 An unrecognized non-empty reason yields a fallback clause containing the raw reason verbatim, so an unmapped code stays diagnosable instead of vanishing. `null`, `undefined`, and `''` yield a generic clause that never leaks the literal words "null" or "undefined" into user-facing text.
+
+### `computeScrollStep(observation)`
+
+Pure. Returns the integer pixel distance to scroll for the next step, derived from a live measurement instead of a fixed fraction of the viewport.
+
+`observation` fields: `mountedBottomOffset` (px from the scroll container's visible top down to the bottom edge of the lowest mounted item node, or a non-usable value when the measurement failed) and `viewportHeight` (`window.innerHeight`).
+
+| Case | Result |
+|-|-|
+| `viewportHeight` not a finite number > 0 | throws — the caller always has `window.innerHeight`, so this means the calling code is broken |
+| `mountedBottomOffset` non-finite or `<= 0` | `round(viewportHeight × 0.9)` — the pre-v4.19.1 fixed behavior |
+| Otherwise | `round(mountedBottomOffset × 0.7)`, floored at `round(viewportHeight × 0.25)` |
+
+No upper clamp: the value is derived from the measured safe limit, so a large measurement legitimately produces a large step.
+
+The asymmetry between the first two rows is deliberate. An invalid `viewportHeight` throws because it can only mean broken calling code; an unusable `mountedBottomOffset` degrades quietly because it legitimately happens when DeepSeek changes its markup and the selector matches nothing. Do not harmonize them.
+
+The 0.25 floor is a deliberately marked corner: below it the measurement is far more likely faulty than real — 18 mounted nodes spanning under a quarter viewport would mean roughly 11 px per message — and bounded progress beats crawling through tens of thousands of pixels. If a real page ever legitimately produces spans that small, this floor is the thing to revisit.
+
+## Adaptive Scroll Step
+
+**Why the step is measured rather than assumed (v4.19.1).**
+
+Live measurement of two real conversations, at different scroll positions, established the facts this design rests on:
+
+| Quantity | Sample 1 | Sample 2 |
+|-|-|-|
+| Viewport height | 988 px | 988 px |
+| Container `clientHeight` | 928 px | 928 px |
+| Mounted item nodes | 18 | 18 |
+| Nodes intersecting the viewport | 5 | 6 |
+| Mounted extent above the visible top | 0 px | 0 px |
+| Mounted extent below the visible bottom | 4244 px | 3406 px |
+| Mounted span from visible top | 5172 px (5.2 viewports) | 4334 px (4.4 viewports) |
+
+Three conclusions follow:
+
+1. **The mount window is item-count-based, not height-based.** Both samples mounted exactly 18 nodes despite different conversations, different scroll positions, and different message lengths. A fixed pixel step is therefore a bet on message length: through a stretch of short messages, 18 nodes span far less height, and a step tuned for long messages would scroll past content that was never mounted. Because the scan is one-directional and never returns, that content is lost permanently and silently.
+2. **Coverage comes from the downward overscan, not from upward overlap.** The mounted window does not extend above the visible top at all, so the old 0.9 step was never protected by its 10% "overlap" in any meaningful sense. What actually guaranteed coverage was that each capture reaches 4-5 viewports *below* the current position, so consecutive captures overlap enormously.
+3. **The safe limit is therefore measurable.** Everything captured so far extends down to the bottom of the lowest mounted node. If the next step lands the new viewport top at or above that point, the new mount window necessarily overlaps the previous one and nothing can be skipped. That distance is exactly `mountedBottomOffset`.
+
+So `harvest.dom.js` measures it each iteration and `HarvestPolicy.computeScrollStep()` converts it into a step at 70% of the limit. Where messages are long the step grows to 3-4 viewports; where they are short it shrinks automatically. The step factor stops being an assertion about the page and becomes a consequence of it.
+
+Measured against the two samples, the step goes from 889 px (the old fixed 0.9) to 3620 px and 3034 px respectively — roughly 3.4-4.1× fewer scroll steps. Wall-clock gain is smaller than the step-count gain, because a larger step mounts more new content per step and so lengthens the settle.
+
+**Rejected alternative — key-gap detection.** Detecting holes in the captured `data-virtual-list-item-key` sequence was considered as a completeness proof and abandoned after measurement: sample 1 returned `distinctDiffs: [1, 3]`, i.e. a naturally occurring hole, while sample 2 was contiguous. Since gaps occur without anything being missed, a gap cannot prove a miss. Do not revive this idea without new evidence that the numbering is dense.
+
+**Residual risk, stated plainly.** Only two samples were taken, both from the same browser and window size. For the adaptive step to skip content, the measurement would have to overstate the mounted window, which the 0.7 fraction is there to absorb. The measurement runs after the previous step's settle, so it reflects the mount window at rest — which is the same state the capture sees.

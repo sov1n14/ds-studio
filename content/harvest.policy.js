@@ -13,6 +13,17 @@
 /** 無進度容許的最長時間（ms），超過即判定為卡住（stalled） */
 const HARVEST_STALL_TIMEOUT_MS = 20000;
 
+/** 捲動步進的安全係數：只取「已掛載內容底部」量測值的這個比例，保留緩衝避免掛載視窗上緣越過已擷取範圍 */
+const SCROLL_STEP_SAFETY_FRACTION = 0.7;
+
+/** 量測值不可用時的備援係數：延用舊版固定步進行為（viewportHeight 的比例） */
+const SCROLL_STEP_FALLBACK_FACTOR = 0.9;
+
+/** 步進下限係數（viewportHeight 的比例）。低於此值代表量測值更可能是量測失準而非真實現象
+ *（18 個節點若只跨越不到四分之一視窗高度，代表每則訊息僅約 11px，不合理），
+ * 與其讓捲動在極小步進下爬過數萬像素，不如接受一個有下限、可繼續前進的步距。 */
+const SCROLL_STEP_MIN_FACTOR = 0.25;
+
 // ─────────────────────────────────────────────────────────────────
 //  狀態初始化
 // ─────────────────────────────────────────────────────────────────
@@ -84,6 +95,41 @@ function decideNextStep(observation, state) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  捲動步進計算
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * 純函式：依「已掛載內容底部量測值」推導下一次捲動的步進距離（CSS px）。
+ * 不存取 DOM、不讀取時鐘、不修改傳入的 observation。
+ * @param {{mountedBottomOffset:number, viewportHeight:number}} observation
+ * @returns {number} 大於 0 的整數步進距離
+ */
+function computeScrollStep(observation) {
+    if (!observation) throw new Error('observation is required');
+
+    const isViewportHeightValid =
+        typeof observation.viewportHeight === 'number' &&
+        Number.isFinite(observation.viewportHeight) &&
+        observation.viewportHeight > 0;
+    if (!isViewportHeightValid) throw new Error('observation.viewportHeight must be a finite number greater than 0');
+
+    const isMountedBottomOffsetUsable =
+        typeof observation.mountedBottomOffset === 'number' &&
+        Number.isFinite(observation.mountedBottomOffset) &&
+        observation.mountedBottomOffset > 0;
+
+    if (!isMountedBottomOffsetUsable) {
+        // 量測值不可用（選擇器抓不到節點等頁面變動）屬合理退化狀況，非程式錯誤 —— 退回舊版固定步進
+        return Math.round(observation.viewportHeight * SCROLL_STEP_FALLBACK_FACTOR);
+    }
+
+    const minStep = Math.round(observation.viewportHeight * SCROLL_STEP_MIN_FACTOR);
+    const measuredStep = Math.round(observation.mountedBottomOffset * SCROLL_STEP_SAFETY_FRACTION);
+
+    return Math.max(measuredStep, minStep);
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  停止原因文案
 // ─────────────────────────────────────────────────────────────────
 
@@ -124,6 +170,7 @@ if (typeof module !== 'undefined' && module.exports) {
         createInitialState,
         decideNextStep,
         describeIncompleteReason,
+        computeScrollStep,
         HARVEST_STALL_TIMEOUT_MS,
     };
 }
@@ -135,6 +182,7 @@ if (typeof window !== 'undefined') {
         createInitialState,
         decideNextStep,
         describeIncompleteReason,
+        computeScrollStep,
         HARVEST_STALL_TIMEOUT_MS,
     };
 }

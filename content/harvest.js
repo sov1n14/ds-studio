@@ -5,14 +5,16 @@
  * 架構決策：
  *   - 此模組純屬 content 層，僅做 DOM 操作，不呼叫 chrome.storage。
  *   - 所有公開函式透過 window.DSstudio.Harvest 暴露，供同層其他模組呼叫。
- *   - 四大單責模組：(a) 擷取/捲動（本檔）、(b) 進度遮罩 UI（harvest.toast.js）、
- *     (c) 是否繼續/停止的純決策邏輯（harvest.policy.js）、
- *     (d) (由外部呼叫者) Markdown 組裝。
+ *   - 五大單責模組：(a) 迴圈編排/捲動控制（本檔）、(b) DOM 探測與量測（harvest.dom.js）、
+ *     (c) 進度遮罩 UI（harvest.toast.js）、
+ *     (d) 是否繼續/停止與捲動步進的純決策邏輯（harvest.policy.js）、
+ *     (e) (由外部呼叫者) Markdown 組裝。
  *
  * 載入順序（manifest.json content_scripts）：
  *   1. content/harvest.toast.js  → 掛載 globalThis.__DS_Harvest_toast
- *   2. content/harvest.policy.js → 掛載 window.DSstudio.HarvestPolicy
- *   3. content/harvest.js        （本檔，合入以上 bundle）
+ *   2. content/harvest.dom.js    → 掛載 globalThis.__DS_Harvest_dom
+ *   3. content/harvest.policy.js → 掛載 window.DSstudio.HarvestPolicy
+ *   4. content/harvest.js        （本檔，合入以上 bundle）
  */
 
 // 合併 Toast Bundle（瀏覽器：由 harvest.toast.js 在前載入設定 globalThis；Node.js 測試：直接 require）
@@ -22,9 +24,16 @@ const showHarvestToastScrolling = __DSHarvestToast.showHarvestToastScrolling;
 const showHarvestToastCapturing = __DSHarvestToast.showHarvestToastCapturing;
 const hideHarvestToast = __DSHarvestToast.hideHarvestToast;
 
-// 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-const __DSSelectorsHarvest = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
-    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+// 合併 DOM 探測/量測 Bundle（瀏覽器：由 harvest.dom.js 在前載入設定 globalThis；Node.js 測試：直接 require）
+const __DSHarvestDom = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_Harvest_dom ||
+    (typeof require !== 'undefined' ? require('./harvest.dom.js') : {});
+const VISIBLE_ITEMS_SELECTOR = __DSHarvestDom.VISIBLE_ITEMS_SELECTOR;
+const MESSAGE_SELECTOR = __DSHarvestDom.MESSAGE_SELECTOR;
+const _findHarvestScrollContainer = __DSHarvestDom._findHarvestScrollContainer;
+const _harvestVisibleMessages = __DSHarvestDom._harvestVisibleMessages;
+const _waitForDomStability = __DSHarvestDom._waitForDomStability;
+const _isAtBottom = __DSHarvestDom._isAtBottom;
+const _measureMountedBottomOffset = __DSHarvestDom._measureMountedBottomOffset;
 
 // 合併決策模組（瀏覽器：由 content/harvest.policy.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
 const __DSHarvestPolicy = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.HarvestPolicy ||
@@ -34,17 +43,8 @@ const __DSHarvestPolicy = (typeof globalThis !== 'undefined' ? globalThis : wind
 //  常數
 // ─────────────────────────────────────────────────────────────────
 
-/** 每步捲動距離係數（相對於 viewport 高度） */
-const HARVEST_SCROLL_STEP_FACTOR = 0.9;
-
 /** 每步等待 DOM 穩定的最長時間（ms） */
 const HARVEST_STEP_TIMEOUT = 8000;
-
-/** DOM 穩定判定：連續幾次未偵測到 mutation 即視為穩定 */
-const HARVEST_STABLE_TICKS = 3;
-
-/** DOM 穩定判定：穩定 tick 間隔（ms） */
-const HARVEST_STABLE_INTERVAL = 100;
 
 /** 判定抵達底部：scrollTop + clientHeight >= scrollHeight - 此容差（px） */
 const HARVEST_BOTTOM_TOLERANCE = 4;
@@ -60,147 +60,8 @@ const HARVEST_BOTTOM_CONFIRM_COUNT = 3;
 const HARVEST_SCROLL_JUMP_THRESHOLD_FACTOR = 1.5;
 
 // ─────────────────────────────────────────────────────────────────
-//  選擇器
+//  (a) 迴圈編排 / 捲動控制
 // ─────────────────────────────────────────────────────────────────
-
-/** 虛擬列表可見項目容器 */
-const VISIBLE_ITEMS_SELECTOR = '.ds-virtual-list-visible-items';
-
-/** 訊息元素 */
-const MESSAGE_SELECTOR = '.ds-message';
-
-/** 虛擬列表項目包裝（攜帶 data-virtual-list-item-key） */
-const ITEM_KEY_ATTR = 'data-virtual-list-item-key';
-
-/** 虛擬列表外容器（用於定位滾動容器；單一來源定義於 content/ds-selectors.js） */
-const VIRTUAL_LIST_SELECTOR = __DSSelectorsHarvest.VIRTUAL_LIST_SELECTOR;
-const VIRTUAL_LIST_FALLBACK = __DSSelectorsHarvest.VIRTUAL_LIST_FALLBACK;
-
-// ─────────────────────────────────────────────────────────────────
-//  (a) 擷取/捲動邏輯
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * 定位對話的滾動容器。
- * 策略：從虛擬列表向上走，找到 .ds-scroll-area 且具備可滾動高度的元素。
- * 若失敗回退到 document.scrollingElement。
- * @returns {Element} 滾動容器
- */
-function _findHarvestScrollContainer() {
-    // 策略 1：從虛擬列表容器向上找 .ds-scroll-area
-    const virtualList =
-        document.querySelector(VIRTUAL_LIST_SELECTOR) ||
-        document.querySelector(VIRTUAL_LIST_FALLBACK);
-
-    if (virtualList) {
-        let el = virtualList.parentElement;
-        while (el && el !== document.body) {
-            if (
-                el.classList.contains(__DSSelectorsHarvest.SCROLL_AREA_CLASS) &&
-                el.scrollHeight > el.clientHeight
-            ) {
-                return el;
-            }
-            el = el.parentElement;
-        }
-    }
-
-    // 策略 2：從可見訊息向上走，找第一個 overflow:auto/scroll 的元素
-    const firstMsg = document.querySelector(
-        `${VISIBLE_ITEMS_SELECTOR} ${MESSAGE_SELECTOR}`
-    );
-    if (firstMsg) {
-        let el = firstMsg.parentElement;
-        while (el && el !== document.body) {
-            const style = getComputedStyle(el);
-            const overflowY = style.overflowY;
-            if (
-                (overflowY === 'auto' || overflowY === 'scroll') &&
-                el.scrollHeight > el.clientHeight
-            ) {
-                return el;
-            }
-            el = el.parentElement;
-        }
-    }
-
-    // 最後回退
-    return document.scrollingElement || document.documentElement;
-}
-
-/**
- * 取得目前可見的訊息，回傳 { key, clonedNode } 陣列。
- * 每個訊息節點被克隆以防止後續 React 虛擬化銷毀。
- * @returns {Array<{key: number, clonedNode: Element}>}
- */
-function _harvestVisibleMessages() {
-    // 找到虛擬列表可見項目容器（可能有多個，取所有）
-    const visibleContainers = document.querySelectorAll(VISIBLE_ITEMS_SELECTOR);
-
-    /** @type {Array<{key: number, clonedNode: Element}>} */
-    const results = [];
-
-    visibleContainers.forEach(container => {
-        const messages = container.querySelectorAll(MESSAGE_SELECTOR);
-        messages.forEach(msg => {
-            // 找到攜帶 data-virtual-list-item-key 的最近祖先（或自身）
-            let keyEl = msg.closest(`[${ITEM_KEY_ATTR}]`);
-            if (!keyEl) return;
-
-            const rawKey = keyEl.getAttribute(ITEM_KEY_ATTR);
-            const key = parseInt(rawKey, 10);
-            // 跳過非數字 key
-            if (isNaN(key)) return;
-
-            results.push({ key, clonedNode: msg.cloneNode(true) });
-        });
-    });
-
-    return results;
-}
-
-/**
- * 等待滾動容器內 DOM 穩定（連續 HARVEST_STABLE_TICKS 個 interval 無 mutation）。
- * 同時設有逾時保護，逾時後仍 resolve（不拋出），讓主流程繼續。
- * @param {Element} container - 要觀察的滾動容器
- * @param {number} stepTimeout - 最大等待時間（ms）
- * @returns {Promise<void>}
- */
-function _waitForDomStability(container, stepTimeout) {
-    return new Promise((resolve) => {
-        let stableTicks = 0;
-        let isMutated = false;
-
-        const observer = new MutationObserver(() => {
-            // 偵測到 mutation，重設穩定計數
-            isMutated = true;
-            stableTicks = 0;
-        });
-
-        observer.observe(container, { childList: true, subtree: true });
-
-        const timeoutId = setTimeout(() => {
-            // 超時仍繼續
-            observer.disconnect();
-            clearInterval(tickId);
-            resolve();
-        }, stepTimeout);
-
-        const tickId = setInterval(() => {
-            if (!isMutated) {
-                stableTicks++;
-            }
-            isMutated = false;
-
-            if (stableTicks >= HARVEST_STABLE_TICKS) {
-                clearTimeout(timeoutId);
-                clearInterval(tickId);
-                observer.disconnect();
-                resolve();
-            }
-        }, HARVEST_STABLE_INTERVAL);
-    });
-}
 
 /**
  * 捲動到頂部並等待 DOM 穩定。
@@ -220,18 +81,6 @@ async function _scrollToTopAndSettle(container) {
     container.scrollTop = 0;
     await _waitForDomStability(container, 3000);
     return { success: true };
-}
-
-/**
- * 判斷滾動容器是否已抵達底部。
- * @param {Element} container
- * @returns {boolean}
- */
-function _isAtBottom(container) {
-    return (
-        container.scrollTop + container.clientHeight >=
-        container.scrollHeight - HARVEST_BOTTOM_TOLERANCE
-    );
 }
 
 /**
@@ -383,8 +232,16 @@ async function harvestAllMessages() {
                 continue;
             }
 
+            // 量測目前掛載內容底部量測值，交由 HarvestPolicy 換算為本步捲動距離；
+            // 量測不可用時回傳 null，policy 內部會退回舊版固定步進。
+            const mountedBottomOffset = _measureMountedBottomOffset(container);
+            const scrollStep = __DSHarvestPolicy.computeScrollStep({
+                mountedBottomOffset,
+                viewportHeight: window.innerHeight,
+            });
+
             // 向下捲一步，並更新預期位置
-            container.scrollBy(0, window.innerHeight * HARVEST_SCROLL_STEP_FACTOR);
+            container.scrollBy(0, scrollStep);
             _expectedScrollTop = container.scrollTop;
 
             // 等待 DOM 穩定（lazy-load 注入新節點）

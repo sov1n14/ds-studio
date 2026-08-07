@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 
-const { createInitialState, decideNextStep, describeIncompleteReason } = window.DSstudio.HarvestPolicy;
+const { createInitialState, decideNextStep, describeIncompleteReason, computeScrollStep } = window.DSstudio.HarvestPolicy;
 
 const HARVEST_STALL_TIMEOUT_MS = 20000;
 
@@ -309,5 +309,106 @@ describe('describeIncompleteReason', () => {
         const result = describeIncompleteReason('complete');
         expect(typeof result).toBe('string');
         expect(result.length).toBeGreaterThan(0);
+    });
+});
+
+describe('HarvestPolicy surface - guard against accidental replacement of the exported object', () => {
+    it('exposes createInitialState, decideNextStep, describeIncompleteReason, and computeScrollStep as functions', () => {
+        expect(typeof window.DSstudio.HarvestPolicy.createInitialState).toBe('function');
+        expect(typeof window.DSstudio.HarvestPolicy.decideNextStep).toBe('function');
+        expect(typeof window.DSstudio.HarvestPolicy.describeIncompleteReason).toBe('function');
+        expect(typeof window.DSstudio.HarvestPolicy.computeScrollStep).toBe('function');
+    });
+});
+
+describe('computeScrollStep - viewportHeight guard (throws: programmer error)', () => {
+    it('throws an Error naming viewportHeight when viewportHeight is 0', () => {
+        expect(() => computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: 0 })).toThrow(/viewportHeight/);
+    });
+
+    it('throws an Error naming viewportHeight when viewportHeight is negative', () => {
+        expect(() => computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: -988 })).toThrow(/viewportHeight/);
+    });
+
+    it('throws an Error naming viewportHeight when viewportHeight is NaN', () => {
+        expect(() => computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: NaN })).toThrow(/viewportHeight/);
+    });
+
+    it('throws an Error naming viewportHeight when viewportHeight is undefined', () => {
+        expect(() => computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: undefined })).toThrow(/viewportHeight/);
+    });
+});
+
+describe('computeScrollStep - mountedBottomOffset unavailable (degrades to the old fixed 0.9 behavior, does not throw)', () => {
+    it('mountedBottomOffset null falls back to Math.round(viewportHeight * 0.9)', () => {
+        expect(computeScrollStep({ mountedBottomOffset: null, viewportHeight: 988 })).toBe(889);
+    });
+
+    it('mountedBottomOffset undefined falls back to Math.round(viewportHeight * 0.9)', () => {
+        expect(computeScrollStep({ mountedBottomOffset: undefined, viewportHeight: 988 })).toBe(889);
+    });
+
+    it('mountedBottomOffset NaN falls back to Math.round(viewportHeight * 0.9)', () => {
+        expect(computeScrollStep({ mountedBottomOffset: NaN, viewportHeight: 988 })).toBe(889);
+    });
+
+    it('mountedBottomOffset Infinity falls back to Math.round(viewportHeight * 0.9)', () => {
+        expect(computeScrollStep({ mountedBottomOffset: Infinity, viewportHeight: 988 })).toBe(889);
+    });
+
+    it('mountedBottomOffset 0 falls back to Math.round(viewportHeight * 0.9)', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 0, viewportHeight: 988 })).toBe(889);
+    });
+
+    it('mountedBottomOffset negative falls back to Math.round(viewportHeight * 0.9)', () => {
+        expect(computeScrollStep({ mountedBottomOffset: -100, viewportHeight: 988 })).toBe(889);
+    });
+});
+
+describe('computeScrollStep - normal case, real live-measured samples', () => {
+    it('live sample 1 (overscanBelow 4244px, mountedBottomOffset 928+4244=5172) returns Math.round(5172 * 0.7) = 3620', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: 988 })).toBe(3620);
+    });
+
+    it('live sample 2 (overscanBelow 3406px, mountedBottomOffset 928+3406=4334) returns Math.round(4334 * 0.7) = 3034', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 4334, viewportHeight: 988 })).toBe(3034);
+    });
+});
+
+describe('computeScrollStep - minimum-step floor (0.25 of viewportHeight)', () => {
+    it('a very small mountedBottomOffset (100) is clamped up to the floor Math.round(988 * 0.25) = 247', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 100, viewportHeight: 988 })).toBe(247);
+    });
+
+    it('a mountedBottomOffset just above the floor threshold (400) is NOT clamped: Math.round(400 * 0.7) = 280', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 400, viewportHeight: 988 })).toBe(280);
+    });
+});
+
+describe('computeScrollStep - no upper clamp', () => {
+    it('a very large mountedBottomOffset (100000) produces a correspondingly large step with no ceiling: Math.round(100000 * 0.7) = 70000', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 100000, viewportHeight: 988 })).toBe(70000);
+    });
+});
+
+describe('computeScrollStep - return type contract', () => {
+    it('always returns an integer, for both the normal-case and fallback-case branches', () => {
+        expect(Number.isInteger(computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: 988 }))).toBe(true);
+        expect(Number.isInteger(computeScrollStep({ mountedBottomOffset: null, viewportHeight: 988 }))).toBe(true);
+    });
+
+    it('always returns a value greater than 0', () => {
+        expect(computeScrollStep({ mountedBottomOffset: 5172, viewportHeight: 988 })).toBeGreaterThan(0);
+        expect(computeScrollStep({ mountedBottomOffset: null, viewportHeight: 988 })).toBeGreaterThan(0);
+        expect(computeScrollStep({ mountedBottomOffset: 100, viewportHeight: 988 })).toBeGreaterThan(0);
+    });
+});
+
+describe('computeScrollStep - purity', () => {
+    it('does not throw when called with a deep-frozen observation, and does not mutate it', () => {
+        const observation = deepFreeze({ mountedBottomOffset: 5172, viewportHeight: 988 });
+        const snapshot = JSON.parse(JSON.stringify(observation));
+        expect(() => computeScrollStep(observation)).not.toThrow();
+        expect(observation).toEqual(snapshot);
     });
 });
