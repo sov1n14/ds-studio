@@ -1,1 +1,2 @@
 - [Bash tool quoting quirk](bash-tool-quoting.md) — heredoc bodies with backticks break the Bash tool wrapper; use sed + plain heredoc appends
+- [ds-studio vitest harness](ds-studio-harness.md) — no root package.json, run tests from test/, HarvestPolicy global surface pattern

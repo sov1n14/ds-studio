@@ -137,10 +137,14 @@ You can export the conversation history from the current DeepSeek chat room as a
 
 1. On the `chat.deepseek.com` page, click the extension icon.
 2. Press the **Export current page conversation as Markdown** button.
-3. The system automatically scrolls to the top of the conversation, then progressively captures the full conversation content from top to bottom (including messages not yet visible on screen in long conversations). The current progress is displayed on screen.
+3. The system automatically scrolls to the top of the conversation, then progressively captures the full conversation content from top to bottom (including messages not yet visible on screen in long conversations). The current progress and the number of messages captured so far are displayed on screen.
 4. During capture, you can still type and send messages normally. However, do not manually scroll the conversation history, as this may interrupt the capture.
-5. Once capture is complete, the system automatically downloads the `.md` file and restores your original scroll position.
-6. If the capture times out or is interrupted by manual scrolling, the system will still export the content collected so far, appending a "Content may be incomplete" warning at the end of the file.
+5. The progress toast carries a **Cancel** button, so you can stop a capture at any time (v4.19.0). Cancelling still exports whatever was collected — the work is not thrown away. The button switches to "Cancelling…" once clicked; the actual stop happens at the next capture step boundary.
+6. Once capture is complete, the system automatically downloads the `.md` file and restores your original scroll position.
+7. **A long conversation will not interrupt the export** (v4.19.0). As long as new messages keep being captured, the run is never cut short no matter how long it takes. Earlier versions imposed a 120-second total cap, which truncated long conversations and lost their newest messages; that cap has been removed. The run now stops only after 20 continuous seconds with no progress at all.
+8. If the capture is interrupted — by a stall, by manual scrolling, or because you cancelled it — the system still exports the content collected so far, and:
+   - appends a warning at the end of the file naming the **actual** cause and the number of messages captured;
+   - shows a prominent warning toast on the page (v4.19.0). Earlier versions left only a single warning line at the end of the file, which in practice was invisible — in one reported case it landed on line 12209 of a 12209-line file, and the export looked like it had completed normally.
 
 ### Export Options
 

@@ -269,6 +269,22 @@
     }
 
     /**
+     * 安全取得「擷取不完整」原因描述子句，供頁尾與 toast 共用同一份文字。
+     * 若 HarvestPolicy 模組不存在（content script 各檔案為獨立注入，可能缺席），
+     * 回退為通用但可診斷的說明，不拋出例外。
+     * @param {string} [reason] - Harvest 回傳的停止原因代碼
+     * @returns {string} 不含結尾標點、開頭小寫的英文子句
+     */
+    function describeIncompleteReasonSafely(reason) {
+        var HarvestPolicy = root.DSstudio && root.DSstudio.HarvestPolicy;
+        // Guard: HarvestPolicy 模組缺席時提供通用回退說明，不中斷匯出流程
+        if (!HarvestPolicy || typeof HarvestPolicy.describeIncompleteReason !== 'function') {
+            return 'the export stopped early and the reason could not be determined (HarvestPolicy module unavailable)';
+        }
+        return HarvestPolicy.describeIncompleteReason(reason);
+    }
+
+    /**
      * 利用 Harvest 模組擷取完整對話，並匯出為 Markdown 檔案。
      * 若擷取未完整（超時），仍匯出已取得部分，並附加警告頁尾。
      * @param {boolean} includeThinking - 是否包含思考過程
@@ -312,9 +328,12 @@
             markdownContent += convertMessageNodeToMarkdown(msg, includeThinking, includeReferences);
         });
 
-        // 若擷取不完整，附加警告頁尾
+        // 若擷取不完整，附加警告頁尾並觸發頁內警告 toast
         if (!harvestResult.isComplete) {
-            markdownContent += '\n> ⚠️ Export may be incomplete: scroll-harvest timed out before reaching the end.\n';
+            var capturedCount = harvestResult.items.length;
+            var clause = describeIncompleteReasonSafely(harvestResult.reason);
+            markdownContent += '\n> ⚠️ Export may be incomplete (' + capturedCount + ' messages captured): ' + clause + '.\n';
+            showHarvestToastIncomplete(capturedCount, clause);
         }
 
         downloadMarkdown(markdownContent);

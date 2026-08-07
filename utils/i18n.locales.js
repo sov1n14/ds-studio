@@ -151,6 +151,13 @@
     harvestScrollingToast: '正在捲動至對話頂端…',
     harvestCapturingToast: '正在擷取完整對話… 已擷取 {count} 則',
     harvestWarning: '⚠ 請勿捲動對話記錄，以免擷取失敗',
+    harvestCancelButton: '取消',
+    harvestCancelButtonAriaLabel: '取消匯出',
+    harvestCancellingButton: '正在取消…',
+    harvestCancellingButtonAriaLabel: '正在取消匯出',
+    harvestDismissButton: '關閉',
+    harvestDismissButtonAriaLabel: '關閉警示',
+    harvestIncompleteToast: '匯出未完整：已擷取 {count} 則。原因：{reason}',
 
     // ---- Content Script: Go Top ----
     goTopAriaLabel: '回到頂部',
@@ -327,6 +334,13 @@
     harvestScrollingToast: 'Scrolling to the top of the conversation…',
     harvestCapturingToast: 'Capturing full conversation… {count} messages captured',
     harvestWarning: '⚠ Do not scroll the conversation history to avoid capture failure',
+    harvestCancelButton: 'Cancel',
+    harvestCancelButtonAriaLabel: 'Cancel export',
+    harvestCancellingButton: 'Cancelling…',
+    harvestCancellingButtonAriaLabel: 'Cancelling export',
+    harvestDismissButton: 'Dismiss',
+    harvestDismissButtonAriaLabel: 'Dismiss warning',
+    harvestIncompleteToast: 'Export incomplete: {count} messages captured. Reason: {reason}',
 
     // ---- Content Script: Go Top ----
     goTopAriaLabel: 'Back to Top',

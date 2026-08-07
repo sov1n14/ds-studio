@@ -26,6 +26,10 @@
  *                                       scrollToTopAndWait resolves success:false,
  *                                       teardown (PreventAutoScroll disabled, scroll
  *                                       restored) still runs on that abort path
+ *   § 9  scroll-step wiring           — fallback step when no keyed nodes are
+ *                                       measurable, adaptive step from live
+ *                                       measurement samples 1 & 2, per-iteration
+ *                                       recomputation, minimum-step floor
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -320,7 +324,7 @@ describe('_waitForDomStability', () => {
         const container = document.createElement('div');
         document.body.appendChild(container);
 
-        // mutate every 50ms — faster than the stability tick interval (150ms) — for the
+        // mutate every 50ms — faster than the stability tick interval (100ms) — for the
         // entire step, so the stable-tick counter is continuously reset and can never
         // reach its threshold; only the stepTimeout fallback can resolve this.
         const stepTimeout = 600;
@@ -336,7 +340,7 @@ describe('_waitForDomStability', () => {
 
         const elapsed = performance.now() - start;
         // if mutations failed to reset the stable-tick counter, this would resolve early
-        // (~450ms, via the stability window) instead of waiting out the full stepTimeout.
+        // (~300ms, via the stability window) instead of waiting out the full stepTimeout.
         expect(elapsed).toBeGreaterThanOrEqual(stepTimeout - 50);
         expect(elapsed).toBeLessThan(stepTimeout + 400);
     }, 5000);
@@ -804,29 +808,171 @@ describe('harvestAllMessages', () => {
         expect(document.querySelector('.dss-harvest-overlay')).toBeNull();
     });
 
-    // ── Timeout returns isComplete:false ─────────────────────────────────────
+    // ── R1 (regression guard): a harvest that keeps making progress must never
+    //    be killed by elapsed time. This directly guards the reported truncation
+    //    bug: a long conversation export that came back with the 500 newest
+    //    messages missing and isComplete:false, root-caused to the deleted
+    //    HARVEST_TOTAL_TIMEOUT (120000ms) wall-clock cap.
 
-    it('returns isComplete:false with reason:timeout when 120s elapses', async () => {
+    it('REGRESSION (truncation bug): captures every message across a long virtual-list run that would have exceeded the removed 120s wall-clock cap', async () => {
         vi.useFakeTimers();
 
-        const { scrollArea, visibleItems } = buildVirtualListDOM();
-        scrollArea.scrollBy = vi.fn();
+        const TOTAL_MESSAGES = 40;
+        const CLIENT_HEIGHT = 400;
+        const SCROLL_STEP_DELTA = (window.innerHeight || 768) * 0.9;
 
-        Object.defineProperty(scrollArea, 'scrollTop', { value: 0, writable: true, configurable: true });
-        Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
-        Object.defineProperty(scrollArea, 'scrollHeight', { value: 100000, configurable: true });
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 500, clientHeight: CLIENT_HEIGHT });
 
-        appendMessage(visibleItems, 0, 'first-msg');
+        let scrollTopValue = 0;
+        let scrollHeightValue = 500;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        Object.defineProperty(scrollArea, 'scrollHeight', {
+            get: () => scrollHeightValue,
+            configurable: true,
+        });
+
+        appendMessage(visibleItems, 0, 'msg-0');
+
+        let nextKey = 1;
+        scrollArea.scrollBy = vi.fn((x, y) => {
+            scrollTopValue += y;
+            if (nextKey < TOTAL_MESSAGES) {
+                appendMessage(visibleItems, nextKey, "msg-" + nextKey);
+                nextKey++;
+                scrollHeightValue = scrollTopValue + CLIENT_HEIGHT + SCROLL_STEP_DELTA;
+            }
+        });
 
         const harvestPromise = harvestAllMessages();
-        await vi.advanceTimersByTimeAsync(130000);
+        await vi.advanceTimersByTimeAsync(400000);
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('complete');
+        expect(result.isComplete).toBe(true);
+        expect(result.items.length).toBe(TOTAL_MESSAGES);
+        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        expect(texts).toEqual(Array.from({ length: TOTAL_MESSAGES }, (_, i) => "msg-" + i));
+    }, 20000);
+
+    it('stops with reason:"stalled" after 20000ms with no progress, returning the items captured before the stall', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: 400 });
+        scrollArea.scrollBy = vi.fn();
+
+        appendMessage(visibleItems, 0, 'captured-before-stall');
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(30000);
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('stalled');
+        expect(result.isComplete).toBe(false);
+        expect(result.items.length).toBeGreaterThan(0);
+        expect(result.items[0].querySelector('.fbb737a4')?.textContent).toBe('captured-before-stall');
+    }, 15000);
+
+    it('does NOT stall when fresh progress arrives before the 20000ms threshold - the stall clock resets on progress', async () => {
+        vi.useFakeTimers();
+
+        const CLIENT_HEIGHT = 400;
+        const SCROLL_STEP_DELTA = (window.innerHeight || 768) * 0.9;
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: CLIENT_HEIGHT });
+
+        let scrollTopValue = 0;
+        let scrollHeightValue = 200000;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        Object.defineProperty(scrollArea, 'scrollHeight', {
+            get: () => scrollHeightValue,
+            configurable: true,
+        });
+
+        appendMessage(visibleItems, 0, 'msg-0');
+
+        let allowProgress = false;
+        let hasAppended = false;
+        scrollArea.scrollBy = vi.fn((x, y) => {
+            scrollTopValue += y;
+            if (allowProgress && !hasAppended) {
+                hasAppended = true;
+                appendMessage(visibleItems, 1, 'msg-1');
+                scrollHeightValue = scrollTopValue + CLIENT_HEIGHT + SCROLL_STEP_DELTA;
+            }
+        });
+
+        const harvestPromise = harvestAllMessages();
+
+        await vi.advanceTimersByTimeAsync(15000);
+
+        allowProgress = true;
+
+        await vi.advanceTimersByTimeAsync(19000);
 
         const result = await harvestPromise;
 
-        expect(result.isComplete).toBe(false);
-        expect(result.reason).toBe('timeout');
-        expect(result.items.length).toBeGreaterThanOrEqual(1);
+        expect(result.reason).toBe('complete');
+        expect(result.isComplete).toBe(true);
+        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        expect(texts).toEqual(['msg-0', 'msg-1']);
+    }, 20000);
+
+    it('cancel callback passed to showHarvestToastScrolling is a function that, when invoked, calls back the caller', () => {
+        const onCancel = vi.fn();
+        showHarvestToastScrolling(onCancel);
+        const btn = document.querySelector('.dss-harvest-toast__cancel-btn');
+        expect(btn).not.toBeNull();
+        expect(typeof btn.__dsOnCancel).toBe('function');
+        btn.__dsOnCancel();
+        expect(onCancel).toHaveBeenCalledOnce();
     });
+
+    it('cancel callback passed to showHarvestToastCapturing is a function that, when invoked, calls back the caller', () => {
+        const onCancel = vi.fn();
+        showHarvestToastCapturing(3, onCancel);
+        const btn = document.querySelector('.dss-harvest-toast__cancel-btn');
+        expect(btn).not.toBeNull();
+        expect(typeof btn.__dsOnCancel).toBe('function');
+        btn.__dsOnCancel();
+        expect(onCancel).toHaveBeenCalledOnce();
+    });
+
+    it('stops with reason:"cancelled" and returns the messages captured so far when the toast cancel button is clicked mid-run', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: 400 });
+        scrollArea.scrollBy = vi.fn();
+
+        appendMessage(visibleItems, 0, 'keep-me-0');
+        appendMessage(visibleItems, 1, 'keep-me-1');
+
+        const harvestPromise = harvestAllMessages();
+
+        await vi.advanceTimersByTimeAsync(3500);
+
+        const cancelBtn = document.querySelector('.dss-harvest-toast__cancel-btn');
+        expect(cancelBtn).not.toBeNull();
+        cancelBtn.click();
+
+        await vi.advanceTimersByTimeAsync(9000);
+        const result = await harvestPromise;
+
+        expect(result.reason).toBe('cancelled');
+        expect(result.isComplete).toBe(false);
+        expect(result.items.length).toBeGreaterThan(0);
+        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        expect(texts).toEqual(expect.arrayContaining(['keep-me-0', 'keep-me-1']));
+    }, 15000);
 
     // ── Safety net: scroll_interrupted ───────────────────────────────────────
 
@@ -886,9 +1032,9 @@ describe('harvestAllMessages', () => {
         const scrollHeight = 400 + Math.ceil(oneStep) + 10;
         Object.defineProperty(scrollArea, 'scrollHeight', { value: scrollHeight, configurable: true });
 
-        // Normal scrollBy: advance by exactly 0.9 * innerHeight
+        // Normal scrollBy: advance by exactly the displacement requested (y)
         scrollArea.scrollBy = vi.fn((x, y) => {
-            scrollTopValue += (window.innerHeight * 0.9);
+            scrollTopValue += y;
         });
 
         appendMessage(visibleItems, 0, 'msg');
@@ -973,5 +1119,201 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('stopped-by-user');
         expect(pas.isEnabled()).toBe(false);
         expect(scrollTopValue).toBe(ORIGINAL_SCROLL_TOP);
+    });
+
+    // ── Scroll-step wiring: measurement → computeScrollStep → scrollBy ───────
+    //
+    // These tests close the integration gap between _measureMountedBottomOffset,
+    // HarvestPolicy.computeScrollStep and the actual scrollBy displacement.
+    // happy-dom's getBoundingClientRect returns all zeros, so the measurement
+    // degrades to the fallback step in every other test in this file; here the
+    // geometry is stubbed from the live DeepSeek measurements recorded in
+    // test/unit/harvest.policy.spec.js (fixed 18 mounted item nodes, container
+    // clientHeight 928, mounted window extending 0 px above and 3406-4244 px
+    // below the visible top).
+
+    it('scrolls by exactly Math.round(innerHeight * 0.9) when no keyed item nodes are measurable (markup change: selector matches nothing)', async () => {
+        vi.useFakeTimers();
+
+        const FALLBACK_STEP = Math.round(window.innerHeight * 0.9);
+        const CLIENT_HEIGHT = 400;
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({
+            scrollHeight: CLIENT_HEIGHT + FALLBACK_STEP,
+        });
+        let scrollTopValue = 0;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        const scrollByMock = vi.fn((x, y) => { scrollTopValue += y; });
+        scrollArea.scrollBy = scrollByMock;
+
+        // A .ds-message exists (the no_messages guard passes) but no element
+        // carries data-virtual-list-item-key, so the measurement finds no keyed
+        // nodes and computeScrollStep must fall back to 0.9 * viewport.
+        appendMessage(visibleItems, null, 'msg');
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(30000);
+        const result = await harvestPromise;
+
+        expect(result.isComplete).toBe(true);
+        expect(scrollByMock).toHaveBeenCalledTimes(1);
+        expect(scrollByMock).toHaveBeenCalledWith(0, FALLBACK_STEP);
+    });
+
+    it('LIVE-MEASUREMENT sample 1 (clientHeight 928 + overscanBelow 4244 = lowest node bottom 5172): scrolls by Math.round(5172 * 0.7) = 3620, not the fallback step', async () => {
+        vi.useFakeTimers();
+
+        const LOWEST_MOUNTED_BOTTOM = 928 + 4244; // 5172 — live sample 1
+        const EXPECTED_STEP = Math.round(LOWEST_MOUNTED_BOTTOM * 0.7); // 3620
+        const CLIENT_HEIGHT = 400;
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({
+            scrollHeight: CLIENT_HEIGHT + EXPECTED_STEP,
+        });
+        let scrollTopValue = 0;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        const scrollByMock = vi.fn((x, y) => { scrollTopValue += y; });
+        scrollArea.scrollBy = scrollByMock;
+
+        // Container visible top at 0 (live measurement). Two keyed nodes — the
+        // step must be driven by the LOWEST mounted node's bottom edge (5172),
+        // not by the higher-mounted one (3000).
+        scrollArea.getBoundingClientRect = () => ({ top: 0, bottom: 928 });
+
+        appendMessage(visibleItems, 0, 'higher-up');
+        appendMessage(visibleItems, 1, 'lowest');
+        const wrappers = visibleItems.querySelectorAll('[data-virtual-list-item-key]');
+        wrappers[0].getBoundingClientRect = () => ({ bottom: 3000 });
+        wrappers[1].getBoundingClientRect = () => ({ bottom: LOWEST_MOUNTED_BOTTOM });
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(30000);
+        const result = await harvestPromise;
+
+        expect(result.isComplete).toBe(true);
+        expect(scrollByMock).toHaveBeenCalledTimes(1);
+        expect(scrollByMock).toHaveBeenCalledWith(0, EXPECTED_STEP);
+        expect(EXPECTED_STEP).toBe(3620); // pin: Math.round(5172 * 0.7) from live sample 1
+    });
+
+    it('LIVE-MEASUREMENT sample 2 (clientHeight 928 + overscanBelow 3406 = lowest node bottom 4334): scrolls by Math.round(4334 * 0.7) = 3034', async () => {
+        vi.useFakeTimers();
+
+        const LOWEST_MOUNTED_BOTTOM = 928 + 3406; // 4334 — live sample 2
+        const EXPECTED_STEP = Math.round(LOWEST_MOUNTED_BOTTOM * 0.7); // 3034
+        const CLIENT_HEIGHT = 400;
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({
+            scrollHeight: CLIENT_HEIGHT + EXPECTED_STEP,
+        });
+        let scrollTopValue = 0;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        const scrollByMock = vi.fn((x, y) => { scrollTopValue += y; });
+        scrollArea.scrollBy = scrollByMock;
+
+        scrollArea.getBoundingClientRect = () => ({ top: 0, bottom: 928 });
+        const msg = appendMessage(visibleItems, 0, 'msg');
+        msg.closest('[data-virtual-list-item-key]').getBoundingClientRect =
+            () => ({ bottom: LOWEST_MOUNTED_BOTTOM });
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(30000);
+        const result = await harvestPromise;
+
+        expect(result.isComplete).toBe(true);
+        expect(scrollByMock).toHaveBeenCalledTimes(1);
+        expect(scrollByMock).toHaveBeenCalledWith(0, EXPECTED_STEP);
+        expect(EXPECTED_STEP).toBe(3034); // pin: Math.round(4334 * 0.7) from live sample 2
+    });
+
+    it('LIVE-MEASUREMENT per-iteration: geometry change between steps makes successive scrollBy displacements differ (3620 then 3034)', async () => {
+        vi.useFakeTimers();
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({ scrollHeight: 200000, clientHeight: 400 });
+        let scrollTopValue = 0;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
+
+        scrollArea.getBoundingClientRect = () => ({ top: 0, bottom: 928 });
+
+        let lowestMountedBottom = 928 + 4244; // sample 1: 5172
+        const msg = appendMessage(visibleItems, 0, 'msg');
+        const wrapper = msg.closest('[data-virtual-list-item-key]');
+        wrapper.getBoundingClientRect = () => ({ bottom: lowestMountedBottom });
+
+        // After the first scroll step, swap the measured geometry to sample 2
+        // (4334): the next iteration must re-measure and derive a new step.
+        let isFirstStep = true;
+        const scrollByMock = vi.fn((x, y) => {
+            scrollTopValue += y;
+            if (isFirstStep) {
+                isFirstStep = false;
+                lowestMountedBottom = 928 + 3406; // sample 2: 4334
+            }
+        });
+        scrollArea.scrollBy = scrollByMock;
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(60000);
+        await harvestPromise;
+
+        const displacements = scrollByMock.mock.calls.map(call => call[1]);
+        expect(displacements[0]).toBe(Math.round(5172 * 0.7)); // 3620
+        expect(displacements[1]).toBe(Math.round(4334 * 0.7)); // 3034
+    });
+
+    it('LIVE-MEASUREMENT floor: tiny measured bottom (100 px) still scrolls by Math.round(innerHeight * 0.25), not Math.round(100 * 0.7) = 70', async () => {
+        vi.useFakeTimers();
+
+        const MIN_STEP = Math.round(window.innerHeight * 0.25);
+        const CLIENT_HEIGHT = 400;
+
+        const { scrollArea, visibleItems } = buildVirtualListDOM({
+            scrollHeight: CLIENT_HEIGHT + MIN_STEP,
+        });
+        let scrollTopValue = 0;
+        Object.defineProperty(scrollArea, 'scrollTop', {
+            get: () => scrollTopValue,
+            set: (v) => { scrollTopValue = v; },
+            configurable: true,
+        });
+        Object.defineProperty(scrollArea, 'clientHeight', { value: CLIENT_HEIGHT, configurable: true });
+        const scrollByMock = vi.fn((x, y) => { scrollTopValue += y; });
+        scrollArea.scrollBy = scrollByMock;
+
+        scrollArea.getBoundingClientRect = () => ({ top: 0, bottom: 928 });
+        const msg = appendMessage(visibleItems, 0, 'msg');
+        msg.closest('[data-virtual-list-item-key]').getBoundingClientRect =
+            () => ({ bottom: 100 });
+
+        const harvestPromise = harvestAllMessages();
+        await vi.advanceTimersByTimeAsync(30000);
+        const result = await harvestPromise;
+
+        expect(result.isComplete).toBe(true);
+        expect(scrollByMock).toHaveBeenCalledTimes(1);
+        expect(scrollByMock).toHaveBeenCalledWith(0, MIN_STEP);
+        // Premise guard: without the floor the measured step would be 70, which
+        // is below MIN_STEP — a regression dropping the floor cannot pass here.
+        expect(MIN_STEP).toBeGreaterThan(Math.round(100 * 0.7));
     });
 });

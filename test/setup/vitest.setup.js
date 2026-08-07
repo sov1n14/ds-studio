@@ -24,6 +24,11 @@ import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
+// harvest.policy.js is the pure decision-logic module for content/harvest.js's
+// scroll-harvest loop. It must load before harvest.js (loaded directly by
+// harvest.spec.js via import, not preloaded here) so window.DSstudio.HarvestPolicy
+// is populated before any consumer resolves it.
+import '../../content/harvest.policy.js';
 // Overlay refactor: load the four replacement modules in dependency order so
 // that window.__DS_PresetOverlay (and the other globals) are available before
 // content-script.js (loaded by individual specs via require) resolves them.

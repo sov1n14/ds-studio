@@ -1,17 +1,13 @@
 /**
  * DS studio — Harvest :: Toast Bundle
  * 擷取進度遮罩 UI（顯示/更新/隱藏）。由 harvest.js 合入使用。
- * 純函式集合，不持有跨函式共享狀態，因此不採用 this-based 方法合併，
- * 直接以具名函式匯出（與 prevent-auto-scroll-bridge.js 同一慣例）。
+ * 純函式集合，不持有模組層級可變狀態；跨呼叫需保留的狀態（取消回呼、
+ * 是否已點擊取消）改為存放於 DOM 元素本身（自訂屬性 / disabled 屬性），
+ * 與 _ensureHarvestToast() 既有「以 DOM 為狀態來源」的作法一致。
  */
 (function (root) {
     'use strict';
 
-    /**
-     * 確保 Toast 容器存在並回傳它（若不存在則建立）。
-     * 建立時同時產生 __text 與 __warn 兩個子元素。
-     * @returns {Element} Toast 根節點
-     */
     function _ensureHarvestToast() {
         let toast = document.querySelector('.dss-harvest-toast');
         if (toast) return toast;
@@ -19,12 +15,10 @@
         toast = document.createElement('div');
         toast.className = 'dss-harvest-toast';
 
-        // 第一行：主要進度文字
         const text = document.createElement('p');
         text.className = 'dss-harvest-toast__text';
         toast.appendChild(text);
 
-        // 第二行：操作警示（擷取階段才顯示）
         const warn = document.createElement('p');
         warn.className = 'dss-harvest-toast__warn';
         toast.appendChild(warn);
@@ -33,70 +27,154 @@
         return toast;
     }
 
-    /**
-     * 【捲動至頂部階段】顯示 Toast，文字為「正在捲動至對話頂端…」，不顯示數量。
-     * 警示行保持隱藏，避免使用者在尚未開始擷取時看到不相干警告。
-     */
-    function showHarvestToastScrolling() {
+    function _resetIncompleteState(toast) {
+        toast.classList.remove('dss-harvest-toast--incomplete');
+
+        clearTimeout(toast.__dsAutoDismissTimer);
+        toast.__dsAutoDismissTimer = null;
+
+        const dismissBtn = toast.querySelector('.dss-harvest-toast__dismiss-btn');
+        if (dismissBtn) dismissBtn.remove();
+    }
+
+    function _renderCancelButton(toast, onCancel) {
+        const hasCancelHandler = typeof onCancel === 'function';
+        let cancelBtn = toast.querySelector('.dss-harvest-toast__cancel-btn');
+
+        if (!hasCancelHandler) {
+            if (cancelBtn) cancelBtn.remove();
+            return;
+        }
+
+        if (!cancelBtn) {
+            cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'dss-harvest-toast__cancel-btn';
+            cancelBtn.textContent = dsI18n.t('harvestCancelButton');
+            cancelBtn.setAttribute('aria-label', dsI18n.t('harvestCancelButtonAriaLabel'));
+            cancelBtn.addEventListener('click', () => {
+                if (cancelBtn.disabled) return;
+
+                cancelBtn.disabled = true;
+                cancelBtn.textContent = dsI18n.t('harvestCancellingButton');
+                cancelBtn.setAttribute('aria-label', dsI18n.t('harvestCancellingButtonAriaLabel'));
+
+                const handler = cancelBtn.__dsOnCancel;
+                if (typeof handler === 'function') handler();
+            });
+            toast.appendChild(cancelBtn);
+        }
+
+        cancelBtn.__dsOnCancel = onCancel;
+    }
+
+    function _renderDismissButton(toast) {
+        let dismissBtn = toast.querySelector('.dss-harvest-toast__dismiss-btn');
+        if (dismissBtn) return;
+
+        dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'dss-harvest-toast__dismiss-btn';
+        dismissBtn.textContent = dsI18n.t('harvestDismissButton');
+        dismissBtn.setAttribute('aria-label', dsI18n.t('harvestDismissButtonAriaLabel'));
+        dismissBtn.addEventListener('click', hideHarvestToast);
+        toast.appendChild(dismissBtn);
+    }
+
+    function showHarvestToastScrolling(onCancel) {
         const toast = _ensureHarvestToast();
+
+        _resetIncompleteState(toast);
 
         const text = toast.querySelector('.dss-harvest-toast__text');
         if (text) {
             text.textContent = dsI18n.t('harvestScrollingToast');
         }
 
-        // 捲動階段不顯示警示行
         const warn = toast.querySelector('.dss-harvest-toast__warn');
         if (warn) {
             warn.style.display = 'none';
         }
 
+        _renderCancelButton(toast, onCancel);
+
         toast.style.display = 'block';
     }
 
-    /**
-     * 【擷取階段】切換至擷取狀態並更新已擷取數量，同時顯示操作警示。
-     * 在向下掃描的每一步呼叫，N 隨實際擷取數量即時更新。
-     * @param {number} capturedCount - 已擷取訊息數
-     */
-    function showHarvestToastCapturing(capturedCount) {
+    function showHarvestToastCapturing(capturedCount, onCancel) {
         if (typeof capturedCount !== 'number') return;
 
         const toast = _ensureHarvestToast();
 
-        // 第一行：進度數量
         const text = toast.querySelector('.dss-harvest-toast__text');
         if (text) {
             text.textContent = dsI18n.t('harvestCapturingToast', { count: capturedCount });
         }
 
-        // 第二行：警示——整個擷取階段持續可見
         const warn = toast.querySelector('.dss-harvest-toast__warn');
         if (warn) {
             warn.textContent = dsI18n.t('harvestWarning');
             warn.style.display = '';
         }
 
+        _renderCancelButton(toast, onCancel);
+
         toast.style.display = 'block';
     }
 
-    /**
-     * 隱藏 Toast（擷取結束時呼叫，finally 區塊保證執行）。
-     */
+    const HARVEST_INCOMPLETE_TOAST_AUTO_DISMISS_MS = 10000;
+
+    function showHarvestToastIncomplete(capturedCount, reasonText) {
+        if (typeof capturedCount !== 'number') return;
+        if (typeof reasonText !== 'string' || !reasonText) return;
+
+        hideHarvestToast();
+
+        const toast = _ensureHarvestToast();
+        toast.classList.add('dss-harvest-toast--incomplete');
+
+        const text = toast.querySelector('.dss-harvest-toast__text');
+        if (text) {
+            text.textContent = dsI18n.t('harvestIncompleteToast', {
+                count: capturedCount,
+                reason: reasonText,
+            });
+        }
+
+        const warn = toast.querySelector('.dss-harvest-toast__warn');
+        if (warn) {
+            warn.style.display = 'none';
+        }
+
+        _renderDismissButton(toast);
+
+        toast.style.display = 'block';
+
+        clearTimeout(toast.__dsAutoDismissTimer);
+        toast.__dsAutoDismissTimer = setTimeout(() => {
+            hideHarvestToast();
+        }, HARVEST_INCOMPLETE_TOAST_AUTO_DISMISS_MS);
+    }
+
     function hideHarvestToast() {
         const toast = document.querySelector('.dss-harvest-toast');
-        if (toast) {
-            toast.style.display = 'none';
-        }
+        if (!toast) return;
+
+        toast.style.display = 'none';
+
+        const cancelBtn = toast.querySelector('.dss-harvest-toast__cancel-btn');
+        if (cancelBtn) cancelBtn.remove();
+
+        _resetIncompleteState(toast);
     }
 
     const bundle = {
         showHarvestToastScrolling,
         showHarvestToastCapturing,
+        showHarvestToastIncomplete,
         hideHarvestToast,
     };
 
-    // 掛載至全域（供 harvest.js 合入使用）；同時提供 CommonJS 匯出供 Node/vitest 測試環境使用
     root.__DS_Harvest_toast = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
