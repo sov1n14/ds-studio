@@ -35,7 +35,7 @@ ds-studio/
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
-│   ├── websearch-toggle.js  ─  One-shot per-activation default for web-search button (v4.13.0)
+│   ├── websearch-toggle.js  ─  One-shot per-activation default for web-search button (v4.13.0; language-independent two-tier locator v4.20.1)
 │   ├── quote-reply.js       ─  Floating "引用回覆" button on text selection
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
@@ -126,6 +126,18 @@ The `isEnabled` key acts as a master switch for all extension features:
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
 - **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0) `isGlobalPromptEnabled` is no longer a straight mirror of one storage key — it is resolved per navigation from the active preset's own `globalPromptEnabled` field, falling back to the legacy device-level key when no preset is active. Subordination to the master switch is unchanged.
+
+### WebSearch Toggle Locator (v4.20.1)
+
+`content/websearch-toggle.js` locates the web-search button with a two-tier, language-independent locator — label text is deliberately not consulted, because the extension must work on every DeepSeek UI language:
+
+- **Tier 1 — icon geometry**: the first candidate whose descendant `path[d]`, trimmed, starts with `M7.9995999336` (named constant `SEARCH_ICON_PATH_PREFIX`). Verified identical across zh-CN / zh-TW / en DOM snapshots and across toggle states. Candidates come from `.ds-toggle-button[aria-pressed]` plus the generic `[aria-pressed="true"], [aria-pressed="false"]` selector, merged and deduped — the icon check alone disambiguates against the deep-thinking toggle, so the generic selector is safe here.
+- **Tier 2 — positional fallback**: the second `.ds-toggle-button[aria-pressed]` candidate (index 1; search sits after deep-thinking in the toggle group). Restricted to the toggle group — positional guessing among generic candidates is forbidden.
+- **Total failure**: `null` plus exactly one `console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button')`, so a future DeepSeek redesign is diagnosable from a user's console paste. No warning on success.
+
+The two tiers have mutually exclusive failure modes (icon redesign vs. toolbar reorder); both would have to change in one release for the feature to fail. Recovery procedure: re-capture `to-do/samples/input-bar-*.html` against the new build.
+
+**Rejected signals — do NOT reintroduce:** label text (`智能搜索` / `智慧搜尋` / `Search`) — the original bug, and a multi-language keyword list is unbounded; hashed classes (`f79352dc`, `_58b31c9`, `_46d2264`, `_6dbc175`, `ec4f5d61`) — CSS-module build hashes that rotate on every DeepSeek redeploy; `clipPath id="__lottie_element_*"` — assigned sequentially by the lottie-web runtime at parse time, so it shifts if any other animation renders first.
 
 ### Overlay Settlement Mechanism (v4.2.2)
 

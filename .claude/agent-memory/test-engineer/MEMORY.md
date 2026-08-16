@@ -1,4 +1,5 @@
-- [Vitest invocation](vitest-invocation.md) — must cd into test/ before npx vitest run, no root package.json
-- [Spec file line endings](spec-file-line-endings.md) — existing specs use CRLF; scripted patches must match \r\n or fail silently
-- [Bash heredoc breaks on long files](pitfall_bash_heredoc_long_files.md) — single-shot `cat > file << 'EOF'` fails past ~150-200 lines; chunk into multiple `cat >>` appends
-- [Popup toggle factory conventions](project_popup_toggle_factory_conventions.md) — ctx accessor naming shared by createToggleManager/createLiveSyncListener/createPresetManager; global-prompt-per-preset-toggle feature context
+# MEMORY.md
+
+- [Session tooling quirks](session-tooling-quirks.md) — Edit/Write disabled in subagent sessions; use Bash heredoc chunks under ~7KB to modify files
+- [Red phase probe vs HEAD](project_red_phase_probe_vs_head.md) — working tree already fixed: probe red against git-shown HEAD copy, never contort fixtures
+- [Websearch-toggle generic fix state](project_websearch_toggle_generic_fix_state.md) — 2026-08-17: approved generic-candidates fix already uncommitted in working tree; next step is test-executor green run
