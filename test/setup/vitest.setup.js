@@ -17,6 +17,7 @@ import '../../utils/storage-manager.presets.js';
 import '../../utils/storage-manager.chatmap.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
+import '../../utils/storage-manager.setters.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';
@@ -107,6 +108,15 @@ const storageOnChanged = {
 // listener live per test.
 export function resetStorageOnChangedListeners() {
     [...onChangedListeners].forEach((listener) => storageOnChanged.removeListener(listener));
+}
+
+// Deterministic bootstrap-completion signal: content-script.js (and other modules)
+// register their chrome.storage.onChanged listener as the LAST statement of a
+// one-time, unawaited module-load bootstrap (see content-script.js initSettings()).
+// Polling this count lets a spec await the real completion of that bootstrap
+// instead of guessing a fixed tick budget that may race the background chain.
+export function getStorageOnChangedListenerCount() {
+    return onChangedListeners.length;
 }
 
 globalThis.chrome = {

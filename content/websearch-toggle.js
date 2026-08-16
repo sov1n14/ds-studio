@@ -1,12 +1,15 @@
 /**
- * DS studio — 連網搜索開關維持
- * 依「連網搜索」二態設定（開啟 / 關閉），在頁面進入時一次性套用智能搜索按鈕的 aria-pressed 狀態。
+ * DS studio — 連網搜尋開關維持
+ * 依「連網搜尋」二態設定（開啟 / 關閉），在頁面進入時一次性套用智能搜尋按鈕的 aria-pressed 狀態。
  * 套用為一次性（one-shot）：套用完成後即釋放控制權，讓使用者手動翻轉按鈕不會被回點。
  * 但每次「啟用事件」發生時會重新武裝一次性旗標，再次套用一次後繼續釋放控制權：
  *   (A) start() 時主開關為開啟
  *   (B) 主開關開啟期間，dsWebSearchToggle 設定透過 storage.onChanged 變更
  *   (C) 主開關透過 storage.onChanged 轉為開啟
  */
+// 搜尋圖示的 path[d] 前綴（語言無關的定位基準；真實頁面資料帶前導空白，比對前需 trim）
+const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
+
 const WebSearchToggle = {
     STORAGE_KEY: 'dsWebSearchToggle', // 對應 StorageManager.KEYS.WEBSEARCH_TOGGLE
 
@@ -16,22 +19,26 @@ const WebSearchToggle = {
     _isSpent: false, // 一次性套用是否已完成（完成後直到下次重新武裝前不再點擊）
     _observer: null,
 
-    // 在符合選擇器的元素中，優先挑選標籤文字含「搜索」者；找不到時回傳 null（避免誤點深度思考按鈕）
-    _pickByLabel(selector) {
-        const matches = document.querySelectorAll(selector);
-        if (!matches.length) return null;
-        for (const el of matches) {
-            if (el.textContent.includes('搜索')) return el;
+    // 在候選元素中，回傳第一個含搜尋圖示（path[d] 去除前導空白後與前綴相符）者；找不到時回傳 null
+    _pickByIcon(candidates) {
+        for (const el of candidates) {
+            const path = el.querySelector('path[d]');
+            if (path && path.getAttribute('d').trim().startsWith(SEARCH_ICON_PATH_PREFIX)) return el;
         }
         return null;
     },
 
-    // 尋找智能搜索切換按鈕；主要選擇器之後接通用備援（不使用建置版雜湊類別）
+    // 尋找智能搜尋切換按鈕（語言無關，不使用建置版雜湊類別）：
+    //   第一層：合併兩組選擇器候選（去重）後，依搜尋圖示 path 前綴比對
+    //   第二層：位置備援 — 僅在開關群組內取第二個按鈕（深度思考之後即為搜尋）
     findButton() {
-        return (
-            this._pickByLabel('.ds-toggle-button[aria-pressed]') ||
-            this._pickByLabel('[aria-pressed="true"], [aria-pressed="false"]')
-        );
+        const toggleButtons = Array.from(document.querySelectorAll('.ds-toggle-button[aria-pressed]'));
+        const genericCandidates = Array.from(document.querySelectorAll('[aria-pressed="true"], [aria-pressed="false"]'));
+        const iconMatch = this._pickByIcon(new Set([...toggleButtons, ...genericCandidates]));
+        if (iconMatch) return iconMatch;
+        if (toggleButtons.length >= 2) return toggleButtons[1];
+        console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button');
+        return null;
     },
 
     // 將儲存值正規化為 'on' / 'off'：未設定或舊版 'default' 值一律視為 'on'

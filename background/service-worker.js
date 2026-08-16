@@ -9,6 +9,7 @@ importScripts(
     '../utils/storage-manager.chatmap.js',
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',
+    '../utils/storage-manager.setters.js',
     '../utils/storage-manager.js',
     '../content/temporary-chat-pending-store.js'
 );

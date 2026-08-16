@@ -1,6 +1,6 @@
 ---
 name: crlf-line-endings
-description: popup/*.js (and likely other JS) source files in ds-studio use CRLF (
+description: popup/*.js and content/*.js source files in ds-studio use CRLF (
 ) line endings, not LF — matters for any string-anchor-based text edit.
 metadata:
   type: project

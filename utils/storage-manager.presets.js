@@ -304,6 +304,20 @@
             if (JSON.stringify(preset) === JSON.stringify(syncPreset)) return false;
             return this._pickNewerPreset(preset, syncPreset) === preset;
         },
+
+        /**
+         * 純函式：決定「全域提示詞」在目前作用中 preset 底下是否啟用。
+         * 若 activePreset 存在，以其自身 globalPromptEnabled 欄位為準（透過 ?? 視 undefined/null 為未設定，
+         * 一律回退為 true —— 還原舊版備份時該欄位必然不存在，不應因此靜默關閉全域提示詞）。
+         * 若 activePreset 為 null/undefined，直接回傳舊版旗標 legacyGlobalFlag。
+         * @param {Object|null|undefined} activePreset - 目前作用中的 preset（可能不含此欄位）
+         * @param {boolean} legacyGlobalFlag - 舊版（無 preset 概念時期）的全域提示詞旗標
+         * @returns {boolean} 是否啟用全域提示詞
+         */
+        resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag) {
+            if (!activePreset) return legacyGlobalFlag;
+            return activePreset.globalPromptEnabled ?? true;
+        },
     };
 
     root.__DS_StorageManager_presets = bundle;

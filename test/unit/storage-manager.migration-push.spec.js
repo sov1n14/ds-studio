@@ -12,11 +12,20 @@ const K = StorageManager.KEYS;
  * to local — they are local-only keys (report.md §4.3 Step 3 made the latter
  * two local-only, joining the pre-existing RESTORED_MESSAGES pattern) and
  * should never be in sync.
+ *
+ * IMPORTANT: this list must stay in sync with StorageManager.DEFAULTS
+ * (utils/storage-manager.js). Any key present in DEFAULTS but missing here
+ * (and not explicitly excluded in storage-manager.init.js's fill/migration
+ * loops) leaves initialize()'s `updates` non-empty, which reroutes every
+ * test in this file away from the migration-push branch they exist to
+ * exercise, silently, since the tests still run but assert against the
+ * wrong branch. Cross-check against DEFAULTS whenever a key is added.
  */
 async function populateDefaults() {
     const localDefaults = {
         [K.PRESET_INDEX]: [],
         [K.ACTIVE_PRESET_ID]: '',
+        [K.PINNED_PRESET_ID]: '',
         [K.IS_ENABLED]: false,
         [K.INCLUDE_THINKING]: true,
         [K.INCLUDE_REFERENCES]: true,

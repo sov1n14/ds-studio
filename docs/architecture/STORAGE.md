@@ -8,13 +8,15 @@
 >
 > **v4.7.0/4.7.1 統一同步進入點**：新增 `StorageManager.syncNow()`（`utils/storage-manager.syncnow.js`），在 popup 開啟與 `chat.deepseek.com` 頁面載入時呼叫，取代原先直接呼叫 `getSettings()` 的作法。`syncNow()` 內部呼叫 `retrySync()` 後再呼叫 `getSettings()`。v4.7.1 修正了一個缺陷：`_get()` 在判定 remote 較新時，原本只在記憶體中回傳合併結果，未把覆寫值持久化回 `chrome.storage.local`；現已在 remote 勝出的分支透過既有的 `_safeSet('local', ...)` 補寫回本機，避免裝置重新開啟後又讀到舊的本機殘留值。
 >
-> **v4.7.3 本地化設定 + 拆檔**：`isEnabled`／`globalPromptEnabled` 改為本地專用（見下表)。入口檔 `utils/storage-manager.js` 因此次改動一度超過 600 行絕對上限，已拆出 `utils/storage-manager.local.js`（本地專用設定：`saveEnabledState`／`getEnabledState`／`saveGlobalPromptEnabled`／`getGlobalPromptEnabled`／`getRestoredMessages`／`saveRestoredMessages`)與 `utils/storage-manager.init.js`（`initialize()` 與 `_installChunkCacheInvalidator`),入口檔現為 411 行。v4.7.4 修正拆檔造成的閉包回歸：`_installChunkCacheInvalidator()` 的 `onChanged` 監聽器原本裸寫 `StorageManager.xxx`，拆檔前靠模組內詞法作用域恰好指向自身 context 的實例；拆檔後裸寫識別字會落到全域 `window.StorageManager`（多 context 情境下永遠指向「最後載入」的那個 context),導致另一 context 的 chunk cache 永遠不會被正確失效。已改為在安裝時 `const self = this` 並在監聽器中使用 `self.xxx`。
+> **v4.7.3 本地化設定 + 拆檔**：`isEnabled`／`globalPromptEnabled` 改為本地專用（見下表)。入口檔 `utils/storage-manager.js` 因此次改動一度超過 600 行絕對上限，已拆出 `utils/storage-manager.local.js`（本地專用設定：`saveEnabledState`／`getEnabledState`／`saveGlobalPromptEnabled`／`getGlobalPromptEnabled`／`getRestoredMessages`／`saveRestoredMessages`)與 `utils/storage-manager.init.js`（`initialize()` 與 `_installChunkCacheInvalidator`),入口檔當時降為 411 行。v4.7.4 修正拆檔造成的閉包回歸：`_installChunkCacheInvalidator()` 的 `onChanged` 監聽器原本裸寫 `StorageManager.xxx`，拆檔前靠模組內詞法作用域恰好指向自身 context 的實例；拆檔後裸寫識別字會落到全域 `window.StorageManager`（多 context 情境下永遠指向「最後載入」的那個 context),導致另一 context 的 chunk cache 永遠不會被正確失效。已改為在安裝時 `const self = this` 並在監聽器中使用 `self.xxx`。
 >
 > **v4.8.3 刪除墓碑（Tombstone）機制**：修復跨裝置同步下「已刪除提示詞組復活」的缺陷。新增 `utils/storage-manager.tombstones.js`，提供 `_mergeTombstones`／`_pruneTombstones`（30 天保留期）／`_isTombstonedAway` 與 `recordPresetTombstones()`，並新增儲存鍵 `dsPresetTombstones`（`{ [presetId]: deletedAt }`，見下表）。`savePromptPresets()` 刪除提示詞組時會同時寫入墓碑（本地與同步兩端）。`mergePresets()` 新增可選的 `tombstones` 參數：合併時若某 id 於任一側的 `updatedAt` 不晚於其墓碑的 `deletedAt`，該 id 會被排除、不再復活；若該 id 之後有更新的編輯（`updatedAt` 較墓碑更新），仍會保留。`resolveSyncConflict()` 會讀取並合併雙邊墓碑再傳入 `mergePresets()`，並將合併後的墓碑寫回。同時修正 `_get()` 的另一個缺口：先前 sync 端 `dsPresetIndex`／`dsPresetOrderMeta` 因較新而勝出時，只在記憶體中回傳、從未持久化回 `chrome.storage.local`；現已比照既有 `dsPreset_*` 的 remote-wins-persist 機制，一併寫回本機，避免下次重新讀取時又看到舊索引。
 >
 > **v4.10.2 墓碑合併演算法修正**：修復 `clearPresetTombstones()`（JSON 匯入還原時清除墓碑）直接 `delete tombstones[id]` 造成的缺陷——鍵不存在時無時間戳可供 `_mergeTombstones()` 的 `MAX(deletedAt)` 比較機制判定勝負，導致任一側仍持有舊墓碑條目時，該條目永遠「贏」，已清除的墓碑會在下次合併時被舊資料復活，使已還原的提示詞組再次遭刪除。修正方式：墓碑條目形狀由裸數字改為物件 `{ ts: number, deleted: boolean }`（`dsPresetTombstones` 型別見下表）。`recordPresetTombstones()`（實際刪除）寫入 `{ ts, deleted: true }`；`clearPresetTombstones()`（匯入還原）改為寫入 `{ ts, deleted: false }`，不再刪除鍵。`_mergeTombstones()` 改為依 `entry.ts` 比較，`ts` 較新的一側整組（含 `deleted` 值）勝出——「清除」與「刪除」現在是同一時間軸上的兩次普通寫入，較新的一次必定勝出。`_isTombstonedAway()` 改為檢查 `entry.deleted === true`（而非鍵是否存在）。`_pruneTombstones()` 改為比較 `entry.ts`，`deleted:true`／`deleted:false` 兩種狀態均依相同保留期（30 天）過期。新增向後相容正規化：舊版裸數字條目在讀取時自動轉換為 `{ ts: <該數字>, deleted: true }`（舊格式僅代表「已刪除」)，確保升級後仍能與新格式正確合併。
 
 > **v4.11.x 稽核瘦身：方法包版圖變更（讀本文件前務必先看這段）**：上面幾條版本註記描述的是各機制**當時**的落點，檔案名稱已不再對應現況。方法包由九個併為六個：`storage-manager.chunking.js` 與 `storage-manager.lock.js` 併為 `storage-manager.chunk-lock.js`；`storage-manager.tombstones.js` 併入 `storage-manager.presets.js`（`_mergeTombstones`／`_pruneTombstones`／`_isTombstonedAway`／`recordPresetTombstones()`／`clearPresetTombstones()` 與 `TOMBSTONE_RETENTION_MS` 現位於此）；`storage-manager.syncnow.js` 併入 `storage-manager.sync.js`（`syncNow()` 現位於此）。所有機制的行為完全未變，僅檔案落點改變。另有 `saveChatPresetMap()` 已刪除——它只是 `mutateChatPresetMap()` 的薄包裝，且僅被測試引用，無任何生產端呼叫者。
+>
+> **方法包現為七個**：入口檔 `utils/storage-manager.js` 在加入新功能前即已超過 `coding-guidelines` §8 的 450 行主動拆分門檻，因此再拆出 `utils/storage-manager.setters.js`，收容 14 個單鍵 `save<X>` 一行式 setter（`saveActivePresetId`／`savePinnedPresetId`／`saveIncludeThinking`／`saveIncludeReferences`／`saveGlobalDefaultPrompt`／`saveSidebarAutoHide`／`saveHideThinking`／`savePreventAutoScroll`／`saveWebsearchToggle`／`saveShowSystemTime`／`saveChatWidth`／`saveChatWidthEnabled`／`saveInputWidth`／`saveInputWidthEnabled`）。純搬移、零行為變更，入口檔因此降至 400 行。注意 `storage-manager.local.js` 的 `saveEnabledState`／`saveGlobalPromptEnabled` **未**搬入此包，它們是本地專用設定，仍留在原處。
 >
 > 此次合併同時修復了一個潛伏的生產缺陷：`background/service-worker.js` 的 `importScripts` 從未載入 `storage-manager.tombstones.js`，但 `resolveSyncConflict()` 會呼叫 `_mergeTombstones()`，因此背景同步重試（`onStartup`／`onInstalled`／alarm）在衝突可自動解決時一直靜默失效——錯誤被一個標註「best-effort，全部吞掉」的空 `catch` 吃掉。詳見 `docs/changelog/v4.md`（4.11.3）與 `docs/architecture/POPUP.md` 的「Load-order invariant」段落。
 
@@ -25,14 +27,14 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | Key | Type | Default | Description |
 |-|-|-|-|
 | `dsPresetIndex` | `string[]` | `[]` | Ordered array of prompt preset IDs. |
-| `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. |
+| `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. Shape: `{ id, name, content, createdAt, updatedAt, globalPromptEnabled }`. (v4.20.0) `globalPromptEnabled` is the preset's own global-prompt injection toggle — written explicitly as `true` on creation, treated as `true` when the field is absent on pre-v4.20.0 data, and synced across devices with the preset itself. |
 | `activePresetId` | string | `""` | The ID of the currently active preset. |
 | `pinnedPresetId` | string | `""` | (v4.18.0) The ID of the preset pinned as the default; `""` means no default. A single scalar, so uniqueness is structural — two presets can never be pinned at once. Read only when a NEW conversation is opened (no chat id in the URL) to preselect that preset; existing conversations are never touched. Written via `savePinnedPresetId()`, which shares `saveActivePresetId()`'s `_set` path (sync primary, local fallback), and included in both backup export and import. |
 | `isEnabled` | boolean | `false` | Whether prompt injection is active (master switch). (v4.7.3) Local-only, device-scoped — excluded from sync, `resolveSyncConflict()`, and `restoreSettings()` import. |
 | `includeThinking` | boolean | `true` | Include AI thinking process in exported MD. |
 | `includeReferences` | boolean | `true` | Include citation reference links in exported MD. |
 | `globalDefaultPrompt` | string | `''` | A global prompt prepended before the per-preset prompt in every conversation. |
-| `globalPromptEnabled` | boolean | `true` | Whether the global default prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. (v4.7.3) Local-only, device-scoped, same exclusions as `isEnabled` — note `globalDefaultPrompt` (the prompt *content*) still syncs normally; only this toggle is local-only. |
+| `globalPromptEnabled` | boolean | `true` | Whether the global prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. (v4.7.3) Local-only, device-scoped, same exclusions as `isEnabled` — note `globalDefaultPrompt` (the prompt *content*) still syncs normally; only this toggle is local-only. (v4.20.0) Demoted to a **legacy fallback**: it is consulted only when there is no active preset. When a preset IS active, that preset's own `globalPromptEnabled` field wins. Resolution is centralized in `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)`. |
 | `chatPresetMap` | object | `{}` | Maps chat UUIDs (`/a/chat/s/{uuid}`) to preset IDs, enabling per-conversation preset binding. *Replaced in v2.4.0 by chunked keys (see Physical Chunking section).* |
 | `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, chunkCount:0, chunkSizes:[] }` | Index key for chunk discovery and write-target selection (v2.4.0+). |
 | `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | Physical chunks, each <= 7KB, holding a subset of the chatPresetMap entries (v2.4.0+). |
@@ -63,6 +65,16 @@ interface PromptPreset {
   content: string;
   createdAt: number;
   updatedAt: number;
+  globalPromptEnabled?: boolean;  // v4.20.0 — absent means true
+}
+```
+
+`globalPromptEnabled` (v4.20.0) makes the global-prompt injection toggle a per-preset property. New presets are created with it explicitly set to `true`; presets written before v4.20.0 have no such field and are treated as `true`, so upgrading changes nothing for existing users. Because it lives on the preset, it syncs and merges with the preset — unlike the same-named device-level key, which remains local-only and is now just the fallback for "no active preset". The resolution rule is centralized in `resolveGlobalPromptEnabled()` (`utils/storage-manager.presets.js`) so the popup and the content script cannot drift apart:
+
+```javascript
+resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag) {
+    if (!activePreset) return legacyGlobalFlag;
+    return activePreset.globalPromptEnabled ?? true;
 }
 ```
 

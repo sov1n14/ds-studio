@@ -2,7 +2,7 @@
  * DS studio — 提示詞獨立編輯視窗控制器
  *
  * 透過 query string 決定編輯目標：
- *   ?target=global              → 全域預設提示詞
+ *   ?target=global              → 全域提示詞
  *   ?target=preset&id=<presetId> → 指定提示詞組
  *
  * 自動儲存策略：

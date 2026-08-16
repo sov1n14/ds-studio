@@ -5,7 +5,7 @@
 - [DS studio Feature Guide](#ds-studio-feature-guide)
   - [Table of Contents](#table-of-contents)
   - [Managing Prompt Groups](#managing-prompt-groups)
-  - [Global Default Prompt](#global-default-prompt)
+  - [Global Prompt](#global-prompt)
   - [Using Prompt Injection](#using-prompt-injection)
     - [Using No Prompt Group](#using-no-prompt-group)
   - [Conversation-Bound Prompt Groups](#conversation-bound-prompt-groups)
@@ -48,18 +48,21 @@ Prompt Groups are the core feature of DS studio, allowing you to create multiple
 6. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused but its text is no longer selected (v4.18.2) — the caret sits at the end of the existing name, so typing appends instead of replacing it; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first).
 7. The system allows deleting all custom prompt groups: the dropdown always retains a blank option as the default, and hovering over it reveals a **✕** (delete all prompt groups, with confirmation) button that clears every custom prompt group at once.
 
-## Global Default Prompt
+## Global Prompt
 
-The Global Default Prompt (Global Prompt) is a piece of text that is automatically appended to every conversation, operating independently from per-conversation prompt groups.
+The Global Prompt is a piece of text that is automatically appended to every conversation, operating independently from per-conversation prompt groups.
 
 - **How to Set**: In the popup menu's **Global Prompt** section, click the pencil button to open the dedicated editor window.
-- **Independent Toggle**: The switch on the right side of the card independently controls whether the global prompt is injected.
+- **Per-Prompt-Group Toggle (v4.20.0)**: The switch on the right side of the card controls whether the global prompt is injected, and **each prompt group remembers its own switch state**. With prompt group A on and prompt group B off, messages sent under A carry the global prompt while messages under B do not. Switching prompt groups updates the switch to reflect that group's own setting. This setting syncs across devices along with the prompt group.
+- **The Content Is Still Shared**: Only the toggle is per-group — the global prompt **content** remains a single shared string used by every prompt group.
+- **When No Prompt Group Is Selected**: With the blank option selected, or in an unbound conversation, the device-level toggle state is used instead.
+- **Existing Prompt Groups**: Prompt groups created before the upgrade are treated as enabled, matching the pre-upgrade behavior.
 - **Priority**: The master switch (top-right) has the highest priority — when the master switch is off, no injection occurs regardless of the global switch state.
 
 ## Using Prompt Injection
 
 1. Go to `chat.deepseek.com`, type your message normally, and send it.
-2. The extension automatically prepends the currently selected prompt (and the global default prompt, if enabled) to your message in the background.
+2. The extension automatically prepends the currently selected prompt (and the global prompt, if enabled) to your message in the background.
 3. You can switch prompt groups via the dropdown at any time without refreshing the page.
 4. Different conversations can be independently bound to different prompt groups — the system automatically restores the prompt group you last set for a conversation based on its UUID.
 5. Different browser tabs operate independently — each tab remembers its currently selected prompt group.
@@ -68,7 +71,7 @@ The Global Default Prompt (Global Prompt) is a piece of text that is automatical
 ### Using No Prompt Group
 
 Select the blank option in the dropdown. The pencil button for editing the prompt group will be disabled, and the system will not inject any prompt group content.
-If you have set a Global Default Prompt with its toggle enabled, that content will still be injected.
+If you have set a Global Prompt with its toggle enabled, that content will still be injected — with no prompt group selected, the toggle falls back to the device-level state.
 
 ## Conversation-Bound Prompt Groups
 
@@ -204,7 +207,7 @@ If multiple devices edit prompt groups simultaneously:
 
 1. The next time you open the popup menu, a **Cloud Sync Conflict** dialog will appear.
 2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp).
-3. Interface settings (except device-local toggles like `isEnabled` and `globalPromptEnabled`) are overwritten by the cloud version.
+3. Interface settings (except device-local toggles like `isEnabled` and the legacy device-level `globalPromptEnabled` fallback) are overwritten by the cloud version. Note that since v4.20.0 the per-prompt-group `globalPromptEnabled` flag lives on the prompt group itself and therefore DOES sync and merge with it.
 4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only**).
 
 ## Master Switch Linkage

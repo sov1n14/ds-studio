@@ -51,6 +51,10 @@ function readPopupJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.js"), "utf-8");
 }
 
+function readPopupTogglesJs() {
+    return readFileSync(resolve(__dirname, "../../popup/popup.toggles.js"), "utf-8");
+}
+
 // -----------------------------------------------------------------------------
 // Requirement 2 - StorageManager settings key / bundle property / default
 // -----------------------------------------------------------------------------
@@ -115,19 +119,19 @@ describe("popup.js - preventAutoScrollToggle DOM ref and load wiring", () => {
 // Requirement 4 - change handler persists via StorageManager.savePreventAutoScroll
 // -----------------------------------------------------------------------------
 
-describe("popup.js - preventAutoScrollToggle change handler persistence", () => {
-    let popupCode;
+describe("popup.toggles.js - preventAutoScrollToggle change handler persistence", () => {
+    let togglesCode;
 
     beforeAll(() => {
-        popupCode = readPopupJs();
+        togglesCode = readPopupTogglesJs();
     });
 
     it("wires a change listener on preventAutoScrollToggle", () => {
-        expect(popupCode).toMatch(/preventAutoScrollToggle\.addEventListener\(\s*['"]change['"]/);
+        expect(togglesCode).toMatch(/preventAutoScrollToggle\.addEventListener\(\s*['"]change['"]/);
     });
 
     it("the change listener persists the new boolean via StorageManager.savePreventAutoScroll(checked value)", () => {
-        const match = popupCode.match(/preventAutoScrollToggle\.addEventListener\(\s*['"]change['"],[\s\S]{0,400}?\}\);/);
+        const match = togglesCode.match(/preventAutoScrollToggle\.addEventListener\(\s*['"]change['"],[\s\S]{0,400}?\}\);/);
         expect(match, "no change listener block found for preventAutoScrollToggle").not.toBeNull();
         expect(match[0]).toMatch(/StorageManager\.savePreventAutoScroll\(\s*preventAutoScrollToggle\.checked/);
     });
