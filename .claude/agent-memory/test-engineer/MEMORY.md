@@ -1,2 +1,4 @@
-- [Bash tool quoting quirk](bash-tool-quoting.md) — heredoc bodies with backticks break the Bash tool wrapper; use sed + plain heredoc appends
-- [ds-studio vitest harness](ds-studio-harness.md) — no root package.json, run tests from test/, HarvestPolicy global surface pattern
+- [Vitest invocation](vitest-invocation.md) — must cd into test/ before npx vitest run, no root package.json
+- [Spec file line endings](spec-file-line-endings.md) — existing specs use CRLF; scripted patches must match \r\n or fail silently
+- [Bash heredoc breaks on long files](pitfall_bash_heredoc_long_files.md) — single-shot `cat > file << 'EOF'` fails past ~150-200 lines; chunk into multiple `cat >>` appends
+- [Popup toggle factory conventions](project_popup_toggle_factory_conventions.md) — ctx accessor naming shared by createToggleManager/createLiveSyncListener/createPresetManager; global-prompt-per-preset-toggle feature context
