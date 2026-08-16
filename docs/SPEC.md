@@ -8,7 +8,7 @@ DS studio 是一個 Chrome 擴充功能，旨在優化 `chat.deepseek.com` 的�
 
 | 模組 | 涵蓋功能 | 規格文件 |
 |-|-|-|
-| **提示詞系統** | 提示詞組管理、注入邏輯、UUID 對話綁定、全域預設提示詞、空白選項模式 | [→ spec/01-prompt-system.md](spec/01-prompt-system.md) |
+| **提示詞系統** | 提示詞組管理、注入邏輯、UUID 對話綁定、全域提示詞、空白選項模式 | [→ spec/01-prompt-system.md](spec/01-prompt-system.md) |
 | **Popup UI 與 Overlay** | 擴充功能彈出選單版面、頁面內提示詞組切換選單 | [→ spec/02-popup-ui.md](spec/02-popup-ui.md) |
 | **UI 調整** | 側邊欄自動隱藏、對話與輸入框寬度調整、隱藏思考過程、連網搜索、防止自動回滾、回到頂部按鈕、行動裝置側欄滑動手勢 | [→ spec/03-ui-adjustments.md](spec/03-ui-adjustments.md) |
 | **匯出與互動功能** | Markdown 匯出、引用回覆、系統時間注入、恢復被審查的回覆 | [→ spec/04-features.md](spec/04-features.md) |

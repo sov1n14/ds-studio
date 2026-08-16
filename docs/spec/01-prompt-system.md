@@ -19,14 +19,14 @@
   - **釘選狀態不因 hover 而改變位置**：列內按鈕改以 `visibility` 而非 `display` 切換顯隱，版面盒始終存在，故已釘選的圖釘在滑鼠移入或移出該列時位置與尺寸都不變；直接 hover 已亮起的圖釘時亮起樣式維持並略微加強，不會看起來像未釘選。
   - **刪除連動**：刪除單一提示詞組或一鍵刪除全部時，若被刪除的組正是預設，`pinnedPresetId` 一併清為 `''`（實作於 `popup/popup.pin-manager.js` 的 `clearPinIfDeleted()`；未受影響時完全不寫入儲存）。
 - **提示詞資料模型**：每組提示詞包含 `id`（字串）、`name`（字串）、`content`（字串）、`createdAt`（數字，紀元毫秒）、`updatedAt`（數字，紀元毫秒）。`id` 以 `preset-{timestamp}-{random}` 格式產生。內容於獨立編輯視窗中自動儲存：`input` 事件設定 dirty flag 並觸發 500ms 防抖寫入（v4.8.1 從 600ms 對齊為 500ms），`blur`、`visibilitychange` 與 `pagehide` 事件提供立即寫入保險（獨立視窗可能被作業系統直接關閉），僅在 dirty 時寫入以避免耗盡 Chrome sync 配額。
-- **獨立提示詞編輯視窗**（v3.0.0，名稱編輯 v4.14.0，Esc 關閉 v4.15.0，聚焦不全選 v4.18.2）：點擊鉛筆按鈕透過 `chrome.windows.create`（`type: 'popup'`，1280×720）開啟 `popup/editor/editor.html`。Query string 契約：`?target=global` 編輯全域預設提示詞；`?target=preset&id=<presetId>` 編輯該提示詞組內容。提示詞組目標的視窗標題處顯示已聚焦、但不全選內容的名稱輸入框（`#editorNameInput`，替代唯讀 `#editorTitle`），全域目標維持唯讀標題。每種目標各為單例 — 重複點擊鉛筆會聚焦既有視窗（`chrome.windows.update`）並將其分頁導向請求 URL（`chrome.tabs.update`，同 URL 即重新載入、不同 URL 切換至當前啟用的提示詞組；`pagehide` 自動儲存保證無資料遺失），視窗已關閉時才重新建立。提示詞組儲存後會廣播 `ACTIVE_PRESET_CHANGED` 使開啟中的 DeepSeek 分頁即時更新。無效的 query 參數或提示詞組已被刪除時，視窗呈現停用狀態並顯示說明文字。所有儲存一律經由 `StorageManager`。（v4.15.0）按 `Esc` 可關閉視窗，未存內容由 `pagehide` 自動儲存後才關閉，不會遺失。
+- **獨立提示詞編輯視窗**（v3.0.0，名稱編輯 v4.14.0，Esc 關閉 v4.15.0，聚焦不全選 v4.18.2）：點擊鉛筆按鈕透過 `chrome.windows.create`（`type: 'popup'`，1280×720）開啟 `popup/editor/editor.html`。Query string 契約：`?target=global` 編輯全域提示詞；`?target=preset&id=<presetId>` 編輯該提示詞組內容。提示詞組目標的視窗標題處顯示已聚焦、但不全選內容的名稱輸入框（`#editorNameInput`，替代唯讀 `#editorTitle`），全域目標維持唯讀標題。每種目標各為單例 — 重複點擊鉛筆會聚焦既有視窗（`chrome.windows.update`）並將其分頁導向請求 URL（`chrome.tabs.update`，同 URL 即重新載入、不同 URL 切換至當前啟用的提示詞組；`pagehide` 自動儲存保證無資料遺失），視窗已關閉時才重新建立。提示詞組儲存後會廣播 `ACTIVE_PRESET_CHANGED` 使開啟中的 DeepSeek 分頁即時更新。無效的 query 參數或提示詞組已被刪除時，視窗呈現停用狀態並顯示說明文字。所有儲存一律經由 `StorageManager`。（v4.15.0）按 `Esc` 可關閉視窗，未存內容由 `pagehide` 自動儲存後才關閉，不會遺失。
 
 ## 2. 提示詞注入邏輯
 
-- **注入內容**：當功能啟用時，系統會在使用者輸入前加入組合前綴（全域預設提示詞 + 各提示詞組內容），以 XML 標籤包裹：
+- **注入內容**：當功能啟用時，系統會在使用者輸入前加入組合前綴（全域提示詞 + 各提示詞組內容），以 XML 標籤包裹：
   ```
   <system-reminder>
-  [全域預設提示詞 + 各提示詞組內容（以 \n\n 連接）]
+  [全域提示詞 + 各提示詞組內容（以 \n\n 連接）]
   </system-reminder>
 
   <user-input>
@@ -68,22 +68,25 @@
 - **新建提示詞組綁定**：在已綁定的對話上建立新提示詞組時，會更新綁定至新提示詞組。
 - **分頁獨立性**：提示詞組選取為各分頁獨立。當彈出選單在一個分頁上選取提示詞組時，會透過 `chrome.tabs.sendMessage` 將 `ACTIVE_PRESET_CHANGED` 訊息直接發送至該分頁的 Content Script。其他分頁的 Content Script 透過各自的 `chatPresetMap` 綁定保留自己的提示詞組選取，避免跨分頁污染。
 
-## 5. 全域預設提示詞
+## 5. 全域提示詞
 
 - **範圍**：透過獨立編輯視窗（鉛筆按鈕 → `editor.html?target=global`）編輯的多行文字。若非空值且全域提示詞開關開啟，該文字會在所有對話中預先附加至各提示詞組之前。
-- **編輯入口**（v3.0.0）：彈出選單 Global Prompt 卡片中「全域預設提示詞」文字右側的鉛筆按鈕（`#editGlobalPromptBtn`，樣式與新增提示詞組的 `+` 按鈕一致），點擊開啟 1280×720 獨立編輯視窗，維持自動儲存。
-- **專屬注入開關**（v3.0.0）：卡片右緣的 `#globalPromptToggle` 開關（外觀與主開關相同，與上方主開關垂直對齊）。開啟時注入全域預設提示詞；關閉時不注入。儲存於 `globalPromptEnabled` 鍵（預設 `true`，既有使用者升級後行為不變）。
-- **優先權**：主開關（`isEnabled`）優先權最高 — 主開關關閉時，無論 `globalPromptEnabled` 狀態為何，全域預設提示詞一律不注入（由 `injectPrefix()` 的 early return 保證）。
-- **儲存**：獨立儲存在 `globalDefaultPrompt` 鍵下，透過 `chrome.storage.sync` 同步。
-- **與各提示詞組的互動**：在 `buildInjectionPrefix()` 中，全域預設提示詞（開關開啟時）與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。合併結果在注入前以 `<system-reminder>` 標籤包裹。
-- **提示詞組獨立性**：變更全域預設提示詞不會影響任何提示詞組的內容，反之亦然。`globalPromptEnabled` 開關也不影響提示詞組內容的注入。
-- **裝置層級限制（v4.7.3）**：`globalPromptEnabled` 與 `isEnabled` 同為裝置層級的本地專屬設定，不參與雲端同步與衝突解決，確保各裝置可獨立控制啟用狀態。
+- **編輯入口**（v3.0.0）：彈出選單 Global Prompt 卡片中「全域提示詞」文字右側的鉛筆按鈕（`#editGlobalPromptBtn`，樣式與新增提示詞組的 `+` 按鈕一致），點擊開啟 1280×720 獨立編輯視窗，維持自動儲存。
+- **專屬注入開關**（v3.0.0，改為逐提示詞組獨立 v4.20.0）：卡片右緣的 `#globalPromptToggle` 開關（外觀與主開關相同，與上方主開關垂直對齊）。開啟時注入全域提示詞；關閉時不注入。v4.20.0 起此開關為**每個提示詞組各自獨立**的屬性，儲存於該組的 `globalPromptEnabled` 欄位，隨提示詞組一同跨裝置同步；切換提示詞組時開關會重新反映該組自己的設定。UI 未新增元件，沿用同一個 `#globalPromptToggle`。
+- **生效值解析**（v4.20.0）：由 `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)` 決定 —— 有作用中的提示詞組時取該組的 `globalPromptEnabled`，欄位缺漏（既有資料升級）時視為 `true`；無作用中的提示詞組（空白選項模式、對話未綁定）時回退至保留的裝置層級 `globalPromptEnabled` 鍵。新建提示詞組一律明確帶入 `globalPromptEnabled: true`。
+- **導覽時重新解析**（v4.20.0）：SPA 導覽不觸發 `chrome.storage.onChanged`，故 `handleChatChange()` 在每一條分支（已綁定、綁定失效、自動綁定、未綁定的既有對話、全新對話）都會重新解析生效值，避免沿用上一個對話殘留的開關狀態。生效提示詞組 id 由 `resolveOverlayPresetId()` 統一解析，與浮動選單共用同一份優先序規則。
+- **刪除連動**（v4.20.0）：刪除單一提示詞組或一鍵刪除全部時，若 `activePresetId` 因此清空，開關會立即重新渲染為裝置層級回退值，不會停留在已刪除那一組的狀態。
+- **優先權**：主開關（`isEnabled`）優先權最高 — 主開關關閉時，無論 `globalPromptEnabled` 狀態為何，全域提示詞一律不注入（由 `injectPrefix()` 的 early return 保證）。
+- **儲存**：全域提示詞的**內容**獨立儲存在 `globalDefaultPrompt` 鍵下，透過 `chrome.storage.sync` 同步，且維持單一份共用字串 —— 逐組獨立的只有開關，不是內容。
+- **與各提示詞組的互動**：在 `buildInjectionPrefix()` 中，全域提示詞（開關開啟時）與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。合併結果在注入前以 `<system-reminder>` 標籤包裹。
+- **提示詞組獨立性**：變更全域提示詞不會影響任何提示詞組的內容，反之亦然。`globalPromptEnabled` 開關也不影響提示詞組內容的注入。
+- **裝置層級 legacy 鍵（v4.7.3，語意調整 v4.20.0）**：裝置層級的 `globalPromptEnabled` 本機鍵保留，但自 v4.20.0 起僅在無作用中提示詞組時作為回退值使用；`isEnabled` 仍為裝置層級的本地專屬設定，不參與雲端同步與衝突解決。
 
 ## 6. 空白選項模式（無操作模式）
 
 - **永遠可見**：在所有 DeepSeek 頁面上，下拉選單頂端永遠有一個空白選項（`value = ''`），不受綁定狀態影響。
 - **選取時的行為**：
-  - 不注入各提示詞組的內容——僅包含全域預設提示詞（若有設定且其開關開啟）。
+  - 不注入各提示詞組的內容——僅包含全域提示詞（若有設定且其開關開啟）。
   - 提示詞組的鉛筆編輯按鈕（`#editPresetBtn`）為停用狀態，無法開啟編輯視窗。
   - 列內刪除（`✕`）按鈕為停用狀態。
 - **新對話時的選取**：當彈出選單在新對話頁面（無 UUID）上開啟時，使用者明確選取或新增提示詞組的動作會透過查詢 Content Script 記憶體中的 `pendingPresetId` 在重新開啟時保留。此待選狀態在每次聊天狀態轉換時清除。若無待選選取存在，行為依 `pinnedPresetId`（v4.18.0）而定：有已釘選且仍存在的預設組時，`handleChatChange()` 會以它填入 `pendingPresetId`、寫入 `activePresetId` 並更新 overlay，因此新對話一開啟就預選該組；無預設（`''`）或釘選的 id 已不存在（該組被刪除、或儲存中留有過期 id）時，維持原行為 —— `activePresetId` 清除為 `''`，預設選取空白選項。釘選是在「開啟新對話」的那一刻讀取的，不會回溯套用到使用者已經停留其上的新對話頁面。在新分頁開啟新對話頁面時，Content Script 的 `promptPrefix` 一律由當前 URL 的 UUID 綁定決定，不會繼承其他分頁的全域 `activePresetId`。

@@ -27,14 +27,14 @@ User settings and prompt presets are managed across `chrome.storage.sync` (prima
 | Key | Type | Default | Description |
 |-|-|-|-|
 | `dsPresetIndex` | `string[]` | `[]` | Ordered array of prompt preset IDs. |
-| `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. |
+| `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. Shape: `{ id, name, content, createdAt, updatedAt, globalPromptEnabled }`. (v4.20.0) `globalPromptEnabled` is the preset's own global-prompt injection toggle — written explicitly as `true` on creation, treated as `true` when the field is absent on pre-v4.20.0 data, and synced across devices with the preset itself. |
 | `activePresetId` | string | `""` | The ID of the currently active preset. |
 | `pinnedPresetId` | string | `""` | (v4.18.0) The ID of the preset pinned as the default; `""` means no default. A single scalar, so uniqueness is structural — two presets can never be pinned at once. Read only when a NEW conversation is opened (no chat id in the URL) to preselect that preset; existing conversations are never touched. Written via `savePinnedPresetId()`, which shares `saveActivePresetId()`'s `_set` path (sync primary, local fallback), and included in both backup export and import. |
 | `isEnabled` | boolean | `false` | Whether prompt injection is active (master switch). (v4.7.3) Local-only, device-scoped — excluded from sync, `resolveSyncConflict()`, and `restoreSettings()` import. |
 | `includeThinking` | boolean | `true` | Include AI thinking process in exported MD. |
 | `includeReferences` | boolean | `true` | Include citation reference links in exported MD. |
 | `globalDefaultPrompt` | string | `''` | A global prompt prepended before the per-preset prompt in every conversation. |
-| `globalPromptEnabled` | boolean | `true` | Whether the global default prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. (v4.7.3) Local-only, device-scoped, same exclusions as `isEnabled` — note `globalDefaultPrompt` (the prompt *content*) still syncs normally; only this toggle is local-only. |
+| `globalPromptEnabled` | boolean | `true` | Whether the global prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. (v4.7.3) Local-only, device-scoped, same exclusions as `isEnabled` — note `globalDefaultPrompt` (the prompt *content*) still syncs normally; only this toggle is local-only. (v4.20.0) Demoted to a **legacy fallback**: it is consulted only when there is no active preset. When a preset IS active, that preset's own `globalPromptEnabled` field wins. Resolution is centralized in `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)`. |
 | `chatPresetMap` | object | `{}` | Maps chat UUIDs (`/a/chat/s/{uuid}`) to preset IDs, enabling per-conversation preset binding. *Replaced in v2.4.0 by chunked keys (see Physical Chunking section).* |
 | `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, chunkCount:0, chunkSizes:[] }` | Index key for chunk discovery and write-target selection (v2.4.0+). |
 | `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | Physical chunks, each <= 7KB, holding a subset of the chatPresetMap entries (v2.4.0+). |
@@ -65,6 +65,16 @@ interface PromptPreset {
   content: string;
   createdAt: number;
   updatedAt: number;
+  globalPromptEnabled?: boolean;  // v4.20.0 — absent means true
+}
+```
+
+`globalPromptEnabled` (v4.20.0) makes the global-prompt injection toggle a per-preset property. New presets are created with it explicitly set to `true`; presets written before v4.20.0 have no such field and are treated as `true`, so upgrading changes nothing for existing users. Because it lives on the preset, it syncs and merges with the preset — unlike the same-named device-level key, which remains local-only and is now just the fallback for "no active preset". The resolution rule is centralized in `resolveGlobalPromptEnabled()` (`utils/storage-manager.presets.js`) so the popup and the content script cannot drift apart:
+
+```javascript
+resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag) {
+    if (!activePreset) return legacyGlobalFlag;
+    return activePreset.globalPromptEnabled ?? true;
 }
 ```
 

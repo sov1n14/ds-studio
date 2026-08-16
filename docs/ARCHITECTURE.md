@@ -85,7 +85,7 @@ ds-studio/
 │   ├── storage-manager.sync.js      ─  Cloud sync / conflict / restore bundle, incl. syncNow() entry point (absorbed syncnow.js in v4.11.3)
 │   ├── storage-manager.presets.js   ─  Preset CRUD & chat-binding bundle, incl. deletion-tombstone merge/prune (absorbed tombstones.js in v4.11.3)
 │   ├── storage-manager.chatmap.js   ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
-│   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, globalPromptEnabled, restored_messages (v4.7.3 split)
+│   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
 │   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
 │   ├── storage-manager.setters.js   ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── i18n.js                 ─  Internationalization system: locale switching, data-i18n attribute processing (v4.3.3)
@@ -125,7 +125,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 - **System time injection**: When `isEnabled` is false, `showSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
-- **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true.
+- **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0) `isGlobalPromptEnabled` is no longer a straight mirror of one storage key — it is resolved per navigation from the active preset's own `globalPromptEnabled` field, falling back to the legacy device-level key when no preset is active. Subordination to the master switch is unchanged.
 
 ### Overlay Settlement Mechanism (v4.2.2)
 

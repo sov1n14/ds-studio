@@ -26,7 +26,7 @@
   - `chatPresetMap` 透過展開合併（本地端基底 + 匯入新增）。
   - UI 設定（globalDefaultPrompt、includeThinking、includeReferences、側邊欄自動隱藏、寬度）由匯入值**覆寫**。
   - 成功後顯示 Toast，3 秒後重新載入彈出選單。
-  - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。
+  - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。（v4.20.0）此處指的是裝置層級的 `globalPromptEnabled` 鍵；各提示詞組自身的 `globalPromptEnabled` 欄位屬於提示詞組資料，隨 `mergePresets()` 一同匯出與匯入。
   - （v4.10.1）匯入完成後會呼叫 `clearPresetTombstones()`，精準清除 `importedSettings.promptPresets` 中每個提示詞組 ID 對應的 `dsPresetTombstones` 記錄（不存在則略過）。修復先前刪除全部提示詞組後再匯入備份，於下次跨裝置同步時因舊墓碑尚未過期而被再次刪除的缺陷。
 - 此外，備份與還原卡片還包含「匯出復原備份」、「匯入復原備份」、「清除所有已還原紀錄」三個按鈕，專門用於管理 `restored_messages`（審查回覆還原記錄），獨立於一般設定備份。
 
@@ -36,7 +36,7 @@
 - **自動同步**：所有寫入操作（`_set()`）為安全起見同時寫入同步與本地端儲存空間。
 - **衝突偵測**：首次執行（或升級）時，比較本地端與同步的 `promptPresets`。若兩者不同且同步有資料，則設定 `syncConflictPending = true`，並阻止讀取使用同步資料（僅回傳本地端資料）。
 - **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
-- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決），清除衝突旗標。
+- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／裝置層級 globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決；各提示詞組自身的 `globalPromptEnabled` 欄位則隨提示詞組正常合併，v4.20.0），清除衝突旗標。
 - **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
 - **排序仲裁（v4.11.19）**：`mergePresets()` 除了合併內容，也決定回傳陣列的**順序**，依據是雙方的 `dsPresetOrderMeta`。僅當本機 `orderUpdatedAt` **嚴格大於**雲端時採用本機順序；其餘情況（**含時間戳完全相等**）一律採用雲端的 `order` 陣列。此規則與讀取路徑的 `_pickPresetOrderByRecency()` 是兩套獨立機制，`mergePresets()` 不呼叫後者。
   - 時間戳相等是**常態而非邊界狀況**：單次 `_set()` 先寫 `chrome.storage.sync`，再把同一個物件鏡射到 `chrome.storage.local`，因此任何一次成功儲存後兩側 `orderUpdatedAt` 必然逐位元相同。
@@ -76,14 +76,14 @@
 | 鍵 | 型別 | 預設值 | 說明 |
 |-|-|-|-|
 | `dsPresetIndex` | `string[]` | `[]` | 提示詞組 ID 的有序陣列（v1.7.0 新格式）。 |
-| `dsPreset_<id>` | `PromptPreset` | — | 各提示詞組獨立儲存於此鍵，繞過 sync 每項 8KB 限制。每組：`{ id, name, content, createdAt, updatedAt }`。 |
+| `dsPreset_<id>` | `PromptPreset` | — | 各提示詞組獨立儲存於此鍵，繞過 sync 每項 8KB 限制。每組：`{ id, name, content, createdAt, updatedAt, globalPromptEnabled }`。`globalPromptEnabled`（v4.20.0）為該組專屬的全域提示詞注入開關，新建時明確帶入 `true`，既有資料無此欄位時視為 `true`；隨提示詞組一同跨裝置同步。 |
 | `activePresetId` | string | `""` | 當前啟用提示詞組的 ID。 |
 | `pinnedPresetId` | string | `""` | 釘選為「預設」的提示詞組 ID，空字串代表無預設（v4.18.0）。單一純量值，故同時只可能有一組被釘選。僅在開啟新對話（URL 無 chat id）時被讀取用來預選；既有對話不受影響。與 `activePresetId` 走相同寫入路徑（sync 為主、local 備援），並同樣納入設定備份的匯出與匯入。 |
 | `isEnabled` | boolean | `false` | 提示詞注入是否啟用（主開關）。 |
 | `includeThinking` | boolean | `true` | 匯出的 MD 是否包含 AI 思考過程。 |
 | `includeReferences` | boolean | `true` | 匯出的 MD 是否包含引用參考連結。 |
 | `globalDefaultPrompt` | string | `''` | 在所有對話中預先附加至各提示詞組前的全域提示詞。 |
-| `globalPromptEnabled` | boolean | `true` | 全域預設提示詞是否注入（v3.0.0）。主開關優先權更高。 |
+| `globalPromptEnabled` | boolean | `true` | 全域提示詞是否注入（v3.0.0）。主開關優先權更高。v4.20.0 起降級為 **legacy 回退鍵** —— 僅在無作用中提示詞組時採用，有作用中提示詞組時改以該組自身的 `globalPromptEnabled` 欄位為準（解析邏輯見 `StorageManager.resolveGlobalPromptEnabled()`）。 |
 | `chatPresetMap` | object | `{}` | *已於 v2.4.0 遷移為分塊儲存*：舊版扁平鍵，僅於遷移時讀取，遷移後清理。 |
 | `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | （v2.4.0+）分塊索引：版本號（樂觀並發權杖）、分塊數量、各塊位元組大小。 |
 | `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | （v2.4.0+）實際資料分塊，每塊 ≤ 7168 bytes，合併後即完整的 chatPresetMap。 |
