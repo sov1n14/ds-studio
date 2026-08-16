@@ -300,7 +300,7 @@ describe('editor.js auto-save debounce wiring — source assertion', () => {
         expect(inputBlockMatch[0]).not.toContain('performSave()');
     });
 
-    it('preset target flow fills the name input with the preset name, hides the title, and focuses/selects the name input', async () => {
+    it('preset target flow fills the name input with the preset name, hides the title, and focuses (without selecting) the name input', async () => {
         const { readFileSync } = await import('fs');
         const { fileURLToPath } = await import('url');
         const { dirname, resolve } = await import('path');
@@ -315,7 +315,10 @@ describe('editor.js auto-save debounce wiring — source assertion', () => {
         expect(presetBlockMatch[0]).toContain("titleEl.classList.add('is-hidden')");
         expect(presetBlockMatch[0]).toContain("nameInputEl.classList.remove('is-hidden')");
         expect(presetBlockMatch[0]).toContain('nameInputEl.focus()');
-        expect(presetBlockMatch[0]).toContain('nameInputEl.select()');
+        // v4.18.2 (2026-08-07): auto-select-all was deliberately removed so the user's
+        // first keystroke doesn't wipe the whole preset name -- focus-only, cursor at end.
+        // Do NOT reintroduce nameInputEl.select() here; this guards that decision.
+        expect(presetBlockMatch[0]).not.toContain('nameInputEl.select()');
     });
 
     it('name input "input" handler sets isDirty and calls the debounced save (not performSave directly)', async () => {

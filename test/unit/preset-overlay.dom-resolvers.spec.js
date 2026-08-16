@@ -20,9 +20,10 @@
  *   3. window.innerWidth: happy-dom defaults to 1024. Tests that need a specific
  *      branch (center vs gap) set window.innerWidth explicitly before reposition()
  *      and restore it in afterEach.
- *   4. naturalWidth in happy-dom: getNaturalWidth() returns ~20 (all geometry=0).
- *      With no minWidth floor, the expected width is 20 (not 80 as in previous tests).
- *      Center mode left = (containerWidth - 20) / 2.
+ *   4. naturalWidth in happy-dom: getNaturalWidth() returns ~20 raw, but the width
+ *      pipeline floors it at minWidth=80 (content/preset-dropdown.position.js), so the
+ *      effective width used for placement is 80, not 20.
+ *      Center mode left = (containerWidth - 80) / 2.
  *      Tests that need a predictable width stub getNaturalWidth on the dropdown.
  */
 
@@ -199,11 +200,12 @@ function makeCtx(overrides = {}) {
 // newChat:   viewport 683..727 (width 44)
 // btn1:      viewport 0..44    (width 44) — same position as title leading edge
 //
-// With windowWidth=1024 (center mode) and naturalWidth≈20 (happy-dom returns 0 → ~20):
-//   width = min(naturalWidth, maxWidth) = ~20
-//   center left = Math.round((767 - ~20) / 2) = 374  (Math.round added in v4.2.1)
+// With windowWidth=1024 (center mode): raw naturalWidth≈20 (happy-dom returns 0 → ~20),
+// but the width pipeline floors it at minWidth=80, so the effective width is 80.
+//   width = max(naturalWidth, minWidth) = 80
+//   center left = Math.round((767 - 80) / 2) = 344  (Math.round added in v4.2.1)
 //
-// To produce a stable expected value, tests stub getNaturalWidth to return 20
+// To produce a stable expected value, tests rely on the minWidth=80 floor
 // and assert with toBe against the exact rounded integer.
 
 const CONTAINER_RECT = rect(0,   767);
@@ -211,9 +213,10 @@ const TITLE_RECT     = rect(0,   180);
 const NEWCHAT_RECT   = rect(683, 44);
 const BTN1_RECT      = rect(0,   44);
 
-// Expected center-mode left when container=767 and getNaturalWidth()≈20:
-// Math.round((767 - 20) / 2) = Math.round(373.5) = 374
-const EXPECTED_CENTER_LEFT = Math.round((767 - 20) / 2); // 374
+// Expected center-mode left when container=767 and effective width=80
+// (raw getNaturalWidth()≈20, floored to minWidth=80 by the width pipeline):
+// Math.round((767 - 80) / 2) = Math.round(343.5) = 344
+const EXPECTED_CENTER_LEFT = Math.round((767 - 80) / 2); // 344
 
 // ── Group 1: correct element resolution via reposition() ─────────────────────
 
