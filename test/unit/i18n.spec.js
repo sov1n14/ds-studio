@@ -41,7 +41,7 @@ describe('dsI18n', () => {
     // ── 1. Basic translation ────────────────────────────────────────────────
     describe('t() — basic translation', () => {
         it('returns the correct zh_TW string for a known key', () => {
-            expect(dsI18n().t('globalPromptLabel')).toBe('全域預設提示詞');
+            expect(dsI18n().t('globalPromptLabel')).toBe('全域提示詞');
             expect(dsI18n().t('saveStatus')).toBe('已儲存');
             expect(dsI18n().t('confirmButton')).toBe('確定');
         });
@@ -53,8 +53,46 @@ describe('dsI18n', () => {
 
         it('returns English string after switching to English locale', async () => {
             await dsI18n().setLocale('en');
-            expect(dsI18n().t('globalPromptLabel')).toBe('Global Default Prompt');
+            expect(dsI18n().t('globalPromptLabel')).toBe('Global Prompt');
             expect(dsI18n().t('saveStatus')).toBe('Saved');
+        });
+    });
+
+    // ── 1b. Global prompt copy (全域提示詞 rename) ───────────────────────────
+    describe('t() — global prompt label copy', () => {
+        it('resolves globalPromptLabel, editGlobalPromptTitle, globalPresetTitle, globalPlaceholder to the new copy in zh_TW', () => {
+            expect(dsI18n().t('globalPromptLabel')).toBe('全域提示詞');
+            expect(dsI18n().t('editGlobalPromptTitle')).toBe('編輯全域提示詞');
+            expect(dsI18n().t('globalPresetTitle')).toBe('全域提示詞');
+            expect(dsI18n().t('globalPlaceholder')).toBe('輸入全域提示詞（會在所有對話中自動插入）');
+        });
+
+        it('resolves the same four keys to the new copy in en', async () => {
+            await dsI18n().setLocale('en');
+            expect(dsI18n().t('globalPromptLabel')).toBe('Global Prompt');
+            expect(dsI18n().t('editGlobalPromptTitle')).toBe('Edit Global Prompt');
+            expect(dsI18n().t('globalPresetTitle')).toBe('Global Prompt');
+            expect(dsI18n().t('globalPlaceholder')).toBe('Enter the global prompt (will be inserted in all conversations)');
+        });
+
+        it('does NOT alter restoreSettingsMessage, which already reads "全域提示詞" / "global prompt" today', async () => {
+            dsI18n().setLocale('zh_TW');
+            expect(dsI18n().t('restoreSettingsMessage')).toBe(
+                '確定要匯入嗎？\n• 覆蓋：介面設定、對話綁定、全域提示詞\n• 合併：提示詞組合（相同 ID 保留本地、新組合新增於後）'
+            );
+
+            await dsI18n().setLocale('en');
+            expect(dsI18n().t('restoreSettingsMessage')).toBe(
+                'Import this backup?\n• Overwrite: Interface settings, conversation bindings, global prompt\n• Merge: Prompt groups (same ID keeps local, new ones appended)'
+            );
+            dsI18n().setLocale('zh_TW');
+        });
+
+        it('does NOT alter the pin/unpin preset copy, which uses an unrelated meaning of "default"', () => {
+            expect(dsI18n().t('pinPresetAriaLabel')).toBe('設為預設（新對話自動選用）');
+            expect(dsI18n().t('pinPresetTooltip')).toBe('設為預設（新對話自動選用）');
+            expect(dsI18n().t('unpinPresetAriaLabel')).toBe('取消預設');
+            expect(dsI18n().t('unpinPresetTooltip')).toBe('取消預設');
         });
     });
 
@@ -122,7 +160,7 @@ describe('dsI18n', () => {
 
         it('after setLocale("en"), t() returns English strings', async () => {
             await dsI18n().setLocale('en');
-            expect(dsI18n().t('globalPromptLabel')).toBe('Global Default Prompt');
+            expect(dsI18n().t('globalPromptLabel')).toBe('Global Prompt');
             expect(dsI18n().t('searchPresetPlaceholder')).toBe('Search Prompt Group');
             expect(dsI18n().t('confirmButton')).toBe('OK');
         });
@@ -131,7 +169,7 @@ describe('dsI18n', () => {
             dsI18n()._reset();
             await dsI18n().init();
             expect(dsI18n().getLocale()).toBe('zh_TW');
-            expect(dsI18n().t('globalPromptLabel')).toBe('全域預設提示詞');
+            expect(dsI18n().t('globalPromptLabel')).toBe('全域提示詞');
         });
 
         it('setLocale with invalid locale returns false and does NOT change locale', async () => {
@@ -149,7 +187,7 @@ describe('dsI18n', () => {
             await dsI18n().setLocale('en');
             await dsI18n().setLocale('en');
             expect(dsI18n().getLocale()).toBe('en');
-            expect(dsI18n().t('globalPromptLabel')).toBe('Global Default Prompt');
+            expect(dsI18n().t('globalPromptLabel')).toBe('Global Prompt');
         });
     });
 
@@ -160,7 +198,7 @@ describe('dsI18n', () => {
             dsI18n()._data = null;
             dsI18n()._locale = 'zh_TW';
 
-            expect(dsI18n().t('globalPromptLabel')).toBe('全域預設提示詞');
+            expect(dsI18n().t('globalPromptLabel')).toBe('全域提示詞');
             expect(dsI18n().t('saveStatus')).toBe('已儲存');
             expect(dsI18n().t('unknownKey')).toBe('unknownKey');
 

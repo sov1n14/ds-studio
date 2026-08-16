@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let saveTimeout;
     let customSelect;
+    let toggleManager;
 
     // Init Modal & Toast
     Modal.init();
@@ -135,6 +136,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         Modal,
         StorageManager,
         pinManager,
+        renderGlobalPromptToggle: () => toggleManager.renderGlobalPromptToggle(globalPromptToggle),
     });
 
     // --- 載入初始設定 ---
@@ -188,11 +190,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
     if (websearchRadios.length) {
         websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle === 'default' ? 'on' : (settings.websearchToggle ?? 'on'))); });
-    }
-
-    // 全域提示詞開關初始值
-    if (globalPromptToggle) {
-        globalPromptToggle.checked = settings.globalPromptEnabled ?? true;
     }
 
     if (chatWidthToggle && chatWidthSlider && chatWidthValue) {
@@ -269,6 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             showSaveStatus();
             await refreshSyncStatus();
             sendActivePresetToContentScript();
+            await toggleManager.renderGlobalPromptToggle(globalPromptToggle);
             customSelect.render();
         },
         onReorder: async (newPresets) => {
@@ -338,7 +336,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             name:      name,
             content:   '',
             createdAt: Date.now(),
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            globalPromptEnabled: true
         };
 
         presets.push(newPreset);
@@ -371,11 +370,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     editorWindowManager.bindEditGlobalPromptButton(editGlobalPromptBtn);
 
     // --- 功能開關（委派至 popup.toggles.js） ---
-    const toggleManager = window.__DS_PopupToggles.createToggleManager({
+    toggleManager = window.__DS_PopupToggles.createToggleManager({
         StorageManager,
         refreshSyncStatus,
         showSaveStatus,
         applyMasterSwitchUI,
+        getPresets:        () => presets,
+        setPresets:        (v) => { presets = v; },
+        getActivePresetId: () => activePresetId,
+        setActivePresetId: (v) => { activePresetId = v; },
     });
     toggleManager.bindToggles({
         globalPromptToggle,
@@ -388,6 +391,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         preventAutoScrollToggle,
         websearchRadios,
     });
+    // 全域提示詞開關初始值：依目前活躍 preset（或裝置本機舊鍵）決定
+    await toggleManager.renderGlobalPromptToggle(globalPromptToggle);
 
     // --- 寬度滑桿（委派至 popup.width-sliders.js） ---
     const widthSliderManager = window.__DS_PopupWidthSliders.createWidthSliderManager({

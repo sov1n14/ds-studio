@@ -110,7 +110,7 @@ describe('loadContent — routing', () => {
         const result = await loadContent({ type: 'global' });
         expect(result).not.toBeNull();
         expect(result.content).toBe('My global prompt');
-        expect(result.title).toBe('全域預設提示詞');
+        expect(result.title).toBe('全域提示詞');
     });
 
     it('loads global content as empty string when no global prompt saved', async () => {

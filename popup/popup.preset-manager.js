@@ -19,6 +19,7 @@
  * @param {Function} ctx.showSaveStatus - 顯示儲存提示
  * @param {Function} ctx.updateEditPresetBtnState - 更新鉛筆按鈕停用狀態
  * @param {Function} ctx.sendActivePresetToContentScript - 廣播活躍提示詞組
+ * @param {Function} [ctx.renderGlobalPromptToggle] - 重新渲染全域提示詞開關（刪除後立即反映回退狀態）
  * @param {Object} ctx.Modal - Modal 實例
  * @param {Object} ctx.StorageManager - StorageManager 實例
  * @param {Object} ctx.pinManager - Pin 管理器實例，需提供 async clearPinIfDeleted(deletedIds)
@@ -67,6 +68,7 @@ function createPresetManager(ctx) {
         ctx.updateEditPresetBtnState();
         ctx.showSaveStatus();
         ctx.sendActivePresetToContentScript();
+        await ctx.renderGlobalPromptToggle?.();
     }
 
     // --- 刪除全部提示詞組 ---
@@ -106,6 +108,7 @@ function createPresetManager(ctx) {
         ctx.updateEditPresetBtnState();
         ctx.showSaveStatus();
         ctx.sendActivePresetToContentScript();
+        await ctx.renderGlobalPromptToggle?.();
     }
 
     // --- 從內容腳本查詢 pending preset ID ---

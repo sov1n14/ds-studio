@@ -11,8 +11,8 @@
   // ============================================================
   const zh_TW = {
     // ---- Popup: Labels & Section Headers ----
-    globalPromptLabel: '全域預設提示詞',
-    editGlobalPromptTitle: '編輯全域預設提示詞',
+    globalPromptLabel: '全域提示詞',
+    editGlobalPromptTitle: '編輯全域提示詞',
     presetGroupLabel: '提示詞組',
     addPresetTitle: '新增提示詞組',
     editPresetContentTitle: '編輯提示詞組內容',
@@ -177,11 +177,11 @@
     savedInitial: '已儲存',
     savingStatus: '儲存中…',
     savedStatus: '已儲存',
-    globalPresetTitle: '全域預設提示詞',
+    globalPresetTitle: '全域提示詞',
     invalidParamsError: '無效的編輯器參數',
     loadFailedError: '載入失敗，請關閉後重試',
     presetNotFoundError: '找不到提示詞組（可能已被刪除）',
-    globalPlaceholder: '輸入全域預設提示詞（會在所有對話中自動插入）',
+    globalPlaceholder: '輸入全域提示詞（會在所有對話中自動插入）',
     presetPlaceholder: '請輸入提示詞內容...',
 
     // ---- Utils ----
@@ -194,8 +194,8 @@
   // ============================================================
   const en = {
     // ---- Popup: Labels & Section Headers ----
-    globalPromptLabel: 'Global Default Prompt',
-    editGlobalPromptTitle: 'Edit Global Default Prompt',
+    globalPromptLabel: 'Global Prompt',
+    editGlobalPromptTitle: 'Edit Global Prompt',
     presetGroupLabel: 'Prompt Group',
     addPresetTitle: 'Add Prompt Group',
     editPresetContentTitle: 'Edit Prompt Group Content',
@@ -360,11 +360,11 @@
     savedInitial: 'Saved',
     savingStatus: 'Saving…',
     savedStatus: 'Saved',
-    globalPresetTitle: 'Global Default Prompt',
+    globalPresetTitle: 'Global Prompt',
     invalidParamsError: 'Invalid editor parameters',
     loadFailedError: 'Load failed, please close and try again',
     presetNotFoundError: 'Prompt group not found (may have been deleted)',
-    globalPlaceholder: 'Enter the global default prompt (will be inserted in all conversations)',
+    globalPlaceholder: 'Enter the global prompt (will be inserted in all conversations)',
     presetPlaceholder: 'Enter prompt content...',
 
     // ---- Utils ----
