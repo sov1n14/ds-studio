@@ -18,8 +18,8 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 12 script tags', () => {
-        expect(scriptSrcs).toHaveLength(12);
+    it('has exactly 13 script tags', () => {
+        expect(scriptSrcs).toHaveLength(13);
     });
 
     it.each([
@@ -30,11 +30,12 @@ describe('editor.html script tag structure', () => {
         ['storage-manager.chatmap.js fifth', 4, '../../utils/storage-manager.chatmap.js'],
         ['storage-manager.local.js sixth', 5, '../../utils/storage-manager.local.js'],
         ['storage-manager.init.js seventh', 6, '../../utils/storage-manager.init.js'],
-        ['storage-manager.js eighth', 7, '../../utils/storage-manager.js'],
-        ['messaging.js ninth', 8, '../../utils/messaging.js'],
-        ['i18n.locales.js tenth (immediately before i18n.js)', 9, '../../utils/i18n.locales.js'],
-        ['i18n.js eleventh (between i18n.locales.js and editor.js)', 10, '../../utils/i18n.js'],
-        ['editor.js last (twelfth)', 11, 'editor.js'],
+        ['storage-manager.setters.js eighth', 7, '../../utils/storage-manager.setters.js'],
+        ['storage-manager.js ninth', 8, '../../utils/storage-manager.js'],
+        ['messaging.js tenth', 9, '../../utils/messaging.js'],
+        ['i18n.locales.js eleventh (immediately before i18n.js)', 10, '../../utils/i18n.locales.js'],
+        ['i18n.js twelfth (between i18n.locales.js and editor.js)', 11, '../../utils/i18n.js'],
+        ['editor.js last (thirteenth)', 12, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });

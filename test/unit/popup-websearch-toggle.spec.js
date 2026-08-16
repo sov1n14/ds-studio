@@ -62,6 +62,10 @@ function readPopupLiveSyncJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.live-sync.js"), "utf-8");
 }
 
+function readPopupTogglesJs() {
+    return readFileSync(resolve(__dirname, "../../popup/popup.toggles.js"), "utf-8");
+}
+
 // -----------------------------------------------------------------------------
 // Requirement 1/2 - popup.html markup
 // -----------------------------------------------------------------------------
@@ -177,23 +181,23 @@ describe("popup.js - websearchToggle load-restore checked state", () => {
 // Requirement 5 - change handler persists via StorageManager.saveWebsearchToggle
 // -----------------------------------------------------------------------------
 
-describe("popup.js - websearchToggle change handler persistence", () => {
-    let popupCode;
+describe("popup.toggles.js - websearchToggle change handler persistence", () => {
+    let togglesCode;
 
     beforeAll(() => {
-        popupCode = readPopupJs();
+        togglesCode = readPopupTogglesJs();
     });
 
     it("ignores the deselected radio in the change handler (if (!r.checked) return)", () => {
-        expect(popupCode).toMatch(/if\s*\(!r\.checked\)\s*return;/);
+        expect(togglesCode).toMatch(/if\s*\(!r\.checked\)\s*return;/);
     });
 
     it("persists the selected value via StorageManager.saveWebsearchToggle(r.value)", () => {
-        expect(popupCode).toMatch(/StorageManager\.saveWebsearchToggle\(\s*r\.value\s*\)/);
+        expect(togglesCode).toMatch(/StorageManager\.saveWebsearchToggle\(\s*r\.value\s*\)/);
     });
 
     it("runs refreshSyncStatus() and showSaveStatus() after persisting", () => {
-        const match = popupCode.match(/StorageManager\.saveWebsearchToggle\([\s\S]{0,300}?\}\);/);
+        const match = togglesCode.match(/StorageManager\.saveWebsearchToggle\([\s\S]{0,300}?\}\);/);
         expect(match, "no saveWebsearchToggle call found inside a change-handler block in popup.js").not.toBeNull();
         expect(match[0]).toMatch(/refreshSyncStatus\(\)/);
         expect(match[0]).toMatch(/showSaveStatus\(\)/);

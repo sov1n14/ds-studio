@@ -71,6 +71,7 @@ ds-studio/
 │   ├── popup.pin-manager.js ─  Pinned default preset toggle / clear-on-delete (createPinManager ctx factory, v4.18.0)
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
 │   ├── popup.live-sync.js   ─  chrome.storage.onChanged reactivity for the open popup (createLiveSyncListener ctx factory, v4.8.0)
+│   ├── popup.toggles.js     ─  Feature-toggle change listeners, nine of them (createToggleManager ctx factory)
 │   ├── custom-select.js        ─  Custom ARIA combobox component for preset selection (v1.9.0)
 │   ├── popup.locale.js         ─  Language switcher UI (v4.3.3)
 │   ├── popup-modal.css         ─  Modal overlay styles
@@ -86,6 +87,7 @@ ds-studio/
 │   ├── storage-manager.chatmap.js   ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
 │   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, globalPromptEnabled, restored_messages (v4.7.3 split)
 │   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
+│   ├── storage-manager.setters.js   ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── i18n.js                 ─  Internationalization system: locale switching, data-i18n attribute processing (v4.3.3)
 │   ├── logger.js               ─  Diagnostic logger, .warn() only after v4.8.4 cleanup
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)

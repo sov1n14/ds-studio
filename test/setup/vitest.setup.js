@@ -17,6 +17,7 @@ import '../../utils/storage-manager.presets.js';
 import '../../utils/storage-manager.chatmap.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
+import '../../utils/storage-manager.setters.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';

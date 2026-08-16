@@ -3,11 +3,9 @@
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
  *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）、
  *       popup.editor-window.js（createEditorWindowManager）、popup.width-sliders.js（createWidthSliderManager）、
- *       popup.markdown-export.js（createMarkdownExportManager）
+ *       popup.markdown-export.js（createMarkdownExportManager）、popup.toggles.js（createToggleManager）
  * 需在本檔案之前以 <script> 載入上述模組。
  */
-
-// ponytail: file past the 450-line proactive-split threshold; extract the feature-toggle bindings into popup.toggles.js when next touched
 
 // ────────────────────────────────────────────
 // Main popup logic
@@ -372,77 +370,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     editorWindowManager.bindEditPresetButton(editPresetBtn);
     editorWindowManager.bindEditGlobalPromptButton(editGlobalPromptBtn);
 
-    // --- 全域提示詞開關 ---
-    if (globalPromptToggle) {
-        globalPromptToggle.addEventListener('change', async () => {
-            await StorageManager.saveGlobalPromptEnabled(globalPromptToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    // --- 主開關 ---
-    enableToggle.addEventListener('change', async () => {
-        await StorageManager.saveEnabledState(enableToggle.checked);
-        await refreshSyncStatus();
-        applyMasterSwitchUI(enableToggle.checked);
-        showSaveStatus();
+    // --- 功能開關（委派至 popup.toggles.js） ---
+    const toggleManager = window.__DS_PopupToggles.createToggleManager({
+        StorageManager,
+        refreshSyncStatus,
+        showSaveStatus,
+        applyMasterSwitchUI,
     });
-
-    if (includeThinkingToggle) {
-        includeThinkingToggle.addEventListener('change', async () => {
-            await StorageManager.saveIncludeThinking(includeThinkingToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (includeReferencesToggle) {
-        includeReferencesToggle.addEventListener('change', async () => {
-            await StorageManager.saveIncludeReferences(includeReferencesToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (sidebarAutoHideToggle) {
-        sidebarAutoHideToggle.addEventListener('change', async () => {
-            await StorageManager.saveSidebarAutoHide(sidebarAutoHideToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (hideThinkingToggle) {
-        hideThinkingToggle.addEventListener('change', async () => {
-            await StorageManager.saveHideThinking(hideThinkingToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (showSystemTimeToggle) {
-        showSystemTimeToggle.addEventListener('change', async () => {
-            await StorageManager.saveShowSystemTime(showSystemTimeToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-
-    if (preventAutoScrollToggle) {
-        preventAutoScrollToggle.addEventListener('change', async () => {
-            await StorageManager.savePreventAutoScroll(preventAutoScrollToggle.checked);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
-    }
-    websearchRadios.forEach(r => {
-        r.addEventListener('change', async () => {
-            if (!r.checked) return;
-            await StorageManager.saveWebsearchToggle(r.value);
-            await refreshSyncStatus();
-            showSaveStatus();
-        });
+    toggleManager.bindToggles({
+        globalPromptToggle,
+        enableToggle,
+        includeThinkingToggle,
+        includeReferencesToggle,
+        sidebarAutoHideToggle,
+        hideThinkingToggle,
+        showSystemTimeToggle,
+        preventAutoScrollToggle,
+        websearchRadios,
     });
 
     // --- 寬度滑桿（委派至 popup.width-sliders.js） ---

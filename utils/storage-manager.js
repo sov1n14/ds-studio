@@ -9,10 +9,9 @@
  *   4. storage-manager.chatmap.js
  *   5. storage-manager.local.js
  *   6. storage-manager.init.js
- *   7. storage-manager.js  （本檔）
+ *   7. storage-manager.setters.js
+ *   8. storage-manager.js  （本檔）
  */
-
-// ponytail: file past the 450-line proactive-split threshold; split the save<X> writers into storage-manager.setters.js when next touched
 
 // === 錯誤類別（供 instanceof 檢查） ===
 
@@ -374,75 +373,6 @@ const StorageManager = {
      */
     _byteLen(obj) { return new TextEncoder().encode(JSON.stringify(obj)).length; },
 
-    /**
-     * Save the active preset ID
-     * @param {string} id
-     */
-    async saveActivePresetId(id) {
-        return this._set({ [this.KEYS.ACTIVE_PRESET_ID]: id });
-    },
-
-    /**
-     * Save the pinned (default) preset group ID
-     * @param {string} id
-     */
-    async savePinnedPresetId(id) {
-        return this._set({ [this.KEYS.PINNED_PRESET_ID]: id });
-    },
-
-    /**
-     * Save include thinking state
-     * @param {boolean} includeThinking
-     */
-    async saveIncludeThinking(includeThinking) {
-        return this._set({ [this.KEYS.INCLUDE_THINKING]: includeThinking });
-    },
-
-    /**
-     * Save include references state
-     * @param {boolean} includeReferences
-     */
-    async saveIncludeReferences(includeReferences) {
-        return this._set({ [this.KEYS.INCLUDE_REFERENCES]: includeReferences });
-    },
-
-    async saveGlobalDefaultPrompt(content) {
-        return this._set({ [this.KEYS.GLOBAL_DEFAULT_PROMPT]: content });
-    },
-
-    async saveSidebarAutoHide(enabled) {
-        return this._set({ [this.KEYS.SIDEBAR_AUTO_HIDE]: enabled });
-    },
-
-    async saveHideThinking(enabled) {
-        return this._set({ [this.KEYS.HIDE_THINKING]: enabled });
-    },
-
-    async savePreventAutoScroll(enabled) {
-        return this._set({ [this.KEYS.PREVENT_AUTO_SCROLL]: enabled });
-    },
-
-    async saveWebsearchToggle(value) { return this._set({ [this.KEYS.WEBSEARCH_TOGGLE]: value }); },
-
-    async saveShowSystemTime(enabled) {
-        return this._set({ [this.KEYS.SHOW_SYSTEM_TIME]: enabled });
-    },
-
-    async saveChatWidth(percent) {
-        return this._set({ [this.KEYS.CHAT_WIDTH]: percent });
-    },
-
-    async saveChatWidthEnabled(enabled) {
-        return this._set({ [this.KEYS.CHAT_WIDTH_ENABLED]: enabled });
-    },
-
-    async saveInputWidth(percent) {
-        return this._set({ [this.KEYS.INPUT_WIDTH]: percent });
-    },
-
-    async saveInputWidthEnabled(enabled) {
-        return this._set({ [this.KEYS.INPUT_WIDTH_ENABLED]: enabled });
-    },
 };
 
 // === Bundle 合併：將各方法群組的方法 mixin 至 StorageManager ===
@@ -453,7 +383,8 @@ const StorageManager = {
         root.__DS_StorageManager_presets  || {},
         root.__DS_StorageManager_chatmap  || {},
         root.__DS_StorageManager_local    || {},
-        root.__DS_StorageManager_init     || {}
+        root.__DS_StorageManager_init     || {},
+        root.__DS_StorageManager_setters  || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 
