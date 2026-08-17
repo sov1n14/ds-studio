@@ -156,12 +156,12 @@ describe("findButton() -- button-detection preference", () => {
         expect(WebSearchToggle.findButton()).toBe(webSearch);
     });
 
-    it("refuses to guess: never returns a lone deep-thinking toggle it cannot identify as the search toggle (no label text involved)", () => {
+    it("refuses to guess: never returns a lone deep-thinking toggle it cannot identify as the search toggle (no label text involved) -- and a failed direct locate never warns", () => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         const deepThink = makeToggle("true", null, DEEP_THINK_ICON_D);
         document.body.appendChild(deepThink);
         expect(WebSearchToggle.findButton()).toBeNull();
-        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).not.toHaveBeenCalled();
     });
 
     it("generic fallback: icon tier locates a plain aria-pressed element (no .ds-toggle-button class) by its search-icon path", () => {
@@ -170,14 +170,14 @@ describe("findButton() -- button-detection preference", () => {
         expect(WebSearchToggle.findButton()).toBe(search);
     });
 
-    it("generic fallback: plain aria-pressed elements without the icon path and no .ds-toggle-button candidates -- returns null and warns once", () => {
+    it("generic fallback: plain aria-pressed elements without the icon path and no .ds-toggle-button candidates -- returns null and does NOT warn", () => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         const first = makeToggle("false", "an arbitrary label", null, true);
         const second = makeToggle("false", "another arbitrary label", null, true);
         document.body.appendChild(first);
         document.body.appendChild(second);
         expect(WebSearchToggle.findButton()).toBeNull();
-        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).not.toHaveBeenCalled();
     });
 });
 
@@ -234,17 +234,17 @@ describe("findButton() -- two-tier locator: icon path, then positional fallback"
         expect(WebSearchToggle.findButton()).toBe(webSearch);
     });
 
-    it("7: icon paths stripped, only one candidate -- returns null and warns once", () => {
+    it("7: icon paths stripped, only one candidate -- returns null and does NOT warn", () => {
         const lone = makeToggle("false", "深度思考", null);
         document.body.appendChild(lone);
         expect(WebSearchToggle.findButton()).toBeNull();
-        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).not.toHaveBeenCalled();
     });
 
-    it("8: no .ds-toggle-button[aria-pressed] candidates at all -- returns null and warns once", () => {
+    it("8: no .ds-toggle-button[aria-pressed] candidates at all -- returns null and does NOT warn", () => {
         expect(document.querySelector(".ds-toggle-button")).toBeNull();
         expect(WebSearchToggle.findButton()).toBeNull();
-        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).not.toHaveBeenCalled();
     });
 
     it("9: deep-thinking toggle AFTER the search toggle in DOM order -- still returns the search toggle", () => {
@@ -253,6 +253,134 @@ describe("findButton() -- two-tier locator: icon path, then positional fallback"
         document.body.appendChild(webSearch);
         document.body.appendChild(deepThink);
         expect(WebSearchToggle.findButton()).toBe(webSearch);
+    });
+});
+
+describe("give-up deadline: single warning after a sustained locate failure", () => {
+    // A failed locate attempt is an expected transient state while the observer
+    // is armed -- it never warns on its own (start(), MutationObserver, _rearm()).
+    // Only a give-up DEADLINE elapsing with the button still unlocated warns,
+    // exactly once per armed deadline. A success before the deadline cancels it.
+    const advance = (ms = 0) => vi.advanceTimersByTimeAsync(ms);
+    // chrome.storage.local.set() resolves via a real setTimeout(0) internally
+    // (test/fixtures/chrome-storage-mock.js); with fake timers active, awaiting
+    // it directly would deadlock. Fire it, advance the fake timer to let its
+    // internal setTimeout run, then await the now-resolvable promise.
+    const setStorage = async (data) => {
+        const p = chrome.storage.local.set(data);
+        await advance(0);
+        await p;
+    };
+    // Confirmed by direct experiment (see agent memory note): under fake
+    // timers, a MutationObserver callback's delivery can be silently DROPPED
+    // (not merely delayed) when another timer -- here, the give-up deadline --
+    // is also pending on the same fake clock. Neither advanceTimersByTimeAsync(0)
+    // in a bounded retry loop nor plain microtask ticks reliably surface it.
+    // Real timers deliver it reliably (every real-timer spec elsewhere in this
+    // file already depends on that). So: drop to real timers just long enough
+    // for the observer's queued callback to be delivered, then resume fake
+    // timers -- by then the button has already been applied and the give-up
+    // path is moot (isSpent is true, nothing left to warn about).
+    const waitForObserverToSettle = async () => {
+        vi.useRealTimers();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        vi.useFakeTimers();
+    };
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("exposes a positive give-up duration as a named module constant", () => {
+        expect(typeof WebSearchToggle.LOCATE_GIVE_UP_MS).toBe("number");
+        expect(WebSearchToggle.LOCATE_GIVE_UP_MS).toBeGreaterThan(0);
+    });
+
+    it("start(): a failed initial locate attempt never warns on its own", async () => {
+        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        const startPromise = WebSearchToggle.start();
+        await advance(0);
+        await startPromise;
+        expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("MutationObserver: a failed retry attempt on an unrelated mutation never warns on its own", async () => {
+        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        const startPromise = WebSearchToggle.start();
+        await advance(0);
+        await startPromise;
+        expect(console.warn).not.toHaveBeenCalled();
+        document.body.appendChild(document.createElement("div"));
+        await advance(0);
+        expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("_rearm(): a failed re-arm attempt never warns immediately -- it re-arms the deadline instead", async () => {
+        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        const startPromise = WebSearchToggle.start();
+        await advance(0);
+        await startPromise;
+        await setStorage({ [MODE_KEY]: "off" });
+        expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("give-up: still not located when the deadline elapses -- exactly ONE warning, never more than one per armed deadline", async () => {
+        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        const startPromise = WebSearchToggle.start();
+        await advance(0);
+        await startPromise;
+        await advance(WebSearchToggle.LOCATE_GIVE_UP_MS);
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[ds-studio] websearch-toggle: failed to locate the web-search button"
+        );
+        expect(WebSearchToggle._isSpent).toBe(false);
+        await advance(WebSearchToggle.LOCATE_GIVE_UP_MS);
+        expect(console.warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("CORE (live sequence): start() fails, an unrelated mutation fails, then the button appears and applies -- ZERO warnings ever, even after advancing past the deadline", async () => {
+        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        // Attempt 1: start(), no button yet.
+        const startPromise = WebSearchToggle.start();
+        await advance(0);
+        await startPromise;
+        // Attempt 2: an unrelated mutation fires the observer, button still absent.
+        document.body.appendChild(document.createElement("div"));
+        await advance(0);
+        // Attempt 3: the button is inserted -- this mutation fires the observer and it applies.
+        const btn = labelledButton("false", "智能搜索");
+        document.body.appendChild(btn);
+        await waitForObserverToSettle();
+        expect(btn.click).toHaveBeenCalledOnce();
+        expect(WebSearchToggle._isSpent).toBe(true);
+        await advance(WebSearchToggle.LOCATE_GIVE_UP_MS * 2);
+        expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("_rearm(): a stale deadline from a previous arm does not fire a spurious warning after a successful re-arm locates the button", async () => {
+        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        const startPromise = WebSearchToggle.start();
+        await advance(0);
+        await startPromise;
+        // Button still absent -- start() has armed a deadline (and an observer).
+        // Insert the button, then immediately trigger the mode change in the SAME
+        // synchronous tick: _rearm()'s own synchronous locate-and-apply finds and
+        // applies it right there (deterministic), before any stale MutationObserver
+        // callback from the pre-rearm observer could ever be delivered as a microtask.
+        const btn = labelledButton("true", "智能搜索");
+        document.body.appendChild(btn);
+        await setStorage({ [MODE_KEY]: "off" }); // mismatched for the new target -- applies synchronously inside _rearm()
+        expect(btn.click).toHaveBeenCalledOnce();
+        expect(WebSearchToggle._isSpent).toBe(true);
+        // Advance well past where the ORIGINAL (pre-rearm) deadline would have fired.
+        await advance(WebSearchToggle.LOCATE_GIVE_UP_MS * 2);
+        expect(console.warn).not.toHaveBeenCalled();
     });
 });
 
