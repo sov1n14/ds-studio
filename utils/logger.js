@@ -16,11 +16,13 @@
         /**
          * 輸出警告記錄，供配額失敗等重要事件使用。
          * 僅於本地 console.warn 輸出，確保生產環境配額失敗訊息可見。
+         * 事件名稱之後的所有引數（例如附帶的 context 與捕捉到的 Error）皆會
+         * 原樣轉發給 console.warn，不因形參數量限制而遭靜默丟棄。
          * @param {string} event
-         * @param {*}      [data]
+         * @param {...*}   rest
          */
-        warn(event, data) {
-            console.warn('[DS-Sync]', event, data !== undefined ? data : '');
+        warn(event, ...rest) {
+            console.warn('[DS-Sync]', event, ...(rest.length ? rest : ['']));
         },
     };
 

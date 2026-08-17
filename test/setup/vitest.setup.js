@@ -7,6 +7,15 @@ import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 import '../../utils/i18n.locales.js';
 import '../../utils/i18n.js';
 
+// __DS_Logger is referenced by content/temporary-chat-pending-store.js and
+// other modules via globalThis.__DS_Logger?.warn(...). Preload it here (a
+// small, dependency-free util with no chrome.* usage at load time) so specs
+// exercise the REAL warn() implementation instead of silently falling through
+// to each caller's own console.warn fallback branch -- that fallback would
+// mask arg-forwarding bugs inside warn() itself. Smaller blast radius than
+// stubbing __DS_Logger per-spec since this file has no other side effects.
+import '../../utils/logger.js';
+
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the

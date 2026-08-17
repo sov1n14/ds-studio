@@ -9,15 +9,19 @@
  */
 // 搜尋圖示的 path[d] 前綴（語言無關的定位基準；真實頁面資料帶前導空白，比對前需 trim）
 const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
+// 定位放棄期限（毫秒）：持續定位失敗超過此時長才提出唯一一次警告
+const LOCATE_GIVE_UP_MS = 15000;
 
 const WebSearchToggle = {
     STORAGE_KEY: 'dsWebSearchToggle', // 對應 StorageManager.KEYS.WEBSEARCH_TOGGLE
+    LOCATE_GIVE_UP_MS,
 
     enabled: false,
     mode: 'on',
     _masterEnabled: false,
     _isSpent: false, // 一次性套用是否已完成（完成後直到下次重新武裝前不再點擊）
     _observer: null,
+    _giveUpTimer: null, // 定位放棄期限的計時器控制代碼
 
     // 在候選元素中，回傳第一個含搜尋圖示（path[d] 去除前導空白後與前綴相符）者；找不到時回傳 null
     _pickByIcon(candidates) {
@@ -37,7 +41,6 @@ const WebSearchToggle = {
         const iconMatch = this._pickByIcon(new Set([...toggleButtons, ...genericCandidates]));
         if (iconMatch) return iconMatch;
         if (toggleButtons.length >= 2) return toggleButtons[1];
-        console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button');
         return null;
     },
 
@@ -62,6 +65,7 @@ const WebSearchToggle = {
         if (!btn) return;
         this.apply(btn);
         this._isSpent = true;
+        this._cancelGiveUp();
         this._stopObserver();
     },
 
@@ -84,6 +88,23 @@ const WebSearchToggle = {
             this._observer = null;
         }
     },
+    // 武裝定位放棄期限：期限到期時若仍未套用（_isSpent 仍為 false）才提出唯一一次警告
+    _armGiveUp() {
+        this._cancelGiveUp();
+        this._giveUpTimer = setTimeout(() => {
+            this._giveUpTimer = null;
+            if (this._isSpent) return;
+            console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button');
+        }, this.LOCATE_GIVE_UP_MS);
+    },
+
+    // 取消尚未到期的定位放棄計時器（套用成功、停用或重新武裝時呼叫）
+    _cancelGiveUp() {
+        if (this._giveUpTimer) {
+            clearTimeout(this._giveUpTimer);
+            this._giveUpTimer = null;
+        }
+    },
 
     // 依主開關與一次性套用是否已完成重新計算：僅在主開關開啟且尚未套用時啟用
     _recompute() {
@@ -99,7 +120,10 @@ const WebSearchToggle = {
         if (this.enabled) return;
         this.enabled = true;
         this.applyToExisting();
-        if (!this._isSpent) this._armObserver();
+        if (!this._isSpent) {
+            this._armObserver();
+            this._armGiveUp();
+        }
     },
 
     // 停用：僅停止監看，不還原按鈕狀態（我們不擁有狀態）
@@ -107,6 +131,7 @@ const WebSearchToggle = {
         if (!this.enabled) return;
         this.enabled = false;
         this._stopObserver();
+        this._cancelGiveUp();
     },
 
     // 重新武裝一次性旗標：先在 enabled 仍誠實反映狀態時執行 disable() 卸除監看，

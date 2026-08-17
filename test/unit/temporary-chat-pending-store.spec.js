@@ -156,34 +156,59 @@ describe('TemporaryChatPendingStore', () => {
 
     // ── Group F: write-error resilience ──────────────────────────────────────
     describe('F — write-error resilience', () => {
-        it('F1: savePendingDeletes logs a warning and resolves (does not throw) when chrome.storage.sync.set rejects', async () => {
+        it('F1: savePendingDeletes logs a warning and resolves (does not throw) when chrome.storage.sync.set rejects, and the caught error itself reaches console.warn', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            vi.spyOn(chrome.storage.sync, 'set').mockRejectedValueOnce(new Error('quota exceeded'));
+            const writeError = new Error('quota exceeded');
+            vi.spyOn(chrome.storage.sync, 'set').mockRejectedValueOnce(writeError);
 
             await expect(TemporaryChatPendingStore.savePendingDeletes([{ chatUuid: 'x', attemptCount: 0 }]))
                 .resolves.toBeUndefined();
 
             expect(warnSpy).toHaveBeenCalled();
+            // Not just "was warn called" -- the actual caught Error must be
+            // among the arguments console.warn received, or the diagnostic
+            // detail was silently dropped somewhere on the way there.
+            const forwardedArgs = warnSpy.mock.calls.flat();
+            expect(forwardedArgs).toContain(writeError);
             warnSpy.mockRestore();
         });
 
-        it('F2: setLastAuthToken logs a warning and resolves (does not throw) when chrome.storage.local.set rejects', async () => {
+        it('F2: setLastAuthToken logs a warning and resolves (does not throw) when chrome.storage.local.set rejects, and the caught error itself reaches console.warn', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            vi.spyOn(chrome.storage.local, 'set').mockRejectedValueOnce(new Error('quota exceeded'));
+            const writeError = new Error('quota exceeded');
+            vi.spyOn(chrome.storage.local, 'set').mockRejectedValueOnce(writeError);
 
             await expect(TemporaryChatPendingStore.setLastAuthToken('Bearer tok')).resolves.toBeUndefined();
 
             expect(warnSpy).toHaveBeenCalled();
+            const forwardedArgs = warnSpy.mock.calls.flat();
+            expect(forwardedArgs).toContain(writeError);
             warnSpy.mockRestore();
         });
 
-        it('F3: addOpenUuid logs a warning and resolves (does not throw) when chrome.storage.local.set rejects', async () => {
+        it('F3: addOpenUuid logs a warning and resolves (does not throw) when chrome.storage.local.set rejects, and the caught error itself reaches console.warn', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            vi.spyOn(chrome.storage.local, 'set').mockRejectedValueOnce(new Error('quota exceeded'));
+            const writeError = new Error('quota exceeded');
+            vi.spyOn(chrome.storage.local, 'set').mockRejectedValueOnce(writeError);
 
             await expect(TemporaryChatPendingStore.addOpenUuid('uuid-err')).resolves.toBeUndefined();
 
             expect(warnSpy).toHaveBeenCalled();
+            const forwardedArgs = warnSpy.mock.calls.flat();
+            expect(forwardedArgs).toContain(writeError);
+            warnSpy.mockRestore();
+        });
+
+        it('F4: removeOpenUuid logs a warning and resolves (does not throw) when chrome.storage.local.remove rejects, and the caught error itself reaches console.warn', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const writeError = new Error('quota exceeded');
+            vi.spyOn(chrome.storage.local, 'remove').mockRejectedValueOnce(writeError);
+
+            await expect(TemporaryChatPendingStore.removeOpenUuid('uuid-err')).resolves.toBeUndefined();
+
+            expect(warnSpy).toHaveBeenCalled();
+            const forwardedArgs = warnSpy.mock.calls.flat();
+            expect(forwardedArgs).toContain(writeError);
             warnSpy.mockRestore();
         });
     });
