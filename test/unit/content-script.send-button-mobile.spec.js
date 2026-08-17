@@ -102,7 +102,7 @@ function makeOtherButton() {
  *   </div>
  * Returns { container, button, span, textarea }
  */
-function makeEditSendButtonInContainer(value = 'edit text') {
+function makeEditSendButtonInContainer(value = 'edit text', label = '发送') {
     const container = document.createElement('div');
     container.className = 'edit-container';
 
@@ -120,9 +120,56 @@ function makeEditSendButtonInContainer(value = 'edit text') {
 
     const span = document.createElement('span');
     span.className = 'ds-button__content';
-    span.textContent = '发送';
+    span.textContent = label;
 
     button.appendChild(bg);
+    button.appendChild(span);
+    container.appendChild(textarea);
+    container.appendChild(button);
+
+    return { container, button, span, textarea };
+}
+
+/**
+ * Build an edit-window Cancel button DOM subtree matching the real markup:
+ *   <div class="edit-container">
+ *     <textarea>user text</textarea>
+ *     <div class="ds-button ds-button--outlinedNeutral ds-button--outlined ..." role="button">
+ *       <div class="ds-button__background"></div>
+ *       <div class="ds-button__border"></div>
+ *       <span class="ds-button__content">取消</span>
+ *     </div>
+ *   </div>
+ * Structurally distinct from the Send button fixture by variant classes
+ * (--outlinedNeutral --outlined vs --primary --filled) and the extra
+ * ds-button__border child. Verbatim per to-do/samples/input-area.html:31-41.
+ * Returns { container, button, span, textarea }
+ */
+function makeEditCancelButtonInContainer(value = 'edit text', label = '取消') {
+    const container = document.createElement('div');
+    container.className = 'edit-container';
+
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+
+    const button = document.createElement('div');
+    button.className =
+        'ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--capsule ' +
+        'ds-button--s ds-button--icon-relative-m ds-button--min-width';
+    button.setAttribute('role', 'button');
+
+    const bg = document.createElement('div');
+    bg.className = 'ds-button__background';
+
+    const border = document.createElement('div');
+    border.className = 'ds-button__border';
+
+    const span = document.createElement('span');
+    span.className = 'ds-button__content';
+    span.textContent = label;
+
+    button.appendChild(bg);
+    button.appendChild(border);
     button.appendChild(span);
     container.appendChild(textarea);
     container.appendChild(button);
@@ -278,10 +325,18 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
     });
 
     // -----------------------------------------------------------------------
-    // TC-4: Edit-message send button — must trigger injection on the edit textarea
+    // TC-4: Edit-message Send button — must trigger injection regardless of
+    //       the UI locale of its label. The predicate must NOT compare the
+    //       label text against a hardcoded literal; ANY label on the edit
+    //       window's Send button (identified structurally, not linguistically)
+    //       must be recognized.
     // -----------------------------------------------------------------------
-    it('TC-4 EDIT-SEND: clicking ds-button with span.ds-button__content "发送" triggers injection on container textarea', () => {
-        const { container, button, span } = makeEditSendButtonInContainer('edit message');
+    it.each([
+        ['发送', 'Simplified Chinese (no regression)'],
+        ['傳送', 'Traditional Chinese'],
+        ['Send', 'English'],
+    ])('TC-4 EDIT-SEND (%s / %s): edit-window Send button triggers injection regardless of label language', (label) => {
+        const { container, span } = makeEditSendButtonInContainer('edit message', label);
         cleanup = mountInDocument(container);
 
         dispatchPointerdown(span);
@@ -292,11 +347,14 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
     });
 
     // -----------------------------------------------------------------------
-    // TC-5: Button with non-"发送" content — must NOT trigger injection
+    // TC-5: Edit-window Cancel button — must NEVER trigger injection, no
+    //       matter which locale label it carries.
     // -----------------------------------------------------------------------
-    it('TC-5 NEGATIVE EDIT: ds-button with span.ds-button__content "取消" does NOT inject', () => {
-        const { container, button, span, textarea } = makeEditSendButtonInContainer('edit message');
-        span.textContent = '取消'; // Change to cancel button text
+    it.each([
+        ['取消', 'Chinese'],
+        ['Cancel', 'English'],
+    ])('TC-5 NEGATIVE EDIT (%s / %s): edit-window Cancel button does NOT inject', (label) => {
+        const { container, span, textarea } = makeEditCancelButtonInContainer('edit message', label);
         cleanup = mountInDocument(container);
 
         const originalValue = textarea.value;
@@ -304,6 +362,48 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
 
         expect(textarea.value).toBe(originalValue);
         expect(textarea.value).not.toContain('<user-input>');
+    });
+
+    // -----------------------------------------------------------------------
+    // TC-5b: An icon-only button sharing the SAME "primary/filled" classes as
+    //       the edit Send button, but with NEITHER the send-icon SVG path NOR
+    //       a span.ds-button__content label, must NOT be treated as the edit
+    //       Send button. This proves the predicate cannot key on the
+    //       primary/filled classes alone (those are shared with the main
+    //       composer's send button).
+    // -----------------------------------------------------------------------
+    it('TC-5b NEGATIVE AMBIGUOUS: primary/filled button with no send-icon and no content span does NOT inject', () => {
+        const button = document.createElement('div');
+        button.className =
+            'ds-button ds-button--primary ds-button--filled ds-button--capsule ' +
+            'ds-button--s ds-button--icon-relative-m ds-button--min-width';
+        button.setAttribute('role', 'button');
+        // Deliberately no span.ds-button__content and no send-icon svg.
+
+        cleanup = mountInDocument(button, textarea);
+
+        const originalValue = textarea.value;
+        dispatchPointerdown(button);
+
+        expect(textarea.value).toBe(originalValue);
+        expect(textarea.value).not.toContain('<user-input>');
+    });
+
+    // -----------------------------------------------------------------------
+    // TC-5c: The main composer's icon-only send button (ds-button--circle,
+    //       NO span.ds-button__content) must keep being handled by the
+    //       composer-send detection path — it must not be swallowed or
+    //       double-handled by the edit-Send predicate merely because it
+    //       shares ds-button--primary/--filled with the edit Send button.
+    // -----------------------------------------------------------------------
+    it('TC-5c COMPOSER-NOT-EDIT: icon-only composer send button (no content span) still injects via the composer path', () => {
+        const { button, svg } = makeMobileSendButton();
+        cleanup = mountInDocument(button, textarea);
+
+        dispatchPointerdown(svg);
+
+        expect(textarea.value).toContain('<user-input>');
+        expect(textarea.value).toContain('hello world');
     });
 
     // -----------------------------------------------------------------------

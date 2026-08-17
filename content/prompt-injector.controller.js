@@ -9,6 +9,21 @@
 (function (root) {
     'use strict';
 
+    // 編輯視窗「傳送」按鈕的結構性標記（語言無關，不依賴文字或雜湊類別）：
+    // 同時具備 primary + filled 變體樣式，且含有 span.ds-button__content 標籤。
+    // 「取消」按鈕使用 outlinedNeutral/outlined 變體，不符合；主輸入框傳送按鈕
+    // 雖共用 primary/filled，但為純圖示按鈕、無 content span，故亦不符合。
+    const EDIT_SEND_BUTTON_VARIANT_CLASSES = ['ds-button--primary', 'ds-button--filled'];
+
+    // 判斷按鈕是否為編輯視窗的「傳送」按鈕（結構性比對，不比對文字內容）
+    function isEditWindowSendButton(button) {
+        const hasSendVariant = EDIT_SEND_BUTTON_VARIANT_CLASSES.every(cls => button.classList.contains(cls));
+        if (!hasSendVariant) return false;
+
+        const contentLabel = button.querySelector('span.ds-button__content')?.textContent.trim();
+        return !!contentLabel;
+    }
+
     /**
      * 建立 PromptInjector 實例。ctx 的 getter/setter 直接讀寫 content-script.js
      * 模組層級的 let 變數，確保狀態異動對本模組即時可見，反之亦然。
@@ -112,7 +127,7 @@
                 const button = e.target.closest('div.ds-icon-button[role="button"], div.ds-button[role="button"]');
 
                 if (button) {
-                    const isEditSendButton = button.querySelector('span.ds-button__content')?.textContent.trim() === '发送';
+                    const isEditSendButton = isEditWindowSendButton(button);
 
                     const isSendButton = button.innerHTML.includes('M8.3125') ||
                                          button.closest('.ba4f09d3') ||
