@@ -89,6 +89,20 @@ describe('A. warn() fires console.warn with [DS-Sync] prefix', () => {
         logger.warn('SYNC_FAILED', 'network error');
         expect(sendSpy).not.toHaveBeenCalled();
     });
+
+    it('A.6 warn() forwards a third argument (e.g. a caught Error) through to console.warn, not just event+data', () => {
+        const logger = loadFreshLogger();
+        const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const caughtError = new Error('quota exceeded');
+
+        logger.warn('pending-store:write-fail', 'removeOpenUuid', caughtError);
+
+        // Requirement: EVERY argument past the event name must reach console.warn.
+        // A caller that passes (event, contextLabel, error) must not have the
+        // error silently swallowed because warn() only declares two formal
+        // parameters.
+        expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'pending-store:write-fail', 'removeOpenUuid', caughtError);
+    });
 });
 
 // ---------------------------------------------------------------------------
