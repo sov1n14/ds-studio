@@ -14,6 +14,9 @@
     // 「取消」按鈕使用 outlinedNeutral/outlined 變體，不符合；主輸入框傳送按鈕
     // 雖共用 primary/filled，但為純圖示按鈕、無 content span，故亦不符合。
     const EDIT_SEND_BUTTON_VARIANT_CLASSES = ['ds-button--primary', 'ds-button--filled'];
+    // 桌面版（ds-icon-button）與行動版（ds-button）送出按鈕共用的結構選擇器，
+    // 供點擊路徑與 Enter 鍵路徑共用，避免重複硬編字串。
+    const SEND_BUTTON_SELECTOR = 'div.ds-icon-button[role="button"], div.ds-button[role="button"]';
 
     // 判斷按鈕是否為編輯視窗的「傳送」按鈕（結構性比對，不比對文字內容）
     function isEditWindowSendButton(button) {
@@ -22,6 +25,38 @@
 
         const contentLabel = button.querySelector('span.ds-button__content')?.textContent.trim();
         return !!contentLabel;
+    }
+
+    // 判斷按鈕是否為送出按鈕（桌面版圖示、行動版容器 class，或編輯視窗傳送按鈕）
+    function isSendButtonCandidate(button) {
+        if (!button) return false;
+        return button.innerHTML.includes('M8.3125') ||
+               !!button.closest('.ba4f09d3') ||
+               button.parentElement.classList.contains('bf38813a') ||
+               isEditWindowSendButton(button);
+    }
+
+    // 判斷送出按鈕目前是否處於「可送出」狀態（未被 DeepSeek 自身標記為 disabled）。
+    // ds-button--disabled 為語意化 BEM class，優先於雜湊 class 作為主要判斷依據。
+    function isSendButtonEnabled(button) {
+        if (!button) return false;
+        if (button.classList.contains('ds-button--disabled')) return false;
+        if (button.getAttribute('aria-disabled') === 'true') return false;
+        if (button.disabled) return false;
+        return true;
+    }
+
+    // 由 textarea 向上遍歷 DOM，找出同一輸入區內的送出按鈕（供 Enter 鍵路徑使用，
+    // 與點擊路徑共用 isSendButtonCandidate，不重複選擇器字串）。
+    function findSendButtonForTextarea(textarea) {
+        if (!textarea) return null;
+        let el = textarea.parentElement;
+        while (el && el !== document.body) {
+            const candidate = el.querySelector(SEND_BUTTON_SELECTOR);
+            if (candidate && isSendButtonCandidate(candidate)) return candidate;
+            el = el.parentElement;
+        }
+        return null;
     }
 
     /**
@@ -43,24 +78,27 @@
         /**
          * 將組合後的提示前綴注入 textarea，並觸發 React 狀態更新。
          * @param {HTMLTextAreaElement} textarea
+         * @param {boolean} [isSendableWithoutText=false] 是否在文字為空時仍可送出（例如僅附件/圖片）
          * @returns {boolean} 注入成功回傳 true，否則 false
          */
-        function injectPrefix(textarea) {
+        function injectPrefix(textarea, isSendableWithoutText = false) {
             if (!ctx.getIsEnabled()) return false;
 
             const injectionPrefix = buildInjectionPrefix();
-            // 嘗試從已注入內容中提取原始使用者訊息；若無則使用原始值
             const rawVal = textarea.value;
             const userInputMatch = rawVal.match(/<user-input>\n([\s\S]*)\n<\/user-input>$/);
             const currentVal = userInputMatch ? userInputMatch[1] : rawVal;
+            const hasUserText = currentVal.trim() !== '';
 
-            if (currentVal.trim() === '') return false;
+            if (!hasUserText && !isSendableWithoutText) return false;
 
-            // formatSystemTime 由 ctx 提供（不讀取模組層級狀態）
             const systemTimePrefix = ctx.getShowSystemTime() ? `Current Time: ${ctx.formatSystemTime()}\n\n` : '';
 
             let newVal;
-            if (injectionPrefix) {
+            // 無文字但可送出（僅附件/圖片）：僅注入時間戳與提示前綴，不包裝 <user-input>
+            if (!hasUserText) {
+                newVal = `${systemTimePrefix}${injectionPrefix}`;
+            } else if (injectionPrefix) {
                 newVal = `${systemTimePrefix}${injectionPrefix}\n\n<user-input>\n${currentVal}\n</user-input>`;
             } else {
                 newVal = `${systemTimePrefix}<user-input>\n${currentVal}\n</user-input>`;
@@ -69,7 +107,6 @@
             const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
             nativeTextAreaValueSetter.call(textarea, newVal);
 
-            // 觸發 React 16+ 的 input 事件
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
             textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -93,8 +130,16 @@
                 const activeElement = document.activeElement;
 
                 if (activeElement && activeElement.tagName === 'TEXTAREA') {
-                    if (activeElement.value.trim() !== '') ctx.markChatCreationAttempt();
-                    if (injectPrefix(activeElement)) {
+                    const hasText = activeElement.value.trim() !== '';
+                    if (hasText) ctx.markChatCreationAttempt();
+
+                    const sendButton = hasText ? null : findSendButtonForTextarea(activeElement);
+                    const isSendableWithoutText = !hasText && isSendButtonEnabled(sendButton);
+
+                    const didInject = injectPrefix(activeElement, isSendableWithoutText);
+                    if (didInject) {
+                        if (!hasText) ctx.markChatCreationAttempt();
+
                         e.preventDefault();
                         e.stopPropagation();
                         e.stopImmediatePropagation();
@@ -124,17 +169,12 @@
                 if (ctx.getIsInjecting()) return;
 
                 // 同時比對桌面版（ds-icon-button）與行動版（ds-button）送出按鈕
-                const button = e.target.closest('div.ds-icon-button[role="button"], div.ds-button[role="button"]');
+                const button = e.target.closest(SEND_BUTTON_SELECTOR);
 
                 if (button) {
                     const isEditSendButton = isEditWindowSendButton(button);
 
-                    const isSendButton = button.innerHTML.includes('M8.3125') ||
-                                         button.closest('.ba4f09d3') ||
-                                         button.parentElement.classList.contains('bf38813a') ||
-                                         isEditSendButton;
-
-                    if (!isSendButton) return;
+                    if (!isSendButtonCandidate(button)) return;
 
                     let textarea;
                     if (isEditSendButton) {
@@ -142,26 +182,43 @@
                         if (document.activeElement?.tagName === 'TEXTAREA') {
                             textarea = document.activeElement;
                         } else {
-                            // 備援：向上遍歷 DOM 找最近且非空的 textarea
+                            // 備援優先序：(1) 向上遍歷 DOM 找到的非空 textarea 優先；
+                            // (2) 找不到時，改採全域查詢 document.querySelector('textarea')，若其為非空亦優先採用；
+                            // (3) 兩者皆無非空 textarea 時，才退回空 textarea（walk-up 找到的最近者優先，否則用全域查詢結果，
+                            //     例如僅附件/圖片送出的情境）。空 textarea 僅作為最後手段，絕不能提前短路上述優先序。
                             let el = button.parentElement;
+                            let firstEmptyTextarea = null;
                             while (el && el !== document.body) {
                                 const ta = el.querySelector('textarea');
-                                if (ta && ta.value.trim() !== '') { textarea = ta; break; }
+                                if (ta) {
+                                    if (ta.value.trim() !== '') { textarea = ta; break; }
+                                    if (!firstEmptyTextarea) firstEmptyTextarea = ta;
+                                }
                                 el = el.parentElement;
                             }
                             if (!textarea) {
-                                textarea = document.querySelector('textarea');
+                                // 全域查詢備援：非空優先於任何空 textarea（包含 walk-up 找到的空 textarea）。
+                                const globalFallbackTextarea = document.querySelector('textarea');
+                                const isGlobalFallbackNonEmpty = !!globalFallbackTextarea && globalFallbackTextarea.value.trim() !== '';
+                                textarea = isGlobalFallbackNonEmpty
+                                    ? globalFallbackTextarea
+                                    : (firstEmptyTextarea || globalFallbackTextarea);
                             }
                         }
                     } else {
                         textarea = document.querySelector('textarea');
                     }
 
-                    if (textarea && textarea.value.trim() !== '') {
-                        ctx.markChatCreationAttempt();
-                        const didInject = injectPrefix(textarea);
+                    if (textarea) {
+                        const hasText = textarea.value.trim() !== '';
+                        const isSendableWithoutText = !hasText && isSendButtonEnabled(button);
+
+                        if (hasText) ctx.markChatCreationAttempt();
+                        const didInject = injectPrefix(textarea, isSendableWithoutText);
 
                         if (didInject) {
+                            if (!hasText) ctx.markChatCreationAttempt();
+
                             e.preventDefault();
                             e.stopPropagation();
                             e.stopImmediatePropagation();
@@ -183,10 +240,8 @@
         return { buildInjectionPrefix, injectPrefix };
     }
 
-    // 瀏覽器 classic script 環境：掛至全域命名空間
     root.__DS_PromptInjector = { createPromptInjector };
 
-    // Node.js / Vitest 測試環境：同時以 module.exports 匯出
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = { createPromptInjector };
     }

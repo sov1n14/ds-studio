@@ -126,6 +126,79 @@ describe('injectPrefix edge cases (1.2.2, 1.3.x scenarios)', () => {
 
 });
 
+describe('injectPrefix isSendableWithoutText (send-with-attachment-only, new behavior)', () => {
+    function makeTextarea(value) {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        return ta;
+    }
+
+    beforeEach(() => {
+        contentScript.__resetState();
+    });
+
+    it('isSendableWithoutText=true with empty text proceeds, returns true, includes timestamp + prompt, no <user-input> wrapper', () => {
+        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'test', showSystemTime: true });
+        const ta = makeTextarea('');
+        expect(contentScript.injectPrefix(ta, true)).toBe(true);
+        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>\ntest\n<\/system-reminder>$/);
+        expect(ta.value).not.toContain('<user-input>');
+        expect(ta.value).not.toContain('</user-input>');
+    });
+
+    it('isSendableWithoutText=true with whitespace-only text proceeds the same as empty text', () => {
+        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'test', showSystemTime: true });
+        const ta = makeTextarea('   \n  \t  ');
+        expect(contentScript.injectPrefix(ta, true)).toBe(true);
+        expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>\ntest\n<\/system-reminder>$/);
+        expect(ta.value).not.toContain('<user-input>');
+        expect(ta.value).not.toContain('</user-input>');
+    });
+
+    it('isSendableWithoutText defaults to false when omitted, so empty text still returns false', () => {
+        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'test' });
+        const ta = makeTextarea('');
+        expect(contentScript.injectPrefix(ta)).toBe(false);
+        expect(ta.value).toBe('');
+    });
+
+    it('isSendableWithoutText=true does not bypass isEnabled=false', () => {
+        contentScript.__setState({ isEnabled: false, globalDefaultPrompt: 'test' });
+        const ta = makeTextarea('');
+        expect(contentScript.injectPrefix(ta, true)).toBe(false);
+        expect(ta.value).toBe('');
+    });
+
+    it('isSendableWithoutText=true does not alter the with-text injection path', () => {
+        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'test' });
+        const ta = makeTextarea('hello');
+        expect(contentScript.injectPrefix(ta, true)).toBe(true);
+        expect(ta.value).toBe(
+            '<system-reminder>\ntest\n</system-reminder>\n\n<user-input>\nhello\n</user-input>'
+        );
+    });
+
+    it('with showSystemTime off and only promptPrefix configured, empty text yields the prefix alone with no wrapper tags', () => {
+        contentScript.__setState({ isEnabled: true, promptPrefix: 'MyPrefix', showSystemTime: false });
+        const ta = makeTextarea('');
+        expect(contentScript.injectPrefix(ta, true)).toBe(true);
+        expect(ta.value).toBe('<system-reminder>\nMyPrefix\n</system-reminder>');
+    });
+
+    it('dispatches an input event and actually writes the textarea value for the empty-text sendable-without-text case', () => {
+        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'test' });
+        const ta = makeTextarea('');
+        const events = [];
+        ta.addEventListener('input', (e) => events.push({ type: e.type, bubbles: e.bubbles }));
+        const originalValue = ta.value;
+        expect(contentScript.injectPrefix(ta, true)).toBe(true);
+        expect(ta.value).not.toBe(originalValue);
+        const inputEvent = events.find(e => e.type === 'input');
+        expect(inputEvent).toBeDefined();
+        expect(inputEvent.bubbles).toBe(true);
+    });
+});
+
 describe('showSystemTime feature (2.4.x scenario)', () => {
     function makeTextarea(value) {
         const ta = document.createElement('textarea');
