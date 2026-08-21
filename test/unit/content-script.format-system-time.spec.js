@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 
 beforeEach(() => {

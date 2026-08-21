@@ -67,7 +67,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         setPathname('/');
     });
 
-    it('calls TemporaryChatDeleteApi.deleteChatSession(uuid, token, {keepalive:true}) not sendMessage when conditions are met', () => {
+    it('calls TemporaryChatDeleteApi.deleteChatSession(uuid, token, {keepalive:true}) and asks background for no delete retry when conditions are met', () => {
         const token = 'Bearer leave-token';
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
@@ -81,7 +81,7 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.TemporaryChatDeleteApi.deleteChatSession).toHaveBeenCalledWith(uuid, token, { keepalive: true });
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_SCHEDULE_DELETE_RETRY' }));
     });
 
     it('does NOT call sendMessage when suppressNextUnloadDelete is true', () => {

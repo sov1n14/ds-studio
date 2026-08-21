@@ -39,6 +39,16 @@ const DSS_DELETE_ENDPOINT_URL = 'https://chat.deepseek.com/api/v0/chat_session/d
 // content→SW：SPA 導航刪除失敗且情境存活時請 SW 排程重試 alarm
 const DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE = 'DSS_SCHEDULE_DELETE_RETRY';
 
+// content→SW 待刪佇列路由：由 background/pending-store-routes.js 代為存取 chrome.storage
+// payload {uuid}：登記為待刪並加入本機開啟集合
+const DSS_MSG_TRACK_FOR_DELETION = 'DSS_TRACK_FOR_DELETION';
+// payload {uuid}：自跨裝置待刪佇列移除
+const DSS_MSG_REMOVE_PENDING_DELETE = 'DSS_REMOVE_PENDING_DELETE';
+// payload {uuid}：自本機開啟中 UUID 集合移除
+const DSS_MSG_REMOVE_OPEN_UUID = 'DSS_REMOVE_OPEN_UUID';
+// payload {token}：更新本機最近有效 bearer token 快取
+const DSS_MSG_SET_LAST_AUTH_TOKEN = 'DSS_SET_LAST_AUTH_TOKEN';
+
 const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_TEMP_CHAT_STORAGE_KEY,
     DSS_TEMP_CHAT_CHANGED_EVENT,
@@ -53,6 +63,10 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_OPEN_TEMP_UUIDS_KEY,
     DSS_DELETE_ENDPOINT_URL,
     DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
+    DSS_MSG_TRACK_FOR_DELETION,
+    DSS_MSG_REMOVE_PENDING_DELETE,
+    DSS_MSG_REMOVE_OPEN_UUID,
+    DSS_MSG_SET_LAST_AUTH_TOKEN,
 };
 
 // 發布至 globalThis：classic script 的 top-level const 僅存在於全域語彙環境而非 globalThis 屬性，消費端以 globalThis[name] 解析常數時需要此份掛載

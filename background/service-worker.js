@@ -16,11 +16,15 @@ importScripts(
     '../content/temporary-chat-constants.js',
     '../content/temporary-chat-pending-store.js',
     '../utils/settings-message-constants.js',
-    'settings-routes.js'
+    'settings-routes.js',
+    'pending-store-routes.js'
 );
 
 // 註冊設定訊息路由與變更廣播（頂層呼叫，確保 worker 重啟後仍存活）
 DSSSettingsRoutes.install();
+
+// 註冊待刪佇列訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
+DSSPendingStoreRoutes.install();
 
 // 重試 alarm 名稱
 const RETRY_ALARM_NAME = 'dss-delete-retry';

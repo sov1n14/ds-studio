@@ -142,8 +142,8 @@ describe('onSelectChange — reposition regression', () => {
  * its OWN bound before this stub's bound. That is what makes the
  * frame-ceiling assertion below meaningful: if maxFrames regressed to a
  * huge value (the old 7200), the drain loop would be cut off by
- * RAF_FLUSH_CAP instead and the settle:frame-N indices would run well
- * past 59, failing the test.
+ * RAF_FLUSH_CAP instead and reposition() would be called ~200 times,
+ * well past 60, failing the test.
  *
  * Returns a restore function.
  */
@@ -198,7 +198,7 @@ describe('settle loop integration', () => {
         if (restoreRaf) restoreRaf();
     });
 
-    it('mountTo triggers settle loop that calls reposition with settle:frame-N reasons', () => {
+    it('mountTo triggers the settle loop, which repositions the overlay', () => {
         target = document.createElement('div');
         document.body.appendChild(target);
 
@@ -208,9 +208,8 @@ describe('settle loop integration', () => {
         // With no button element inside the target, resolveNewChatButtonEl
         // returns null, so measure() returns null every frame, the metric
         // never stabilises, and the loop runs until it hits its frame
-        // ceiling (maxFrames=60) -> reposition('settle:frame-N').
+        // ceiling (maxFrames=60), calling reposition() once per frame.
         expect(overlay.reposition).toHaveBeenCalled();
-        expect(overlay.reposition).toHaveBeenNthCalledWith(1, 'settle:frame-0');
     });
 
     it('bounds settle frames to the 60-frame ceiling (no unbounded loop)', () => {
@@ -219,19 +218,19 @@ describe('settle loop integration', () => {
 
         overlay.mountTo(target);
 
-        const frameIndices = overlay.reposition.mock.calls
-            .map(([reason]) => /^settle:frame-(\d+)$/.exec(String(reason)))
-            .filter(Boolean)
-            .map(([, n]) => Number(n));
+        const repositionCalls = overlay.reposition.mock.calls.length;
 
         // Sanity: the loop actually ran, otherwise the bound below is vacuous.
-        expect(frameIndices.length).toBeGreaterThan(0);
-        // The ceiling: with maxFrames=60 no frame index may reach 60, and the
-        // loop may not emit more than 60 settle frames. RAF_FLUSH_CAP (200)
-        // exceeds 60, so a regression to an unbounded/huge maxFrames would
-        // produce indices up to the flush cap and fail here.
-        expect(Math.max(...frameIndices)).toBeLessThan(60);
-        expect(frameIndices.length).toBeLessThanOrEqual(60);
+        expect(repositionCalls).toBeGreaterThan(0);
+        // The ceiling. reposition is spied BEFORE mountTo, and mountTo's own
+        // render path never calls it: mountTo goes straight to
+        // _applyPlacementSync(), and the ResizeObserver / window-resize
+        // handlers it installs never fire during this test. So every call
+        // counted here is one settle frame and maxFrames=60 is the exact
+        // allowance — no slack. RAF_FLUSH_CAP (200) exceeds 60, so a
+        // regression to an unbounded/huge maxFrames would drain up to the
+        // flush cap (~200 calls) and fail here.
+        expect(repositionCalls).toBeLessThanOrEqual(60);
     });
 
     it('unmount does not crash after settle loop', () => {

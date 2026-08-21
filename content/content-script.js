@@ -48,6 +48,9 @@ const bindingState = ChatBinding.state;
 var __overlayFactory = __root.__DS_PresetOverlay ||
     (typeof require !== 'undefined' ? require('./preset-overlay.controller.js') : {});
 const PresetOverlay = __overlayFactory.createPresetOverlay({
+    // 相依模組由本組合點注入（manifest 已保證兩者先行載入）
+    storageManager:            StorageManager,
+    i18n:                      dsI18n,
     getIsEnabled:              () => bindingState.isEnabled,
     getCurrentChatUuid:        () => bindingState.currentChatUuid,
     setCurrentChatUuid:        (v) => { bindingState.currentChatUuid = v; },

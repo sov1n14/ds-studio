@@ -90,7 +90,7 @@
      * 固定收斂參數：約 1 秒（60 幀）上限，連續 4 幀穩定即收斂。
      * 收斂後的版面變動由 ResizeObserver 與 window resize 監聽器接手。
      * @param {Function} measure       回傳當前 key metric（px），無法解析時回傳 null
-     * @param {Function} apply         每幀重新套用 reposition，接收 reason 字串
+     * @param {Function} apply         每幀重新套用 reposition
      * @param {Function} scheduleFrame 幀排程器（rAF 或同步 fallback）
      * @returns {{cancel: () => void}|null} runSettle 不可用時回傳 null
      */

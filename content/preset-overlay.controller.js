@@ -64,6 +64,10 @@
     }
 
     function createPresetOverlay(ctx) {
+        // 依賴注入（P11）：優先取 ctx 提供的實作，未提供時退回 manifest 載入順序建立的全域物件。
+        const resolveStorage = () => (ctx && ctx.storageManager) || StorageManager;
+        const resolveI18n    = () => (ctx && ctx.i18n) || dsI18n;
+
         const PresetOverlay = {
             TARGET_SELECTOR: TARGET_SELECTOR,
 
@@ -76,10 +80,12 @@
             _settle:            null,
 
             buildDOM() {
+                const i18n = resolveI18n();
                 this.dropdown = createPresetDropdown({
                     onChange: (id) => this.onSelectChange(id),
-                    placeholderText: dsI18n.t('dropdownPlaceholder'),
-                    emptyOptionText: dsI18n.t('dropdownEmptyOption')
+                    i18n: i18n,
+                    placeholderText: i18n.t('dropdownPlaceholder'),
+                    emptyOptionText: i18n.t('dropdownEmptyOption')
                 });
                 this.wrapperEl = this.dropdown.el;
             },
@@ -92,7 +98,7 @@
                 this._applyPlacementSync();
                 this.setupResizeObserver();
                 this.setupWindowResizeListener();
-                this.startSettle('initial-settle');
+                this.startSettle();
             },
 
             unmount() {
@@ -119,7 +125,7 @@
                 if (!this.dropdown) return;
                 this.dropdown.setOptions(presets);
                 this.dropdown.setValue(activeId || '');
-                this.reposition('render');
+                this.reposition();
             },
 
             updateActiveId(id) {
@@ -134,7 +140,7 @@
                 if (enabled) this.reposition();
             },
 
-            reposition(reason) {
+            reposition() {
                 if (!this.wrapperEl || !this.targetEl) return;
                 if (this.wrapperEl.style.display === 'none') return;
                 scheduleFrame(() => this._applyPlacementSync());
@@ -177,7 +183,7 @@
                 this.wrapperEl.style.transform   = 'translateY(-50%)';
             },
 
-            startSettle: function startSettle(reason) {
+            startSettle: function startSettle() {
                 if (!startSettleSync) return;
                 if (this._settle) return;
                 var self = this;
@@ -186,31 +192,44 @@
                         var result = resolveNewChatButtonEl(self.targetEl);
                         return result && result.el ? result.el.getBoundingClientRect().left : null;
                     },
-                    function (r) { self.reposition(r); },
+                    function () { self.reposition(); },
                     scheduleFrame
                 );
             },
 
             onSelectChange(newId) {
                 const currentChatUuid = ctx.getCurrentChatUuid();
-                const chatPresetMap   = ctx.getChatPresetMap();
+                const storage         = resolveStorage();
 
-                if (currentChatUuid && newId !== '') {
-                    chatPresetMap[currentChatUuid] = newId;
-                    StorageManager.bindChatToPreset(currentChatUuid, newId).then(() =>
-                        StorageManager.getChatPresetMap().then(m => { ctx.setChatPresetMap(m); })
-                    );
-                } else if (currentChatUuid && newId === '') {
-                    delete chatPresetMap[currentChatUuid];
-                    StorageManager.unbindChat(currentChatUuid).then(() =>
-                        StorageManager.getChatPresetMap().then(m => { ctx.setChatPresetMap(m); })
-                    );
+                if (currentChatUuid) {
+                    const isBinding = newId !== '';
+
+                    // 記憶體狀態改以「發布新實例」更新，不就地改動 ctx 持有的物件；
+                    // 同步發布確保緊接其後的 updatePromptPrefixFromBinding 讀得到新綁定。
+                    const nextMap = { ...ctx.getChatPresetMap() };
+                    if (isBinding) {
+                        nextMap[currentChatUuid] = newId;
+                    } else {
+                        delete nextMap[currentChatUuid];
+                    }
+                    ctx.setChatPresetMap(nextMap);
+
+                    // 實際寫入一律走 StorageManager 的交易式路徑，完成後以儲存結果覆寫記憶體狀態。
+                    const persisted = isBinding
+                        ? storage.bindChatToPreset(currentChatUuid, newId)
+                        : storage.unbindChat(currentChatUuid);
+                    Promise.resolve(persisted)
+                        .then(() => storage.getChatPresetMap())
+                        .then(map => { ctx.setChatPresetMap(map); })
+                        .catch(err => console.error('[DSS] preset-overlay onSelectChange: chatPresetMap 持久化失敗:', err));
                 } else {
                     ctx.setPendingPresetId(newId ?? null);
                 }
-                StorageManager.saveActivePresetId(newId);
+
+                Promise.resolve(storage.saveActivePresetId(newId))
+                    .catch(err => console.error('[DSS] preset-overlay onSelectChange: saveActivePresetId 失敗:', err));
                 ctx.updatePromptPrefixFromBinding();
-                this.reposition('onSelectChange');
+                this.reposition();
             },
 
             findAndMount() {
@@ -219,7 +238,7 @@
                 if (this.targetEl === found) return;
                 this.mountTo(found);
                 this.setVisible(ctx.getIsEnabled());
-                StorageManager.getSettings().then(s => {
+                resolveStorage().getSettings().then(s => {
                     const currentChatUuid = ctx.getCurrentChatUuid();
                     const chatPresetMap   = ctx.getChatPresetMap();
                     const pendingPresetId = ctx.getPendingPresetId ? ctx.getPendingPresetId() : undefined;
@@ -250,7 +269,7 @@
                     this._windowResizeHandler = null;
                 }
                 this._windowResizeHandler = setupWindowResizeListenerSync(
-                    () => this.reposition('window-resize'),
+                    () => this.reposition(),
                     scheduleFrame
                 );
             },

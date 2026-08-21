@@ -100,7 +100,14 @@
         function trackUuid(uuid) {
             state.trackedTemporaryUuid = uuid;
             saveTrackedUuid(uuid);
-            TemporaryChatPendingStore.trackForDeletion(uuid);
+            // 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）；
+            // fire-and-forget，失敗僅記錄不中斷追蹤流程
+            Promise.resolve(chrome.runtime.sendMessage({
+                type: _getConst('DSS_MSG_TRACK_FOR_DELETION', 'DSS_TRACK_FOR_DELETION'),
+                uuid,
+            }))
+                .then((response) => { if (response?.ok === false) throw new Error(response.error); })
+                .catch((err) => console.error('[DSS] temporary-chat-delete.tracking trackUuid:', err));
             state.isPendingCreate = false;
         }
 

@@ -46,7 +46,14 @@
             if (e.source !== window) return;
             if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
             state.capturedAuthToken = e.data.authorization || null;
-            if (e.data.authorization) TemporaryChatPendingStore.setLastAuthToken(e.data.authorization);
+            if (!e.data.authorization) return;
+            // 委派 SW 的待刪佇列路由；fire-and-forget，失敗僅記錄
+            Promise.resolve(chrome.runtime.sendMessage({
+                type: _getConst('DSS_MSG_SET_LAST_AUTH_TOKEN', 'DSS_SET_LAST_AUTH_TOKEN'),
+                token: e.data.authorization,
+            }))
+                .then((response) => { if (response?.ok === false) throw new Error(response.error); })
+                .catch((err) => console.error('[DSS] temporary-chat-delete.handlers handleAuthMessage:', err));
         }
 
         /**

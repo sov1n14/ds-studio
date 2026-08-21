@@ -47,6 +47,7 @@ beforeAll(async () => {
     };
     globalThis.TemporaryChatPendingStore = pendingStoreStub;
     globalThis.DSSSettingsRoutes = { install: vi.fn() };
+    globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
     globalThis.fetch = vi.fn();
 
     await import('../../background/service-worker.js');

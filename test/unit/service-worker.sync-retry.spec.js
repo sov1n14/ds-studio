@@ -55,6 +55,7 @@ beforeAll(async () => {
 
     settingsRoutesStub = { install: vi.fn() };
     globalThis.DSSSettingsRoutes = settingsRoutesStub;
+    globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
 
     // Import once; top-level chrome.runtime.onStartup / onInstalled / alarms.onAlarm
     // registrations happen here.

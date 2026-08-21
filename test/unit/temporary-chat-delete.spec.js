@@ -205,22 +205,22 @@ describe('E — handleAuthMessage', () => {
         expect(TemporaryChatDelete.__getState().capturedAuthToken).toBe('Bearer abc');
     });
 
-    it('E5: calls TemporaryChatPendingStore.setLastAuthToken(token) when token present', () => {
+    it('E5: sends DSS_SET_LAST_AUTH_TOKEN to background when token present', () => {
         const event = new MessageEvent('message', {
             data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer abc' },
             source: window,
         });
         TemporaryChatDelete.handleAuthMessage(event);
-        expect(global.TemporaryChatPendingStore.setLastAuthToken).toHaveBeenCalledWith('Bearer abc');
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DSS_SET_LAST_AUTH_TOKEN', token: 'Bearer abc' });
     });
 
-    it('E6: does NOT call setLastAuthToken when authorization is absent', () => {
+    it('E6: does NOT send DSS_SET_LAST_AUTH_TOKEN to background when authorization is absent', () => {
         const event = new MessageEvent('message', {
             data: { type: 'DSS_AUTH_CAPTURED', authorization: null },
             source: window,
         });
         TemporaryChatDelete.handleAuthMessage(event);
-        expect(global.TemporaryChatPendingStore.setLastAuthToken).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_SET_LAST_AUTH_TOKEN' }));
     });
 
     it('E2: ignores messages not from window (source !== window)', () => {
@@ -378,14 +378,14 @@ describe('H — checkCoOccurrence', () => {
         expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBe(uuid);
     });
 
-    it('H6: when both are true and already on chat page → calls TemporaryChatPendingStore.trackForDeletion(uuid)', () => {
+    it('H6: when both are true and already on chat page → sends DSS_TRACK_FOR_DELETION to background', () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({ createDetected: true, completionDetected: true });
 
         TemporaryChatDelete.checkCoOccurrence();
 
-        expect(global.TemporaryChatPendingStore.trackForDeletion).toHaveBeenCalledWith(uuid);
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DSS_TRACK_FOR_DELETION', uuid });
     });
 });
 
@@ -419,7 +419,7 @@ describe('I — handleNavigationEvent (marking)', () => {
         expect(TemporaryChatDelete.__getState().isPendingCreate).toBe(false);
     });
 
-    it('I1b: calls TemporaryChatPendingStore.trackForDeletion(uuid) when marking via navigation', () => {
+    it('I1b: sends DSS_TRACK_FOR_DELETION to background when marking via navigation', () => {
         TemporaryChatDelete.__setState({ isPendingCreate: true, enabledFlagCache: true });
 
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -428,7 +428,7 @@ describe('I — handleNavigationEvent (marking)', () => {
             navigationType: 'push',
         }));
 
-        expect(global.TemporaryChatPendingStore.trackForDeletion).toHaveBeenCalledWith(uuid);
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DSS_TRACK_FOR_DELETION', uuid });
     });
 
     it('I2: persists trackedTemporaryUuid to sessionStorage after marking', () => {
@@ -510,7 +510,7 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
         postMessageSpy.mockRestore();
     });
 
-    it('J2: does NOT call chrome.runtime.sendMessage on navigation (keepalive: false path)', () => {
+    it('J2: does NOT ask background to schedule a delete retry on navigation (keepalive: false path)', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -523,7 +523,7 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
             navigationType: 'push',
         }));
 
-        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_SCHEDULE_DELETE_RETRY' }));
     });
 
     it('J3: clears trackedTemporaryUuid after navigation deletion', () => {
@@ -762,7 +762,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
         expect(global.TemporaryChatDeleteApi.deleteChatSession).toHaveBeenCalledWith(uuid, 'Bearer tok', { keepalive: true });
     });
 
-    it('M2: does NOT call chrome.runtime.sendMessage (tab-close now routes through deleteChatSession)', () => {
+    it('M2: does NOT ask background to schedule a delete retry (tab-close routes through deleteChatSession)', () => {
         const uuid = 'face0000-f00d-dead-beef-0123456789ab';
         setPathname(`/a/chat/s/${uuid}`);
         TemporaryChatDelete.__setState({
@@ -774,7 +774,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_SCHEDULE_DELETE_RETRY' }));
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
     });
 
@@ -812,7 +812,7 @@ describe('N — deleteTrackedAndClear', () => {
         sessionStorage.clear();
     });
 
-    it('N10: calls TemporaryChatPendingStore.removeOpenUuid(uuid) on departure', () => {
+    it('N10: sends DSS_REMOVE_OPEN_UUID to background on departure', () => {
         const uuid = 'dede0009-dead-dead-dead-deaddeaddead';
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: uuid,
@@ -821,7 +821,7 @@ describe('N — deleteTrackedAndClear', () => {
 
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
 
-        expect(global.TemporaryChatPendingStore.removeOpenUuid).toHaveBeenCalledWith(uuid);
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DSS_REMOVE_OPEN_UUID', uuid });
     });
 
     it('N1: navigation (keepalive: false) — posts DSS_FIBER_DELETE_SESSION message', () => {
@@ -880,7 +880,7 @@ describe('N — deleteTrackedAndClear', () => {
         vi.useRealTimers();
     });
 
-    it('N9: navigation (keepalive: false) — does NOT fallback to API if fiber delete succeeds; calls removePendingDelete(uuid)', () => {
+    it('N9: navigation (keepalive: false) — does NOT fallback to API if fiber delete succeeds; sends DSS_REMOVE_PENDING_DELETE', () => {
         vi.useFakeTimers();
         const uuid = 'dede0001-dead-dead-dead-deaddeaddead';
         TemporaryChatDelete.__setState({
@@ -900,7 +900,7 @@ describe('N — deleteTrackedAndClear', () => {
         vi.advanceTimersByTime(3000);
 
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
-        expect(global.TemporaryChatPendingStore.removePendingDelete).toHaveBeenCalledWith(uuid);
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DSS_REMOVE_PENDING_DELETE', uuid });
         vi.useRealTimers();
     });
 
@@ -916,7 +916,7 @@ describe('N — deleteTrackedAndClear', () => {
         expect(global.TemporaryChatDeleteApi.deleteChatSession).toHaveBeenCalledWith(uuid, 'Bearer close', { keepalive: true });
     });
 
-    it('N4: tab close (keepalive: true) — does NOT call chrome.runtime.sendMessage nor deleteChatSessionWithRetry', () => {
+    it('N4: tab close (keepalive: true) — does NOT ask background to schedule a delete retry nor call deleteChatSessionWithRetry', () => {
         const uuid = 'dede0002-dead-dead-dead-deaddeaddead';
         TemporaryChatDelete.__setState({
             trackedTemporaryUuid: uuid,
@@ -926,10 +926,10 @@ describe('N — deleteTrackedAndClear', () => {
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
 
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
-        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_SCHEDULE_DELETE_RETRY' }));
     });
 
-    it('N11: tab close (keepalive: true) — calls removePendingDelete(uuid) after successful deleteChatSession', async () => {
+    it('N11: tab close (keepalive: true) — sends DSS_REMOVE_PENDING_DELETE after a successful deleteChatSession', async () => {
         const uuid = 'dede0010-dead-dead-dead-deaddeaddead';
         global.TemporaryChatDeleteApi.deleteChatSession.mockResolvedValueOnce(true);
         TemporaryChatDelete.__setState({
@@ -943,10 +943,10 @@ describe('N — deleteTrackedAndClear', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(global.TemporaryChatPendingStore.removePendingDelete).toHaveBeenCalledWith(uuid);
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'DSS_REMOVE_PENDING_DELETE', uuid });
     });
 
-    it('N12: tab close (keepalive: true) — does NOT call removePendingDelete when deleteChatSession fails', async () => {
+    it('N12: tab close (keepalive: true) — sends no DSS_REMOVE_PENDING_DELETE when deleteChatSession fails', async () => {
         const uuid = 'dede0011-dead-dead-dead-deaddeaddead';
         global.TemporaryChatDeleteApi.deleteChatSession.mockResolvedValueOnce(false);
         TemporaryChatDelete.__setState({
@@ -959,7 +959,7 @@ describe('N — deleteTrackedAndClear', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(global.TemporaryChatPendingStore.removePendingDelete).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_REMOVE_PENDING_DELETE' }));
     });
 
     it('N5: clears _trackedTemporaryUuid and saves null to sessionStorage', () => {

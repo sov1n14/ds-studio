@@ -6,7 +6,7 @@
  *
  * 載入順序（manifest.json 必須依此順序）：
  *   1. temporary-chat-constants.js   （常數）
- *   2. temporary-chat-enabled-flag.js（啟用旗標，chrome.storage.local）
+ *   2. temporary-chat-enabled-flag.js（啟用旗標，經 background 設定路由；需 utils/settings-message-constants.js 先行載入）
  *   3. temporary-chat-pending-store.js / temporary-chat-delete-api.js
  *   4. temporary-chat-delete.tracking.js
  *   5. temporary-chat-delete.coordinator.js
@@ -53,10 +53,10 @@ const TemporaryChatDelete = (() => {
     /** 讀取啟用旗標（同步，來源為共享旗標模組的快取）。 */
     const readEnabledFlag = () => _flag().isEnabled();
 
-    /** 僅更新啟用旗標快取，不寫入 chrome.storage.local。 */
+    /** 僅更新啟用旗標快取，不經 background 設定路由寫入。 */
     const setEnabledFlagCache = (isEnabled) => _flag().__setCache(isEnabled);
 
-    /** 從 chrome.storage.local 讀取啟用旗標並更新快取。 */
+    /** 以 DSS_GET_SETTINGS 向 background 索取啟用旗標並更新快取。 */
     const initEnabledFlagFromStorage = () => _flag().initFromStorage();
 
     // ── 部件組合（單一共享狀態物件，以參照傳遞給所有部件） ──────────────────
@@ -131,7 +131,7 @@ const TemporaryChatDelete = (() => {
 
     /**
      * 初始化模組：訂閱啟用旗標變更、從 sessionStorage 恢復追蹤 UUID、
-     * 從 chrome.storage.local 讀取啟用旗標，並決定是否掛載監聽器。
+     * 經 background 設定路由讀取啟用旗標，並決定是否掛載監聽器。
      * @returns {Promise<void>}
      */
     async function init() {
