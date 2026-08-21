@@ -46,9 +46,6 @@ const __DSHarvestPolicy = (typeof globalThis !== 'undefined' ? globalThis : wind
 /** 每步等待 DOM 穩定的最長時間（ms） */
 const HARVEST_STEP_TIMEOUT = 8000;
 
-/** 判定抵達底部：scrollTop + clientHeight >= scrollHeight - 此容差（px） */
-const HARVEST_BOTTOM_TOLERANCE = 4;
-
 /** 底部確認需連續幾次穩定才算真的到底 */
 const HARVEST_BOTTOM_CONFIRM_COUNT = 3;
 
@@ -180,11 +177,10 @@ async function harvestAllMessages() {
             // 每輪只讀取一次版面度量，避免重複讀取觸發多次 layout reflow。
             // 這些值僅在本輪內重用，下一輪捲動後會再重新讀取。
             const scrollTop = container.scrollTop;
-            const clientHeight = container.clientHeight;
             const scrollHeight = container.scrollHeight;
 
-            const isAtBottomNow =
-                scrollTop + clientHeight >= scrollHeight - HARVEST_BOTTOM_TOLERANCE;
+            // 底部判定與容差常數的單一來源為 harvest.dom.js 的 _isAtBottom()。
+            const isAtBottomNow = _isAtBottom(container);
 
             if (isAtBottomNow) {
                 bottomConfirmCount++;
