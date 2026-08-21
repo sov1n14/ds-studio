@@ -194,7 +194,7 @@ sequenceDiagram
     Note over Popup,Content: 一般流程 — 提示詞操作
     Popup->>Popup: Modal.prompt/confirm 管理提示詞 CRUD
     Popup->>Storage: 儲存 promptPresets / activePresetId
-    Popup->>Content: sendMessage ACTIVE_PRESET_CHANGED (per-tab)
+    Popup->>Content: broadcastActivePreset ACTIVE_PRESET_CHANGED (all chat.deepseek.com tabs)
     Content->>Content: updatePromptPrefixFromBinding()
     Storage-->>Content: onChanged (PROMPT_PRESETS / CHAT_PRESET_MAP)
 
