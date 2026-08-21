@@ -9,6 +9,8 @@ beforeAll(() => {
     // be loaded (and i18n initialized) before custom-select.js is evaluated —
     // mirrors the <script> load order declared in popup/popup.html.
     loadI18nOnce();
+    // custom-select.js does `const _debounce = DSSDebounce;` — the shared helper must be on globalThis first.
+    evalPopupScript('utils/debounce.js');
     evalPopupScript('popup/preset-item-renderer.js');
     evalPopupScript('popup/custom-select.js');
 
@@ -94,7 +96,6 @@ describe('createPresetCustomSelect', () => {
             expect(typeof sel.render).toBe('function');
             expect(typeof sel.open).toBe('function');
             expect(typeof sel.close).toBe('function');
-            expect(typeof sel.setActive).toBe('function');
         });
 
         it('初始面板應為隱藏狀態', () => {
@@ -159,24 +160,6 @@ describe('createPresetCustomSelect', () => {
             sel.open();
             sel.open();
             expect(document.querySelectorAll('#list .ds-select__item').length).toBe(3);
-        });
-    });
-
-    describe('setActive()', () => {
-        it('setActive() 更新 trigger 顯示文字', () => {
-            const { sel, setActiveId } = createSelect();
-            setActiveId('c');
-            sel.setActive('c');
-            expect(document.getElementById('value').textContent).toBe('Gamma');
-        });
-
-        it('setActive() 在面板開啟時更新選中狀態', () => {
-            const { sel, setActiveId } = createSelect();
-            sel.open();
-            setActiveId('b');
-            sel.setActive('b');
-            const selected = document.querySelector('#list .ds-select__item--selected');
-            expect(selected?.dataset.id).toBe('b');
         });
     });
 

@@ -32,16 +32,8 @@
         return false;
     }
 
-    function _debounce(fn, delayMs) {
-        let timer = null;
-        return function (...args) {
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(() => {
-                timer = null;
-                fn.apply(this, args);
-            }, delayMs);
-        };
-    }
+    // 防抖工具來自 utils/debounce.js（由 popup.html 於本檔之前載入）
+    const _debounce = DSSDebounce;
 
     function createPresetCustomSelect({
         triggerEl,
@@ -159,22 +151,6 @@
             panelEl.hidden = true;
             triggerEl.setAttribute('aria-expanded', 'false');
             _unregisterOutsideClick();
-        }
-
-        function setActive(presetId) {
-            _updateTrigger();
-            if (!state.isOpen) return;
-
-            panelEl.querySelectorAll('.ds-select__item--selected').forEach(el => {
-                el.classList.remove('ds-select__item--selected');
-            });
-
-            if (presetId === '') {
-                blankItemEl.classList.add('ds-select__item--selected');
-            } else {
-                const el = listEl.querySelector(`[data-id="${CSS.escape(presetId)}"]`);
-                if (el) el.classList.add('ds-select__item--selected');
-            }
         }
 
         function _registerOutsideClick() {
@@ -426,7 +402,7 @@
         _bindEvents();
         render();
 
-        return { render, open, close, setActive };
+        return { render, open, close };
     }
 
     global.__DSSCustomSelect = { createPresetCustomSelect };

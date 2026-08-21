@@ -16,6 +16,8 @@ beforeAll(() => {
     // Mirrors the <script> load order declared in popup/popup.html, and the
     // same loading pattern used by test/unit/popup-custom-select.spec.js.
     loadI18nOnce();
+    // custom-select.js does `const _debounce = DSSDebounce;` — the shared helper must be on globalThis first.
+    evalPopupScript('utils/debounce.js');
     evalPopupScript('popup/preset-item-renderer.js');
     evalPopupScript('popup/custom-select.js');
 

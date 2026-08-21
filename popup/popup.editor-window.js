@@ -2,9 +2,20 @@
  * DS studio — Popup Editor Window 模組
  * 封裝全域/提示詞組編輯器視窗的開啟（singleton per target）與追蹤邏輯，
  * 並綁定「編輯提示詞組」「編輯全域提示詞」兩顆按鈕的點擊事件。
+ * 視窗單例狀態由 utils/window-control.js 保存於 chrome.storage.session（決策 D5），
+ * popup 關閉後再次點擊仍會聚焦既有視窗，切換提示詞組時則導向該組的 URL。
  * 使用 factory 模式接收 ctx 上下文物件，以保持與 popup.js 的共享狀態同步。
  * 此檔案以 classic script 載入，無 ES import/export。
  */
+
+// --- 編輯器視窗 ID 的 session 儲存鍵（全域與提示詞組各保留一個 slot） ---
+const EDITOR_WINDOW_STORAGE_KEYS = {
+    global: 'dss-editor-window-id-global',
+    preset: 'dss-editor-window-id-preset',
+};
+
+// --- 編輯器視窗建立選項 ---
+const EDITOR_WINDOW_CREATE_OPTIONS = { type: 'popup', width: 1280, height: 720 };
 
 /**
  * 建立編輯器視窗管理器。
@@ -12,10 +23,6 @@
  * @param {Function} ctx.getActivePresetId - 取得目前 activePresetId
  */
 function createEditorWindowManager(ctx) {
-    // --- 編輯器視窗 ID 追蹤（各保留一個 slot） ---
-    let globalEditorWindowId = null;
-    let presetEditorWindowId = null;
-
     /**
      * 開啟（或聚焦）編輯器視窗（singleton per target）
      * @param {'global'|'preset'} target - 編輯目標類型
@@ -23,48 +30,20 @@ function createEditorWindowManager(ctx) {
      */
     async function openEditorWindow(target, presetId) {
         const baseUrl = chrome.runtime.getURL('popup/editor/editor.html');
-        const url = target === 'global'
+        const isGlobal = target === 'global';
+        // URL 的 query string 即編輯器讀取編輯目標的機制，切換提示詞組時由此帶入新的 id
+        const url = isGlobal
             ? `${baseUrl}?target=global`
             : `${baseUrl}?target=preset&id=${encodeURIComponent(presetId)}`;
 
-        // 根據 target 選取對應的視窗 ID slot
-        const isGlobal      = target === 'global';
-        const trackedId     = isGlobal ? globalEditorWindowId : presetEditorWindowId;
-
-        if (trackedId !== null) {
-            try {
-                // 嘗試聚焦現有視窗
-                await chrome.windows.update(trackedId, { focused: true });
-                // 重新載入／導向分頁：相同 URL 即重新整理，不同 URL 則切換至目前啟用的提示詞組。
-                // 此舉安全無資料遺失之虞，因編輯器在 pagehide 時會先自動儲存未存內容。
-                try {
-                    const tabs = await chrome.tabs.query({ windowId: trackedId });
-                    const tab = tabs[0];
-                    if (tab && typeof tab.id === 'number') {
-                        await chrome.tabs.update(tab.id, { url });
-                    }
-                } catch {
-                    // 視窗可能並行關閉，忽略錯誤
-                }
-                return;
-            } catch {
-                // 視窗已關閉，清除追蹤 ID 並重新建立
-                if (isGlobal) {
-                    globalEditorWindowId = null;
-                } else {
-                    presetEditorWindowId = null;
-                }
-            }
-        }
-
         try {
-            const win = await chrome.windows.create({ url, type: 'popup', width: 1280, height: 720 });
-            if (isGlobal) {
-                globalEditorWindowId = win.id;
-            } else {
-                presetEditorWindowId = win.id;
-            }
+            await DSSWindowControl.openSingletonWindow({
+                url,
+                createOptions: EDITOR_WINDOW_CREATE_OPTIONS,
+                storageKey: EDITOR_WINDOW_STORAGE_KEYS[isGlobal ? 'global' : 'preset'],
+            });
         } catch (err) {
+            console.error('[DSS] popup.editor-window.openEditorWindow:', err);
         }
     }
 

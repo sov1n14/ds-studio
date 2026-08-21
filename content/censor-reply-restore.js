@@ -23,7 +23,6 @@ var __DS_CensorKeyToMessageIdMap = (typeof globalThis !== 'undefined' ? globalTh
     (typeof require !== 'undefined' ? require('./censor-reply-restore.keymap.js') : null);
 
 const CensorReplyRestore = {
-    RESTORED_MESSAGES_KEY: 'restored_messages',
     STORAGE_MAX_ENTRIES: 200,
 
     enabled: false,
@@ -301,7 +300,7 @@ const CensorReplyRestore = {
     async clearAllRestoredMessages() {
         this._restoredMessages = {};
         this._keyToMessageId.clear();
-        await StorageManager.saveRestoredMessages({});
+        await StorageManager.clearRestoredMessages();
     },
 
     enable() {

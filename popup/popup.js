@@ -211,10 +211,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 判斷是否在 DeepSeek 分頁並調整活躍提示詞組
     try {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tabs[0] && tabs[0].url && tabs[0].url.includes('chat.deepseek.com')) {
-            const uuid  = presetManager.extractUuidFromUrl(tabs[0].url);
-            const tabId = tabs[0].id;
+        const activeTab = await DSSTabControl.queryActiveDeepseekTab();
+        if (activeTab && activeTab.url) {
+            const uuid  = presetManager.extractUuidFromUrl(activeTab.url);
+            const tabId = activeTab.id;
             currentTabUuid = uuid || null;
 
             if (uuid && chatPresetMap[uuid]) {

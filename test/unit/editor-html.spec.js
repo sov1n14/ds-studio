@@ -18,24 +18,25 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 13 script tags', () => {
-        expect(scriptSrcs).toHaveLength(13);
+    it('has exactly 14 script tags', () => {
+        expect(scriptSrcs).toHaveLength(14);
     });
 
     it.each([
         ['logger.js first', 0, '../../utils/logger.js'],
-        ['storage-manager.chunk-lock.js second', 1, '../../utils/storage-manager.chunk-lock.js'],
-        ['storage-manager.sync.js third', 2, '../../utils/storage-manager.sync.js'],
-        ['storage-manager.presets.js fourth', 3, '../../utils/storage-manager.presets.js'],
-        ['storage-manager.chatmap.js fifth', 4, '../../utils/storage-manager.chatmap.js'],
-        ['storage-manager.local.js sixth', 5, '../../utils/storage-manager.local.js'],
-        ['storage-manager.init.js seventh', 6, '../../utils/storage-manager.init.js'],
-        ['storage-manager.setters.js eighth', 7, '../../utils/storage-manager.setters.js'],
-        ['storage-manager.js ninth', 8, '../../utils/storage-manager.js'],
-        ['messaging.js tenth', 9, '../../utils/messaging.js'],
-        ['i18n.locales.js eleventh (immediately before i18n.js)', 10, '../../utils/i18n.locales.js'],
-        ['i18n.js twelfth (between i18n.locales.js and editor.js)', 11, '../../utils/i18n.js'],
-        ['editor.js last (thirteenth)', 12, 'editor.js'],
+        ['debounce.js second (immediately after logger.js)', 1, '../../utils/debounce.js'],
+        ['storage-manager.chunk-lock.js third', 2, '../../utils/storage-manager.chunk-lock.js'],
+        ['storage-manager.sync.js fourth', 3, '../../utils/storage-manager.sync.js'],
+        ['storage-manager.presets.js fifth', 4, '../../utils/storage-manager.presets.js'],
+        ['storage-manager.chatmap.js sixth', 5, '../../utils/storage-manager.chatmap.js'],
+        ['storage-manager.local.js seventh', 6, '../../utils/storage-manager.local.js'],
+        ['storage-manager.init.js eighth', 7, '../../utils/storage-manager.init.js'],
+        ['storage-manager.setters.js ninth', 8, '../../utils/storage-manager.setters.js'],
+        ['storage-manager.js tenth', 9, '../../utils/storage-manager.js'],
+        ['messaging.js eleventh', 10, '../../utils/messaging.js'],
+        ['i18n.locales.js twelfth (immediately before i18n.js)', 11, '../../utils/i18n.locales.js'],
+        ['i18n.js thirteenth (between i18n.locales.js and editor.js)', 12, '../../utils/i18n.js'],
+        ['editor.js last (fourteenth)', 13, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });

@@ -220,6 +220,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })().catch(e => {
             if (e?.message?.includes('Extension context invalidated')) return;
         });
+        // 同步回覆 ack，讓 popup 能區分「內容腳本未注入」與「已收下匯出指令」
+        sendResponse({ received: true });
     } else if (request.action === 'ACTIVE_PRESET_CHANGED') {
         bindingState.pendingPresetId = request.presetId ?? null;
         ChatBinding.updatePromptPrefixFromBinding();

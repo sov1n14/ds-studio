@@ -1,16 +1,4 @@
-/* 提示詞編輯器獨立樣式 — 不依賴 popup.css */
-
-:root {
-    --primary-color: #4d6bfe;
-    --primary-hover: color-mix(in srgb, var(--primary-color) 80%, black);
-    --bg-color: #ffffff;
-    --body-bg: #f3f4f6;
-    --text-color: #1f2937;
-    --border-color: #e5e7eb;
-    --success-color: #16a34a;
-    --focus-ring: color-mix(in srgb, var(--primary-color) 20%, transparent);
-    --muted-color: #6b7280;
-}
+/* 提示詞編輯器樣式 — 設計 Token 由 popup-theme.css 統一提供 */
 
 /* 重置與基礎 */
 *, *::before, *::after {
@@ -31,19 +19,19 @@ html, body {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    padding: 16px;
-    gap: 12px;
+    padding: var(--space-4);
+    gap: var(--space-3);
 }
 
 /* 標題列：標題 + 儲存狀態 */
 .editor-header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
     background-color: var(--bg-color);
-    border-radius: 10px;
-    padding: 14px 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-radius: var(--radius-md);
+    padding: 14px var(--space-4);
+    box-shadow: var(--shadow-card);
     flex-shrink: 0;
 }
 
@@ -79,9 +67,9 @@ html, body {
     flex-direction: column;
     min-height: 0;
     background-color: var(--bg-color);
-    border-radius: 10px;
-    padding: 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-card);
 }
 
 /* 文字輸入區：撐滿剩餘空間 */
@@ -89,9 +77,9 @@ html, body {
     flex: 1;
     width: 100%;
     min-height: 0;
-    padding: 8px;
+    padding: var(--space-2);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     resize: none;
     font-family: inherit;
     font-size: 14px;
@@ -109,15 +97,15 @@ html, body {
 
 /* 停用狀態：錯誤或找不到提示詞 */
 .editor-textarea:disabled {
-    background-color: #f9fafb;
-    color: #9ca3af;
+    background-color: var(--surface-sunken);
+    color: var(--text-muted);
     cursor: not-allowed;
     resize: none;
 }
 
 /* 錯誤標題樣式 */
 .editor-header h1.is-error {
-    color: #dc2626;
+    color: var(--danger-color);
 }
 
 /* 通用隱藏（名稱輸入框預設隱藏，僅提示詞組目標顯示） */
@@ -129,9 +117,9 @@ html, body {
 .editor-name-input {
     flex: 1;
     min-width: 0;
-    padding: 6px 8px;
+    padding: 6px var(--space-2);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-family: inherit;
     font-size: 14px;
     color: var(--text-color);
@@ -147,7 +135,7 @@ html, body {
 
 /* 儲存錯誤狀態：紅字、可換行、不擠壓版面 */
 .save-status--error {
-    color: #dc2626;
+    color: var(--danger-color);
     white-space: normal;
     flex-shrink: 1;
 }

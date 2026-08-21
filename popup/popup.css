@@ -76,7 +76,7 @@ header {
 .locale-option:hover {
     background: var(--surface-hover);
 }
-.locale-option input[type="radio"] {
+:is(.locale-option, .segmented-option) input[type="radio"] {
     appearance: none;
     -webkit-appearance: none;
     width: 16px;
@@ -90,13 +90,13 @@ header {
     cursor: pointer;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.locale-option input[type="radio"]:hover {
+:is(.locale-option, .segmented-option) input[type="radio"]:hover {
     border-color: var(--primary-color);
 }
-.locale-option input[type="radio"]:checked {
+:is(.locale-option, .segmented-option) input[type="radio"]:checked {
     border-color: var(--primary-color);
 }
-.locale-option input[type="radio"]:checked::after {
+:is(.locale-option, .segmented-option) input[type="radio"]:checked::after {
     content: "";
     position: absolute;
     top: 50%;
@@ -107,11 +107,11 @@ header {
     background-color: var(--primary-color);
     transform: translate(-50%, -50%);
 }
-.locale-option input[type="radio"]:focus-visible {
+:is(.locale-option, .segmented-option) input[type="radio"]:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--focus-ring);
 }
-.locale-option input[type="radio"]:disabled {
+:is(.locale-option, .segmented-option) input[type="radio"]:disabled {
     border-color: var(--text-muted);
     cursor: not-allowed;
 }
@@ -124,18 +124,23 @@ header {
     overflow: hidden;
 }
 
-.websearch-options .locale-option {
-    padding: 3px 10px;
+.segmented-option {
+    display: flex;
+    align-items: center;
     gap: 4px;
+    padding: 3px 10px;
+    cursor: pointer;
     font-size: 12px;
     color: var(--text-secondary);
+    white-space: nowrap;
 }
 
-.websearch-options .locale-option:not(:last-child) {
+.segmented-option:not(:last-child) {
     border-right: 1px solid var(--border-color);
 }
 
-.websearch-options .locale-option:has(input:checked) {
+.segmented-option:hover,
+.segmented-option:has(input:checked) {
     color: var(--text-color);
     background-color: var(--surface-hover);
 }

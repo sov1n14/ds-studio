@@ -204,11 +204,11 @@
                         <label data-i18n="websearchToggleLabel">連網搜索</label>
                     </div>
                     <div class="websearch-options">
-                        <label class="locale-option">
+                        <label class="segmented-option">
                             <input type="radio" name="websearchToggle" value="on" checked>
                             <span data-i18n="websearchOnLabel">開啟</span>
                         </label>
-                        <label class="locale-option">
+                        <label class="segmented-option">
                             <input type="radio" name="websearchToggle" value="off">
                             <span data-i18n="websearchOffLabel">關閉</span>
                         </label>
@@ -267,6 +267,9 @@
     </div>
 
     <script src="../utils/logger.js"></script>
+    <script src="../utils/debounce.js"></script>
+    <script src="../utils/tab-control.js"></script>
+    <script src="../utils/window-control.js"></script>
     <script src="../utils/storage-manager.chunk-lock.js"></script>
     <script src="../utils/storage-manager.sync.js"></script>
     <script src="../utils/storage-manager.presets.js"></script>

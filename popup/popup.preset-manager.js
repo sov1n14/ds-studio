@@ -113,12 +113,8 @@ function createPresetManager(ctx) {
 
     // --- 從內容腳本查詢 pending preset ID ---
     async function getPendingPresetIdFromContentScript(tabId) {
-        try {
-            const response = await chrome.tabs.sendMessage(tabId, { action: 'GET_PENDING_PRESET' });
-            return response?.pendingPresetId || null;
-        } catch (err) {
-            return null;
-        }
+        const response = await DSSTabControl.sendToTab(tabId, { action: 'GET_PENDING_PRESET' });
+        return response?.pendingPresetId || null;
     }
 
     // --- 從 URL 解析對話 UUID（純函式） ---

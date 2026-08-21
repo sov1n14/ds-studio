@@ -13,26 +13,8 @@
 
 'use strict';
 
-// ─────────────────────────────────────────────
-// 防抖工具（本檔案的正式實作，classic script 環境下獨立運作）
-// ─────────────────────────────────────────────
-
-/**
- * 建立防抖包裝函式。
- * @param {Function} fn - 要延遲執行的函式
- * @param {number} delayMs - 延遲毫秒數
- * @returns {Function} 防抖後的函式
- */
-function debounce(fn, delayMs) {
-    let timer = null;
-    return function (...args) {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-            timer = null;
-            fn.apply(this, args);
-        }, delayMs);
-    };
-}
+// 防抖工具來自 utils/debounce.js（由 editor.html 於本檔之前載入）
+const debounce = DSSDebounce;
 
 // ─────────────────────────────────────────────
 // 解析 Query String 目標
@@ -350,7 +332,6 @@ const __DSSEditor = {
     parseTarget,
     saveContent,
     loadContent,
-    debounce,
     renderDisabledState,
     updateSaveStatus,
     isDuplicateName,
