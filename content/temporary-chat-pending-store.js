@@ -21,7 +21,7 @@ function logWriteFailure(context, error) {
         globalThis.__DS_Logger.warn('pending-store:write-fail', context, error);
         return;
     }
-    console.warn('pending-store:write-fail', context, error);
+    console.warn('[DSS]', 'pending-store:write-fail', context, error);
 }
 
 const TemporaryChatPendingStore = (() => {

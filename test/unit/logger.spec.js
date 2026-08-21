@@ -3,11 +3,11 @@
  *
  * 診斷記錄器已移除純診斷用的跨情境記錄轉發子系統（sync() / _forward() /
  * _detectSource()）。__DS_Logger 現僅保留 warn(event, data)，且僅呼叫本地
- * console.warn('[DS-Sync]', event, data)，不再與 chrome.runtime.sendMessage
+ * console.warn('[DSS]', event, data)，不再與 chrome.runtime.sendMessage
  * 有任何互動。本測試據此驗證。
  *
  * Coverage groups:
- *   A. warn() calls console.warn with [DS-Sync] prefix, event and data
+ *   A. warn() calls console.warn with [DSS] prefix, event and data
  *   B. Fail-safe — warn() never throws and still logs when chrome is unavailable
  *   C. Regression guard — sync()/_forward()/_detectSource() no longer exist
  *
@@ -40,24 +40,24 @@ function loadFreshLogger() {
 // Group A — warn() fires console.warn locally
 // ---------------------------------------------------------------------------
 
-describe('A. warn() fires console.warn with [DS-Sync] prefix', () => {
+describe('A. warn() fires console.warn with [DSS] prefix', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('A.1 warn() calls console.warn with [DS-Sync] prefix, event and data', () => {
+    it('A.1 warn() calls console.warn with [DSS] prefix, event and data', () => {
         const logger = loadFreshLogger();
         const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         logger.warn('QUOTA_EXCEEDED', { bytes: 1024 });
         expect(spy).toHaveBeenCalledOnce();
-        expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'QUOTA_EXCEEDED', { bytes: 1024 });
+        expect(spy).toHaveBeenCalledWith('[DSS]', 'QUOTA_EXCEEDED', { bytes: 1024 });
     });
 
     it('A.2 warn() with no data argument passes empty string to console.warn', () => {
         const logger = loadFreshLogger();
         const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         logger.warn('EVENT_NO_DATA');
-        expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'EVENT_NO_DATA', '');
+        expect(spy).toHaveBeenCalledWith('[DSS]', 'EVENT_NO_DATA', '');
     });
 
     it('A.3 warn() forwards falsy data values (0, null, false) verbatim', () => {
@@ -65,13 +65,13 @@ describe('A. warn() fires console.warn with [DS-Sync] prefix', () => {
         const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         logger.warn('ZERO', 0);
-        expect(spy).toHaveBeenLastCalledWith('[DS-Sync]', 'ZERO', 0);
+        expect(spy).toHaveBeenLastCalledWith('[DSS]', 'ZERO', 0);
 
         logger.warn('NULL', null);
-        expect(spy).toHaveBeenLastCalledWith('[DS-Sync]', 'NULL', null);
+        expect(spy).toHaveBeenLastCalledWith('[DSS]', 'NULL', null);
 
         logger.warn('FALSE', false);
-        expect(spy).toHaveBeenLastCalledWith('[DS-Sync]', 'FALSE', false);
+        expect(spy).toHaveBeenLastCalledWith('[DSS]', 'FALSE', false);
     });
 
     it('A.4 warn() does NOT call console.log', () => {
@@ -101,7 +101,7 @@ describe('A. warn() fires console.warn with [DS-Sync] prefix', () => {
         // A caller that passes (event, contextLabel, error) must not have the
         // error silently swallowed because warn() only declares two formal
         // parameters.
-        expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'pending-store:write-fail', 'removeOpenUuid', caughtError);
+        expect(spy).toHaveBeenCalledWith('[DSS]', 'pending-store:write-fail', 'removeOpenUuid', caughtError);
     });
 });
 
@@ -132,7 +132,7 @@ describe('B. Fail-safe — warn() works without chrome API interaction', () => {
             logger = loadFreshLogger();
             const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             expect(() => logger.warn('no-chrome', 'test')).not.toThrow();
-            expect(spy).toHaveBeenCalledWith('[DS-Sync]', 'no-chrome', 'test');
+            expect(spy).toHaveBeenCalledWith('[DSS]', 'no-chrome', 'test');
         } finally {
             globalThis.chrome = savedChrome;
         }

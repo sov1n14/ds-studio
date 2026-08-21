@@ -94,7 +94,7 @@ const WebSearchToggle = {
         this._giveUpTimer = setTimeout(() => {
             this._giveUpTimer = null;
             if (this._isSpent) return;
-            console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button');
+            console.warn('[DSS] websearch-toggle: failed to locate the web-search button');
         }, this.LOCATE_GIVE_UP_MS);
     },
 

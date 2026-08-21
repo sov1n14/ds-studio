@@ -1,12 +1,12 @@
 ---
 name: crlf-line-endings
-description: popup/*.js and content/*.js source files in ds-studio use CRLF (
+description: popup/, content/ and utils/ source files in ds-studio use CRLF (
 ) line endings, not LF — matters for any string-anchor-based text edit.
 metadata:
   type: project
 ---
 
-Confirmed via raw byte read: `popup/popup.js` uses 
+Confirmed via raw byte read: `popup/popup.js` and `utils/storage-manager.chunk-lock.js` use 
  line endings throughout.
 
 **Why:** Repo convention (Windows-authored), not an isolated file.

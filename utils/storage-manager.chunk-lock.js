@@ -13,6 +13,20 @@
     const LOCK_POLL_INTERVAL_MS = 50;
     const RECONCILIATION_RETRY_BUDGET = 3;
 
+    /**
+     * 可降級告警：本 bundle 亦由 background/service-worker.js 載入，該處刻意不載入
+     * utils/logger.js，故 __DS_Logger 缺席時退回帶 [DSS] 前綴的 console.warn。
+     * @param {string} event
+     * @param {*} context
+     */
+    function warn(event, context) {
+        if (globalThis.__DS_Logger?.warn) {
+            globalThis.__DS_Logger.warn(event, context);
+            return;
+        }
+        console.warn('[DSS]', event, context);
+    }
+
     const bundle = {
         /**
          * 確保 _metaCache 與 _chunkIndexCache 已從 storage 載入。
@@ -69,7 +83,7 @@
          */
         async _writeChunkWithMeta(chunkIdx, chunkObj, newMeta) {
             if (this._metaCache && newMeta.version !== this._metaCache.version + 1) {
-                console.warn('[StorageManager] meta version did not strictly increment',
+                warn('chunk-lock:meta-version-not-incremented',
                     { prev: this._metaCache.version, next: newMeta.version });
             }
             const items = {};
@@ -125,7 +139,7 @@
             if (cur && cur.owner === token) {
                 await this._safeRemove('local', [lockKey]);
             } else {
-                console.warn('[StorageManager] lock owner mismatch on release, TTL takeover likely',
+                warn('chunk-lock:lock-owner-mismatch-on-release',
                     { lockKey, expected: token, actual: cur?.owner });
             }
         },

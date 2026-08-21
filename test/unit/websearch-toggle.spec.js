@@ -337,7 +337,7 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
         await advance(WebSearchToggle.LOCATE_GIVE_UP_MS);
         expect(console.warn).toHaveBeenCalledTimes(1);
         expect(console.warn).toHaveBeenCalledWith(
-            "[ds-studio] websearch-toggle: failed to locate the web-search button"
+            "[DSS] websearch-toggle: failed to locate the web-search button"
         );
         expect(WebSearchToggle._isSpent).toBe(false);
         await advance(WebSearchToggle.LOCATE_GIVE_UP_MS);

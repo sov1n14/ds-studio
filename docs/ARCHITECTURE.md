@@ -142,7 +142,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 
 - **Tier 1 — icon geometry**: the first candidate whose descendant `path[d]`, trimmed, starts with `M7.9995999336` (named constant `SEARCH_ICON_PATH_PREFIX`). Verified identical across zh-CN / zh-TW / en DOM snapshots and across toggle states. Candidates come from `.ds-toggle-button[aria-pressed]` plus the generic `[aria-pressed="true"], [aria-pressed="false"]` selector, merged and deduped — the icon check alone disambiguates against the deep-thinking toggle, so the generic selector is safe here.
 - **Tier 2 — positional fallback**: the second `.ds-toggle-button[aria-pressed]` candidate (index 1; search sits after deep-thinking in the toggle group). Restricted to the toggle group — positional guessing among generic candidates is forbidden.
-- **Total failure**: `null` plus exactly one `console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button')`, so a future DeepSeek redesign is diagnosable from a user's console paste. No warning on success.
+- **Total failure**: `null` plus exactly one `console.warn('[DSS] websearch-toggle: failed to locate the web-search button')`, so a future DeepSeek redesign is diagnosable from a user's console paste. No warning on success.
 
 The two tiers have mutually exclusive failure modes (icon redesign vs. toolbar reorder); both would have to change in one release for the feature to fail. Recovery procedure: re-capture `to-do/samples/input-bar-*.html` against the new build.
 
