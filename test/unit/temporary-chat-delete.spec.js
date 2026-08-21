@@ -1,29 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// ── chrome mocks (must be set before module import) ────────────────────────────
-const chromeStorageLocalMock = {
-    _store: {},
-    get(keys) {
-        const result = {};
-        keys.forEach(k => { if (k in this._store) result[k] = this._store[k]; });
-        return Promise.resolve(result);
-    },
-    set(items) {
-        Object.assign(this._store, items);
-        return Promise.resolve();
-    },
-    _reset() { this._store = {}; },
-};
-
-global.chrome = {
-    storage: {
-        local: chromeStorageLocalMock,
-        onChanged: { addListener: () => {} },
-    },
-    runtime: {
-        sendMessage: vi.fn(),
-    },
-};
+// chrome.* comes from the shared mock in test/setup/vitest.setup.js (real in-memory
+// chrome.storage.local + a fan-in storage.onChanged), and the three
+// temporary-chat-delete.* part bundles plus TemporaryChatEnabledFlag are preloaded
+// there too. No spec-local `global.chrome = {...}`: static imports are hoisted, so
+// that assignment ran AFTER the module under test had already captured the setup
+// mock -- the module and the tests were talking to two different chrome objects.
 
 // ── TemporaryChatDeleteApi mock ────────────────────────────────────────────────
 global.TemporaryChatDeleteApi = {
@@ -67,22 +49,28 @@ beforeEach(() => {
     Object.values(global.TemporaryChatPendingStore).forEach((fn) => fn.mockClear());
 });
 
+// Writing the enabled key to the shared chrome.storage.local mock fires onChanged,
+// which the flag module's cross-tab sync turns into an attachListeners() call on this
+// module. Detach after every test so listener state never leaks between tests.
+afterEach(() => {
+    TemporaryChatDelete.detachListeners();
+});
+
 // ── Group A: initEnabledFlagFromStorage ───────────────────────────────────────
 
 describe('A — initEnabledFlagFromStorage', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
-        chromeStorageLocalMock._reset();
     });
 
     it('A1: reads dss-temporary-chat-enabled from chrome.storage.local', async () => {
-        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.__getState().enabledFlagCache).toBe(true);
     });
 
     it('A2: sets _enabledFlagCache to true when stored value is true', async () => {
-        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
@@ -94,7 +82,7 @@ describe('A — initEnabledFlagFromStorage', () => {
     });
 
     it('A4: sets _enabledFlagCache to false when stored value is false', async () => {
-        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = false;
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
     });
@@ -105,7 +93,6 @@ describe('A — initEnabledFlagFromStorage', () => {
 describe('B — readEnabledFlag', () => {
     beforeEach(() => {
         TemporaryChatDelete.__resetState();
-        chromeStorageLocalMock._reset();
     });
 
     it('B1: returns false when cache is not initialised (default)', () => {
@@ -118,7 +105,7 @@ describe('B — readEnabledFlag', () => {
     });
 
     it('B3: does NOT call chrome.storage.local (reads only from cache)', async () => {
-        const getSpy = vi.spyOn(chromeStorageLocalMock, 'get');
+        const getSpy = vi.spyOn(chrome.storage.local, 'get');
         TemporaryChatDelete.__setState({ enabledFlagCache: true });
         TemporaryChatDelete.readEnabledFlag();
         expect(getSpy).not.toHaveBeenCalled();
@@ -393,7 +380,7 @@ describe('I — handleNavigationEvent (marking)', () => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
         setPathname('/');
     });
 
@@ -475,7 +462,7 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -520,7 +507,7 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
             navigationType: 'push',
         }));
 
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
     it('J3: clears trackedTemporaryUuid after navigation deletion', () => {
@@ -563,7 +550,7 @@ describe('K — same-URL / reload must NOT delete', () => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -735,7 +722,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSession.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSession.mockResolvedValue(true);
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -771,7 +758,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
     });
 
@@ -787,7 +774,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
         expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
     });
 });
@@ -801,7 +788,7 @@ describe('N — deleteTrackedAndClear', () => {
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSession.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSession.mockResolvedValue(true);
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -923,7 +910,7 @@ describe('N — deleteTrackedAndClear', () => {
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
 
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 
     it('N11: tab close (keepalive: true) — calls removePendingDelete(uuid) after successful deleteChatSession', async () => {
@@ -982,7 +969,7 @@ describe('N — deleteTrackedAndClear', () => {
         TemporaryChatDelete.deleteTrackedAndClear();
 
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     });
 });
 
@@ -995,7 +982,7 @@ describe('O — toggle-off still deletes tracked conversation', () => {
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSession.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSession.mockResolvedValue(true);
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {
@@ -1097,111 +1084,73 @@ describe('P — listener lifecycle', () => {
         expect(TemporaryChatDelete.__getState().isListening).toBe(false);
     });
 
-    // ── Fix B: init() reorder tests ───────────────────────────────────────────
+    // ── Real init() behaviour ────────────────────────────────────────────────
+    // Replaces the former P5/P6/P7, which re-implemented init()'s attach ordering
+    // inline in the test body and therefore passed no matter what init() did.
+    // These call the real init() and assert only what an outside observer can see.
 
-    it('P5: init() early-attach — if trackedUuid exists in sessionStorage, attachListeners is called BEFORE initEnabledFlagFromStorage resolves', async () => {
-        // Arrange: place a UUID in sessionStorage so loadTrackedUuid() returns it
-        sessionStorage.setItem('dss-temporary-chat-uuid', 'early-uuid-1111-2222-3333-444444444444');
-        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = false;
+    it('P5: init() seeds the enabled flag from chrome.storage.local', async () => {
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
+        TemporaryChatDelete.__setState({ enabledFlagCache: false });
 
-        // Use a deferred promise so we can check isListening before it resolves
-        let resolveStorage;
-        const storagePromise = new Promise(res => { resolveStorage = res; });
-        const origInit = TemporaryChatDelete.initEnabledFlagFromStorage;
-        const initSpy = vi.spyOn(TemporaryChatDelete, 'initEnabledFlagFromStorage').mockImplementation(() => storagePromise);
+        await TemporaryChatDelete.init();
 
-        let isListeningBeforeAwait = null;
-
-        // Kick off init (do not await yet)
-        const initPromise = (async () => {
-            const CHANGED_EVENT = 'dss-temporary-chat-changed';
-            window.addEventListener(CHANGED_EVENT, TemporaryChatDelete.handleToggleChanged);
-
-            TemporaryChatDelete.__resetState();
-            // Replicate fixed init() logic
-            const uuid = TemporaryChatDelete.loadTrackedUuid();
-            if (uuid) {
-                TemporaryChatDelete.__setState({ trackedTemporaryUuid: uuid });
-                TemporaryChatDelete.attachListeners();
-            }
-            // Capture state before await
-            isListeningBeforeAwait = TemporaryChatDelete.__getState().isListening;
-
-            await TemporaryChatDelete.initEnabledFlagFromStorage();
-
-            const state = TemporaryChatDelete.__getState();
-            if (state.enabledFlagCache && !state.isListening) {
-                TemporaryChatDelete.attachListeners();
-            }
-        })();
-
-        // Verify isListening was set BEFORE the promise resolved
-        expect(isListeningBeforeAwait).toBe(true);
-
-        // Now resolve the storage promise so init completes cleanly
-        resolveStorage();
-        await initPromise;
-
-        initSpy.mockRestore();
-        sessionStorage.clear();
-        window.removeEventListener('dss-temporary-chat-changed', TemporaryChatDelete.handleToggleChanged);
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
 
-    it('P6: init() late-attach — if no trackedUuid but enabledFlagCache becomes true, attachListeners is called after await', async () => {
-        // Arrange: no UUID in sessionStorage, but storage has enabled=true
-        sessionStorage.clear();
-        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
-
+    it('P6: after init() with the flag enabled, a real window message mutates state (listeners are live)', async () => {
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
         TemporaryChatDelete.__resetState();
 
-        // Replicate fixed init() logic inline
-        const uuid = TemporaryChatDelete.loadTrackedUuid();
-        expect(uuid).toBeNull();
+        await TemporaryChatDelete.init();
 
-        // Should NOT be listening yet (no uuid)
-        expect(TemporaryChatDelete.__getState().isListening).toBe(false);
+        // Auth capture: dispatched on window, NOT handed to the handler directly.
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer post-init' },
+            source: window,
+        }));
+        expect(TemporaryChatDelete.__getState().capturedAuthToken).toBe('Bearer post-init');
 
-        await TemporaryChatDelete.initEnabledFlagFromStorage();
-
-        // Now enabledFlagCache is true, isListening is still false → should attach
-        const stateAfterAwait = TemporaryChatDelete.__getState();
-        expect(stateAfterAwait.enabledFlagCache).toBe(true);
-
-        if (stateAfterAwait.enabledFlagCache && !stateAfterAwait.isListening) {
-            TemporaryChatDelete.attachListeners();
-        }
-
-        expect(TemporaryChatDelete.__getState().isListening).toBe(true);
+        // Creation detection through the same live listener.
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'DSS_CHAT_CREATE_DETECTED' },
+            source: window,
+        }));
+        expect(TemporaryChatDelete.__getState().createDetected).toBe(true);
     });
 
-    it('P7: init() no-double-attach — if both trackedUuid and enabledFlagCache are true, attachListeners is called only once', async () => {
-        // Arrange: UUID in sessionStorage AND enabled=true in storage
-        sessionStorage.setItem('dss-temporary-chat-uuid', 'nodbl-uuid-1111-2222-3333-444444444444');
-        chromeStorageLocalMock._store['dss-temporary-chat-enabled'] = true;
-
+    it('P7: init() restores a tracked uuid from sessionStorage and goes live even while the flag is disabled', async () => {
+        const uuid = 'eeee1111-2222-3333-4444-555555555555';
+        sessionStorage.setItem('dss-temporary-chat-uuid', uuid);
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
         TemporaryChatDelete.__resetState();
 
-        const attachSpy = vi.spyOn(TemporaryChatDelete, 'attachListeners');
+        await TemporaryChatDelete.init();
 
-        // Replicate fixed init() logic
-        const uuid = TemporaryChatDelete.loadTrackedUuid();
-        if (uuid) {
-            TemporaryChatDelete.__setState({ trackedTemporaryUuid: uuid });
-            TemporaryChatDelete.attachListeners(); // first call
-        }
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
+        // A tracked conversation must still be deletable, so the listeners must be live
+        // even though the toggle is off: prove it through an observable state mutation.
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer tracked' },
+            source: window,
+        }));
+        expect(TemporaryChatDelete.__getState().capturedAuthToken).toBe('Bearer tracked');
 
-        await TemporaryChatDelete.initEnabledFlagFromStorage();
-
-        const state = TemporaryChatDelete.__getState();
-        if (state.enabledFlagCache && !state.isListening) {
-            TemporaryChatDelete.attachListeners(); // guarded: should NOT be called because isListening=true
-        }
-
-        // attachListeners should have been called exactly once (the early call)
-        expect(attachSpy).toHaveBeenCalledTimes(1);
-
-        attachSpy.mockRestore();
         sessionStorage.clear();
+    });
+
+    it('P8: with no tracked uuid and the flag disabled, init() leaves the listeners detached', async () => {
+        sessionStorage.clear();
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
+        TemporaryChatDelete.__resetState();
+
+        await TemporaryChatDelete.init();
+
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer should-be-ignored' },
+            source: window,
+        }));
+        expect(TemporaryChatDelete.__getState().capturedAuthToken).toBeNull();
     });
 });
 
@@ -1212,7 +1161,7 @@ describe('R — handleNavigationEvent (same-conversation guard)', () => {
         TemporaryChatDelete.__resetState();
         sessionStorage.clear();
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
-        global.chrome.runtime.sendMessage.mockClear();
+        chrome.runtime.sendMessage.mockClear();
     });
 
     afterEach(() => {

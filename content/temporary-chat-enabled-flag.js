@@ -70,7 +70,15 @@ const TemporaryChatEnabledFlag = (() => {
         _subscribers.add(fn);
     }
 
-    return { isEnabled, initFromStorage, write, startSync, subscribe };
+    /**
+     * 僅更新快取，不寫入 chrome.storage.local（供切換事件即時同步與單元測試使用）。
+     * @param {boolean} isEnabledNext
+     */
+    function __setCache(isEnabledNext) {
+        _isEnabledCache = _coerce(isEnabledNext);
+    }
+
+    return { isEnabled, initFromStorage, write, startSync, subscribe, __setCache };
 })();
 
 globalThis.TemporaryChatEnabledFlag = TemporaryChatEnabledFlag;

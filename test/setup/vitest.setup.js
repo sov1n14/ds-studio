@@ -34,6 +34,19 @@ import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
+// temporary-chat-enabled-flag.js publishes globalThis.TemporaryChatEnabledFlag, the
+// shared enabled-flag cache that content/temporary-chat-toggle.js and the
+// temporary-chat-delete entry both resolve at load time (they throw a load-order
+// error when it is absent). Preloaded here rather than per-spec because static
+// imports are hoisted: a spec cannot reliably order it ahead of its own
+// module-under-test import.
+import '../../content/temporary-chat-enabled-flag.js';
+// temporary-chat-delete.* parts: each sets its own __DSS_TempChatDelete_* global as
+// a load side effect and MUST execute before the entry file (content/temporary-chat-delete.js),
+// which _requirePart()s all three. Same contract as the storage-manager.* parts above.
+import '../../content/temporary-chat-delete.tracking.js';
+import '../../content/temporary-chat-delete.coordinator.js';
+import '../../content/temporary-chat-delete.handlers.js';
 // harvest.policy.js is the pure decision-logic module for content/harvest.js's
 // scroll-harvest loop. It must load before harvest.js (loaded directly by
 // harvest.spec.js via import, not preloaded here) so window.DSstudio.HarvestPolicy

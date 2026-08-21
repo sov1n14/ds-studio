@@ -1,35 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
-// Tests the refresh detection logic in temporary-chat-delete.js.
-// The Navigation API navigate event checks navigationType === 'reload' or same-URL.
-// Keyboard supplement: handleRefreshKeydown sets _isKeyboardRefresh for F5 / Ctrl+R / Cmd+R.
-
-describe('refresh detection — navigationType logic', () => {
-    it('marks as refresh when navigationType is reload', () => {
-        const navigationType = 'reload';
-        const isRefresh = (navigationType === 'reload');
-        expect(isRefresh).toBe(true);
-    });
-
-    it('does not mark as refresh when navigationType is push', () => {
-        const navigationType = 'push';
-        const isRefresh = (navigationType === 'reload');
-        expect(isRefresh).toBe(false);
-    });
-
-    it('does not mark as refresh when navigationType is replace', () => {
-        const navigationType = 'replace';
-        const isRefresh = (navigationType === 'reload');
-        expect(isRefresh).toBe(false);
-    });
-
-    it('does not mark as refresh when navigationType is traverse', () => {
-        const navigationType = 'traverse';
-        const isRefresh = (navigationType === 'reload');
-        expect(isRefresh).toBe(false);
-    });
-});
+// Tests the keyboard refresh-detection supplement in temporary-chat-delete.js:
+// handleRefreshKeydown sets isKeyboardRefresh for F5 / Ctrl+R / Cmd+R.
+// The Navigation API `navigationType === 'reload'` branch is covered by
+// temporary-chat-delete.spec.js group K (it exercises handleNavigationEvent).
 
 describe('handleRefreshKeydown — keyboard supplement', () => {
     beforeEach(() => {
