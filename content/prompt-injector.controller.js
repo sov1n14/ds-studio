@@ -9,6 +9,10 @@
 (function (root) {
     'use strict';
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     // 編輯視窗「傳送」按鈕的結構性標記（語言無關，不依賴文字或雜湊類別）：
     // 同時具備 primary + filled 變體樣式，且含有 span.ds-button__content 標籤。
     // 「取消」按鈕使用 outlinedNeutral/outlined 變體，不符合；主輸入框傳送按鈕
@@ -31,8 +35,8 @@
     function isSendButtonCandidate(button) {
         if (!button) return false;
         return button.innerHTML.includes('M8.3125') ||
-               !!button.closest('.ba4f09d3') ||
-               button.parentElement.classList.contains('bf38813a') ||
+               !!button.closest(selectors.SEND_BUTTON_CONTAINER_SELECTOR) ||
+               button.parentElement.classList.contains(selectors.SEND_BUTTON_PARENT_CLASS) ||
                isEditWindowSendButton(button);
     }
 

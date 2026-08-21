@@ -6,6 +6,10 @@
 (function (root) {
     'use strict';
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     /**
      * 格式化系統時間為 yyyy/mm/dd hh:mm:ss（24小時制、零補位），並附加當地時區偏移 (UTC±hh:mm)。
      * @param {Date} [date]
@@ -207,21 +211,21 @@
         var result = '';
 
         // AI 回覆：含 .ds-markdown 容器
-        var markdownContainer = msg.querySelector('.ds-markdown');
+        var markdownContainer = msg.querySelector(selectors.MARKDOWN_SELECTOR);
 
         if (markdownContainer) {
             result += '## DeepSeek\n\n';
 
             // 思考過程區塊
-            var firstThinkBlock = msg.querySelector('.ds-think-content');
+            var firstThinkBlock = msg.querySelector(selectors.THINK_CONTENT_SELECTOR);
             var thinkContainer = firstThinkBlock ? firstThinkBlock.parentNode : null;
 
             if (thinkContainer && includeThinking) {
                 result += '> **Thinking Process:**\n';
                 for (var i = 0; i < thinkContainer.children.length; i++) {
                     var child = thinkContainer.children[i];
-                    if (child.classList.contains('ds-think-content')) {
-                        var mdBlock = child.querySelector('.ds-markdown');
+                    if (child.classList.contains(selectors.THINK_CONTENT_CLASS)) {
+                        var mdBlock = child.querySelector(selectors.MARKDOWN_SELECTOR);
                         if (mdBlock) {
                             var text = parseHtmlToMarkdown(mdBlock, { forceReferences: true });
                             var quoted = text.split('\n').map(function (line) { return '> ' + line; }).join('\n');
@@ -244,7 +248,7 @@
             }
 
             // 主回覆：最後一個位於思考容器之外的 .ds-markdown
-            var allMarkdownBlocks = Array.from(msg.querySelectorAll('.ds-markdown'));
+            var allMarkdownBlocks = Array.from(msg.querySelectorAll(selectors.MARKDOWN_SELECTOR));
             var mainResponseItems = thinkContainer
                 ? allMarkdownBlocks.filter(function (block) { return !thinkContainer.contains(block); })
                 : allMarkdownBlocks;
@@ -255,7 +259,7 @@
             }
         } else {
             // 使用者訊息
-            var userContentWrapper = msg.querySelector('.fbb737a4') || msg.firstElementChild;
+            var userContentWrapper = msg.querySelector(selectors.USER_CONTENT_SELECTOR) || msg.firstElementChild;
             var text = userContentWrapper ? userContentWrapper.innerText : msg.innerText;
             text = (text || '').trim();
             if (text) {
@@ -299,7 +303,7 @@
         var Harvest = root.DSstudio && root.DSstudio.Harvest;
         if (!Harvest) {
             // Harvest 模組不存在（舊版相容回退：直接擷取目前可見訊息）
-            var messages = document.querySelectorAll('.ds-virtual-list-visible-items .ds-message');
+            var messages = document.querySelectorAll(selectors.VISIBLE_ITEMS_SELECTOR + ' ' + selectors.MESSAGE_SELECTOR);
             if (!messages || messages.length === 0) {
                 alert(dsI18n.t('exportNoConversationAlert'));
                 return;

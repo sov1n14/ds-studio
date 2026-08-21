@@ -5,6 +5,10 @@
 (function (root) {
     'use strict';
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     const bundle = {
 
         _buildThinkBlock(thinkFragment, elapsedSecs) {
@@ -28,7 +32,7 @@
                     container.setAttribute('data-ht-collapsed', '1');
                 }
                 // 切換思考內容的顯示狀態
-                const thinkContent = container.querySelector('.ds-think-content');
+                const thinkContent = container.querySelector(selectors.THINK_CONTENT_SELECTOR);
                 if (thinkContent) {
                     thinkContent.style.display = isCollapsed ? 'block' : 'none';
                 }
@@ -77,7 +81,7 @@
             thinkContent.appendChild(sep);
 
             const md = document.createElement('div');
-            md.className = 'ds-markdown';
+            md.className = selectors.MARKDOWN_CLASS;
             md.setAttribute('style', '--ds-md-zoom: 1.143;');
             md.innerHTML = this._renderMarkdown(thinkFragment.content);
             thinkContent.appendChild(md);
@@ -87,7 +91,7 @@
             container.addEventListener('click', function (e) {
                 if (e.target !== container) return;
                 var isCollapsed = this.getAttribute('data-ht-collapsed') === '1';
-                var tc = this.querySelector('.ds-think-content');
+                var tc = this.querySelector(selectors.THINK_CONTENT_SELECTOR);
                 if (tc) {
                     tc.style.display = isCollapsed ? 'none' : 'block';
                 }

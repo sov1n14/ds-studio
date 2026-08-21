@@ -48,16 +48,16 @@ const GoToTop = {
     ANCHOR_SELECTOR_FALLBACK2: '[data-virtual-list-item-key="1"]',
     // 訊息選擇器：先用雜湊組合，再退回 class-substring 比對
     // confirmed in full-page.html line 328: <div class="d29f3d7d ds-message _63c77b1">
-    FIRST_MSG_SELECTOR: '.ds-message._63c77b1',
+    FIRST_MSG_SELECTOR: __DSSelectorsGoTop.ASSISTANT_MESSAGE_SELECTOR,
     // 虛擬列表容器：用於找到正確的滾動容器（單一來源定義於 content/ds-selectors.js）
     VIRTUAL_LIST_SELECTOR: __DSSelectorsGoTop.VIRTUAL_LIST_SELECTOR,
     VIRTUAL_LIST_FALLBACK: __DSSelectorsGoTop.VIRTUAL_LIST_FALLBACK,
     // 原生按鈕選擇器：精確雜湊 class 優先，再退回穩定 ds-* class 組合
     // confirmed in go-bottom.html: <div role="button" class="ds-button ... ds-button--floating _0706cde ...">
     NATIVE_BTN_SELECTOR: '._0706cde:not(.dsw-gotop)',
-    INJECT_PARENT_SELECTOR: '.aaff8b8f',
-    INJECT_PARENT_FALLBACK: '._871cbca > div:nth-child(2)',
-    OUTER_WRAPPER_SELECTOR: '._871cbca',
+    INJECT_PARENT_SELECTOR: __DSSelectorsGoTop.FLOATING_BUTTON_BAR_SELECTOR,
+    INJECT_PARENT_FALLBACK: __DSSelectorsGoTop.CONTENT_COLUMN_SELECTOR + ' > div:nth-child(2)',
+    OUTER_WRAPPER_SELECTOR: __DSSelectorsGoTop.CONTENT_COLUMN_SELECTOR,
 
     // === 狀態 ===
     enabled: false,

@@ -17,6 +17,10 @@
 (function (root) {
     'use strict';
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     /** 注入樣式的 <style> 元素 id */
     var STYLE_ID = 'dss-overlay-style';
 
@@ -36,7 +40,7 @@
         style.textContent = [
             /* 為 #dss-preset-overlay 建立 absolute 定位的 containing block；
                ._1551317 為新對話頁，刻意跳過以避免不必要掛載。 */
-            '._2be88ba:not(._1551317){position:relative!important}',
+            selectors.CHAT_HEADER_SELECTOR + ':not(._1551317){position:relative!important}',
 
             /* overlay 容器基底定位：脫離 flow（absolute）+ 垂直置中。
                水平定位（left / width）由 reposition() 依 computePlacement 結果寫入 inline style。 */

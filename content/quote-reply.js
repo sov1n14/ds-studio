@@ -1,8 +1,12 @@
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_QuoteReplySelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const QuoteReply = {
     isSelectionInScope(node) {
         if (!node) return false;
         const el = node.nodeType === 3 ? node.parentElement : node;
-        return !!el.closest('div.ds-virtual-list-visible-items');
+        return !!el.closest('div' + __DS_QuoteReplySelectors.VISIBLE_ITEMS_SELECTOR);
     },
 
     formatQuote(text) {

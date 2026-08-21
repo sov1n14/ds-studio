@@ -11,6 +11,10 @@ if (!INPUT_WIDTH_FACTORY) {
     throw new Error('content/input-width.js 需要 content/width-feature.js 先行載入');
 }
 
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_InputWidthSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const InputWidth = INPUT_WIDTH_FACTORY.create({
     STYLE_ID: 'ds-input-width-style',
     PERCENT_KEY: StorageManager.KEYS.INPUT_WIDTH,
@@ -42,11 +46,13 @@ const InputWidth = INPUT_WIDTH_FACTORY.create({
 
     getCSS(percent) {
         const vw = Math.min(Math.max(percent, this.MIN), this.MAX);
+        const column = __DS_InputWidthSelectors.CONTENT_COLUMN_SELECTOR;
+        const bar = __DS_InputWidthSelectors.FLOATING_BUTTON_BAR_SELECTOR;
         return `
-._871cbca,
-._871cbca .aaff8b8f,
-.aaff8b8f,
-._871cbca ._77cefa5._3d616d3 {
+${column},
+${column} ${bar},
+${bar},
+${column} ._77cefa5._3d616d3 {
   max-width: ${vw}vw !important;
   width: min(100%, ${vw}vw) !important;
   margin-left: auto !important;

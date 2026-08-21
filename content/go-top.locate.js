@@ -10,6 +10,7 @@
     const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
+    const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
 
     const bundle = {
         // ─────────────────────────────
@@ -122,9 +123,9 @@
             // 降級鏈：依穩定 ds-* class 組合依序嘗試
             const result = this._querySelectorWithFallback([
                 this.NATIVE_BTN_SELECTOR,
-                '.aaff8b8f .ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                '.aaff8b8f [role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                '.aaff8b8f [role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)',
+                FLOATING_BAR + ' .ds-button--floating.ds-button--circle:not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)',
             ]);
             if (!result) return null;
 

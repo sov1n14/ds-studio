@@ -2,11 +2,15 @@
  * DS studio — Hide Thinking Process
  * Auto-collapses expanded thinking blocks by clicking the header element.
  */
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_HideThinkingSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const HideThinking = {
     STORAGE_KEY: 'dsHideThinking',
     CONTAINER_CLASS: '_74c0879',
     HEADER_CLASS: '_245c867',
-    THINK_CONTENT_CLASS: 'ds-think-content',
+    THINK_CONTENT_CLASS: __DS_HideThinkingSelectors.THINK_CONTENT_CLASS,
     DATA_ATTR: 'data-ht-collapsed',
 
     enabled: false,

@@ -26,6 +26,10 @@ const TemporaryChatToggle = (() => {
                 ? window[name]
                 : fallback;
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const _selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     // ── 私有狀態 ──────────────────────────────────────────────────────────────
     let _mutationObserver = null;
     let _injectedRow = null;
@@ -176,7 +180,7 @@ const TemporaryChatToggle = (() => {
     function tryInject() {
         if (!_masterEnabled) return;
 
-        const anchor = document.querySelector('div.aaff8b8f');
+        const anchor = document.querySelector('div' + _selectors.FLOATING_BUTTON_BAR_SELECTOR);
 
         if (!anchor) return;
         injectToggleRow(anchor);

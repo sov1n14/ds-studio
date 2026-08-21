@@ -13,6 +13,10 @@
 var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
     (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
 
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+var __DS_CensorSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const CensorReplyRestore = {
     RESTORED_MESSAGES_KEY: 'restored_messages',
     STORAGE_MAX_ENTRIES: 200,
@@ -69,13 +73,13 @@ const CensorReplyRestore = {
     },
 
     _getPrecedingUserPromptKey(assistantMsgEl) {
-        const virtualItem = assistantMsgEl.closest('[data-virtual-list-item-key]');
+        const virtualItem = assistantMsgEl.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR);
         if (!virtualItem) return null;
         let prev = virtualItem.previousElementSibling;
         while (prev) {
-            const msgEl = prev.querySelector('.ds-message');
+            const msgEl = prev.querySelector(__DS_CensorSelectors.MESSAGE_SELECTOR);
             if (msgEl) {
-                const userMsg = msgEl.querySelector('.fbb737a4');
+                const userMsg = msgEl.querySelector(__DS_CensorSelectors.USER_CONTENT_SELECTOR);
                 if (userMsg) {
                     return this._normalizePrompt(msgEl.textContent);
                 }
@@ -107,7 +111,7 @@ const CensorReplyRestore = {
 
     _getToolbarGroup(messageEl) {
         // 工具欄是 messageEl 的兄弟元素 — 在虛擬列表項目容器中搜尋
-        const container = messageEl.closest('[data-virtual-list-item-key]') || messageEl.parentElement;
+        const container = messageEl.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR) || messageEl.parentElement;
         if (container) {
             const toolbar = container.querySelector('.ds-flex._965abe9');
             if (toolbar) return toolbar;
@@ -158,7 +162,7 @@ const CensorReplyRestore = {
 
         // MutationObserver 可能已經在 postMessage 傳遞之前就觸發了。
         // 現在 pendingQueue 中有了 messageId，再手動掃描一遍。
-        var msgs = document.querySelectorAll('.ds-message._63c77b1');
+        var msgs = document.querySelectorAll(__DS_CensorSelectors.ASSISTANT_MESSAGE_SELECTOR);
         for (var mi = 0; mi < msgs.length; mi++) {
             this._tryRestoreMessage(msgs[mi]);
         }
@@ -237,13 +241,13 @@ const CensorReplyRestore = {
 
     _scanNode(node) {
         const messages = node.querySelectorAll
-            ? node.querySelectorAll('.ds-message')
+            ? node.querySelectorAll(__DS_CensorSelectors.MESSAGE_SELECTOR)
             : [];
         for (const msgEl of messages) {
             this._tryRestoreMessage(msgEl);
         }
 
-        if (node.classList && node.classList.contains('ds-message')) {
+        if (node.classList && node.classList.contains(__DS_CensorSelectors.MESSAGE_CLASS)) {
             this._tryRestoreMessage(node);
             return;
         }
@@ -251,9 +255,9 @@ const CensorReplyRestore = {
         // Node 既不是 .ds-message 也不包含任何 .ds-message — 檢查它是否被添加到一個
         // 已經有兄弟 .ds-message 的虛擬列表項目內（例如，工具欄在消息之後添加）
         if (node.closest && messages.length === 0) {
-            const virtualItem = node.closest('[data-virtual-list-item-key]');
+            const virtualItem = node.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                const siblingMsg = virtualItem.querySelector('.ds-message');
+                const siblingMsg = virtualItem.querySelector(__DS_CensorSelectors.MESSAGE_SELECTOR);
                 if (siblingMsg) {
                     this._tryRestoreMessage(siblingMsg);
                 }
@@ -262,7 +266,7 @@ const CensorReplyRestore = {
     },
 
     applyToExisting() {
-        const messages = document.querySelectorAll('.ds-message._63c77b1');
+        const messages = document.querySelectorAll(__DS_CensorSelectors.ASSISTANT_MESSAGE_SELECTOR);
         messages.forEach((el) => this._tryRestoreMessage(el));
         this._tryRestoreFromStoredRecords();
     },

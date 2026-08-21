@@ -23,6 +23,10 @@
 (function () {
     'use strict';
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     // 重新注入的防抖間隔：React 重繪會連續觸發 observer
     const REAPPLY_DEBOUNCE_MS = 200;
 
@@ -44,7 +48,7 @@
         MIN: 30,
         MAX: 100,
         // DeepSeek 主內容區；缺失時退回 document.body
-        OBSERVE_ROOT_SELECTOR: '._765a5cd',
+        OBSERVE_ROOT_SELECTOR: selectors.SCROLL_ROOT_SELECTOR,
         OBSERVER_OPTIONS: { childList: true, subtree: true },
         WATCH_KEYS: [],
 

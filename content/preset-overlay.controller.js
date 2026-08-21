@@ -46,7 +46,11 @@
     var startSettleSync               = __viewportSyncModule.startSettle;
     var resolveOverlayPresetId        = __presetIdResolverModule.resolveOverlayPresetId;
 
-    var TARGET_SELECTOR = '._2be88ba';
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const __selectorsModule = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
+    var TARGET_SELECTOR = __selectorsModule.CHAT_HEADER_SELECTOR;
 
     function scheduleFrame(fn) {
         if (typeof requestAnimationFrame === 'function') {

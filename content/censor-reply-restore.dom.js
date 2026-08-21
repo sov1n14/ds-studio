@@ -9,6 +9,10 @@
     const chatSessionId = root.DSSChatSessionId ||
         (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     const bundle = {
 
         // ────────────────────────────────────────────
@@ -43,9 +47,9 @@
         // ────────────────────────────────────────────
 
         _getMessageIdFromElement(msgEl) {
-            const virtualItem = msgEl.closest('[data-virtual-list-item-key]');
+            const virtualItem = msgEl.closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                const key = virtualItem.getAttribute('data-virtual-list-item-key');
+                const key = virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR);
                 if (this._keyToMessageId.has(key)) {
                     const mid = this._keyToMessageId.get(key);
                     // 同步清除 pendingQueue 中相同 messageId 的條目，避免後續 queue 後備誤配
@@ -141,9 +145,9 @@
 
             var chosen = candidates[0];
             // 將對應關係寫入 _keyToMessageId 以供後續快速查詢
-            var virtualItem = msgEl.closest('[data-virtual-list-item-key]');
+            var virtualItem = msgEl.closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                this._keyToMessageId.set(virtualItem.getAttribute('data-virtual-list-item-key'), chosen.message_id);
+                this._keyToMessageId.set(virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR), chosen.message_id);
             }
             return chosen.message_id;
         },
@@ -187,9 +191,9 @@
                 return;
             }
 
-            const virtualItem = msgEl.closest('[data-virtual-list-item-key]');
+            const virtualItem = msgEl.closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                this._keyToMessageId.set(virtualItem.getAttribute('data-virtual-list-item-key'), messageId);
+                this._keyToMessageId.set(virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR), messageId);
             }
 
             this._injectRestoredContent(msgEl, record);
@@ -232,16 +236,16 @@
                     const thinkContainer = msgEl.querySelector('._74c0879');
                     if (thinkContainer) {
                         thinkContainer.classList.add('restored-content');
-                        const thinkContentEl = thinkContainer.querySelector('.ds-think-content');
+                        const thinkContentEl = thinkContainer.querySelector(selectors.THINK_CONTENT_SELECTOR);
                         if (thinkContentEl) {
                             const thinkBody = thinkContentEl.querySelector('._9ecc93a');
                             if (thinkBody) {
                                 thinkBody.innerHTML = '';
                             }
-                            let markdownEl = thinkContentEl.querySelector('.ds-markdown');
+                            let markdownEl = thinkContentEl.querySelector(selectors.MARKDOWN_SELECTOR);
                             if (!markdownEl) {
                                 markdownEl = document.createElement('div');
-                                markdownEl.className = 'ds-markdown';
+                                markdownEl.className = selectors.MARKDOWN_CLASS;
                                 if (thinkBody) {
                                     thinkBody.after(markdownEl);
                                 } else {
@@ -271,16 +275,16 @@
                 const thinkContainer = msgEl.querySelector('._74c0879');
                 if (thinkContainer) {
                     thinkContainer.classList.add('restored-content');
-                    const thinkContentEl = thinkContainer.querySelector('.ds-think-content');
+                    const thinkContentEl = thinkContainer.querySelector(selectors.THINK_CONTENT_SELECTOR);
                     if (thinkContentEl) {
                         const thinkBody = thinkContentEl.querySelector('._9ecc93a');
                         if (thinkBody) {
                             thinkBody.innerHTML = '';
                         }
-                        let markdownEl = thinkContentEl.querySelector('.ds-markdown');
+                        let markdownEl = thinkContentEl.querySelector(selectors.MARKDOWN_SELECTOR);
                         if (!markdownEl) {
                             markdownEl = document.createElement('div');
-                            markdownEl.className = 'ds-markdown';
+                            markdownEl.className = selectors.MARKDOWN_CLASS;
                             if (thinkBody) {
                                 thinkBody.after(markdownEl);
                             } else {
@@ -316,7 +320,7 @@
             }
 
             // 2. 收集 DOM 中尚未復原且被審查的 assistant 訊息（按 DOM 順序）
-            var msgEls = document.querySelectorAll('.ds-message._63c77b1');
+            var msgEls = document.querySelectorAll(selectors.ASSISTANT_MESSAGE_SELECTOR);
             var unrestoredEls = [];
             for (var i = 0; i < msgEls.length; i++) {
                 var el = msgEls[i];
@@ -379,9 +383,9 @@
                 recList.sort(function (a, b) { return String(a.message_id).localeCompare(String(b.message_id)); });
                 var pairs = Math.min(domList.length, recList.length);
                 for (var i = 0; i < pairs; i++) {
-                    var virtualItem = domList[i].closest('[data-virtual-list-item-key]');
+                    var virtualItem = domList[i].closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
                     if (virtualItem) {
-                        var key = virtualItem.getAttribute('data-virtual-list-item-key');
+                        var key = virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR);
                         this._keyToMessageId.set(key, recList[i].message_id);
                     }
                     this._injectRestoredContent(domList[i], recList[i]);
