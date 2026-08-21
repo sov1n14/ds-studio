@@ -9,6 +9,10 @@
  *   4. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
  *   5. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
  */
+// Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
+var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
+    (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+
 const CensorReplyRestore = {
     RESTORED_MESSAGES_KEY: 'restored_messages',
     STORAGE_MAX_ENTRIES: 200,
@@ -47,9 +51,7 @@ const CensorReplyRestore = {
     //   - non-null → different non-null：切換到另一個聊天，清除所有執行期狀態
     //   - non-null → null：離開聊天頁面（如聊天列表），清除所有執行期狀態
     _checkSessionChange() {
-        var newSessionId = null;
-        var urlMatch = window.location.pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-        if (urlMatch) newSessionId = urlMatch[1];
+        var newSessionId = __DS_CensorChatSessionId.extractChatSessionId();
 
         if (newSessionId === this._currentSessionId) return;
 

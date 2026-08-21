@@ -16,6 +16,10 @@
                 ? window[name]
                 : fallback;
 
+    // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
+    const chatSessionId = root.DSSChatSessionId ||
+        (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+
     const CO_OCCURRENCE_WINDOW_MS = 1000;
 
     /**
@@ -74,15 +78,12 @@
 
     /**
      * 從 URL（可為完整 href 或僅 pathname）擷取聊天 UUID（格式：/a/chat/s/<uuid>）。
-     * 正規表達式本身即會在 query string（?）或 hash（#）處停止比對，
-     * 故傳入完整 href 或僅 pathname 皆可正確擷取，無需額外剝離。
+     * 實作委派 DSSChatSessionId.extractChatSessionId()，傳入完整 href 或僅 pathname 皆可。
      * @param {string} [urlOrPath] - 預設使用 window.location.pathname
      * @returns {string|null}
      */
     function extractUuidFromUrl(urlOrPath) {
-        const target = urlOrPath !== undefined ? urlOrPath : window.location.pathname;
-        const match = target.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-        return match ? match[1] : null;
+        return chatSessionId.extractChatSessionId(urlOrPath);
     }
 
     /**

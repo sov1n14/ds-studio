@@ -5,6 +5,10 @@
 (function (root) {
     'use strict';
 
+    // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
+    const chatSessionId = root.DSSChatSessionId ||
+        (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+
     const bundle = {
 
         // ────────────────────────────────────────────
@@ -100,9 +104,8 @@
          */
         _resolveMessageIdFromStorage(msgEl) {
             // 取得當前 session ID；明確要求非 falsy，避免 null !== null 意外通過
-            var currentSessionId = null;
-            var urlMatch = window.location.pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-            if (urlMatch) currentSessionId = urlMatch[1];
+            // 此處獨立於 _currentSessionId 自行讀取 URL：本函式為純查詢，不得呼叫會清除執行期狀態的 _checkSessionChange()
+            var currentSessionId = chatSessionId.extractChatSessionId();
 
             // 明確規則：任一端 session ID 為 falsy → 禁止比對
             if (!currentSessionId) return null;

@@ -54,6 +54,10 @@ var __presetIdResolverModule = (typeof globalThis !== 'undefined' ? globalThis :
     (typeof require !== 'undefined' ? require('./preset-id.resolver.js') : {});
 var resolveOverlayPresetId = __presetIdResolverModule.resolveOverlayPresetId;
 
+// Session id 擷取共用工具（由 chat-session-id.js 在前載入；Node.js 測試：直接 require）
+var __DSChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
+    (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+
 // 設定初始化
 async function initSettings() {
     // StorageManager 由 manifest.json 在本腳本之前注入
@@ -165,8 +169,7 @@ async function refreshGlobalPromptEnabled() {
 
 // URL / Chat 工具函式
 function extractUuidFromUrl() {
-    const match = window.location.pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-    return match ? match[1] : null;
+    return __DSChatSessionId.extractChatSessionId();
 }
 
 // 標記使用者在新對話頁面送出訊息，允許後續 auto-bind；5 秒後自動清除。
