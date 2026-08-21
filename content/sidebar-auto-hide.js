@@ -26,6 +26,7 @@ const SidebarAutoHide = {
     mutationObserver: null,
     sidebarObserver: null,
     resizeTimer: null,
+    _eventAbortController: null,
     _hoverMonitorHandler: null,
     _activeDropdownEl: null,
 
@@ -153,8 +154,14 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         this.sidebarEl = this.getSidebar();
         if (!this.sidebarEl) return false;
 
-        this.sidebarEl.addEventListener('mouseenter', () => this.handleMouseEnter());
-        this.sidebarEl.addEventListener('mouseleave', () => this.handleMouseLeave());
+        // 每個 enable 週期共用一個 AbortController，disable() 一次移除所有 hover 監聽，
+        // 避免反覆開關時堆疊重複 handler（每個都會再開一組計時器）
+        if (!this._eventAbortController) {
+            this._eventAbortController = new AbortController();
+        }
+        const { signal } = this._eventAbortController;
+        this.sidebarEl.addEventListener('mouseenter', () => this.handleMouseEnter(), { signal });
+        this.sidebarEl.addEventListener('mouseleave', () => this.handleMouseLeave(), { signal });
         return true;
     },
 
@@ -311,6 +318,8 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         this.enabled = true;
 
         this.injectStyles();
+        // disable() 會拆掉 observer，故每次啟用都重建
+        this.setupMutationObserver();
         this.setupHoverZone();
         const bound = this.bindEvents();
         if (!bound) {
@@ -349,8 +358,26 @@ ${this.SIDEBAR_INNER_SELECTOR} {
             document.removeEventListener('mouseover', this._hoverMonitorHandler, true);
             this._hoverMonitorHandler = null;
         }
+        if (this._eventAbortController) {
+            this._eventAbortController.abort();
+            this._eventAbortController = null;
+        }
         if (this._activeDropdownEl) {
             this._activeDropdownEl = null;
+        }
+        // 停用時拆掉兩個 subtree observer：enable() 重建 mutationObserver，
+        // sidebarObserver 由後續 observeSidebar() 重建
+        if (this.sidebarObserver) {
+            this.sidebarObserver.disconnect();
+            this.sidebarObserver = null;
+        }
+        if (this.mutationObserver) {
+            this.mutationObserver.disconnect();
+            this.mutationObserver = null;
+        }
+        if (this.resizeTimer) {
+            clearTimeout(this.resizeTimer);
+            this.resizeTimer = null;
         }
         this.originalWidth = null;
         if (this.enterTimer) {
@@ -365,25 +392,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
     destroy() {
         this.disable();
-        if (this.sidebarObserver) {
-            this.sidebarObserver.disconnect();
-            this.sidebarObserver = null;
-        }
-        if (this.mutationObserver) {
-            this.mutationObserver.disconnect();
-            this.mutationObserver = null;
-        }
-        if (this.resizeTimer) {
-            clearTimeout(this.resizeTimer);
-            this.resizeTimer = null;
-        }
-        if (this._hoverMonitorHandler) {
-            document.removeEventListener('mouseover', this._hoverMonitorHandler, true);
-            this._hoverMonitorHandler = null;
-        }
-        if (this._activeDropdownEl) {
-            this._activeDropdownEl = null;
-        }
     },
 
     async start() {
@@ -395,7 +403,6 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
 
         this.setupStorageListener();
-        this.setupMutationObserver();
         this.setupResizeHandler();
 
         if (enabled && this._masterEnabled) {

@@ -12,14 +12,12 @@ const ChatWidth = {
     enabled: false,
     percent: 70,
     _masterEnabled: false,
-    styleEl: null,
     mutationObserver: null,
     applyTimer: null,
 
     getCSS(percent) {
         const vw = Math.min(Math.max(percent, this.MIN), this.MAX);
         return `
-#${this.STYLE_ID} {}
 .ds-virtual-list-items._6f2c522 {
   --message-list-max-width: ${vw}vw !important;
 }
@@ -39,22 +37,11 @@ const ChatWidth = {
             document.head.appendChild(style);
         }
         style.textContent = this.getCSS(percent);
-        this.styleEl = style;
     },
 
     removeStyles() {
         const style = document.getElementById(this.STYLE_ID);
         if (style) style.remove();
-        this.styleEl = null;
-    },
-
-    applyWidth(percent) {
-        this.percent = percent;
-        if (this.enabled) {
-            this.injectStyles(percent);
-        } else {
-            this.removeStyles();
-        }
     },
 
     setupMutationObserver() {
@@ -123,10 +110,7 @@ const ChatWidth = {
     disable() {
         this.enabled = false;
         this.removeStyles();
-    },
-
-    destroy() {
-        this.disable();
+        // 停用時必須拆掉 observer，否則背景仍每 200ms 重排計時器；enable() 會重建
         if (this.mutationObserver) {
             this.mutationObserver.disconnect();
             this.mutationObserver = null;
@@ -135,6 +119,10 @@ const ChatWidth = {
             clearTimeout(this.applyTimer);
             this.applyTimer = null;
         }
+    },
+
+    destroy() {
+        this.disable();
     },
 
     async start() {

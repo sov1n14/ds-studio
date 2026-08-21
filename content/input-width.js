@@ -14,7 +14,6 @@ const InputWidth = {
     _masterEnabled: false,
     _chatWidthPercent: 70,
     _chatWidthEnabled: false,
-    styleEl: null,
     mutationObserver: null,
     applyTimer: null,
 
@@ -28,7 +27,6 @@ const InputWidth = {
     getCSS(percent) {
         const vw = Math.min(Math.max(percent, this.MIN), this.MAX);
         return `
-#${this.STYLE_ID} {}
 ._871cbca,
 ._871cbca .aaff8b8f,
 .aaff8b8f,
@@ -50,13 +48,11 @@ const InputWidth = {
             document.head.appendChild(style);
         }
         style.textContent = this.getCSS(percent);
-        this.styleEl = style;
     },
 
     removeStyles() {
         const style = document.getElementById(this.STYLE_ID);
         if (style) style.remove();
-        this.styleEl = null;
     },
 
     applyWidth(percent) {
@@ -150,10 +146,7 @@ const InputWidth = {
     disable() {
         this.enabled = false;
         this.removeStyles();
-    },
-
-    destroy() {
-        this.disable();
+        // 停用時必須拆掉 observer，否則背景仍每 200ms 重排計時器；enable() 會重建
         if (this.mutationObserver) {
             this.mutationObserver.disconnect();
             this.mutationObserver = null;
@@ -162,6 +155,10 @@ const InputWidth = {
             clearTimeout(this.applyTimer);
             this.applyTimer = null;
         }
+    },
+
+    destroy() {
+        this.disable();
     },
 
     async start() {

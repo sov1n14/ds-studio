@@ -57,21 +57,4 @@ describe('ChatWidth CSS generation (7.x scenarios)', () => {
             expect(importantCount).toBeGreaterThanOrEqual(4);
         });
     });
-
-    describe('applyWidth()', () => {
-        it('injects styles when enabled', () => {
-            ChatWidth.enabled = true;
-            ChatWidth.applyWidth(80);
-            const style = document.getElementById(ChatWidth.STYLE_ID);
-            expect(style).not.toBeNull();
-            expect(style.textContent).toContain('80vw');
-        });
-
-        it('removes style element when disabled', () => {
-            ChatWidth.enabled = false;
-            ChatWidth.applyWidth(50);
-            const style = document.getElementById(ChatWidth.STYLE_ID);
-            expect(style).toBeNull();
-        });
-    });
 });

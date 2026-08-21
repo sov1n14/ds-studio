@@ -4,7 +4,7 @@
  *
  * 架構決策：
  *   - 使用 setInterval 輪詢（每 1000ms），與 sidebar-auto-hide.js 的
- *     MUTATION_CHECK_INTERVAL_MS 慣例一致，避免引入 MutationObserver。
+ *     RESIZE_DEBOUNCE_MS 的毫秒常數命名慣例一致，避免引入 MutationObserver。
  *   - 透過 StorageManager.KEYS.IS_ENABLED 追蹤擴充功能主開關，無獨立功能開關。
  *   - 選擇器採 fallback chain：語意 ds-* class 優先，hash class 為備援。
  */
