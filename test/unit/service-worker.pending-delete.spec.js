@@ -4,8 +4,16 @@
  * service-worker.js is a classic script that calls importScripts(...) at the top
  * and references bare globals (StorageManager, TemporaryChatPendingStore). We stub
  * both BEFORE importing so the file's top-level listener registrations see the stubs.
- * fetch is stubbed globally to drive performDeleteFetch's success/failure branches.
+ * fetch is stubbed globally to drive performDeleteFetch's success/failure branches
+ * (DSSDeepSeekApi.performDeleteFetch resolves `fetch` at call time, so the global
+ * stub keeps intercepting the remediation path).
+ *
+ * The two side-effect imports stand in for the real importScripts payload: they
+ * publish globalThis.DSSDeepSeekApi and the DSS_* constants that service-worker.js
+ * reads as bare globals.
  */
+import '../../utils/deepseek-api.js';
+import '../../content/temporary-chat-constants.js';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const RETRY_ALARM_NAME = 'dss-delete-retry';

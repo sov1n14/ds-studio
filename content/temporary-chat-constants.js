@@ -39,21 +39,26 @@ const DSS_DELETE_ENDPOINT_URL = 'https://chat.deepseek.com/api/v0/chat_session/d
 // content→SW：SPA 導航刪除失敗且情境存活時請 SW 排程重試 alarm
 const DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE = 'DSS_SCHEDULE_DELETE_RETRY';
 
+const DSS_TEMP_CHAT_CONSTANTS = {
+    DSS_TEMP_CHAT_STORAGE_KEY,
+    DSS_TEMP_CHAT_CHANGED_EVENT,
+    DSS_TEMP_CHAT_UUID_KEY,
+    DSS_CHAT_CREATE_MESSAGE_TYPE,
+    DSS_CHAT_CREATE_ENDPOINT,
+    DSS_CHAT_COMPLETION_MESSAGE_TYPE,
+    DSS_FIBER_DELETE_MESSAGE_TYPE,
+    DSS_FIBER_DELETE_RESULT_TYPE,
+    DSS_PENDING_DELETES_SYNC_KEY,
+    DSS_LAST_AUTH_TOKEN_KEY,
+    DSS_OPEN_TEMP_UUIDS_KEY,
+    DSS_DELETE_ENDPOINT_URL,
+    DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
+};
+
+// 發布至 globalThis：classic script 的 top-level const 僅存在於全域語彙環境而非 globalThis 屬性，消費端以 globalThis[name] 解析常數時需要此份掛載
+Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS);
+
 // Test export（瀏覽器中為 no-op）
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        DSS_TEMP_CHAT_STORAGE_KEY,
-        DSS_TEMP_CHAT_CHANGED_EVENT,
-        DSS_TEMP_CHAT_UUID_KEY,
-        DSS_CHAT_CREATE_MESSAGE_TYPE,
-        DSS_CHAT_CREATE_ENDPOINT,
-        DSS_CHAT_COMPLETION_MESSAGE_TYPE,
-        DSS_FIBER_DELETE_MESSAGE_TYPE,
-        DSS_FIBER_DELETE_RESULT_TYPE,
-        DSS_PENDING_DELETES_SYNC_KEY,
-        DSS_LAST_AUTH_TOKEN_KEY,
-        DSS_OPEN_TEMP_UUIDS_KEY,
-        DSS_DELETE_ENDPOINT_URL,
-        DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
-    };
+    module.exports = DSS_TEMP_CHAT_CONSTANTS;
 }

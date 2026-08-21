@@ -6,7 +6,7 @@
 const TemporaryChatDeleteApi = (() => {
     'use strict';
 
-    const DELETE_URL = 'https://chat.deepseek.com/api/v0/chat_session/delete';
+    const DELETE_URL = globalThis.DSS_DELETE_ENDPOINT_URL ?? 'https://chat.deepseek.com/api/v0/chat_session/delete';
     // 最多重試次數（導航觸發刪除失敗時使用）
     const MAX_RETRY_ATTEMPTS = 3;
     // 每次重試間隔（毫秒）
