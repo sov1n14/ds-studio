@@ -56,7 +56,6 @@ describe('GoToTop', () => {
             expect(GoToTop._button).not.toBeNull();
             expect(document.body.contains(GoToTop._button)).toBe(true);
             expect(GoToTop._observer).not.toBeNull();
-            expect(GoToTop._routeObserver).not.toBeNull();
         });
 
         it('enable is idempotent when called twice', () => {
@@ -103,13 +102,71 @@ describe('GoToTop', () => {
             expect(GoToTop._scrollListener).toBeNull();
         });
 
-        it('disable cleans up route observer', () => {
+        // Route detection has no observer field to inspect: it lives in the
+        // debounced body-mutation callback plus a popstate listener. These
+        // three specs therefore assert the observable consequence of a route
+        // change — the old button is torn down and a new one injected —
+        // through each of the two trigger paths, and its absence after
+        // disable().
+        it('a popstate route change after enable re-injects the button', () => {
             GoToTop._masterEnabled = true;
             GoToTop.enable();
+            const firstBtn = GoToTop._button;
+            expect(firstBtn).not.toBeNull();
+
+            vi.useFakeTimers();
+            window.history.pushState({}, '', '/a/chat/route-popstate');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+
+            // The route change tears the old button down synchronously.
+            expect(document.body.contains(firstBtn)).toBe(false);
+            expect(GoToTop._button).toBeNull();
+
+            // A new button is injected after the 100ms route-change debounce.
+            vi.advanceTimersByTime(100);
+            expect(GoToTop._button).not.toBeNull();
+            expect(GoToTop._button).not.toBe(firstBtn);
+            expect(document.body.contains(GoToTop._button)).toBe(true);
+        });
+
+        it('a pathname change seen through a body mutation re-injects the button', async () => {
+            GoToTop._masterEnabled = true;
+            GoToTop.enable();
+            const firstBtn = GoToTop._button;
+            expect(firstBtn).not.toBeNull();
+
+            window.history.pushState({}, '', '/a/chat/route-mutation');
+            document.body.appendChild(document.createElement('span'));
+
+            // Real timers on purpose: happy-dom delivers MutationObserver
+            // records on the microtask queue, which fake timers do not flush.
+            // 50ms observer debounce detects the new pathname, then the 100ms
+            // route-change debounce re-injects.
+            await new Promise((resolve) => setTimeout(
+                resolve, GoToTop.OBSERVER_DEBOUNCE + 100 + 60));
+
+            expect(document.body.contains(firstBtn)).toBe(false);
+            expect(GoToTop._button).not.toBeNull();
+            expect(GoToTop._button).not.toBe(firstBtn);
+            expect(document.body.contains(GoToTop._button)).toBe(true);
+        });
+
+        it('after disable, neither popstate nor a body mutation re-injects a button', async () => {
+            GoToTop._masterEnabled = true;
+            GoToTop.enable();
+            expect(GoToTop._button).not.toBeNull();
 
             GoToTop.disable();
-            expect(GoToTop._routeObserver).toBeNull();
             expect(GoToTop._popstateHandler).toBeNull();
+
+            window.history.pushState({}, '', '/a/chat/route-after-disable');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+            document.body.appendChild(document.createElement('span'));
+            await new Promise((resolve) => setTimeout(
+                resolve, GoToTop.OBSERVER_DEBOUNCE + 100 + 60));
+
+            expect(GoToTop._button).toBeNull();
+            expect(document.querySelector('.dsw-gotop')).toBeNull();
         });
 
         it('disable cleans up wrapper observer', () => {

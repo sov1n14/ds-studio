@@ -67,7 +67,6 @@ const GoToTop = {
     _injectionMode: null,
     _scrollContainer: null,
     _observer: null,
-    _routeObserver: null,
     // 包裝容器變動監控器，用於偵測 React re-render 後重新注入
     _wrapperObserver: null,
     _wrapperObserverTimer: null,
@@ -92,20 +91,23 @@ const GoToTop = {
 
     /**
      * Watch the DOM for structural changes (new messages, SPA re-renders).
-     * Debounces calls to _evaluateVisibility.
+     * Debounces route detection and _evaluateVisibility onto one observer.
+     * 刻意不監聽 attributes：可見性僅取決於節點結構與滾動位置，
+     * 且本功能自身會改寫按鈕 style，監聽屬性會造成回呼自我觸發。
      */
     _startObserver() {
         if (this._observer) return;
         this._observer = new MutationObserver(() => {
             clearTimeout(this._observerTimer);
             this._observerTimer = setTimeout(() => {
+                // 路由切換與可見性判斷共用同一組去抖動的 DOM 變動事件
+                if (this._handlePathChange()) return;
                 this._evaluateVisibility();
             }, this.OBSERVER_DEBOUNCE);
         });
         this._observer.observe(document.body, {
             childList: true,
             subtree: true,
-            attributes: true,
         });
     },
 
@@ -148,34 +150,37 @@ const GoToTop = {
     },
 
     /**
-     * Watch for SPA route changes via MutationObserver + popstate.
+     * 比對 pathname 判斷是否發生 SPA 路由切換；已切換則觸發 _onRouteChange。
+     * @returns {boolean} 是否偵測到路由切換
      */
-    _startRouteObserver() {
-        if (this._routeObserver) return;
+    _handlePathChange() {
+        const currentPath = window.location.pathname;
+        if (currentPath === this._lastPath) return false;
+
+        // 首次比對（_lastPath 尚未初始化）只記錄基準，不視為路由切換
+        const isFirstSample = !this._lastPath;
+        this._lastPath = currentPath;
+        if (isFirstSample) return false;
+
+        this._onRouteChange();
+        return true;
+    },
+
+    /**
+     * Watch for SPA route changes via popstate.
+     * DOM 變動路徑的路由偵測已併入 _startObserver 的去抖動回呼。
+     */
+    _startRouteListener() {
+        if (this._popstateHandler) return;
         this._lastPath = window.location.pathname;
 
-        this._routeObserver = new MutationObserver(() => {
-            if (window.location.pathname !== this._lastPath) {
-                this._lastPath = window.location.pathname;
-                this._onRouteChange();
-            }
-        });
-        this._routeObserver.observe(document.body, { childList: true, subtree: true });
-
         this._popstateHandler = () => {
-            if (window.location.pathname !== this._lastPath) {
-                this._lastPath = window.location.pathname;
-                this._onRouteChange();
-            }
+            this._handlePathChange();
         };
         window.addEventListener('popstate', this._popstateHandler);
     },
 
-    _stopRouteObserver() {
-        if (this._routeObserver) {
-            this._routeObserver.disconnect();
-            this._routeObserver = null;
-        }
+    _stopRouteListener() {
         if (this._popstateHandler) {
             window.removeEventListener('popstate', this._popstateHandler);
             this._popstateHandler = null;
@@ -239,8 +244,8 @@ const GoToTop = {
         if (this.enabled) return;
         this.enabled = true;
 
+        this._startRouteListener();
         this._startObserver();
-        this._startRouteObserver();
 
         // 嘗試注入按鈕；若 DOM 尚未準備好則重試
         this._tryConnectDom();
@@ -262,7 +267,7 @@ const GoToTop = {
         const isNativeBtnReady = !!this._getNativeButton();
 
         if (isInputAreaReady || isNativeBtnReady) {
-            const isInjected = this._injectButton();
+            this._injectButton();
 
             // 找到滾動容器並啟動監聽（以 anchor 定位，anchor 此時可能已存在）
             const anchor = this._getAnchor();
@@ -303,7 +308,7 @@ const GoToTop = {
         this._locked = false;
         this._stopObserver();
         this._stopScrollListener();
-        this._stopRouteObserver();
+        this._stopRouteListener();
         this._stopWrapperObserver();
 
         if (this._button) {

@@ -94,7 +94,6 @@ export function resetGoToTopState() {
     GoToTop._scrollPromise = null;
     GoToTop._scrollReject = null;
     GoToTop._observer = null;
-    GoToTop._routeObserver = null;
     GoToTop._wrapperObserver = null;
     GoToTop._wrapperObserverTimer = null;
     GoToTop._scrollListener = null;
@@ -103,6 +102,8 @@ export function resetGoToTopState() {
     GoToTop._enableRetryTimer = null;
     GoToTop._enableRetryCount = 0;
     GoToTop._lastPath = '';
+    clearTimeout(GoToTop._routeChangeTimer);
+    GoToTop._routeChangeTimer = null;
     document.body.innerHTML = '';
     vi.restoreAllMocks();
 }
