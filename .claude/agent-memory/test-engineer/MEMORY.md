@@ -1,1 +1,2 @@
 - [Broadcast spec pitfall](pitfall-broadcast-specs.md) — global beforeEach storage clear fires onChanged; drain it, and install onMessage listeners only once.
+- [Vitest fake-timer pitfalls](vitest-fake-timers-pitfalls.md) — storage-mock deadlock, MutationObserver delivery, and happy-dom setTimeout(0) costing ~15ms per turn.

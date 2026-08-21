@@ -37,26 +37,15 @@
  */
 
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import StorageManager from '../../utils/storage-manager.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
 
 beforeAll(async () => {
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
+    loadI18nOnce();
     await globalThis.dsI18n.init();
 
-    const presetManagerCode = readFileSync(resolve(__dirname, '../../popup/popup.preset-manager.js'), 'utf-8');
-    eval(presetManagerCode);
-
-    const togglesCode = readFileSync(resolve(__dirname, '../../popup/popup.toggles.js'), 'utf-8');
-    eval(togglesCode);
+    evalPopupScript('popup/popup.preset-manager.js');
+    evalPopupScript('popup/popup.toggles.js');
 });
 
 function makeCheckbox(checked = false) {

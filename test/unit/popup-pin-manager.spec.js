@@ -1,16 +1,10 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript } from '../helpers/popup-script-loader.js';
 
 let createPinManager;
 
 beforeAll(() => {
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.pin-manager.js'), 'utf-8');
-    eval(code);
+    evalPopupScript('popup/popup.pin-manager.js');
     createPinManager = globalThis.window.__DS_PopupPinManager.createPinManager;
 });
 

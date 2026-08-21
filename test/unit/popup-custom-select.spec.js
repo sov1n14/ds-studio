@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript, loadI18nOnce, readProjectFile } from '../helpers/popup-script-loader.js';
 
 let Modal;
 
@@ -13,19 +8,12 @@ beforeAll(() => {
     // each row's markup, and that renderer calls dsI18n.t(...), so both must
     // be loaded (and i18n initialized) before custom-select.js is evaluated —
     // mirrors the <script> load order declared in popup/popup.html.
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
-
-    const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
-    eval(rendererCode);
-
-    const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
-    eval(code);
+    loadI18nOnce();
+    evalPopupScript('popup/preset-item-renderer.js');
+    evalPopupScript('popup/custom-select.js');
 
     // Extract Modal object from popup.js for modal-integration tests
-    const popupCode = readFileSync(resolve(__dirname, '../../popup/popup.modal.js'), 'utf-8');
+    const popupCode = readProjectFile('popup/popup.modal.js');
     const match = popupCode.match(/const Modal = \{[\s\S]*?\n\};/);
     if (!match) {
         throw new Error('Could not extract Modal object from popup.js');

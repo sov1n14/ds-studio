@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
 
 // NOTE: this file used to import fuzzyMatch()/debounce() from
 // popup/popup-utils.js, a module with ZERO production consumers (verified
@@ -15,18 +13,10 @@ import { dirname, resolve } from 'path';
 // test/unit/popup-custom-select.spec.js (eval-load custom-select.js) and
 // test/unit/editor.spec.js (ESM import of editor.js).
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 beforeAll(() => {
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
-    const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
-    eval(rendererCode);
-    const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
-    eval(code);
+    loadI18nOnce();
+    evalPopupScript('popup/preset-item-renderer.js');
+    evalPopupScript('popup/custom-select.js');
 });
 
 function makeDOM() {

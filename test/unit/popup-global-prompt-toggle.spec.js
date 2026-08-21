@@ -53,17 +53,11 @@
  *   business logic.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import StorageManager from '../../utils/storage-manager.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript } from '../helpers/popup-script-loader.js';
 
 beforeAll(() => {
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.toggles.js'), 'utf-8');
-    eval(code);
+    evalPopupScript('popup/popup.toggles.js');
     if (typeof window.__DS_PopupToggles?.createToggleManager !== 'function') {
         throw new Error('createToggleManager was not exposed on window.__DS_PopupToggles');
     }
