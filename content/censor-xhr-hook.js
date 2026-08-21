@@ -11,7 +11,6 @@
 
     var originalOpen = XMLHttpRequest.prototype.open;
     var originalSend = XMLHttpRequest.prototype.send;
-    var pendingStates = new Map();
     var originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
     var lastCapturedAuth = null;
 
@@ -69,7 +68,6 @@
 
         var state = SseParser.createState();
         var buffer = '';
-        pendingStates.set(xhr, state);
 
         // 剖析請求主體以取得 chat_session_id 與 prompt，作為重新整理定位锚點
         var reqChatSessionId = null, reqPromptText = null;
@@ -107,7 +105,6 @@
                         promptText: reqPromptText,
                     }, '*');
                     state.messageId = null;
-                    pendingStates.delete(xhr);
                 }
             }
         });
