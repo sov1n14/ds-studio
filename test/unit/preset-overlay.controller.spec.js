@@ -137,11 +137,13 @@ describe('onSelectChange — reposition regression', () => {
  * are processed in the same drain loop — exactly like the browser's async
  * frame queue but without the async overhead or the recursion.
  *
- * RAF_FLUSH_CAP (200) is large enough to let the settle loop reach
- * stableK=120 (converge) on a real DOM, yet small enough to terminate
- * immediately when measure() always returns null (null-metric path).
- * The test assertions only require that reposition was called at least
- * once with 'settle:frame-0', which is satisfied on the very first flush.
+ * RAF_FLUSH_CAP (200) is deliberately larger than the production
+ * settle-loop ceiling (maxFrames=60, stableK=4), so the loop always hits
+ * its OWN bound before this stub's bound. That is what makes the
+ * frame-ceiling assertion below meaningful: if maxFrames regressed to a
+ * huge value (the old 7200), the drain loop would be cut off by
+ * RAF_FLUSH_CAP instead and the settle:frame-N indices would run well
+ * past 59, failing the test.
  *
  * Returns a restore function.
  */
@@ -204,12 +206,32 @@ describe('settle loop integration', () => {
 
         // The settle loop runs synchronously (rAF stubbed).
         // With no button element inside the target, resolveNewChatButtonEl
-        // returns null, so measure() returns null every frame.  Since
-        // prevMetric stays null (it's only set when measure returns non-null),
-        // the loop keeps waiting and increments frame each time until
-        // maxFrames=30 is reached: 30 calls to apply -> reposition.
+        // returns null, so measure() returns null every frame, the metric
+        // never stabilises, and the loop runs until it hits its frame
+        // ceiling (maxFrames=60) -> reposition('settle:frame-N').
         expect(overlay.reposition).toHaveBeenCalled();
         expect(overlay.reposition).toHaveBeenNthCalledWith(1, 'settle:frame-0');
+    });
+
+    it('bounds settle frames to the 60-frame ceiling (no unbounded loop)', () => {
+        target = document.createElement('div');
+        document.body.appendChild(target);
+
+        overlay.mountTo(target);
+
+        const frameIndices = overlay.reposition.mock.calls
+            .map(([reason]) => /^settle:frame-(\d+)$/.exec(String(reason)))
+            .filter(Boolean)
+            .map(([, n]) => Number(n));
+
+        // Sanity: the loop actually ran, otherwise the bound below is vacuous.
+        expect(frameIndices.length).toBeGreaterThan(0);
+        // The ceiling: with maxFrames=60 no frame index may reach 60, and the
+        // loop may not emit more than 60 settle frames. RAF_FLUSH_CAP (200)
+        // exceeds 60, so a regression to an unbounded/huge maxFrames would
+        // produce indices up to the flush cap and fail here.
+        expect(Math.max(...frameIndices)).toBeLessThan(60);
+        expect(frameIndices.length).toBeLessThanOrEqual(60);
     });
 
     it('unmount does not crash after settle loop', () => {
