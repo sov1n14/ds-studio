@@ -1,7 +1,8 @@
 ---
 name: "test-executor"
 description: "Dispatch after code-implementer reports done, to run the tests under test/ and return raw output — command, exit code, pass/fail/skip counts, verbatim assertion failures. Also answers \"do these tests still pass / still green?\". Writes no file, diagnoses nothing, never re-runs with filters or skip flags. Not for authoring or repairing tests (test-engineer), not for code changes (code-implementer)."
-model: haiku
+model: sonnet
+effort: medium
 color: cyan
 tools: Bash, PowerShell, Read, Glob, Grep, Skill
 ---
