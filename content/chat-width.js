@@ -1,19 +1,19 @@
 /**
- * DS studio — Chat Width Adjuster
- * Controls the width of the conversation area and input area.
+ * DS studio — 對話區寬度（content/chat-width.js）
+ *
+ * 僅提供設定與 CSS：樣式注入、observer 生命週期與開關閘控皆由
+ * content/width-feature.js 工廠負責。
  */
-const ChatWidth = {
-    STYLE_ID: 'ds-chat-width-style',
-    STORAGE_KEY: 'dsChatWidth',
-    ENABLED_KEY: 'dsChatWidthEnabled',
-    MIN: 30,
-    MAX: 100,
+const CHAT_WIDTH_FACTORY = globalThis.DSSWidthFeature
+    || (typeof require !== 'undefined' ? require('./width-feature.js') : null);
+if (!CHAT_WIDTH_FACTORY) {
+    throw new Error('content/chat-width.js 需要 content/width-feature.js 先行載入');
+}
 
-    enabled: false,
-    percent: 70,
-    _masterEnabled: false,
-    mutationObserver: null,
-    applyTimer: null,
+const ChatWidth = CHAT_WIDTH_FACTORY.create({
+    STYLE_ID: 'ds-chat-width-style',
+    PERCENT_KEY: StorageManager.KEYS.CHAT_WIDTH,
+    ENABLED_KEY: StorageManager.KEYS.CHAT_WIDTH_ENABLED,
 
     getCSS(percent) {
         const vw = Math.min(Math.max(percent, this.MIN), this.MAX);
@@ -28,124 +28,11 @@ const ChatWidth = {
   padding-right: 0 !important;
 }`.trim();
     },
+});
 
-    injectStyles(percent) {
-        let style = document.getElementById(this.STYLE_ID);
-        if (!style) {
-            style = document.createElement('style');
-            style.id = this.STYLE_ID;
-            document.head.appendChild(style);
-        }
-        style.textContent = this.getCSS(percent);
-    },
-
-    removeStyles() {
-        const style = document.getElementById(this.STYLE_ID);
-        if (style) style.remove();
-    },
-
-    setupMutationObserver() {
-        if (this.mutationObserver) this.mutationObserver.disconnect();
-
-        this.mutationObserver = new MutationObserver(() => {
-            if (this.applyTimer) clearTimeout(this.applyTimer);
-            this.applyTimer = setTimeout(() => {
-                if (this.enabled) {
-                    this.injectStyles(this.percent);
-                }
-            }, 200);
-        });
-
-        const mainArea = document.querySelector('._765a5cd') || document.body;
-        this.mutationObserver.observe(mainArea, {
-            childList: true,
-            subtree: true
-        });
-    },
-
-    setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-
-            // Master switch
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                if (this._masterEnabled) {
-                    chrome.storage.local.get([this.ENABLED_KEY, this.STORAGE_KEY], (data) => {
-                        if (data[this.ENABLED_KEY]) {
-                            this.enable(data[this.STORAGE_KEY] ?? this.percent);
-                        }
-                    });
-                } else {
-                    this.disable();
-                }
-            }
-
-            // Own toggle
-            if (changes[this.STORAGE_KEY] || changes[this.ENABLED_KEY]) {
-                if (!this._masterEnabled) return;
-                const enabled = changes[this.ENABLED_KEY]
-                    ? changes[this.ENABLED_KEY].newValue
-                    : this.enabled;
-                const percent = changes[this.STORAGE_KEY]
-                    ? changes[this.STORAGE_KEY].newValue
-                    : this.percent;
-
-                if (enabled) {
-                    this.enable(percent);
-                } else if (changes[this.ENABLED_KEY]) {
-                    this.disable();
-                }
-            }
-        });
-    },
-
-    enable(percent) {
-        this.enabled = true;
-        this.percent = percent || this.percent;
-        this.injectStyles(this.percent);
-        this.setupMutationObserver();
-    },
-
-    disable() {
-        this.enabled = false;
-        this.removeStyles();
-        // 停用時必須拆掉 observer，否則背景仍每 200ms 重排計時器；enable() 會重建
-        if (this.mutationObserver) {
-            this.mutationObserver.disconnect();
-            this.mutationObserver = null;
-        }
-        if (this.applyTimer) {
-            clearTimeout(this.applyTimer);
-            this.applyTimer = null;
-        }
-    },
-
-    destroy() {
-        this.disable();
-    },
-
-    async start() {
-        const data = await chrome.storage.local.get([
-            this.STORAGE_KEY, this.ENABLED_KEY,
-            StorageManager.KEYS.IS_ENABLED
-        ]);
-        const enabled = data[this.ENABLED_KEY] ?? false;
-        const percent = data[this.STORAGE_KEY] ?? 70;
-        this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
-
-        this.setupStorageListener();
-
-        if (enabled && this._masterEnabled) {
-            this.enable(percent);
-        }
-    }
-};
-
-// Auto-start
 ChatWidth.start();
 
-// === Test export (no-op in browser) ===
+// === 測試匯出（瀏覽器情境為 no-op） ===
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = ChatWidth;
 }

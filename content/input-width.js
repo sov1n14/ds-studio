@@ -1,21 +1,37 @@
 /**
- * DS studio — Input Width Adjuster
- * Controls the width of the edit input box specifically.
+ * DS studio — 輸入框寬度（content/input-width.js）
+ *
+ * 僅提供設定與 CSS：樣式注入、observer 生命週期與開關閘控皆由
+ * content/width-feature.js 工廠負責。
+ * 跨功能相依：輸入框不得寬於對話區，故追蹤對話區寬度的兩個鍵做夾限。
  */
-const InputWidth = {
-    STYLE_ID: 'ds-input-width-style',
-    STORAGE_KEY: 'dsInputWidth',
-    ENABLED_KEY: 'dsInputWidthEnabled',
-    MIN: 30,
-    MAX: 100,
+const INPUT_WIDTH_FACTORY = globalThis.DSSWidthFeature
+    || (typeof require !== 'undefined' ? require('./width-feature.js') : null);
+if (!INPUT_WIDTH_FACTORY) {
+    throw new Error('content/input-width.js 需要 content/width-feature.js 先行載入');
+}
 
-    enabled: false,
-    percent: 70,
-    _masterEnabled: false,
+const InputWidth = INPUT_WIDTH_FACTORY.create({
+    STYLE_ID: 'ds-input-width-style',
+    PERCENT_KEY: StorageManager.KEYS.INPUT_WIDTH,
+    ENABLED_KEY: StorageManager.KEYS.INPUT_WIDTH_ENABLED,
+    WATCH_KEYS: [StorageManager.KEYS.CHAT_WIDTH, StorageManager.KEYS.CHAT_WIDTH_ENABLED],
+    // 輸入框額外監看 class 變動：DeepSeek 會在編輯狀態切換時換掉容器 class
+    OBSERVER_OPTIONS: { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] },
+
     _chatWidthPercent: 70,
     _chatWidthEnabled: false,
-    mutationObserver: null,
-    applyTimer: null,
+
+    onValues(values) {
+        const percentKey = StorageManager.KEYS.CHAT_WIDTH;
+        const enabledKey = StorageManager.KEYS.CHAT_WIDTH_ENABLED;
+        if (Object.prototype.hasOwnProperty.call(values, percentKey)) {
+            this._chatWidthPercent = values[percentKey];
+        }
+        if (Object.prototype.hasOwnProperty.call(values, enabledKey)) {
+            this._chatWidthEnabled = values[enabledKey];
+        }
+    },
 
     getEffectivePercent() {
         if (this._chatWidthEnabled && this._chatWidthPercent < this.percent) {
@@ -39,153 +55,11 @@ const InputWidth = {
   padding-right: 0 !important;
 }`.trim();
     },
+});
 
-    injectStyles(percent) {
-        let style = document.getElementById(this.STYLE_ID);
-        if (!style) {
-            style = document.createElement('style');
-            style.id = this.STYLE_ID;
-            document.head.appendChild(style);
-        }
-        style.textContent = this.getCSS(percent);
-    },
-
-    removeStyles() {
-        const style = document.getElementById(this.STYLE_ID);
-        if (style) style.remove();
-    },
-
-    applyWidth(percent) {
-        this.percent = percent;
-        if (this.enabled) {
-            this.injectStyles(this.getEffectivePercent());
-        } else {
-            this.removeStyles();
-        }
-    },
-
-    setupMutationObserver() {
-        if (this.mutationObserver) this.mutationObserver.disconnect();
-
-        this.mutationObserver = new MutationObserver(() => {
-            if (this.applyTimer) clearTimeout(this.applyTimer);
-            this.applyTimer = setTimeout(() => {
-                if (this.enabled) {
-                    this.injectStyles(this.getEffectivePercent());
-                }
-            }, 200);
-        });
-
-        const mainArea = document.querySelector('._765a5cd') || document.body;
-        this.mutationObserver.observe(mainArea, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class']
-        });
-    },
-
-    setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-
-            // Master switch
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                if (this._masterEnabled) {
-                    chrome.storage.local.get([this.ENABLED_KEY, this.STORAGE_KEY], (data) => {
-                        if (data[this.ENABLED_KEY]) {
-                            this.enable(data[this.STORAGE_KEY] ?? this.percent);
-                        }
-                    });
-                } else {
-                    this.disable();
-                }
-            }
-
-            // Track chat-width for clamping and re-injection
-            if (changes[StorageManager.KEYS.CHAT_WIDTH]) {
-                this._chatWidthPercent = changes[StorageManager.KEYS.CHAT_WIDTH].newValue;
-                if (this.enabled && this._chatWidthEnabled) {
-                    this.applyWidth(this.percent);
-                }
-            }
-            if (changes[StorageManager.KEYS.CHAT_WIDTH_ENABLED]) {
-                this._chatWidthEnabled = changes[StorageManager.KEYS.CHAT_WIDTH_ENABLED].newValue;
-                if (this.enabled) {
-                    this.applyWidth(this.percent);
-                }
-            }
-
-            // Own toggle
-            if (changes[this.STORAGE_KEY] || changes[this.ENABLED_KEY]) {
-                if (!this._masterEnabled) return;
-                const enabled = changes[this.ENABLED_KEY]
-                    ? changes[this.ENABLED_KEY].newValue
-                    : this.enabled;
-                const percent = changes[this.STORAGE_KEY]
-                    ? changes[this.STORAGE_KEY].newValue
-                    : this.percent;
-
-                if (enabled) {
-                    this.enable(percent);
-                } else if (changes[this.ENABLED_KEY]) {
-                    this.disable();
-                }
-            }
-        });
-    },
-
-    enable(percent) {
-        this.enabled = true;
-        this.percent = percent || this.percent;
-        this.injectStyles(this.getEffectivePercent());
-        this.setupMutationObserver();
-    },
-
-    disable() {
-        this.enabled = false;
-        this.removeStyles();
-        // 停用時必須拆掉 observer，否則背景仍每 200ms 重排計時器；enable() 會重建
-        if (this.mutationObserver) {
-            this.mutationObserver.disconnect();
-            this.mutationObserver = null;
-        }
-        if (this.applyTimer) {
-            clearTimeout(this.applyTimer);
-            this.applyTimer = null;
-        }
-    },
-
-    destroy() {
-        this.disable();
-    },
-
-    async start() {
-        const data = await chrome.storage.local.get([
-            this.STORAGE_KEY, this.ENABLED_KEY,
-            StorageManager.KEYS.IS_ENABLED,
-            StorageManager.KEYS.CHAT_WIDTH,
-            StorageManager.KEYS.CHAT_WIDTH_ENABLED
-        ]);
-        const enabled = data[this.ENABLED_KEY] ?? false;
-        const percent = data[this.STORAGE_KEY] ?? 70;
-        this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
-        this._chatWidthPercent = data[StorageManager.KEYS.CHAT_WIDTH] ?? 70;
-        this._chatWidthEnabled = data[StorageManager.KEYS.CHAT_WIDTH_ENABLED] ?? false;
-
-        this.setupStorageListener();
-
-        if (enabled && this._masterEnabled) {
-            this.enable(percent);
-        }
-    }
-};
-
-// Auto-start
 InputWidth.start();
 
-// === Test export (no-op in browser) ===
+// === 測試匯出（瀏覽器情境為 no-op） ===
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = InputWidth;
 }
