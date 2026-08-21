@@ -38,6 +38,7 @@ beforeAll(async () => {
         getLastAuthToken: vi.fn().mockResolvedValue(null),
     };
     globalThis.TemporaryChatPendingStore = pendingStoreStub;
+    globalThis.DSSSettingsRoutes = { install: vi.fn() };
     globalThis.fetch = vi.fn();
 
     await import('../../background/service-worker.js');

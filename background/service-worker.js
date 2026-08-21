@@ -1,8 +1,9 @@
 'use strict';
 
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
-// 注意：不載入 utils/i18n.js 與 utils/logger.js，避免觸碰 window / 選用性 __DS_Logger 之外的載入期副作用
+// 注意：不載入 utils/i18n.js，該檔載入期需觸碰 DOM（document），service worker 無此環境
 importScripts(
+    '../utils/logger.js',
     '../utils/storage-manager.chunk-lock.js',
     '../utils/storage-manager.sync.js',
     '../utils/storage-manager.presets.js',
@@ -11,8 +12,13 @@ importScripts(
     '../utils/storage-manager.init.js',
     '../utils/storage-manager.setters.js',
     '../utils/storage-manager.js',
-    '../content/temporary-chat-pending-store.js'
+    '../content/temporary-chat-pending-store.js',
+    '../utils/settings-message-constants.js',
+    'settings-routes.js'
 );
+
+// 註冊設定訊息路由與變更廣播（頂層呼叫，確保 worker 重啟後仍存活）
+DSSSettingsRoutes.install();
 
 // 重試 alarm 名稱
 const RETRY_ALARM_NAME = 'dss-delete-retry';
