@@ -4,8 +4,11 @@
  * 套用為一次性（one-shot）：套用完成後即釋放控制權，讓使用者手動翻轉按鈕不會被回點。
  * 但每次「啟用事件」發生時會重新武裝一次性旗標，再次套用一次後繼續釋放控制權：
  *   (A) start() 時主開關為開啟
- *   (B) 主開關開啟期間，dsWebSearchToggle 設定透過 storage.onChanged 變更
- *   (C) 主開關透過 storage.onChanged 轉為開啟
+ *   (B) 主開關開啟期間，dsWebSearchToggle 模式值經 DSS_SETTINGS_CHANGED 廣播變更
+ *   (C) 主開關經 registerFeatureToggle 轉為開啟
+ *
+ * 設定來源：主開關閘控交由 content/feature-toggle.js；模式值以 DSS_GET_SETTINGS
+ * 向 background 索取初始值，後續變更由 DSS_SETTINGS_CHANGED 廣播驅動。
  */
 // 搜尋圖示的 path[d] 前綴（語言無關的定位基準；真實頁面資料帶前導空白，比對前需 trim）
 const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
@@ -13,7 +16,7 @@ const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
 const LOCATE_GIVE_UP_MS = 15000;
 
 const WebSearchToggle = {
-    STORAGE_KEY: 'dsWebSearchToggle', // 對應 StorageManager.KEYS.WEBSEARCH_TOGGLE
+    STORAGE_KEY: StorageManager.KEYS.WEBSEARCH_TOGGLE,
     LOCATE_GIVE_UP_MS,
 
     enabled: false,
@@ -143,36 +146,78 @@ const WebSearchToggle = {
         this._recompute();
     },
 
-    // 監聽儲存變更（僅 local；專案的 _set() 會同步寫入 local）
-    setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
+    /** 於呼叫時解析相依模組，同時支援瀏覽器全域與單元測試的 require。 */
+    _resolveDeps() {
+        return {
+            messageTypes: globalThis.DSS_SETTINGS_MSG
+                || (typeof require !== 'undefined' ? require('../utils/settings-message-constants.js') : null),
+            featureToggle: globalThis.DSSFeatureToggle
+                || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null),
+        };
+    },
 
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = !!changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                this._rearm();
-            }
+    // 處理 background 廣播的設定變更：僅關心自身模式值，變更後重新武裝一次性套用
+    _handleSettingsChanged(message) {
+        const { messageTypes } = this._resolveDeps();
+        if (!messageTypes || !message || message.type !== messageTypes.SETTINGS_CHANGED) return;
+        if (message.area !== 'local') return;
 
-            if (changes[this.STORAGE_KEY]) {
-                this.mode = this._normalizeMode(changes[this.STORAGE_KEY].newValue);
-                this._rearm();
+        const change = message.changes?.[this.STORAGE_KEY];
+        if (!change) return;
+
+        this.mode = this._normalizeMode(change.newValue);
+        this._rearm();
+    },
+
+    // 訂閱設定廣播（模式值變更）
+    _setupSettingsListener() {
+        chrome.runtime.onMessage.addListener((message) => {
+            // 訊息回呼邊界：拋錯無人可接，攔下並記錄
+            try {
+                this._handleSettingsChanged(message);
+            } catch (error) {
+                console.error('[DSS] websearch-toggle 設定廣播處理失敗:', error);
             }
         });
     },
 
-    // 啟動：讀取目前設定、註冊監聽並重新計算
+    // 啟動：先取得模式值，再把主開關閘控交給共用 registerFeatureToggle
     async start() {
-        const data = await chrome.storage.local.get([
-            this.STORAGE_KEY,
-            StorageManager.KEYS.IS_ENABLED
-        ]);
-        this.mode = this._normalizeMode(data[this.STORAGE_KEY]);
-        this._masterEnabled = !!data[StorageManager.KEYS.IS_ENABLED];
-        this.setupStorageListener();
-        this._recompute();
+        try {
+            const { messageTypes, featureToggle } = this._resolveDeps();
+            if (!messageTypes || !featureToggle) {
+                throw new Error('content/websearch-toggle.js 需要 utils/settings-message-constants.js 與 content/feature-toggle.js 先行載入');
+            }
+
+            this._setupSettingsListener();
+
+            const response = await chrome.runtime.sendMessage({
+                type: messageTypes.GET_SETTINGS,
+                keys: [this.STORAGE_KEY],
+            });
+            if (!response || response.ok !== true) {
+                throw new Error(response?.error || 'GET_SETTINGS 未回傳有效結果');
+            }
+            this.mode = this._normalizeMode((response.values || {})[this.STORAGE_KEY]);
+
+            featureToggle.registerFeatureToggle({
+                onEnable: () => {
+                    this._masterEnabled = true;
+                    this._rearm();
+                },
+                onDisable: () => {
+                    this._masterEnabled = false;
+                    this._rearm();
+                },
+            });
+        } catch (error) {
+            // 讀取失敗即維持休眠，不在設定未知的情況下點擊頁面按鈕
+            console.error('[DSS] websearch-toggle 啟動失敗:', error);
+        }
     }
 };
 
+// Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 WebSearchToggle.start();
 
 if (typeof module !== 'undefined' && module.exports) {

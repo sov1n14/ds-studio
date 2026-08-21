@@ -8,6 +8,11 @@
  *      呼叫端（如 harvest.js）在 finally 區塊呼叫 disable() 影響。
  *
  * 單一職責：僅管理注入、bridge 元素與永久鎖定設定。擷取邏輯由 harvest.js 負責。
+ *
+ * 設定來源：主開關與自身開關（dsPreventAutoScroll）的閘控委派
+ * content/feature-toggle.js 的共用管線，初始值與變更廣播皆由其向 background 取得。
+ * 注意：MAIN world 端（content/prevent-auto-scroll.js）無 chrome.runtime 可用，
+ * 狀態一律透過本檔的 bridge element dataset 傳遞。
  */
 
 (function () {
@@ -20,9 +25,6 @@
 
     /** 注入腳本用的 <script> element ID（冪等保護） */
     const SCRIPT_INJECT_ID = 'dss-prevent-auto-scroll-script';
-
-    /** 永久鎖定功能設定於 chrome.storage.local 的 key */
-    const PERSISTENT_SETTING_KEY = 'dsPreventAutoScroll';
 
     // ── 私有函式 ──────────────────────────────────────────────────────
 
@@ -59,17 +61,6 @@
             script.remove();
         };
         document.documentElement.appendChild(script);
-    }
-
-    /**
-     * 依主開關與永久鎖定設定值套用永久鎖定狀態。
-     * 決策規則：主開關（StorageManager.KEYS.IS_ENABLED）啟用，且
-     * dsPreventAutoScroll 為 true 時，才視為永久鎖定啟用。
-     * @param {boolean} isMasterEnabled
-     * @param {boolean} isSettingEnabled
-     */
-    function _applyPersistentSetting(isMasterEnabled, isSettingEnabled) {
-        setPersistent(isMasterEnabled && isSettingEnabled);
     }
 
     // ── 公開介面 ──────────────────────────────────────────────────────
@@ -132,34 +123,23 @@
     }
 
     /**
-     * 設定訂閱進入點：讀取一次目前設定並套用，之後監聽
-     * chrome.storage.onChanged 即時反映主開關或永久鎖定設定的變更。
-     * 鏡射 content/hide-thinking.js 的 start() 慣例。
-     * @returns {Promise<void>}
+     * 設定訂閱進入點：把「主開關 + 自身開關（dsPreventAutoScroll）」的閘控
+     * 交給共用管線，生效時鎖定捲動、失效時解除。初始設定讀取失敗時管線維持
+     * 休眠，故不會在設定未知的情況下鎖定捲動。
+     * @returns {Function} 解除註冊函式
      */
-    async function start() {
-        const data = await chrome.storage.local.get([
-            PERSISTENT_SETTING_KEY,
-            StorageManager.KEYS.IS_ENABLED
-        ]);
-        _applyPersistentSetting(
-            data[StorageManager.KEYS.IS_ENABLED] ?? false,
-            data[PERSISTENT_SETTING_KEY] ?? false
-        );
+    function start() {
+        // 瀏覽器：由 content/feature-toggle.js 於前載入設定全域；Node.js 測試：直接 require
+        const featureToggle = globalThis.DSSFeatureToggle ||
+            (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+        if (!featureToggle) {
+            throw new Error('content/prevent-auto-scroll-bridge.js 需要 content/feature-toggle.js 先行載入');
+        }
 
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-            if (!changes[StorageManager.KEYS.IS_ENABLED] && !changes[PERSISTENT_SETTING_KEY]) return;
-
-            chrome.storage.local.get(
-                [PERSISTENT_SETTING_KEY, StorageManager.KEYS.IS_ENABLED],
-                (latest) => {
-                    _applyPersistentSetting(
-                        latest[StorageManager.KEYS.IS_ENABLED] ?? false,
-                        latest[PERSISTENT_SETTING_KEY] ?? false
-                    );
-                }
-            );
+        return featureToggle.registerFeatureToggle({
+            ownKey: StorageManager.KEYS.PREVENT_AUTO_SCROLL,
+            onEnable: () => setPersistent(true),
+            onDisable: () => setPersistent(false),
         });
     }
 
@@ -176,7 +156,6 @@
         window.DSstudio.PreventAutoScroll = { enable, disable, isEnabled, setPersistent, isPersistent, start };
     }
 
-    // 啟動設定訂閱：鏡射 hide-thinking.js 的 bootstrap 慣例（模組層級 side
-    // effect 為此類 content script 功能模組的既有、刻意設計）。
+    // Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
     start();
 })();

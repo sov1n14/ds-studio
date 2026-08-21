@@ -16,6 +16,12 @@ import '../../utils/i18n.js';
 // stubbing __DS_Logger per-spec since this file has no other side effects.
 import '../../utils/logger.js';
 
+// globalThis.DSS_SETTINGS_MSG is read at call time by content/feature-toggle.js
+// (message type strings for GET_SETTINGS / SETTINGS_CHANGED). Preload it so any
+// spec that loads a toggle-gated content module gets the real constants instead
+// of a TypeError inside the toggle's initial settings read.
+import '../../utils/settings-message-constants.js';
+
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the

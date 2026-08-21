@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import quoteReply from '../../content/quote-reply.js';
 
@@ -596,5 +596,146 @@ describe('hideButton', () => {
         quoteReply.__setState({ selectedText: 'some text' });
         quoteReply.hideButton();
         expect(quoteReply.__getState().selectedText).toBe('');
+    });
+});
+
+// ===========================================================================
+// Master toggle (feature-toggle wiring)
+// ===========================================================================
+//
+// These cases exercise quote-reply through its real gate: content/feature-toggle.js.
+// A fresh module instance per test is required because both the toggle registry
+// and its single shared chrome.runtime.onMessage listener are module state --
+// they must attach to THIS test's stubs. Same pattern as width-feature.spec.js.
+//
+// Assertions are observable-DOM only: presence and display of .dss-quote-btn.
+// enable() creates the (hidden) button, so "button exists" alone would be
+// vacuous for the on-case; the on-case therefore asserts display becomes 'flex'
+// and checks it was not 'flex' beforehand.
+
+/** Minimal fireable event stub, mirroring the setup file's createMockEvent(). */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => listeners.forEach((fn) => fn(...args)),
+    };
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('master toggle', () => {
+    const realOnMessage = chrome.runtime.onMessage;
+    const realSendMessage = chrome.runtime.sendMessage;
+
+    afterEach(() => {
+        vi.useRealTimers();
+        chrome.runtime.onMessage = realOnMessage;
+        chrome.runtime.sendMessage = realSendMessage;
+    });
+
+    /**
+     * Load a fresh quote-reply instance gated by a fresh feature-toggle whose
+     * initial GET_SETTINGS answers with the given master-switch value, and wait
+     * for that async initial read to settle.
+     */
+    async function loadWithMaster(isEnabled) {
+        chrome.runtime.onMessage = createOnMessageStub();
+        chrome.runtime.sendMessage = vi.fn(async () => ({ ok: true, values: { isEnabled } }));
+        vi.resetModules();
+        delete window.__DSS_QR_INITIALIZED__;
+        await import('../../content/feature-toggle.js');
+        await import('../../content/quote-reply.js');
+        await flush();
+    }
+
+    /** Stub window.getSelection with a valid in-scope selection. */
+    function stubInScopeSelection() {
+        const { child } = buildScopedDOM('p', 'AI text');
+        vi.spyOn(window, 'getSelection').mockReturnValue(makeSelection({
+            text: 'AI text',
+            anchorNode: child,
+            focusNode: child,
+        }));
+    }
+
+    /** Fire selectionchange and let the 250ms debounce elapse (fake timers). */
+    function fireSelectionAndSettle() {
+        document.dispatchEvent(new Event('selectionchange'));
+        vi.advanceTimersByTime(250);
+    }
+
+    it('master ON: a selection change makes the quote button visible', async () => {
+        await loadWithMaster(true);
+        stubInScopeSelection();
+
+        // Guard against a vacuous pass: the button exists but is not shown yet.
+        expect(document.querySelector('.dss-quote-btn').style.display).not.toBe('flex');
+
+        vi.useFakeTimers();
+        fireSelectionAndSettle();
+
+        const btn = document.querySelector('.dss-quote-btn');
+        expect(btn, 'quote button must exist after selectionchange + 250ms').not.toBeNull();
+        expect(btn.style.display).toBe('flex');
+    });
+
+    it('master turned OFF removes the button and stops producing new ones', async () => {
+        await loadWithMaster(true);
+        stubInScopeSelection();
+
+        vi.useFakeTimers();
+        fireSelectionAndSettle();
+        expect(document.querySelector('.dss-quote-btn').style.display).toBe('flex');
+
+        chrome.runtime.onMessage.callListeners({
+            type: DSS_SETTINGS_MSG.SETTINGS_CHANGED,
+            area: 'local',
+            changes: { isEnabled: { newValue: false } },
+        });
+
+        expect(document.querySelector('.dss-quote-btn'),
+            'button must be removed from the DOM when the master switch goes off').toBeNull();
+
+        fireSelectionAndSettle();
+        expect(document.querySelector('.dss-quote-btn'),
+            'no button may be created while the master switch is off').toBeNull();
+    });
+
+    it('master turned OFF cancels a debounce already in flight', async () => {
+        await loadWithMaster(true);
+        stubInScopeSelection();
+
+        vi.useFakeTimers();
+        document.dispatchEvent(new Event('selectionchange'));
+        vi.advanceTimersByTime(100); // still inside the 250ms debounce window
+
+        chrome.runtime.onMessage.callListeners({
+            type: DSS_SETTINGS_MSG.SETTINGS_CHANGED,
+            area: 'local',
+            changes: { isEnabled: { newValue: false } },
+        });
+
+        vi.advanceTimersByTime(200); // would have fired the pending callback at 250ms
+
+        expect(document.querySelector('.dss-quote-btn'),
+            'a pending debounce must not resurrect the button after disable').toBeNull();
+    });
+
+    it('master OFF from the start: no button is ever created', async () => {
+        await loadWithMaster(false);
+        stubInScopeSelection();
+
+        vi.useFakeTimers();
+        fireSelectionAndSettle();
+
+        expect(document.querySelector('.dss-quote-btn')).toBeNull();
+    });
+
+    it('disable() before any button exists does not throw', () => {
+        // __resetState() in the global beforeEach leaves btnEl === null.
+        expect(() => quoteReply.disable()).not.toThrow();
     });
 });

@@ -1,3 +1,5 @@
-- [Broadcast spec pitfall](pitfall-broadcast-specs.md) — global beforeEach storage clear fires onChanged; drain it, and install onMessage listeners only once.
-- [Vitest fake-timer pitfalls](vitest-fake-timers-pitfalls.md) — storage-mock deadlock, MutationObserver delivery, and happy-dom setTimeout(0) costing ~15ms per turn.
-- [Red phase for a missing module](red-phase-runner.md) — import-resolve red runs zero tests; ship the expected test count alongside it.
+- [Feature-toggle migration red suite](project_toggle_migration.md) — the full suite's known-failing spec families during the 2026-08 toggle migration, and how to baseline against them.
+- [Messaging spec harness](project_messaging_spec_harness.md) — how to spec modules that get settings via DSS_GET_SETTINGS/SETTINGS_CHANGED; auto-start double-registration trap.
+- [Bash heredoc long files](pitfall_bash_heredoc_long_files.md) — write spec files in ~100-line chunked appends; a single giant heredoc truncates.
+- [ds-studio harness](ds-studio-harness.md) — no root package.json; run specs from test/ with npx vitest.
+- [Fixture reset masks removed fields](pitfall_fixture_masked_fields.md) — a shared reset helper can keep a deleted-field assertion green; grep all of test/.

@@ -2,63 +2,123 @@
  * Unit tests for the persistent-lock feature of content/prevent-auto-scroll-bridge.js
  *
  * Coverage map:
- *   § 1  setPersistent()/isPersistent() — explicit API contract (A, B, D, E)
- *   § 2  disable() regression guard while persistent (C)
- *   § 3  non-persistent behaviour unchanged (F)
- *   § 4  settings subscription — reacts live to chrome.storage.onChanged (G)
+ *   § 1  setPersistent()/isPersistent() — explicit API contract
+ *   § 2  disable() regression guard while persistent
+ *   § 3  non-persistent behaviour unchanged
+ *   § 4  settings subscription — reacts live to the shared toggle pipeline
  *
- * IMPLEMENTATION BLINDNESS: assertions below are derived only from the
- * requirement contract handed down by the orchestrator, plus the public
- * function names/signatures already established by the sibling spec file
- * test/unit/prevent-auto-scroll-bridge.spec.js (enable/disable/isEnabled).
- * content/prevent-auto-scroll-bridge.js and content/prevent-auto-scroll.js
- * were NOT read while writing this file.
- *
- * Public API asserted (implementer must match these names/signatures):
+ * Public API asserted:
  *   PreventAutoScroll.setPersistent(shouldPersist: boolean): void
  *   PreventAutoScroll.isPersistent(): boolean
- *   PreventAutoScroll.enable(): void        (already exists)
- *   PreventAutoScroll.disable(): void       (already exists)
- *   PreventAutoScroll.isEnabled(): boolean  (already exists)
+ *   PreventAutoScroll.enable(): void
+ *   PreventAutoScroll.disable(): void
+ *   PreventAutoScroll.isEnabled(): boolean
  *
- * Settings-subscription entry point (mirrors HideThinking.start() in
- * content/hide-thinking.js — reads chrome.storage.local once, applies it,
- * then installs the chrome.storage.onChanged listener). It is invoked as a
- * module-level side effect on import, exactly like HideThinking.start(), so
- * — matching the precedent set in test/unit/hide-thinking.spec.js — this
- * spec never calls it directly. It must exist as:
- *   PreventAutoScroll.start(): Promise<void>
- *
- * Master-switch default semantics mirrored from content/hide-thinking.js
- * (see start(): `data[StorageManager.KEYS.IS_ENABLED] ?? false`): when the
- * master switch key is absent from storage, it is treated as disabled, so
- * persistent mode MUST stay off even if 'dsPreventAutoScroll' is true.
+ * § 4 drives the module the way background/settings-routes.js does: the master
+ * switch (isEnabled) and the feature's own key (dsPreventAutoScroll) arrive
+ * through DSS_GET_SETTINGS at start-up and through DSS_SETTINGS_CHANGED
+ * broadcasts afterwards. The module auto-starts on load, so start-up state is
+ * arranged by queueing the GET_SETTINGS response BEFORE loading it.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
-import bridgeModule from '../../content/prevent-auto-scroll-bridge.js';
-import StorageManager from '../../utils/storage-manager.js';
+import '../../utils/settings-message-constants.js';
 
-const { enable, disable, isEnabled, setPersistent, isPersistent } = bridgeModule;
-
+const MASTER_KEY = 'isEnabled';
 const SETTING_KEY = 'dsPreventAutoScroll';
+const UNRELATED_KEY = 'isHideThinkingEnabled';
+const BRIDGE_ID = 'dss-prevent-auto-scroll-bridge';
 
-function wait(ms = 10) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Fresh chrome.runtime.onMessage stub (same shape as the shared mock) plus a
+ * listener count, so "the listener is gone after destroy" is checkable.
+ */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
 }
 
-// Baseline reset via the public API + storage only — no internal fields are
-// touched, per anti-tautology rules (assert observable behaviour, not
-// internal call sequences / internal state).
-beforeEach(async () => {
-    setPersistent(false);
-    await chrome.storage.local.set({
-        [StorageManager.KEYS.IS_ENABLED]: false,
-        [SETTING_KEY]: false,
+let onMessage;
+let sendMessage;
+let enable;
+let disable;
+let isEnabled;
+let setPersistent;
+let isPersistent;
+
+/** Queue the values every GET_SETTINGS round trip resolves with. */
+function respondWith(values) {
+    sendMessage.mockImplementation((_message, callback) => {
+        const response = { ok: true, values };
+        if (typeof callback === 'function') callback(response);
+        return Promise.resolve(response);
     });
-    await wait();
-    disable();
+}
+
+/** Let the pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
+/**
+ * (Re)load the module under test against the currently queued GET_SETTINGS
+ * response. The module auto-starts on load, so respondWith() must run first.
+ */
+async function load() {
+    // Fresh feature-toggle instance per load: its registry and its shared
+    // onMessage listener are module state, so the previous load's registration
+    // dies with the previous instance and cannot leak into this test.
+    vi.resetModules();
+    await import('../../content/feature-toggle.js');
+    const mod = await import('../../content/prevent-auto-scroll-bridge.js');
+    const api = mod.default ?? mod;
+    // start() is invoked by the module itself as its auto-start point.
+    ({ enable, disable, isEnabled, setPersistent, isPersistent } = api);
+    await flush();
+    return api;
+}
+
+beforeEach(async () => {
+    // The bridge element lives on documentElement and carries all of this
+    // module's state (enabled / persistent), so it must go before each test.
+    // The injected <script id=SCRIPT_ID> is deliberately left in place: it is
+    // only an idempotency marker, and removing it makes every test re-inject
+    // and re-fetch it.
+    document.getElementById(BRIDGE_ID)?.remove();
+
+    onMessage = createOnMessageStub();
+    sendMessage = vi.fn();
+    chrome.runtime.onMessage = onMessage;
+    chrome.runtime.sendMessage = sendMessage;
+
+    // Default arrangement: registered but dormant (master switch off).
+    respondWith({ [MASTER_KEY]: false, [SETTING_KEY]: false });
+    await load();
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
 });
 
 describe('setPersistent()', () => {
@@ -110,74 +170,79 @@ describe('enable()/disable() when persistent mode is off', () => {
 });
 
 describe('settings subscription', () => {
-    it('persistent mode turns ON only when master switch is enabled AND dsPreventAutoScroll is true', async () => {
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await wait();
-        expect(isPersistent()).toBe(false); // setting still false
-
-        await chrome.storage.local.set({ [SETTING_KEY]: true });
-        await wait();
+    /** Load with both the master switch and the feature key switched on. */
+    async function loadFullyOn() {
+        respondWith({ [MASTER_KEY]: true, [SETTING_KEY]: true });
+        await load();
         expect(isPersistent()).toBe(true);
         expect(isEnabled()).toBe(true);
+    }
+
+    it('persistent mode is on at start-up when the master switch and dsPreventAutoScroll both read as true', async () => {
+        await loadFullyOn();
     });
 
-    it('persistent mode stays OFF when master switch is disabled even if dsPreventAutoScroll is true', async () => {
-        await chrome.storage.local.set({
-            [StorageManager.KEYS.IS_ENABLED]: false,
-            [SETTING_KEY]: true,
-        });
-        await wait();
-        expect(isPersistent()).toBe(false);
-    });
+    it('persistent mode stays off at start-up when the master switch is on but dsPreventAutoScroll reads as false', async () => {
+        respondWith({ [MASTER_KEY]: true, [SETTING_KEY]: false });
+        await load();
 
-    it('an absent master switch key defaults to disabled, keeping persistent mode off even if dsPreventAutoScroll is true', async () => {
-        await chrome.storage.local.remove(StorageManager.KEYS.IS_ENABLED);
-        await chrome.storage.local.set({ [SETTING_KEY]: true });
-        await wait();
-        expect(isPersistent()).toBe(false);
-    });
-
-    it('flipping dsPreventAutoScroll from true back to false turns persistent mode off live, without a reload', async () => {
-        await chrome.storage.local.set({
-            [StorageManager.KEYS.IS_ENABLED]: true,
-            [SETTING_KEY]: true,
-        });
-        await wait();
-        expect(isPersistent()).toBe(true);
-
-        await chrome.storage.local.set({ [SETTING_KEY]: false });
-        await wait();
         expect(isPersistent()).toBe(false);
         expect(isEnabled()).toBe(false);
     });
 
-    it('a live change to the master switch key is honoured the same way as the setting key', async () => {
-        await chrome.storage.local.set({
-            [StorageManager.KEYS.IS_ENABLED]: true,
-            [SETTING_KEY]: true,
-        });
-        await wait();
-        expect(isPersistent()).toBe(true);
+    it('persistent mode stays off at start-up when dsPreventAutoScroll is true but the master switch is off', async () => {
+        respondWith({ [MASTER_KEY]: false, [SETTING_KEY]: true });
+        await load();
 
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        await wait();
         expect(isPersistent()).toBe(false);
-
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await wait();
-        expect(isPersistent()).toBe(true);
+        expect(isEnabled()).toBe(false);
     });
 
-    it('ignores changes reported under a namespace other than "local"', async () => {
-        await chrome.storage.local.set({
-            [StorageManager.KEYS.IS_ENABLED]: true,
-            [SETTING_KEY]: false,
-        });
-        await wait();
+    it('flipping dsPreventAutoScroll to false turns persistent mode off live, without a reload', async () => {
+        await loadFullyOn();
+
+        broadcast(change(SETTING_KEY, false));
+
+        expect(isPersistent()).toBe(false);
+        expect(isEnabled()).toBe(false);
+    });
+
+    it('turning the master switch off turns persistent mode off live', async () => {
+        await loadFullyOn();
+
+        broadcast(change(MASTER_KEY, false));
+
+        expect(isPersistent()).toBe(false);
+        expect(isEnabled()).toBe(false);
+    });
+
+    it('turning the master switch back on restores persistent mode', async () => {
+        await loadFullyOn();
+
+        broadcast(change(MASTER_KEY, false));
         expect(isPersistent()).toBe(false);
 
-        await chrome.storage.sync.set({ [SETTING_KEY]: true });
-        await wait();
-        expect(isPersistent()).toBe(false); // sync-namespace change must be ignored
+        broadcast(change(MASTER_KEY, true));
+
+        expect(isPersistent()).toBe(true);
+        expect(isEnabled()).toBe(true);
+    });
+
+    it('ignores a change reported for an area other than "local"', async () => {
+        await loadFullyOn();
+
+        broadcast(change(SETTING_KEY, false), 'sync');
+
+        expect(isPersistent()).toBe(true);
+        expect(isEnabled()).toBe(true);
+    });
+
+    it('ignores a broadcast that carries only an unrelated key', async () => {
+        await loadFullyOn();
+
+        broadcast(change(UNRELATED_KEY, false));
+
+        expect(isPersistent()).toBe(true);
+        expect(isEnabled()).toBe(true);
     });
 });

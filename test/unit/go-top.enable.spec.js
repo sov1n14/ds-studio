@@ -7,6 +7,39 @@ import StorageManager from '../../utils/storage-manager.js';
 import GoToTop from '../../content/go-top.js';
 import { resetGoToTopState, createWrapperWithoutNativeButton } from '../helpers/go-top-fixtures.js';
 
+// ── Settings-message harness ────────────────────────────────────────────────
+// content/go-top.js gets its master-switch state from the shared toggle
+// pipeline (content/feature-toggle.js -> DSS_GET_SETTINGS /
+// DSS_SETTINGS_CHANGED). These helpers stand in for background/settings-routes.js.
+
+/** Queue the values every GET_SETTINGS round trip resolves with. */
+function respondWith(values) {
+    chrome.runtime.sendMessage.mockImplementation((_message, callback) => {
+        const response = { ok: true, values };
+        if (typeof callback === 'function') callback(response);
+        return Promise.resolve(response);
+    });
+}
+
+/** Let the pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    chrome.runtime.onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
     afterEach(() => { vi.useRealTimers(); });
@@ -180,16 +213,16 @@ describe('GoToTop', () => {
     });
 
     // ─────────────────────────────────────
-    //  setupStorageListener
+    //  Master-switch broadcasts
     // ─────────────────────────────────────
 
     // NOTE: this hook is intentionally NOT merged with `enable / disable`'s
     // hook above. It omits the `_getAnchor` mock and anchor element on
-    // purpose — these three tests exercise the storage-listener path with
-    // the REAL `_getAnchor`, so hoisting a shared hook would silently change
-    // what `enable()` does inside these tests.
-    describe('setupStorageListener', () => {
-        beforeEach(() => {
+    // purpose — these tests exercise the master-switch path with the REAL
+    // `_getAnchor`, so hoisting a shared hook would silently change what
+    // enable() does inside these tests.
+    describe('master-switch broadcasts', () => {
+        beforeEach(async () => {
             // Setup minimal scroll container so _startScrollListener doesn't fail
             const container = document.createElement('div');
             container.style.overflowY = 'auto';
@@ -212,45 +245,51 @@ describe('GoToTop', () => {
                 this._scrollContainer = container;
                 return container;
             });
+
+            // Re-register the toggle so this test starts from a known dormant
+            // state (the load-time registration may have been left switched on
+            // by an earlier test in this file).
+            respondWith({ isEnabled: false });
+            GoToTop.destroy();
+            await GoToTop.init();
+            await flush();
         });
 
-        it('enables/disables based ONLY on master IS_ENABLED switch', async () => {
-            GoToTop._masterEnabled = false;
-            GoToTop.enabled = false;
-
-            await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-            await new Promise((resolve) => setTimeout(resolve, 10));
-            expect(GoToTop.enabled).toBe(true);
-
-            await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-            await new Promise((resolve) => setTimeout(resolve, 10));
+        it('injects the button when the master switch broadcast turns on, and removes it when it turns off', () => {
             expect(GoToTop.enabled).toBe(false);
-        });
+            expect(document.querySelector('.dsw-gotop')).toBeNull();
 
-        it('ignores any other storage keys (e.g., dsGoTop)', async () => {
-            GoToTop._masterEnabled = true;
-            GoToTop.enable();
-
-            const listeners = chrome.storage.local._listeners;
-            listeners.forEach((l) => {
-                l({ dsGoTop: { newValue: false } }, 'local');
-            });
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            broadcast(change('isEnabled', true));
 
             expect(GoToTop.enabled).toBe(true);
+            expect(document.querySelector('.dsw-gotop')).not.toBeNull();
+
+            broadcast(change('isEnabled', false));
+
+            expect(GoToTop.enabled).toBe(false);
+            expect(document.querySelector('.dsw-gotop')).toBeNull();
         });
 
-        it('only responds to local namespace, not sync', async () => {
-            GoToTop._masterEnabled = true;
-            GoToTop.enable();
+        it('ignores a broadcast that carries only an unrelated key (e.g. dsGoTop)', () => {
+            broadcast(change('isEnabled', true));
+            const button = GoToTop._button;
+            expect(button).not.toBeNull();
 
-            const listeners = chrome.storage.local._listeners;
-            listeners.forEach((l) => {
-                l({ [StorageManager.KEYS.IS_ENABLED]: { newValue: false } }, 'sync');
-            });
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            broadcast(change('dsGoTop', false));
 
             expect(GoToTop.enabled).toBe(true);
+            expect(GoToTop._button).toBe(button);
+            expect(document.querySelector('.dsw-gotop')).not.toBeNull();
+        });
+
+        it('only responds to the local area, not sync', () => {
+            broadcast(change('isEnabled', true));
+            expect(GoToTop.enabled).toBe(true);
+
+            broadcast(change('isEnabled', false), 'sync');
+
+            expect(GoToTop.enabled).toBe(true);
+            expect(document.querySelector('.dsw-gotop')).not.toBeNull();
         });
     });
 

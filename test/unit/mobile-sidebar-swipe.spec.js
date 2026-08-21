@@ -1,25 +1,73 @@
+/**
+ * content/mobile-sidebar-swipe.js — right-swipe gesture behavior.
+ *
+ * The module obtains its master-switch state through the shared toggle pipeline
+ * (content/feature-toggle.js -> DSS_GET_SETTINGS / DSS_SETTINGS_CHANGED),
+ * delegates mobile detection to content/mobile-device.js, and waits for the
+ * sidebar toggle button through content/retry-until.js. This spec drives it
+ * through those seams only: the stubbed GET_SETTINGS response, SETTINGS_CHANGED
+ * broadcasts, and real touch events dispatched on document.
+ *
+ * The mobile-detection truth table lives in test/unit/mobile-device.spec.js;
+ * the retry-loop bookkeeping lives in test/unit/retry-until.spec.js. Here only
+ * their observable consequence is asserted: does a swipe click the button?
+ */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/settings-message-constants.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Hoisted: desktop navigator before module auto-start
-//  The module calls MobileSidebarSwipe.start() at module level (line 344).
-//  We must ensure navigator looks like a desktop device so that auto-start
-//  is a no-op (returns early from _isMobileDevice() check).
-//  vi.hoisted() runs before any import, guaranteeing the mock is in place
-//  before the module evaluates its top-level code.
-// ─────────────────────────────────────────────────────────────────────────────
-vi.hoisted(() => {
-    vi.stubGlobal('navigator', { maxTouchPoints: 0, userAgent: 'Chrome Desktop' });
-});
+const MASTER_KEY = 'isEnabled';
+const UNRELATED_KEY = 'isHideThinkingEnabled';
+/** content/mobile-sidebar-swipe.js polls for the toggle button every 500ms. */
+const DOM_RETRY_INTERVAL_MS = 500;
 
-// Side-effect import: storage-manager sets window.StorageManager at line 1376
-import '../../utils/storage-manager.js';
-import MobileSidebarSwipe from '../../content/mobile-sidebar-swipe.js';
-import StorageManager from '../../utils/storage-manager.js';
+/**
+ * Fresh chrome.runtime.onMessage stub (same shape as the shared mock) plus a
+ * listener count, so "the listener is gone after destroy" is checkable.
+ */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+let onMessage;
+let sendMessage;
+let MobileSidebarSwipe;
+
+/** Queue the values every GET_SETTINGS round trip resolves with. */
+function respondWith(values) {
+    sendMessage.mockImplementation((_message, callback) => {
+        const response = { ok: true, values };
+        if (typeof callback === 'function') callback(response);
+        return Promise.resolve(response);
+    });
+}
+
+/** Let the pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
+// ── Navigator helpers ───────────────────────────────────────────────────────
 
 function stubMobileNavigator() {
     vi.stubGlobal('navigator', { maxTouchPoints: 2, userAgent: 'Chrome Desktop' });
@@ -29,9 +77,7 @@ function stubDesktopNavigator() {
     vi.stubGlobal('navigator', { maxTouchPoints: 0, userAgent: 'Chrome Desktop' });
 }
 
-function stubMobileUANavigator() {
-    vi.stubGlobal('navigator', { maxTouchPoints: 0, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)' });
-}
+// ── DOM / gesture helpers ───────────────────────────────────────────────────
 
 /**
  * Create a sidebar toggle button matching the primary selector:
@@ -45,8 +91,26 @@ function createSidebarButton() {
     return btn;
 }
 
+/** Dispatch a real touch event on document with a single touch point. */
+function dispatchTouch(type, x, y) {
+    const event = new Event(type, { bubbles: true });
+    event.touches = [{ clientX: x, clientY: y }];
+    document.dispatchEvent(event);
+}
+
 /**
- * Set up the module for swipe testing: mobile navigator, enabled, and touch bound.
+ * Dispatch a gesture that satisfies every swipe condition: 70px rightward,
+ * dominantly horizontal, instantaneous, starting inside the centre 80% zone.
+ */
+function dispatchValidRightSwipe() {
+    dispatchTouch('touchstart', 300, 400);
+    dispatchTouch('touchmove', 370, 410);
+    dispatchTouch('touchend', 370, 410);
+}
+
+/**
+ * Set up the module for direct-handler swipe testing: mobile navigator,
+ * enabled, and touch bound.
  */
 function setupForSwipe() {
     stubMobileNavigator();
@@ -54,48 +118,48 @@ function setupForSwipe() {
     MobileSidebarSwipe._bindTouchEvents();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  beforeEach / afterEach
-//  Resets every mutable property on the module to its default value so that
-//  state from one test never leaks into the next. Uses the same approach as
-//  go-top.visibility.spec.js (reset in beforeEach, restore timers in afterEach) but
-//  also cleans up touch listeners and globals for the added complexity of
-//  this module's touch event bindings and navigator mocking.
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * (Re)load the module under test against the currently stubbed navigator and
+ * GET_SETTINGS response. The module auto-starts on load, so the arrangement
+ * must be in place BEFORE calling this.
+ */
+async function load() {
+    if (MobileSidebarSwipe) MobileSidebarSwipe.destroy();
 
-beforeEach(() => {
+    // Fresh feature-toggle instance per load: its shared onMessage listener and
+    // its registry are module state, and must attach to this test own stub.
+    vi.resetModules();
+    await import('../../content/mobile-device.js');
+    await import('../../content/retry-until.js');
+    await import('../../content/feature-toggle.js');
+    const mod = await import('../../content/mobile-sidebar-swipe.js');
+    MobileSidebarSwipe = mod.default ?? mod;
+    await flush();
+    return MobileSidebarSwipe;
+}
+
+beforeEach(async () => {
     document.body.innerHTML = '';
+    onMessage = createOnMessageStub();
+    sendMessage = vi.fn();
+    chrome.runtime.onMessage = onMessage;
+    chrome.runtime.sendMessage = sendMessage;
+
+    stubMobileNavigator();
+    MobileSidebarSwipe = null;
+    // Default arrangement: registered but dormant (master switch off).
+    respondWith({ [MASTER_KEY]: false });
+    await load();
 });
 
 afterEach(() => {
-    // Clean up any registered event listeners before resetting state
-    if (MobileSidebarSwipe._touchStartHandler) {
-        document.removeEventListener('touchstart', MobileSidebarSwipe._touchStartHandler);
+    if (MobileSidebarSwipe) {
+        MobileSidebarSwipe.destroy();
+        // Tests that bind handlers by hand (setupForSwipe) bypass enable(), so
+        // disable()'s guard may have skipped the unbind.
+        MobileSidebarSwipe._unbindTouchEvents();
+        MobileSidebarSwipe = null;
     }
-    if (MobileSidebarSwipe._touchMoveHandler) {
-        document.removeEventListener('touchmove', MobileSidebarSwipe._touchMoveHandler);
-    }
-    if (MobileSidebarSwipe._touchEndHandler) {
-        document.removeEventListener('touchend', MobileSidebarSwipe._touchEndHandler);
-    }
-    if (MobileSidebarSwipe._domRetryTimer) {
-        clearTimeout(MobileSidebarSwipe._domRetryTimer);
-    }
-
-    // Reset all mutable state to defaults
-    MobileSidebarSwipe.enabled = false;
-    MobileSidebarSwipe._masterEnabled = false;
-    MobileSidebarSwipe._isTouchBound = false;
-    MobileSidebarSwipe._startPoint = null;
-    MobileSidebarSwipe._startTime = null;
-    MobileSidebarSwipe._deltaX = 0;
-    MobileSidebarSwipe._deltaY = 0;
-    MobileSidebarSwipe._touchStartHandler = null;
-    MobileSidebarSwipe._touchMoveHandler = null;
-    MobileSidebarSwipe._touchEndHandler = null;
-    MobileSidebarSwipe._domRetryTimer = null;
-    MobileSidebarSwipe._domRetryCount = 0;
-
     document.body.innerHTML = '';
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -103,8 +167,7 @@ afterEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  1. DESKTOP GUARD
-//     No Touch Points, Non-mobile UA — module should not enable.
+//  1. Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('module constants', () => {
@@ -114,6 +177,10 @@ describe('module constants', () => {
         expect(MobileSidebarSwipe.SWIPE_MAX_DURATION_MS).toBe(500);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  2. Desktop guard
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('desktop guard', () => {
     it('does NOT enable on desktop devices (maxTouchPoints=0, non-mobile UA)', () => {
@@ -130,34 +197,28 @@ describe('desktop guard', () => {
             expect.objectContaining({ passive: false })
         );
     });
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  2-3. MOBILE DETECTION
-//     _isMobileDevice() should return true for touch devices OR mobile UA.
-// ─────────────────────────────────────────────────────────────────────────────
+    it('a master-on broadcast does not arm the gesture on a desktop device', async () => {
+        stubDesktopNavigator();
+        respondWith({ [MASTER_KEY]: false });
+        await load();
 
-describe('_isMobileDevice', () => {
-    it('returns true when navigator.maxTouchPoints > 0 (touch-capable device)', () => {
-        stubMobileNavigator();
-        expect(MobileSidebarSwipe._isMobileDevice()).toBe(true);
-    });
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
 
-    it('returns true when userAgent matches a known mobile pattern', () => {
-        stubMobileUANavigator();
-        expect(MobileSidebarSwipe._isMobileDevice()).toBe(true);
+        broadcast(change(MASTER_KEY, true));
+        dispatchValidRightSwipe();
+
+        expect(MobileSidebarSwipe.enabled).toBe(false);
+        expect(clickSpy).not.toHaveBeenCalled();
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  4-10. SWIPE DETECTION
-//     Gesture recognition: valid right-swipe triggers click; various
-//     rejection scenarios must not trigger a click.
+//  3. Swipe gesture recognition
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('swipe gesture', () => {
-    // ── 4. FULL VALID SWIPE ──────────────────────────────────────────────────
-
     it('triggers button click on a valid right-swipe in the center 80% zone (deltaX=70 >= 50, dominant horizontal, within duration)', () => {
         setupForSwipe();
         const button = createSidebarButton();
@@ -169,8 +230,6 @@ describe('swipe gesture', () => {
 
         expect(clickSpy).toHaveBeenCalledOnce();
     });
-
-    // ── 5. OUTSIDE CENTER 80% ZONE (HORIZONTAL) ──────────────────────────────
 
     it('does NOT trigger when touch starts outside the center 80% zone (clientX too far left, < 10% of viewport)', () => {
         setupForSwipe();
@@ -186,8 +245,6 @@ describe('swipe gesture', () => {
         expect(clickSpy).not.toHaveBeenCalled();
     });
 
-    // ── 6. WRONG DIRECTION (leftward) ────────────────────────────────────────
-
     it('does NOT trigger when deltaX is negative (swiping left, not right)', () => {
         setupForSwipe();
         const button = createSidebarButton();
@@ -200,8 +257,6 @@ describe('swipe gesture', () => {
 
         expect(clickSpy).not.toHaveBeenCalled();
     });
-
-    // ── 7. TOO SHORT DISTANCE ────────────────────────────────────────────────
 
     it('does NOT trigger when deltaX is below SWIPE_THRESHOLD_PX (25 < 50)', () => {
         setupForSwipe();
@@ -216,28 +271,22 @@ describe('swipe gesture', () => {
         expect(clickSpy).not.toHaveBeenCalled();
     });
 
-    // ── 8. VERTICAL DOMINANT (scroll-like) ───────────────────────────────────
-
     it('does NOT trigger when vertical delta dominates (|deltaY| * 1.5 > deltaX)', () => {
         setupForSwipe();
         const button = createSidebarButton();
         const clickSpy = vi.spyOn(button, 'click');
 
         MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 300, clientY: 400 }] });
-        // deltaX = 30, deltaY = -200 → deltaX(30) <= |deltaY|*1.5(300) → rejected
+        // deltaX = 30, deltaY = -200 -> deltaX(30) <= |deltaY|*1.5(300) -> rejected
         MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 330, clientY: 200 }] });
         MobileSidebarSwipe._onTouchEnd();
 
         expect(clickSpy).not.toHaveBeenCalled();
     });
 
-    // ── 9. TOO SLOW (duration >= 500ms) ──────────────────────────────────────
-
     it('does NOT trigger when elapsed time exceeds SWIPE_MAX_DURATION_MS', () => {
         vi.useFakeTimers();
-        stubMobileNavigator();
-        MobileSidebarSwipe.enabled = true;
-        MobileSidebarSwipe._bindTouchEvents();
+        setupForSwipe();
 
         const button = createSidebarButton();
         const clickSpy = vi.spyOn(button, 'click');
@@ -246,13 +295,11 @@ describe('swipe gesture', () => {
         // Date.now() is now under our control; advance past the 500ms limit
         vi.advanceTimersByTime(600);
         MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 370, clientY: 410 }] });
-        // duration = 600ms >= 500ms → rejected
+        // duration = 600ms >= 500ms -> rejected
         MobileSidebarSwipe._onTouchEnd();
 
         expect(clickSpy).not.toHaveBeenCalled();
     });
-
-    // ── 10. BUTTON NOT FOUND — no error ──────────────────────────────────────
 
     it('does not throw when no toggle button is in the DOM', () => {
         setupForSwipe();
@@ -268,68 +315,118 @@ describe('swipe gesture', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  11. DOM POLLING
-//      _tryConnectDom should not bind until the target button appears.
+//  4. DOM readiness polling (delegated to content/retry-until.js)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('DOM polling (_tryConnectDom)', () => {
-    it('binds touch events when button appears after initial poll failure', () => {
-        stubMobileNavigator();
-        MobileSidebarSwipe.enabled = true;
+describe('DOM readiness polling', () => {
+    it('binds touch events once the sidebar toggle button appears on a later poll', () => {
+        vi.useFakeTimers();
+        MobileSidebarSwipe.enable();
 
-        // No button in DOM yet → poll should fail, no touch binding
-        MobileSidebarSwipe._tryConnectDom();
+        // No button in the DOM yet: nothing is bound, so a swipe does nothing.
         expect(MobileSidebarSwipe._isTouchBound).toBe(false);
 
-        // Inject the sidebar toggle button
-        createSidebarButton();
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
 
-        // Manual retry — now button is found
-        MobileSidebarSwipe._tryConnectDom();
-        expect(MobileSidebarSwipe._isTouchBound).toBe(true);
+        dispatchValidRightSwipe();
+        expect(clickSpy).not.toHaveBeenCalled();
+
+        // One poll interval later the button is found and the gesture is armed.
+        vi.advanceTimersByTime(DOM_RETRY_INTERVAL_MS);
+
+        dispatchValidRightSwipe();
+        expect(clickSpy).toHaveBeenCalledOnce();
+    });
+
+    it('after disable(), a button appearing later binds nothing', () => {
+        vi.useFakeTimers();
+        MobileSidebarSwipe.enable();
+        MobileSidebarSwipe.disable();
+
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
+
+        vi.advanceTimersByTime(DOM_RETRY_INTERVAL_MS);
+
+        dispatchValidRightSwipe();
+
+        expect(clickSpy).not.toHaveBeenCalled();
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  12-13. STORAGE LISTENER
-//      _setupStorageListener should enable/disable the module when the
-//      master IS_ENABLED key changes in chrome.storage.local.
+//  5. SETTINGS_CHANGED broadcasts
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('storage listener (_setupStorageListener)', () => {
-    it('disables the module when master switch is turned off (IS_ENABLED → false)', async () => {
-        MobileSidebarSwipe.enabled = true;
-        MobileSidebarSwipe._masterEnabled = true;
-        MobileSidebarSwipe._setupStorageListener();
+describe('SETTINGS_CHANGED broadcasts', () => {
+    it('master switch turning on arms the gesture: a valid swipe clicks the toggle button', () => {
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
 
-        // Trigger storage change via the mock; the listener fires synchronously
-        // during set(), then the promise resolves on the next tick.
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        dispatchValidRightSwipe();
+        expect(clickSpy).not.toHaveBeenCalled(); // dormant before the broadcast
 
-        expect(MobileSidebarSwipe.enabled).toBe(false);
+        broadcast(change(MASTER_KEY, true));
+        dispatchValidRightSwipe();
+
+        expect(clickSpy).toHaveBeenCalledOnce();
     });
 
-    it('enables the module when master switch is turned on (IS_ENABLED → true, mobile device)', async () => {
-        stubMobileNavigator();
-        MobileSidebarSwipe.enabled = false;
-        MobileSidebarSwipe._masterEnabled = false;
-        MobileSidebarSwipe._setupStorageListener();
+    it('master switch turning off disarms the gesture: the same swipe no longer clicks', () => {
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
 
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        broadcast(change(MASTER_KEY, true));
+        dispatchValidRightSwipe();
+        expect(clickSpy).toHaveBeenCalledOnce();
 
-        // enable() sets enabled=true; also called _tryConnectDom which is a
-        // no-op if no button is in DOM (does not throw)
-        expect(MobileSidebarSwipe.enabled).toBe(true);
+        broadcast(change(MASTER_KEY, false));
+        dispatchValidRightSwipe();
+
+        expect(clickSpy).toHaveBeenCalledOnce(); // no second click
+    });
+
+    it('an unrelated key leaves the dormant feature dormant', () => {
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
+
+        broadcast(change(UNRELATED_KEY, true));
+        dispatchValidRightSwipe();
+
+        expect(clickSpy).not.toHaveBeenCalled();
+    });
+
+    it('a master-switch-off change reported for the sync area is ignored', () => {
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
+
+        broadcast(change(MASTER_KEY, true));
+        broadcast(change(MASTER_KEY, false), 'sync');
+
+        dispatchValidRightSwipe();
+
+        expect(clickSpy).toHaveBeenCalledOnce();
+    });
+
+    it('after disable(), a 500ms advance binds no touch handlers', () => {
+        broadcast(change(MASTER_KEY, true));
+        const button = createSidebarButton();
+        const clickSpy = vi.spyOn(button, 'click');
+
+        vi.useFakeTimers();
+        broadcast(change(MASTER_KEY, false));
+        vi.advanceTimersByTime(DOM_RETRY_INTERVAL_MS);
+
+        dispatchValidRightSwipe();
+
+        expect(MobileSidebarSwipe._isTouchBound).toBe(false);
+        expect(clickSpy).not.toHaveBeenCalled();
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  14-15. TRIGGER ZONE (center 80%)
-//      Touches in the top status-bar zone or bottom navigation zone
-//      must be rejected (_startPoint stays null). Also rejects touches
-//      outside the center 80% horizontal zone (test 5 covers that case).
+//  6. Trigger zone (center 80%) — vertical rejection
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('vertical zone rejection (_onTouchStart)', () => {

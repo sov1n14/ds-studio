@@ -8,11 +8,21 @@
  * 在該區域內向右滑動即可展開側邊欄。
  *
  * 架構決策：
- *   - 僅在行動裝置（觸控或行動 UA）上啟動，桌面端零開銷。
- *   - 使用 isMobileDevice() 防護所有事件處理器與生命週期函式。
- *   - 透過 StorageManager.KEYS.IS_ENABLED 追蹤擴充功能主開關。
- *   - 針對側邊欄切換按鈕以 DOM 輪詢方式等待就緒後綁定手勢偵測。
+ *   - 僅在行動裝置（觸控或行動 UA）上啟動，桌面端零開銷；
+ *     判定委派 content/mobile-device.js 的共用實作。
+ *   - 主開關閘控委派 content/feature-toggle.js 的共用管線（本功能無自身開關）。
+ *   - 側邊欄切換按鈕的 DOM 就緒輪詢委派 content/retry-until.js。
  */
+// 共用模組（瀏覽器：由 manifest 於前載入設定 globalThis；Node.js 測試：直接 require）
+const __DS_SwipeMobileDevice = globalThis.DSSMobileDevice
+    || (typeof require !== 'undefined' ? require('./mobile-device.js') : null);
+const __DS_SwipeFeatureToggle = globalThis.DSSFeatureToggle
+    || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+const __DS_SwipeRetryUntil = globalThis.DSSRetryUntil
+    || (typeof require !== 'undefined' ? require('./retry-until.js') : null);
+if (!__DS_SwipeMobileDevice || !__DS_SwipeFeatureToggle || !__DS_SwipeRetryUntil) {
+    throw new Error('content/mobile-sidebar-swipe.js 需要 content/mobile-device.js、content/feature-toggle.js 與 content/retry-until.js 先行載入');
+}
 const MobileSidebarSwipe = {
     // === 常數 ===
     SWIPE_THRESHOLD_PX: 50,
@@ -24,7 +34,6 @@ const MobileSidebarSwipe = {
 
     // === 狀態 ===
     enabled: false,
-    _masterEnabled: false,
     _isTouchBound: false,
     _startPoint: null,
     _startTime: null,
@@ -33,22 +42,12 @@ const MobileSidebarSwipe = {
     _touchStartHandler: null,
     _touchMoveHandler: null,
     _touchEndHandler: null,
-    _domRetryTimer: null,
-    _domRetryCount: 0,
+    _domRetryCancel: null,
+    _unregisterToggle: null,
 
     // ─────────────────────────────
     //  Private: Helpers
     // ─────────────────────────────
-
-    /**
-     * 判斷是否為行動裝置。
-     * 涵蓋實體觸控裝置（maxTouchPoints）與 Chrome DevTools 行動模擬（User-Agent）。
-     * @returns {boolean}
-     */
-    _isMobileDevice() {
-        return navigator.maxTouchPoints > 0 ||
-               /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-    },
 
     /**
      * 嘗試以多重選擇器找到側邊欄切換按鈕。
@@ -79,32 +78,19 @@ const MobileSidebarSwipe = {
     },
 
     /**
-     * 以閘控重試等待目標按鈕 DOM 就緒。
-     * 每 500ms 輪詢一次，最多 60 次（≈30s）。
-     * 超過上限則靜默放棄（不拋出錯誤）。
+     * 以共用輪詢等待目標按鈕 DOM 就緒後綁定觸控事件。
+     * 立即判定一次，之後每 500ms 重試，最多 60 次（≈30s）；
+     * 次數用盡即靜默放棄（不拋出錯誤）。
      */
     _tryConnectDom() {
         if (!this.enabled) return;
 
-        const button = this._findButton();
-        if (button) {
-            clearTimeout(this._domRetryTimer);
-            this._domRetryTimer = null;
-            this._domRetryCount = 0;
-            this._bindTouchEvents();
-            return;
-        }
-
-        this._domRetryCount += 1;
-        if (this._domRetryCount > this.DOM_MAX_RETRIES) {
-            this._domRetryCount = 0;
-            return;
-        }
-
-        clearTimeout(this._domRetryTimer);
-        this._domRetryTimer = setTimeout(() => {
-            this._tryConnectDom();
-        }, this.DOM_RETRY_INTERVAL_MS);
+        this._cancelDomRetry();
+        this._domRetryCancel = __DS_SwipeRetryUntil(() => this._findButton(), {
+            intervalMs: this.DOM_RETRY_INTERVAL_MS,
+            maxRetries: this.DOM_MAX_RETRIES,
+            onReady: () => this._bindTouchEvents(),
+        });
     },
 
     // ─────────────────────────────
@@ -118,7 +104,7 @@ const MobileSidebarSwipe = {
      */
     _onTouchStart(e) {
         if (!this.enabled) return;
-        if (!this._isMobileDevice()) return;
+        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
 
         const touch = e.touches[0];
         if (!touch) return;
@@ -149,7 +135,7 @@ const MobileSidebarSwipe = {
      */
     _onTouchMove(e) {
         if (!this.enabled) return;
-        if (!this._isMobileDevice()) return;
+        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
         if (!this._startPoint) return;
 
         const touch = e.touches[0];
@@ -171,7 +157,7 @@ const MobileSidebarSwipe = {
      */
     _onTouchEnd() {
         if (!this.enabled) return;
-        if (!this._isMobileDevice()) return;
+        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
         if (!this._startPoint) return;
 
         const deltaX = this._deltaX;
@@ -255,29 +241,6 @@ const MobileSidebarSwipe = {
     },
 
     // ─────────────────────────────
-    //  Private: Storage listener
-    // ─────────────────────────────
-
-    /**
-     * 監聽 chrome.storage.onChanged，僅追蹤擴充功能主開關（IS_ENABLED）。
-     * 無各別功能切換 — 完全跟隨主開關啟用/停用。
-     */
-    _setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                if (this._masterEnabled) {
-                    this.enable();
-                } else {
-                    this.disable();
-                }
-            }
-        });
-    },
-
-    // ─────────────────────────────
     //  Public: Lifecycle methods
     // ─────────────────────────────
 
@@ -286,7 +249,7 @@ const MobileSidebarSwipe = {
      * Once the button is found, touch event listeners are bound.
      */
     enable() {
-        if (!this._isMobileDevice()) return;
+        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
         if (this.enabled) return;
         this.enabled = true;
 
@@ -302,7 +265,7 @@ const MobileSidebarSwipe = {
         this.enabled = false;
 
         this._unbindTouchEvents();
-        this._clearRetryTimer();
+        this._cancelDomRetry();
         this._resetSwipeState();
     },
 
@@ -311,25 +274,22 @@ const MobileSidebarSwipe = {
      */
     destroy() {
         this.disable();
+        if (this._unregisterToggle) {
+            this._unregisterToggle();
+            this._unregisterToggle = null;
+        }
     },
 
     /**
-     * Initialize the module: check device, read master switch from storage,
-     * set up storage change listener, and enable if conditions are met.
+     * 初始化模組：確認為行動裝置後，將主開關閘控交給共用管線。
      */
-    async start() {
-        if (!this._isMobileDevice()) return;
+    start() {
+        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
 
-        const data = await new Promise((resolve) => {
-            chrome.storage.local.get([StorageManager.KEYS.IS_ENABLED], resolve);
+        this._unregisterToggle = __DS_SwipeFeatureToggle.registerFeatureToggle({
+            onEnable: () => this.enable(),
+            onDisable: () => this.disable(),
         });
-        this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
-
-        this._setupStorageListener();
-
-        if (this._masterEnabled) {
-            this.enable();
-        }
     },
 
     // ─────────────────────────────
@@ -337,12 +297,12 @@ const MobileSidebarSwipe = {
     // ─────────────────────────────
 
     /**
-     * 清除 DOM 就緒輪詢計時器並重設計數。
+     * 取消進行中的 DOM 就緒輪詢（可重複呼叫）。
      */
-    _clearRetryTimer() {
-        clearTimeout(this._domRetryTimer);
-        this._domRetryTimer = null;
-        this._domRetryCount = 0;
+    _cancelDomRetry() {
+        if (!this._domRetryCancel) return;
+        this._domRetryCancel();
+        this._domRetryCancel = null;
     },
 
     /**
@@ -356,7 +316,7 @@ const MobileSidebarSwipe = {
     }
 };
 
-// Auto-start
+// Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 MobileSidebarSwipe.start();
 
 // === Test export (no-op in browser) ===

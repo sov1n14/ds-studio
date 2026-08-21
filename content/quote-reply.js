@@ -1,8 +1,33 @@
+/**
+ * DS studio — 引用回覆（content/quote-reply.js）
+ *
+ * 選取對話區文字 → 浮出「引用回覆」按鈕 → 點擊後把引用文字寫入輸入框。
+ * 生命週期交由 content/feature-toggle.js 的 registerFeatureToggle 閘控：
+ * ownKey 為 null，代表僅跟隨總開關；關閉時拆除所有 document 監聽器、
+ * 清掉待執行的防抖計時器並移除按鈕，開啟時重新掛上。
+ */
+
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
 const __DS_QuoteReplySelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
+/** 選取變更後的防抖間隔（ms）：selectionchange 於拖曳選取期間會連續觸發 */
+const QUOTE_REPLY_DEBOUNCE_MS = 250;
+
+/** 於呼叫時解析開關管線，同時支援瀏覽器全域與單元測試的 require。 */
+function __ds_resolveQuoteReplyToggle() {
+    return globalThis.DSSFeatureToggle
+        || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+}
+
 const QuoteReply = {
+    // === 狀態：集中於功能物件，不使用模組層級 let ===
+    btnEl: null,
+    selectedText: '',
+    isScrollAttached: false,
+    debounceTimer: null,
+    unregisterToggle: null,
+
     isSelectionInScope(node) {
         if (!node) return false;
         const el = node.nodeType === 3 ? node.parentElement : node;
@@ -53,54 +78,55 @@ const QuoteReply = {
     },
 
     getButtonEl() {
-        if (!_btnEl) {
-            _btnEl = document.createElement('div');
-            _btnEl.className = 'dss-quote-btn';
-            _btnEl.style.display = 'none';
-            _btnEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"></path></svg><span>${dsI18n.t('quoteReplyBtnLabel')}</span>`;
+        if (!QuoteReply.btnEl) {
+            const btn = document.createElement('div');
+            btn.className = 'dss-quote-btn';
+            btn.style.display = 'none';
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"></path></svg><span>${dsI18n.t('quoteReplyBtnLabel')}</span>`;
 
-            _btnEl.addEventListener('mousedown', (e) => {
+            btn.addEventListener('mousedown', (e) => {
                 e.preventDefault();
             });
 
-            _btnEl.addEventListener('click', () => {
+            btn.addEventListener('click', () => {
                 const textarea = document.querySelector('textarea');
                 if (textarea) {
-                    QuoteReply.injectQuote(textarea, _selectedText);
+                    QuoteReply.injectQuote(textarea, QuoteReply.selectedText);
                 }
                 QuoteReply.hideButton();
             });
 
-            document.body.appendChild(_btnEl);
+            QuoteReply.btnEl = btn;
+            document.body.appendChild(btn);
         }
 
-        return _btnEl;
+        return QuoteReply.btnEl;
     },
 
     showButton(top, left) {
-        _btnEl.style.top = top + 'px';
-        _btnEl.style.left = left + 'px';
-        _btnEl.style.display = 'flex';
+        QuoteReply.btnEl.style.top = top + 'px';
+        QuoteReply.btnEl.style.left = left + 'px';
+        QuoteReply.btnEl.style.display = 'flex';
 
-        if (!_attachedScroll) {
-            window.addEventListener('scroll', _scrollHandler, { capture: true, passive: true });
-            window.addEventListener('resize', _resizeHandler);
-            _attachedScroll = true;
+        if (!QuoteReply.isScrollAttached) {
+            window.addEventListener('scroll', QuoteReply.handleViewportChange, { capture: true, passive: true });
+            window.addEventListener('resize', QuoteReply.handleViewportChange);
+            QuoteReply.isScrollAttached = true;
         }
     },
 
     hideButton() {
-        if (_btnEl) {
-            _btnEl.style.display = 'none';
+        if (QuoteReply.btnEl) {
+            QuoteReply.btnEl.style.display = 'none';
         }
 
-        if (_attachedScroll) {
-            window.removeEventListener('scroll', _scrollHandler, { capture: true });
-            window.removeEventListener('resize', _resizeHandler);
-            _attachedScroll = false;
+        if (QuoteReply.isScrollAttached) {
+            window.removeEventListener('scroll', QuoteReply.handleViewportChange, { capture: true });
+            window.removeEventListener('resize', QuoteReply.handleViewportChange);
+            QuoteReply.isScrollAttached = false;
         }
 
-        _selectedText = '';
+        QuoteReply.selectedText = '';
     },
 
     injectQuote(textarea, selectedText) {
@@ -132,7 +158,7 @@ const QuoteReply = {
             return;
         }
 
-        _selectedText = sel.toString();
+        QuoteReply.selectedText = sel.toString();
 
         const range = sel.getRangeAt(0);
         const rects = range.getClientRects();
@@ -155,58 +181,77 @@ const QuoteReply = {
         }
     },
 
-    init() {
+    // === 事件處理器：箭頭函式屬性，參考位址穩定，removeEventListener 才拆得掉 ===
+
+    /** 唯一的防抖排程入口：selectionchange 已涵蓋滑鼠與鍵盤造成的選取變化。 */
+    handleSelectionEvent: () => {
+        clearTimeout(QuoteReply.debounceTimer);
+        QuoteReply.debounceTimer = setTimeout(() => QuoteReply.handleSelectionChange(), QUOTE_REPLY_DEBOUNCE_MS);
+    },
+
+    /** 點擊按鈕以外的區域即收起按鈕。 */
+    handleDocumentMouseDown: (e) => {
+        if (QuoteReply.btnEl && !QuoteReply.btnEl.contains(e.target)) QuoteReply.hideButton();
+    },
+
+    /** 捲動或縮放後重新定位；僅在按鈕顯示期間掛載。 */
+    handleViewportChange: () => {
+        requestAnimationFrame(() => QuoteReply.handleSelectionChange());
+    },
+
+    /** 即時語系切換：更新已存在的按鈕文字。 */
+    handleLocaleChanged: () => {
+        if (!QuoteReply.btnEl) return;
+        const svg = QuoteReply.btnEl.querySelector('svg');
+        QuoteReply.btnEl.innerHTML = '';
+        if (svg) QuoteReply.btnEl.appendChild(svg);
+        const span = document.createElement('span');
+        span.textContent = dsI18n.t('quoteReplyBtnLabel');
+        QuoteReply.btnEl.appendChild(span);
+    },
+
+    // === 生命週期 ===
+
+    enable() {
         QuoteReply.getButtonEl();
+        document.addEventListener('selectionchange', QuoteReply.handleSelectionEvent);
+        document.addEventListener('mousedown', QuoteReply.handleDocumentMouseDown);
+        document.addEventListener('dsI18n-locale-changed', QuoteReply.handleLocaleChanged);
+    },
 
-        document.addEventListener('mouseup', () => {
-            clearTimeout(_debounceTimer);
-            _debounceTimer = setTimeout(() => QuoteReply.handleSelectionChange(), 250);
-        });
+    disable() {
+        document.removeEventListener('selectionchange', QuoteReply.handleSelectionEvent);
+        document.removeEventListener('mousedown', QuoteReply.handleDocumentMouseDown);
+        document.removeEventListener('dsI18n-locale-changed', QuoteReply.handleLocaleChanged);
 
-        document.addEventListener('keyup', (e) => {
-            if (e.isComposing) return;
-            if (['Shift', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-                clearTimeout(_debounceTimer);
-                _debounceTimer = setTimeout(() => QuoteReply.handleSelectionChange(), 250);
-            }
-        });
+        clearTimeout(QuoteReply.debounceTimer);
+        QuoteReply.debounceTimer = null;
 
-        document.addEventListener('selectionchange', () => {
-            clearTimeout(_debounceTimer);
-            _debounceTimer = setTimeout(() => QuoteReply.handleSelectionChange(), 250);
-        });
+        // hideButton 一併拆掉 scroll / resize 監聽器
+        QuoteReply.hideButton();
+        if (QuoteReply.btnEl) {
+            QuoteReply.btnEl.remove();
+            QuoteReply.btnEl = null;
+        }
+    },
 
-        document.addEventListener('mousedown', (e) => {
-            if (_btnEl && !_btnEl.contains(e.target)) QuoteReply.hideButton();
-        });
+    init() {
+        const featureToggle = __ds_resolveQuoteReplyToggle();
+        if (!featureToggle) {
+            throw new Error('content/quote-reply.js 需要 content/feature-toggle.js 先行載入');
+        }
 
-        // 即時語系切換：更新已存在的按鈕文字
-        document.addEventListener('dsI18n-locale-changed', function () {
-            if (_btnEl) {
-                var svg = _btnEl.querySelector('svg');
-                _btnEl.innerHTML = '';
-                if (svg) _btnEl.appendChild(svg);
-                var span = document.createElement('span');
-                span.textContent = dsI18n.t('quoteReplyBtnLabel');
-                _btnEl.appendChild(span);
-            }
+        QuoteReply.unregisterToggle = featureToggle.registerFeatureToggle({
+            ownKey: null,
+            onEnable: QuoteReply.enable,
+            onDisable: QuoteReply.disable,
         });
     },
 };
 
-let _btnEl = null;
-let _selectedText = '';
-let _attachedScroll = false;
-let _debounceTimer = null;
-
-function _scrollHandler() {
-    requestAnimationFrame(() => QuoteReply.handleSelectionChange());
-}
-
-function _resizeHandler() {
-    requestAnimationFrame(() => QuoteReply.handleSelectionChange());
-}
-
+// 啟動點：沿用 content 層功能模組的 bootstrap 慣例（模組層級 side effect 為此類
+// 功能模組既有、刻意的設計，見 prevent-auto-scroll-bridge.js）。
+// init 只註冊開關，監聽器掛載延後至總開關判定為開啟時才發生。
 if (typeof window !== 'undefined' && !window.__DSS_QR_INITIALIZED__) {
     window.__DSS_QR_INITIALIZED__ = true;
     QuoteReply.init();
@@ -223,19 +268,21 @@ if (typeof module !== 'undefined' && module.exports) {
         showButton: QuoteReply.showButton,
         hideButton: QuoteReply.hideButton,
         getButtonEl: QuoteReply.getButtonEl,
+        enable: QuoteReply.enable,
+        disable: QuoteReply.disable,
         __resetState: () => {
-            _btnEl = null;
-            _selectedText = '';
-            _attachedScroll = false;
-            clearTimeout(_debounceTimer);
-            _debounceTimer = null;
+            QuoteReply.btnEl = null;
+            QuoteReply.selectedText = '';
+            QuoteReply.isScrollAttached = false;
+            clearTimeout(QuoteReply.debounceTimer);
+            QuoteReply.debounceTimer = null;
         },
         __setState: (s) => {
-            if ('selectedText' in s) _selectedText = s.selectedText;
+            if ('selectedText' in s) QuoteReply.selectedText = s.selectedText;
         },
         __getState: () => ({
-            selectedText: _selectedText,
-            attachedScroll: _attachedScroll,
+            selectedText: QuoteReply.selectedText,
+            attachedScroll: QuoteReply.isScrollAttached,
         }),
     };
 }

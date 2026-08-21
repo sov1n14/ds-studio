@@ -31,8 +31,7 @@ describe('GoToTop', () => {
             expect(GoToTop._scrollReject).toBeNull();
             expect(GoToTop._wrapperObserver).toBeNull();
             expect(GoToTop._wrapperObserverTimer).toBeNull();
-            expect(GoToTop._enableRetryTimer).toBeNull();
-            expect(GoToTop._enableRetryCount).toBe(0);
+            expect(GoToTop._cancelConnectRetry).toBeNull();
             expect(GoToTop._lastPath).toBe('');
         });
 
