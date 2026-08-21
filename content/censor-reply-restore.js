@@ -3,11 +3,12 @@
  * 攔截 XHR SSE 回應、偵測 DOM 審查，並將原始模型回覆重新注入頁面。
  *
  * 載入順序（manifest.json 中 bundle 必須先於 entry）：
- *   1. censor-reply-restore.markdown.js    → globalThis.__DS_CensorReplyRestore_markdown
- *   2. censor-reply-restore.dom.js         → globalThis.__DS_CensorReplyRestore_dom
- *   3. censor-reply-restore.thinkblock.js  → globalThis.__DS_CensorReplyRestore_thinkblock
- *   4. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
- *   5. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
+ *   1. censor-reply-restore.keymap.js      → globalThis.__DS_CensorKeyToMessageIdMap
+ *   2. censor-reply-restore.markdown.js    → globalThis.__DS_CensorReplyRestore_markdown
+ *   3. censor-reply-restore.dom.js         → globalThis.__DS_CensorReplyRestore_dom
+ *   4. censor-reply-restore.thinkblock.js  → globalThis.__DS_CensorReplyRestore_thinkblock
+ *   5. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
+ *   6. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
  */
 // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
 var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
@@ -17,6 +18,10 @@ var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis :
 var __DS_CensorSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
+// key <-> messageId 雙向對應表（瀏覽器：censor-reply-restore.keymap.js 在前載入；Node.js 測試：直接 require）
+var __DS_CensorKeyToMessageIdMap = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_CensorKeyToMessageIdMap ||
+    (typeof require !== 'undefined' ? require('./censor-reply-restore.keymap.js') : null);
+
 const CensorReplyRestore = {
     RESTORED_MESSAGES_KEY: 'restored_messages',
     STORAGE_MAX_ENTRIES: 200,
@@ -25,12 +30,30 @@ const CensorReplyRestore = {
     _observer: null,
     _xhrHooked: false,
     _pendingQueue: [],
-    _keyToMessageId: new Map(),
+    // 實際儲存體；外部一律透過下方存取子讀寫 _keyToMessageId。
+    __keyToMessageIdStore: new __DS_CensorKeyToMessageIdMap(),
+    // 整份重新指派（切換聊天、測試 fixture）時自動包成 KeyToMessageIdMap，確保反向索引永遠與當下這張表一致。
+    get _keyToMessageId() {
+        return this.__keyToMessageIdStore;
+    },
+    set _keyToMessageId(map) {
+        this.__keyToMessageIdStore = map instanceof __DS_CensorKeyToMessageIdMap ? map : new __DS_CensorKeyToMessageIdMap(map);
+    },
     _restoredMessages: {},
     // 記錄儲存記錄是否已全域套用過一次（避免每次 MutationObserver 觸發都做完整掃描）
     _storedRecordsApplied: false,
     // 追蹤目前已知的 session ID，用於 SPA 切換聊天時清除過期執行期狀態
     _currentSessionId: null,
+
+    /**
+     * 反查目前對應到該 messageId 的 virtual-list-item key。純查詢函式，不修改任何狀態。
+     * @param {string|number} messageId
+     * @returns {string|null}
+     */
+    _findKeyForMessageId(messageId) {
+        if (messageId === null || messageId === undefined) return null;
+        return this._keyToMessageId.findKey(messageId);
+    },
 
     // ── Normalize ───────────────────────────
 

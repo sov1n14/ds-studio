@@ -320,3 +320,59 @@ describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)
         expect(getRenderedSelectedValue()).toBe(PINNED_PRESET.id);
     });
 });
+
+// ── Group D: scheduleFindAndMount debounce ───────────────────────────────────
+// The controller owns no body observer: content-script.js's single body observer
+// fans DOM mutations out to scheduleFindAndMount(), which must collapse a burst
+// of mutations into ONE findAndMount() 150ms after the last one, and must not
+// fire at all once the overlay has been unmounted.
+
+describe('scheduleFindAndMount — 150ms debounce', () => {
+    let overlay, ctx;
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        spyStorageManager();
+        ctx     = makeCtx();
+        overlay = createPresetOverlay(ctx);
+        // Observe the remount decision itself; the real findAndMount would need a
+        // live DeepSeek header in the DOM, which is not what this debounce owns.
+        overlay.findAndMount = vi.fn();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        restoreStorageManager();
+    });
+
+    it('does not remount before 150ms have elapsed, and remounts exactly once at 150ms', () => {
+        overlay.scheduleFindAndMount();
+
+        vi.advanceTimersByTime(149);
+        expect(overlay.findAndMount).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(1);
+        expect(overlay.findAndMount).toHaveBeenCalledTimes(1);
+    });
+
+    it('collapses a burst of body mutations into a single remount', () => {
+        overlay.scheduleFindAndMount();
+        vi.advanceTimersByTime(50);
+        overlay.scheduleFindAndMount();
+        vi.advanceTimersByTime(50);
+        overlay.scheduleFindAndMount();
+
+        // 100ms of the burst has already passed: a non-debounced timer would have
+        // fired more than once by the end of this window.
+        vi.advanceTimersByTime(150);
+        expect(overlay.findAndMount).toHaveBeenCalledTimes(1);
+    });
+
+    it('unmount cancels a pending remount', () => {
+        overlay.scheduleFindAndMount();
+        overlay.unmount();
+
+        vi.advanceTimersByTime(150);
+        expect(overlay.findAndMount).not.toHaveBeenCalled();
+    });
+});

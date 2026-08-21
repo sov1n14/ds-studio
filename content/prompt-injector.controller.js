@@ -3,6 +3,9 @@
  * 從 content-script.js 抽離：前綴組裝、textarea 注入、Enter 鍵與送出按鈕攔截。
  * 維持與原檔完全相同的公開行為，確保 content-script.js 與現有 Vitest 測試零改動。
  *
+ * 送出按鈕的辨識與 textarea 解析由 prompt-injector.send-button.js 負責；
+ * DeepSeek 頁面選擇器一律取自 content/ds-selectors.js。
+ *
  * 此檔案以 classic script 載入，無 ES import/export。
  */
 
@@ -10,58 +13,20 @@
     'use strict';
 
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const selectors = root.DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
-    // 編輯視窗「傳送」按鈕的結構性標記（語言無關，不依賴文字或雜湊類別）：
-    // 同時具備 primary + filled 變體樣式，且含有 span.ds-button__content 標籤。
-    // 「取消」按鈕使用 outlinedNeutral/outlined 變體，不符合；主輸入框傳送按鈕
-    // 雖共用 primary/filled，但為純圖示按鈕、無 content span，故亦不符合。
-    const EDIT_SEND_BUTTON_VARIANT_CLASSES = ['ds-button--primary', 'ds-button--filled'];
-    // 桌面版（ds-icon-button）與行動版（ds-button）送出按鈕共用的結構選擇器，
-    // 供點擊路徑與 Enter 鍵路徑共用，避免重複硬編字串。
-    const SEND_BUTTON_SELECTOR = 'div.ds-icon-button[role="button"], div.ds-button[role="button"]';
+    // 送出按鈕辨識部件（瀏覽器：prompt-injector.send-button.js 於前載入；Node.js 測試：直接 require）
+    const sendButton = root.__DS_PromptInjectorSendButton ||
+        (typeof require !== 'undefined' ? require('./prompt-injector.send-button.js') : {});
 
-    // 判斷按鈕是否為編輯視窗的「傳送」按鈕（結構性比對，不比對文字內容）
-    function isEditWindowSendButton(button) {
-        const hasSendVariant = EDIT_SEND_BUTTON_VARIANT_CLASSES.every(cls => button.classList.contains(cls));
-        if (!hasSendVariant) return false;
-
-        const contentLabel = button.querySelector('span.ds-button__content')?.textContent.trim();
-        return !!contentLabel;
-    }
-
-    // 判斷按鈕是否為送出按鈕（桌面版圖示、行動版容器 class，或編輯視窗傳送按鈕）
-    function isSendButtonCandidate(button) {
-        if (!button) return false;
-        return button.innerHTML.includes('M8.3125') ||
-               !!button.closest(selectors.SEND_BUTTON_CONTAINER_SELECTOR) ||
-               button.parentElement.classList.contains(selectors.SEND_BUTTON_PARENT_CLASS) ||
-               isEditWindowSendButton(button);
-    }
-
-    // 判斷送出按鈕目前是否處於「可送出」狀態（未被 DeepSeek 自身標記為 disabled）。
-    // ds-button--disabled 為語意化 BEM class，優先於雜湊 class 作為主要判斷依據。
-    function isSendButtonEnabled(button) {
-        if (!button) return false;
-        if (button.classList.contains('ds-button--disabled')) return false;
-        if (button.getAttribute('aria-disabled') === 'true') return false;
-        if (button.disabled) return false;
-        return true;
-    }
-
-    // 由 textarea 向上遍歷 DOM，找出同一輸入區內的送出按鈕（供 Enter 鍵路徑使用，
-    // 與點擊路徑共用 isSendButtonCandidate，不重複選擇器字串）。
-    function findSendButtonForTextarea(textarea) {
-        if (!textarea) return null;
-        let el = textarea.parentElement;
-        while (el && el !== document.body) {
-            const candidate = el.querySelector(SEND_BUTTON_SELECTOR);
-            if (candidate && isSendButtonCandidate(candidate)) return candidate;
-            el = el.parentElement;
-        }
-        return null;
-    }
+    const {
+        isEditWindowSendButton,
+        isSendButtonCandidate,
+        isSendButtonEnabled,
+        findSendButtonForTextarea,
+        resolveTextareaForButton,
+    } = sendButton;
 
     /**
      * 建立 PromptInjector 實例。ctx 的 getter/setter 直接讀寫 content-script.js
@@ -124,47 +89,72 @@
             return navigator.maxTouchPoints > 0 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         }
 
+        // 攔截原始事件，改由本模組於注入完成後自行重送
+        function suppressEvent(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+
+        /**
+         * 注入完成後於下一個影格重送原生 Enter 鍵，讓 DeepSeek 依既有流程送出。
+         * @param {HTMLTextAreaElement} textarea
+         */
+        function redispatchEnter(textarea) {
+            requestAnimationFrame(() => {
+                ctx.setIsInjecting(true);
+                textarea.dispatchEvent(new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                }));
+                ctx.setIsInjecting(false);
+            });
+        }
+
+        /**
+         * 注入完成後於下一個影格重送按鈕點擊。
+         * 主輸入框需重新查詢 textarea（React 可能已重建節點），編輯視窗則沿用注入時的節點。
+         * @param {Element} button
+         * @param {HTMLTextAreaElement} capturedTextarea
+         * @param {boolean} isEditSendButton
+         */
+        function redispatchClick(button, capturedTextarea, isEditSendButton) {
+            requestAnimationFrame(() => {
+                const ta = isEditSendButton ? capturedTextarea : document.querySelector('textarea');
+                if (!ta || ta.value.trim() === '') return;
+                ctx.setIsInjecting(true);
+                button.click();
+                ctx.setIsInjecting(false);
+            });
+        }
+
         // 鍵盤事件攔截（Enter 送出）
         document.addEventListener('keydown', (e) => {
             // 僅攔截不含 Shift 的 Enter 鍵
-            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-                if (ctx.getIsInjecting()) return;
-                if (isMobileDevice()) return;
+            if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+            if (ctx.getIsInjecting()) return;
+            if (isMobileDevice()) return;
 
-                const activeElement = document.activeElement;
+            const activeElement = document.activeElement;
+            if (!activeElement || activeElement.tagName !== 'TEXTAREA') return;
 
-                if (activeElement && activeElement.tagName === 'TEXTAREA') {
-                    const hasText = activeElement.value.trim() !== '';
-                    if (hasText) ctx.markChatCreationAttempt();
+            const hasText = activeElement.value.trim() !== '';
+            if (hasText) ctx.markChatCreationAttempt();
 
-                    const sendButton = hasText ? null : findSendButtonForTextarea(activeElement);
-                    const isSendableWithoutText = !hasText && isSendButtonEnabled(sendButton);
+            // 僅在無文字時才需確認送出按鈕是否可送出（僅附件/圖片的情境）
+            const sendButtonEl = hasText ? null : findSendButtonForTextarea(activeElement);
+            const isSendableWithoutText = !hasText && isSendButtonEnabled(sendButtonEl);
 
-                    const didInject = injectPrefix(activeElement, isSendableWithoutText);
-                    if (didInject) {
-                        if (!hasText) ctx.markChatCreationAttempt();
+            if (!injectPrefix(activeElement, isSendableWithoutText)) return;
+            if (!hasText) ctx.markChatCreationAttempt();
 
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-
-                        requestAnimationFrame(() => {
-                            ctx.setIsInjecting(true);
-                            const enterEvent = new KeyboardEvent('keydown', {
-                                key: 'Enter',
-                                code: 'Enter',
-                                keyCode: 13,
-                                which: 13,
-                                bubbles: true,
-                                cancelable: true,
-                                composed: true
-                            });
-                            activeElement.dispatchEvent(enterEvent);
-                            ctx.setIsInjecting(false);
-                        });
-                    }
-                }
-            }
+            suppressEvent(e);
+            redispatchEnter(activeElement);
         }, { capture: true });
 
         // 滑鼠/指標事件攔截（點擊送出按鈕）
@@ -173,71 +163,24 @@
                 if (ctx.getIsInjecting()) return;
 
                 // 同時比對桌面版（ds-icon-button）與行動版（ds-button）送出按鈕
-                const button = e.target.closest(SEND_BUTTON_SELECTOR);
+                const button = e.target.closest(selectors.SEND_BUTTON_ROLE_SELECTOR);
+                if (!button) return;
 
-                if (button) {
-                    const isEditSendButton = isEditWindowSendButton(button);
+                const isEditSendButton = isEditWindowSendButton(button);
+                if (!isSendButtonCandidate(button, isEditSendButton)) return;
 
-                    if (!isSendButtonCandidate(button)) return;
+                const textarea = resolveTextareaForButton(button, isEditSendButton);
+                if (!textarea) return;
 
-                    let textarea;
-                    if (isEditSendButton) {
-                        // 優先使用 activeElement（在 pointerdown 時焦點尚未轉移，最可靠）
-                        if (document.activeElement?.tagName === 'TEXTAREA') {
-                            textarea = document.activeElement;
-                        } else {
-                            // 備援優先序：(1) 向上遍歷 DOM 找到的非空 textarea 優先；
-                            // (2) 找不到時，改採全域查詢 document.querySelector('textarea')，若其為非空亦優先採用；
-                            // (3) 兩者皆無非空 textarea 時，才退回空 textarea（walk-up 找到的最近者優先，否則用全域查詢結果，
-                            //     例如僅附件/圖片送出的情境）。空 textarea 僅作為最後手段，絕不能提前短路上述優先序。
-                            let el = button.parentElement;
-                            let firstEmptyTextarea = null;
-                            while (el && el !== document.body) {
-                                const ta = el.querySelector('textarea');
-                                if (ta) {
-                                    if (ta.value.trim() !== '') { textarea = ta; break; }
-                                    if (!firstEmptyTextarea) firstEmptyTextarea = ta;
-                                }
-                                el = el.parentElement;
-                            }
-                            if (!textarea) {
-                                // 全域查詢備援：非空優先於任何空 textarea（包含 walk-up 找到的空 textarea）。
-                                const globalFallbackTextarea = document.querySelector('textarea');
-                                const isGlobalFallbackNonEmpty = !!globalFallbackTextarea && globalFallbackTextarea.value.trim() !== '';
-                                textarea = isGlobalFallbackNonEmpty
-                                    ? globalFallbackTextarea
-                                    : (firstEmptyTextarea || globalFallbackTextarea);
-                            }
-                        }
-                    } else {
-                        textarea = document.querySelector('textarea');
-                    }
+                const hasText = textarea.value.trim() !== '';
+                const isSendableWithoutText = !hasText && isSendButtonEnabled(button);
 
-                    if (textarea) {
-                        const hasText = textarea.value.trim() !== '';
-                        const isSendableWithoutText = !hasText && isSendButtonEnabled(button);
+                if (hasText) ctx.markChatCreationAttempt();
+                if (!injectPrefix(textarea, isSendableWithoutText)) return;
+                if (!hasText) ctx.markChatCreationAttempt();
 
-                        if (hasText) ctx.markChatCreationAttempt();
-                        const didInject = injectPrefix(textarea, isSendableWithoutText);
-
-                        if (didInject) {
-                            if (!hasText) ctx.markChatCreationAttempt();
-
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-
-                            const capturedTextarea = textarea;
-                            requestAnimationFrame(() => {
-                                const ta = isEditSendButton ? capturedTextarea : document.querySelector('textarea');
-                                if (!ta || ta.value.trim() === '') return;
-                                ctx.setIsInjecting(true);
-                                button.click();
-                                ctx.setIsInjecting(false);
-                            });
-                        }
-                    }
-                }
+                suppressEvent(e);
+                redispatchClick(button, textarea, isEditSendButton);
             }, { capture: true });
         });
 

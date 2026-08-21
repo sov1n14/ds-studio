@@ -207,9 +207,27 @@ describe('C — showDeleteFailedToast', () => {
         expect(toasts).toHaveLength(1);
     });
 
-    it('C3: toast contains the correct Chinese error text', () => {
+    // The text is sourced from the i18n layer. Asserting the literal zh_TW value
+    // (not dsI18n.t('tempChatDeleteFailedToast')) keeps the test sharp: a wrong or
+    // missing locale key makes t() return the key name, which would still match a
+    // key-based expectation and pass vacuously.
+    it('C3: toast shows the zh_TW copy for the tempChatDeleteFailedToast key', () => {
         TemporaryChatDeleteApi.showDeleteFailedToast();
         const toast = document.getElementById('dss-delete-failed-toast');
         expect(toast.textContent).toBe('臨時對話刪除失敗，請確認網路連線。');
+    });
+
+    it('C4: toast carries the stylesheet hook class', () => {
+        TemporaryChatDeleteApi.showDeleteFailedToast();
+        const toast = document.getElementById('dss-delete-failed-toast');
+        expect(toast.classList.contains('dss-temp-chat-delete-failed-toast')).toBe(true);
+    });
+
+    // Styling belongs to temporary-chat-toggle.css; any inline style would mean the
+    // appearance is duplicated in JS and no longer themeable from the sheet.
+    it('C5: toast carries no inline styles', () => {
+        TemporaryChatDeleteApi.showDeleteFailedToast();
+        const toast = document.getElementById('dss-delete-failed-toast');
+        expect(toast.style.length).toBe(0);
     });
 });

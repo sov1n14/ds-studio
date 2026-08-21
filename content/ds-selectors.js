@@ -72,6 +72,26 @@
     /** 送出按鈕的直接父層 class（以 classList.contains 比對） */
     const SEND_BUTTON_PARENT_CLASS = 'bf38813a';
 
+    // ─────────────────────────────────────────────────────────────────
+    //  送出按鈕結構（桌面版 ds-icon-button / 行動版 ds-button 共用）
+    // ─────────────────────────────────────────────────────────────────
+
+    /** 可能為送出按鈕的可點擊容器（桌面版圖示鈕與行動版按鈕兩種變體） */
+    const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-icon-button[role="button"], div.ds-button[role="button"]';
+
+    /** 送出圖示的 SVG path 起始字串；以屬性前綴比對，不序列化整個子樹 */
+    const SEND_BUTTON_ICON_PATH_PREFIX = 'M8.3125';
+    const SEND_BUTTON_ICON_SELECTOR = `svg path[d^="${SEND_BUTTON_ICON_PATH_PREFIX}"]`;
+
+    /** 編輯視窗「傳送」按鈕的變體 class（取消鈕為 outlined 變體，故不符） */
+    const EDIT_SEND_BUTTON_VARIANT_CLASSES = ['ds-button--primary', 'ds-button--filled'];
+
+    /** 按鈕的文字內容標籤（純圖示按鈕不具備此節點） */
+    const BUTTON_CONTENT_SELECTOR = 'span.ds-button__content';
+
+    /** 按鈕停用狀態的語意化 BEM class */
+    const BUTTON_DISABLED_CLASS = 'ds-button--disabled';
+
     const DSSelectors = {
         VIRTUAL_LIST_SELECTOR, VIRTUAL_LIST_FALLBACK, SCROLL_AREA_CLASS,
         MESSAGE_CLASS, MESSAGE_SELECTOR,
@@ -83,6 +103,10 @@
         SCROLL_ROOT_SELECTOR, CHAT_HEADER_SELECTOR,
         CONTENT_COLUMN_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR,
         SEND_BUTTON_CONTAINER_SELECTOR, SEND_BUTTON_PARENT_CLASS,
+        SEND_BUTTON_ROLE_SELECTOR,
+        SEND_BUTTON_ICON_PATH_PREFIX, SEND_BUTTON_ICON_SELECTOR,
+        EDIT_SEND_BUTTON_VARIANT_CLASSES,
+        BUTTON_CONTENT_SELECTOR, BUTTON_DISABLED_CLASS,
     };
 
     // === Test export (no-op in browser) ===

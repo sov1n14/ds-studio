@@ -99,6 +99,10 @@ function createMockEvent() {
         removeListener: (fn) => listeners.delete(fn),
         hasListener: (fn) => listeners.has(fn),
         callListeners: (...args) => listeners.forEach((fn) => fn(...args)),
+        // Test helper: how many listeners are currently registered. Lets a spec
+        // await a module's load-time bootstrap by polling for the listener that
+        // the bootstrap registers as its last step, instead of guessing a tick budget.
+        listenerCount: () => listeners.size,
     };
 }
 
@@ -138,11 +142,11 @@ export function resetStorageOnChangedListeners() {
     [...onChangedListeners].forEach((listener) => storageOnChanged.removeListener(listener));
 }
 
-// Deterministic bootstrap-completion signal: content-script.js (and other modules)
-// register their chrome.storage.onChanged listener as the LAST statement of a
-// one-time, unawaited module-load bootstrap (see content-script.js initSettings()).
-// Polling this count lets a spec await the real completion of that bootstrap
-// instead of guessing a fixed tick budget that may race the background chain.
+// Registered-listener count for chrome.storage.onChanged, for a spec that needs to
+// know whether the module under test has installed its storage listener
+// (background/settings-routes.js and friends). Content scripts receive setting
+// changes as a chrome.runtime.onMessage broadcast instead -- for those, poll
+// chrome.runtime.onMessage.listenerCount().
 export function getStorageOnChangedListenerCount() {
     return onChangedListeners.length;
 }

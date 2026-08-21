@@ -1,26 +1,80 @@
 /**
- * RED-PHASE SPEC - content/temporary-chat-enabled-flag.js does not exist yet.
+ * content/temporary-chat-enabled-flag.js -- flag cache, read, write and
+ * cross-context sync, driven entirely through the settings messaging pipeline.
  *
- * Requirements source: consolidation of the duplicated "temporary chat enabled"
- * flag cache/read/onChanged logic. Assertions derive from the stated
- * requirements (observable inputs -> observable outputs) only:
- *   - storage key: 'dss-temporary-chat-enabled' in chrome.storage.local
- *   - coercion: a stored value counts as enabled ONLY when it is boolean true
- *   - default (pre-init, missing key, storage failure): false
+ * Requirements source: the flag no longer touches chrome.storage. Its contract:
+ *   - initial value: DSS_GET_SETTINGS with keys ['dss-temporary-chat-enabled']
+ *   - write: DSS_SET_SETTINGS with { 'dss-temporary-chat-enabled': <boolean> }
+ *   - cross-context sync: a DSS_SETTINGS_CHANGED broadcast with area 'local'
+ *   - coercion: enabled ONLY when the value is boolean true
+ *   - default (pre-init, missing key, failed/refused read): false
  *
- * Every assertion observes public behavior: isEnabled() return values, what
- * lands in chrome.storage.local, and how many times subscribers are invoked
- * with which value. No internal call sequence is asserted.
+ * Every assertion observes public behavior: isEnabled() return values, the
+ * messages the module sends, and how many times subscribers are invoked with
+ * which value.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { resetStorageOnChangedListeners } from '../setup/vitest.setup.js';
+import '../../utils/settings-message-constants.js';
 
 const ENABLED_KEY = 'dss-temporary-chat-enabled';
+const MSG = () => globalThis.DSS_SETTINGS_MSG;
+
+/** Backing store the fake settings route answers from; re-seeded per test. */
+let store;
+let onMessage;
+
+/**
+ * Fresh chrome.runtime.onMessage stub (same shape as the shared mock).
+ * A new stub per test drops the listeners of previously loaded module
+ * instances, so each test observes only its own instance's registration.
+ */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
+
+/** Answer GET_SETTINGS / SET_SETTINGS from `store`, the way background does. */
+function installSettingsRoute() {
+    chrome.runtime.sendMessage = vi.fn(async (message) => {
+        if (message?.type === MSG().GET_SETTINGS) {
+            const values = {};
+            (message.keys || []).forEach((key) => {
+                if (key in store) values[key] = store[key];
+            });
+            return { ok: true, values };
+        }
+        if (message?.type === MSG().SET_SETTINGS) {
+            Object.assign(store, message.values);
+            return { ok: true };
+        }
+        return { ok: true, values: {} };
+    });
+}
+
+/** Seed the value the settings route reports for the enabled key. */
+function seed(value) {
+    store[ENABLED_KEY] = value;
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    onMessage.callListeners(
+        { type: MSG().SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
 
 /**
  * Load a pristine instance of the module under test.
  * Fresh per test because the module owns a process-lifetime cache and a
- * once-only onChanged registration; a shared instance would make these tests
+ * once-only onMessage registration; a shared instance would make these tests
  * order-dependent.
  */
 async function loadFlagModule() {
@@ -29,18 +83,13 @@ async function loadFlagModule() {
     return mod.default ?? mod;
 }
 
-/** Fire a storage change event as if it came from another tab or context. */
-function fireStorageChange(changes, areaName) {
-    chrome.storage.onChanged.callListeners(changes, areaName);
-}
-
 describe('TemporaryChatEnabledFlag', () => {
     beforeEach(() => {
-        // The global beforeEach in vitest.setup.js clears both storage areas.
-        // Drop listeners left behind by previously loaded module instances so
-        // each test observes only the registrations of its own instance.
-        resetStorageOnChangedListeners();
         vi.restoreAllMocks();
+        store = {};
+        onMessage = createOnMessageStub();
+        chrome.runtime.onMessage = onMessage;
+        installSettingsRoute();
     });
 
     describe('R1 - isEnabled() before any initialization', () => {
@@ -51,15 +100,15 @@ describe('TemporaryChatEnabledFlag', () => {
     });
 
     describe('R2 - initFromStorage()', () => {
-        it('R2.1: stored true -> isEnabled() is true', async () => {
-            await chrome.storage.local.set({ [ENABLED_KEY]: true });
+        it('R2.1: settings report true -> isEnabled() is true', async () => {
+            seed(true);
             const Flag = await loadFlagModule();
             await Flag.initFromStorage();
             expect(Flag.isEnabled()).toBe(true);
         });
 
-        it('R2.2: stored false -> isEnabled() is false', async () => {
-            await chrome.storage.local.set({ [ENABLED_KEY]: false });
+        it('R2.2: settings report false -> isEnabled() is false', async () => {
+            seed(false);
             const Flag = await loadFlagModule();
             await Flag.initFromStorage();
             expect(Flag.isEnabled()).toBe(false);
@@ -71,25 +120,34 @@ describe('TemporaryChatEnabledFlag', () => {
             expect(Flag.isEnabled()).toBe(false);
         });
 
-        it('R2.4: a non-boolean truthy stored value is NOT enabled (strict boolean coercion)', async () => {
-            await chrome.storage.local.set({ [ENABLED_KEY]: 'true' });
+        it('R2.4: a non-boolean truthy value is NOT enabled (strict boolean coercion)', async () => {
+            seed('true');
             const Flag = await loadFlagModule();
             await Flag.initFromStorage();
             expect(Flag.isEnabled()).toBe(false);
         });
 
-        it('R2.5: a storage read rejection does not throw and leaves the false default', async () => {
+        it('R2.5: a rejected settings read does not throw and leaves the false default', async () => {
+            seed(true);
             const Flag = await loadFlagModule();
-            vi.spyOn(chrome.storage.local, 'get').mockRejectedValue(new Error('storage unavailable'));
+            chrome.runtime.sendMessage.mockRejectedValue(new Error('port closed'));
             await Flag.initFromStorage();   // must not reject
             expect(Flag.isEnabled()).toBe(false);
         });
 
-        it('R2.6: a later initFromStorage reflects a value stored after the first read', async () => {
+        it('R2.5b: a refused settings read ({ok:false}) does not throw and leaves the false default', async () => {
+            seed(true);
+            const Flag = await loadFlagModule();
+            chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'boom' });
+            await Flag.initFromStorage();   // must not reject
+            expect(Flag.isEnabled()).toBe(false);
+        });
+
+        it('R2.6: a later initFromStorage reflects a value changed after the first read', async () => {
             const Flag = await loadFlagModule();
             await Flag.initFromStorage();
             expect(Flag.isEnabled()).toBe(false);
-            await chrome.storage.local.set({ [ENABLED_KEY]: true });
+            seed(true);
             await Flag.initFromStorage();
             expect(Flag.isEnabled()).toBe(true);
         });
@@ -102,58 +160,69 @@ describe('TemporaryChatEnabledFlag', () => {
             expect(Flag.isEnabled()).toBe(true);
         });
 
-        it('R3.2: persists true under the enabled key in chrome.storage.local', async () => {
+        it('R3.2: asks background to persist true under the enabled key', async () => {
             const Flag = await loadFlagModule();
             Flag.write(true);
-            await vi.waitFor(async () => {
-                const stored = await chrome.storage.local.get([ENABLED_KEY]);
-                expect(stored[ENABLED_KEY]).toBe(true);
+            await vi.waitFor(() => {
+                expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
             });
+            expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+                type: MSG().SET_SETTINGS,
+                values: { [ENABLED_KEY]: true },
+            });
+            expect(store[ENABLED_KEY]).toBe(true);
         });
 
-        it('R3.3: persists false, overwriting a previously stored true', async () => {
-            await chrome.storage.local.set({ [ENABLED_KEY]: true });
+        it('R3.3: asks background to persist false, overwriting a previously stored true', async () => {
+            seed(true);
             const Flag = await loadFlagModule();
             Flag.write(false);
             expect(Flag.isEnabled()).toBe(false);
-            await vi.waitFor(async () => {
-                const stored = await chrome.storage.local.get([ENABLED_KEY]);
-                expect(stored[ENABLED_KEY]).toBe(false);
+            await vi.waitFor(() => {
+                expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
             });
+            expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+                type: MSG().SET_SETTINGS,
+                values: { [ENABLED_KEY]: false },
+            });
+            expect(store[ENABLED_KEY]).toBe(false);
         });
 
-        it('R3.4: does not write the flag to the sync area', async () => {
+        it('R3.4: never touches chrome.storage directly (persistence is background-owned)', async () => {
+            const localSet = vi.spyOn(chrome.storage.local, 'set');
+            const syncSet = vi.spyOn(chrome.storage.sync, 'set');
             const Flag = await loadFlagModule();
+
             Flag.write(true);
-            await vi.waitFor(async () => {
-                const stored = await chrome.storage.local.get([ENABLED_KEY]);
-                expect(stored[ENABLED_KEY]).toBe(true);
+            await vi.waitFor(() => {
+                expect(store[ENABLED_KEY]).toBe(true);
             });
-            const syncStored = await chrome.storage.sync.get([ENABLED_KEY]);
-            expect(syncStored[ENABLED_KEY]).toBeUndefined();
+
+            expect(localSet).not.toHaveBeenCalled();
+            expect(syncSet).not.toHaveBeenCalled();
         });
     });
 
     describe('R4 - startSync()', () => {
-        it('R4.1: a local change to the enabled key updates the cache', async () => {
+        it('R4.1: a local broadcast of the enabled key updates the cache', async () => {
             const Flag = await loadFlagModule();
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } });
             expect(Flag.isEnabled()).toBe(true);
         });
 
-        it('R4.2: a local change back to false updates the cache', async () => {
+        it('R4.2: a local broadcast back to false updates the cache', async () => {
             const Flag = await loadFlagModule();
             Flag.write(true);
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: true, newValue: false } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: true, newValue: false } });
             expect(Flag.isEnabled()).toBe(false);
         });
 
         it('R4.3: a non-boolean newValue is not treated as enabled', async () => {
             const Flag = await loadFlagModule();
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: 'true' } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: 'true' } });
             expect(Flag.isEnabled()).toBe(false);
         });
 
@@ -165,27 +234,42 @@ describe('TemporaryChatEnabledFlag', () => {
             Flag.startSync();
             Flag.startSync();
 
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'local');
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: true, newValue: false } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } });
+            broadcast({ [ENABLED_KEY]: { oldValue: true, newValue: false } });
 
             expect(seen).toEqual([true, false]);
         });
 
-        it('R4.5: a change in the sync area for the same key does not update the cache', async () => {
+        it('R4.5: a sync-area broadcast for the same key does not update the cache', async () => {
             const Flag = await loadFlagModule();
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'sync');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'sync');
+            expect(Flag.isEnabled()).toBe(false);
+        });
+
+        it('R4.6: a message of another type carrying the enabled key does not touch the cache', async () => {
+            const Flag = await loadFlagModule();
+            Flag.startSync();
+            onMessage.callListeners(
+                {
+                    type: 'DSS_SOME_OTHER_MESSAGE',
+                    area: 'local',
+                    changes: { [ENABLED_KEY]: { oldValue: false, newValue: true } },
+                },
+                { id: 'test-extension-id' },
+                () => {},
+            );
             expect(Flag.isEnabled()).toBe(false);
         });
     });
 
     describe('R5 - subscribe(fn)', () => {
-        it('R5.1: the subscriber receives the new boolean on an enabled-key change', async () => {
+        it('R5.1: the subscriber receives the new boolean on an enabled-key broadcast', async () => {
             const Flag = await loadFlagModule();
             const seen = [];
             Flag.subscribe((isEnabled) => seen.push(isEnabled));
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } });
             expect(seen).toEqual([true]);
         });
 
@@ -196,26 +280,26 @@ describe('TemporaryChatEnabledFlag', () => {
             Flag.subscribe((v) => a.push(v));
             Flag.subscribe((v) => b.push(v));
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } });
             expect(a).toEqual([true]);
             expect(b).toEqual([true]);
         });
 
-        it('R5.3: changes to other keys do not notify subscribers', async () => {
+        it('R5.3: broadcasts about other keys do not notify subscribers', async () => {
             const Flag = await loadFlagModule();
             const seen = [];
             Flag.subscribe((v) => seen.push(v));
             Flag.startSync();
-            fireStorageChange({ 'some-other-key': { oldValue: 1, newValue: 2 } }, 'local');
+            broadcast({ 'some-other-key': { oldValue: 1, newValue: 2 } });
             expect(seen).toEqual([]);
         });
 
-        it('R5.4: a sync-area change does not notify subscribers', async () => {
+        it('R5.4: a sync-area broadcast does not notify subscribers', async () => {
             const Flag = await loadFlagModule();
             const seen = [];
             Flag.subscribe((v) => seen.push(v));
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'sync');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'sync');
             expect(seen).toEqual([]);
         });
 
@@ -226,7 +310,7 @@ describe('TemporaryChatEnabledFlag', () => {
             Flag.subscribe(fn);
             Flag.subscribe(fn);
             Flag.startSync();
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } });
             expect(seen).toEqual([true]);
         });
 
@@ -234,7 +318,7 @@ describe('TemporaryChatEnabledFlag', () => {
             const Flag = await loadFlagModule();
             const seen = [];
             Flag.subscribe((v) => seen.push(v));
-            fireStorageChange({ [ENABLED_KEY]: { oldValue: false, newValue: true } }, 'local');
+            broadcast({ [ENABLED_KEY]: { oldValue: false, newValue: true } });
             expect(seen).toEqual([]);
         });
     });

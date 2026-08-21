@@ -31,14 +31,43 @@ function makeNavigateEvent({ destinationUrl, navigationType = 'push' }) {
     };
 }
 
+const MSG = () => globalThis.DSS_SETTINGS_MSG;
+
+/** Backing store the fake settings route answers from; re-seeded per test. */
+let settingsStore = {};
+
+/**
+ * Answer GET_SETTINGS / SET_SETTINGS out of settingsStore the way background
+ * does. The enabled flag reaches this module through TemporaryChatEnabledFlag,
+ * which asks background for its value instead of reading chrome.storage.
+ */
+function installSettingsRoute() {
+    chrome.runtime.sendMessage = vi.fn(async (message) => {
+        if (message?.type === MSG().GET_SETTINGS) {
+            const values = {};
+            (message.keys || []).forEach((key) => {
+                if (key in settingsStore) values[key] = settingsStore[key];
+            });
+            return { ok: true, values };
+        }
+        if (message?.type === MSG().SET_SETTINGS) {
+            Object.assign(settingsStore, message.values);
+            return { ok: true };
+        }
+        return { ok: true, values: {} };
+    });
+}
+
 // Clear all TemporaryChatPendingStore mock call history before every test in this file.
 beforeEach(() => {
     Object.values(global.TemporaryChatPendingStore).forEach((fn) => fn.mockClear());
+    settingsStore = {};
+    installSettingsRoute();
 });
 
-// Writing the enabled key to the shared chrome.storage.local mock fires onChanged,
-// which the flag module's cross-tab sync turns into an attachListeners() call on this
-// module. Detach after every test so listener state never leaks between tests.
+// A DSS_SETTINGS_CHANGED broadcast for the enabled key makes the flag module's
+// cross-tab sync call attachListeners() on this module. Detach after every test
+// so listener state never leaks between tests.
 afterEach(() => {
     TemporaryChatDelete.detachListeners();
 });
@@ -50,26 +79,26 @@ describe('A — initEnabledFlagFromStorage', () => {
         TemporaryChatDelete.__resetState();
     });
 
-    it('A1: reads dss-temporary-chat-enabled from chrome.storage.local', async () => {
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
+    it('A1: reads dss-temporary-chat-enabled through the settings pipeline', async () => {
+        settingsStore['dss-temporary-chat-enabled'] = true;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.__getState().enabledFlagCache).toBe(true);
     });
 
-    it('A2: sets _enabledFlagCache to true when stored value is true', async () => {
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
+    it('A2: sets _enabledFlagCache to true when the reported value is true', async () => {
+        settingsStore['dss-temporary-chat-enabled'] = true;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
 
-    it('A3: sets _enabledFlagCache to false when stored value is absent', async () => {
-        // store is empty
+    it('A3: sets _enabledFlagCache to false when the value is absent', async () => {
+        // settingsStore is empty
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
     });
 
-    it('A4: sets _enabledFlagCache to false when stored value is false', async () => {
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
+    it('A4: sets _enabledFlagCache to false when the reported value is false', async () => {
+        settingsStore['dss-temporary-chat-enabled'] = false;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
     });
@@ -1076,8 +1105,8 @@ describe('P — listener lifecycle', () => {
     // inline in the test body and therefore passed no matter what init() did.
     // These call the real init() and assert only what an outside observer can see.
 
-    it('P5: init() seeds the enabled flag from chrome.storage.local', async () => {
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
+    it('P5: init() seeds the enabled flag from the settings pipeline', async () => {
+        settingsStore['dss-temporary-chat-enabled'] = true;
         TemporaryChatDelete.__setState({ enabledFlagCache: false });
 
         await TemporaryChatDelete.init();
@@ -1086,7 +1115,7 @@ describe('P — listener lifecycle', () => {
     });
 
     it('P6: after init() with the flag enabled, a real window message mutates state (listeners are live)', async () => {
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
+        settingsStore['dss-temporary-chat-enabled'] = true;
         TemporaryChatDelete.__resetState();
 
         await TemporaryChatDelete.init();
@@ -1109,7 +1138,7 @@ describe('P — listener lifecycle', () => {
     it('P7: init() restores a tracked uuid from sessionStorage and goes live even while the flag is disabled', async () => {
         const uuid = 'eeee1111-2222-3333-4444-555555555555';
         sessionStorage.setItem('dss-temporary-chat-uuid', uuid);
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
+        settingsStore['dss-temporary-chat-enabled'] = false;
         TemporaryChatDelete.__resetState();
 
         await TemporaryChatDelete.init();
@@ -1128,7 +1157,7 @@ describe('P — listener lifecycle', () => {
 
     it('P8: with no tracked uuid and the flag disabled, init() leaves the listeners detached', async () => {
         sessionStorage.clear();
-        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
+        settingsStore['dss-temporary-chat-enabled'] = false;
         TemporaryChatDelete.__resetState();
 
         await TemporaryChatDelete.init();

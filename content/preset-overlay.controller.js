@@ -52,6 +52,9 @@
 
     var TARGET_SELECTOR = __selectorsModule.CHAT_HEADER_SELECTOR;
 
+    // DOM 變動後重掛浮動選單的去抖動間隔（毫秒）
+    const FIND_AND_MOUNT_DEBOUNCE_MS = 150;
+
     function scheduleFrame(fn) {
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(fn);
@@ -67,9 +70,8 @@
             dropdown:           null,
             wrapperEl:          null,
             targetEl:           null,
-            domObserver:        null,
             resizeObserver:     null,
-            _debounceTimer:     null,
+            _findAndMountTimer: null,
             _windowResizeHandler: null,
             _settle:            null,
 
@@ -108,6 +110,8 @@
                     this._windowResizeHandler = null;
                 }
                 if (this._settle) { this._settle.cancel(); this._settle = null; }
+                clearTimeout(this._findAndMountTimer);
+                this._findAndMountTimer = null;
                 this.targetEl = null;
             },
 
@@ -230,18 +234,13 @@
                 });
             },
 
-            setupDomObserver() {
-                if (this.domObserver) return;
-                this.domObserver = new MutationObserver(() => {
-                    if (!ctx.isExtensionContextValid()) {
-                        this.domObserver.disconnect();
-                        this.domObserver = null;
-                        return;
-                    }
-                    clearTimeout(this._debounceTimer);
-                    this._debounceTimer = setTimeout(() => this.findAndMount(), 150);
-                });
-                this.domObserver.observe(document.body, { childList: true, subtree: true });
+            /**
+             * 去抖動地重掛浮動選單。本檔不自建 body 觀察器：DOM 變動由
+             * content-script.js 的單一 body 觀察器扇出呼叫本方法。
+             */
+            scheduleFindAndMount() {
+                clearTimeout(this._findAndMountTimer);
+                this._findAndMountTimer = setTimeout(() => this.findAndMount(), FIND_AND_MOUNT_DEBOUNCE_MS);
             },
 
             setupWindowResizeListener() {
@@ -268,7 +267,6 @@
 
             start(presets, activeId, enable) {
                 injectOverlayStyles();
-                this.setupDomObserver();
                 this.findAndMount();
                 this.render(presets, activeId);
                 if (enable !== undefined) this.setVisible(enable);

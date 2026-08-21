@@ -9,9 +9,9 @@
  * the toggle row whenever the pathname changes. The MutationObserver handles the
  * case where the anchor element appears asynchronously after the route settles.
  *
- * Cross-tab sync: TemporaryChatEnabledFlag keeps the enabled flag in
- * chrome.storage.local so every tab reflects changes made in any single tab, and
- * caches it in memory so readEnabledFlag() stays synchronous.
+ * 設定不由本層直讀儲存區：主開關（isEnabled）的閘控交由 content/feature-toggle.js
+ * 向 background 索取並訂閱變更；臨時對話啟用旗標則由 TemporaryChatEnabledFlag
+ * 經 background 同步至每個分頁，並快取於記憶體使 readEnabledFlag() 維持同步呼叫。
  */
 
 const TemporaryChatToggle = (() => {
@@ -33,8 +33,10 @@ const TemporaryChatToggle = (() => {
     // ── 私有狀態 ──────────────────────────────────────────────────────────────
     let _mutationObserver = null;
     let _injectedRow = null;
-    // 擴充功能主開關狀態；於 init() 中從 StorageManager.KEYS.IS_ENABLED 讀取
+    // 擴充功能主開關狀態；由 feature-toggle 依 background 提供的設定驅動
     let _masterEnabled = false;
+    // 主開關僅需註冊一次：init() 可能被重複呼叫，避免累積註冊
+    let _hasMasterToggleRegistered = false;
 
     // ── 純工具函式（可供測試匯出） ───────────────────────────────────────────
 
@@ -51,6 +53,18 @@ const TemporaryChatToggle = (() => {
     }
 
     /**
+     * 取得共用功能開關管線（content/feature-toggle.js 在前載入提供）。
+     */
+    function _featureToggle() {
+        const featureToggle = globalThis.DSSFeatureToggle
+            || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+        if (!featureToggle) {
+            throw new Error('[DSS] temporary-chat-toggle: DSSFeatureToggle is missing — load content/feature-toggle.js before this file');
+        }
+        return featureToggle;
+    }
+
+    /**
      * 從共享快取讀取啟用旗標（同步）。
      * @returns {boolean}
      */
@@ -59,7 +73,7 @@ const TemporaryChatToggle = (() => {
     }
 
     /**
-     * 同步更新共享快取並非同步寫入 chrome.storage.local（fire-and-forget）。
+     * 同步更新共享快取並非同步請 background 寫入（fire-and-forget）。
      * @param {boolean} isEnabled
      */
     function writeEnabledFlag(isEnabled) {
@@ -252,10 +266,38 @@ const TemporaryChatToggle = (() => {
         dispatchToggleEvent(newValue);
     }
 
+    /**
+     * 更新主開關狀態並同步顯示／隱藏切換列。
+     * @param {boolean} isMasterEnabled
+     */
+    function setMasterEnabled(isMasterEnabled) {
+        _masterEnabled = isMasterEnabled;
+        if (!_masterEnabled) {
+            removeToggleRow();
+        } else if (window.location.pathname === '/') {
+            tryInject();
+        }
+    }
+
+    /**
+     * 把主開關閘控交給共用管線：初始值與後續變更皆由 background 提供。
+     * 本功能無自身開關鍵，故 ownKey 為 null（僅受主開關控制）。
+     */
+    function registerMasterToggle() {
+        if (_hasMasterToggleRegistered) return;
+        _hasMasterToggleRegistered = true;
+
+        _featureToggle().registerFeatureToggle({
+            ownKey: null,
+            onEnable: () => setMasterEnabled(true),
+            onDisable: () => setMasterEnabled(false),
+        });
+    }
+
     // ── 公開 API ─────────────────────────────────────────────────────────────
 
     /**
-     * 初始化模組：先從 chrome.storage.local 載入旗標快取並訂閱跨分頁變更，
+     * 初始化模組：先載入旗標快取並訂閱跨分頁變更、註冊主開關閘控，
      * 再啟動 observer 與 navigation 監聽，最後在首頁立即注入。
      * @returns {Promise<void>}
      */
@@ -266,13 +308,8 @@ const TemporaryChatToggle = (() => {
         flag.subscribe(setCacheForCrossTabSync);
         await flag.initFromStorage();
 
-        // 讀取擴充功能主開關狀態，決定是否允許注入切換列
-        try {
-            const result = await chrome.storage.local.get([StorageManager.KEYS.IS_ENABLED]);
-            _masterEnabled = result[StorageManager.KEYS.IS_ENABLED] ?? false;
-        } catch {
-            _masterEnabled = false;
-        }
+        // 主開關決定是否允許注入切換列
+        registerMasterToggle();
 
         // Start observer and navigation listeners regardless of current path,
         // so SPA navigations back to '/' are handled correctly
@@ -298,29 +335,10 @@ const TemporaryChatToggle = (() => {
         handleNavigation,
         // 供跨分頁同步與單元測試使用：直接更新快取並同步 UI
         __setCacheForCrossTabSync: setCacheForCrossTabSync,
-        /**
-         * 供主開關 storage 監聽器使用：更新 _masterEnabled 並同步顯示/隱藏切換列。
-         * @param {boolean} isMasterEnabled
-         */
-        __setMasterEnabled(isMasterEnabled) {
-            _masterEnabled = isMasterEnabled;
-            if (!_masterEnabled) {
-                removeToggleRow();
-            } else if (window.location.pathname === '/') {
-                tryInject();
-            }
-        },
+        // 供主開關管線與單元測試使用：更新主開關狀態並同步顯示／隱藏切換列
+        __setMasterEnabled: setMasterEnabled,
     };
 })();
-
-// ── 主開關跨分頁同步監聽器 ─────────────────────────────────────────────────
-// 擴充功能主開關（StorageManager.KEYS.IS_ENABLED）控制切換列的顯示/隱藏；
-// 臨時對話啟用旗標則由 TemporaryChatEnabledFlag 自行同步（見 init() 的 subscribe）。
-chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
-    if (!changes[StorageManager.KEYS.IS_ENABLED]) return;
-    TemporaryChatToggle.__setMasterEnabled(changes[StorageManager.KEYS.IS_ENABLED].newValue);
-});
 
 // Auto-start（與 sidebar-auto-hide.js 相同的啟動模式）
 TemporaryChatToggle.init();

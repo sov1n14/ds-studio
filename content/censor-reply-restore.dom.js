@@ -129,11 +129,8 @@
                 if (rec.chat_session_id !== currentSessionId) continue;
                 if (rec.prompt_key !== promptKey) continue;
                 // 若此 messageId 已有對應的 virtualItem key，視為已使用
-                var alreadyMapped = false;
-                this._keyToMessageId.forEach(function (v) {
-                    if (String(v) === String(rec.message_id)) alreadyMapped = true;
-                });
-                if (!alreadyMapped) candidates.push(rec);
+                if (this._findKeyForMessageId(rec.message_id) !== null) continue;
+                candidates.push(rec);
             }
 
             if (candidates.length === 0) return null;

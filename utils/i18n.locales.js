@@ -159,6 +159,9 @@
     harvestDismissButtonAriaLabel: '關閉警示',
     harvestIncompleteToast: '匯出未完整：已擷取 {count} 則。原因：{reason}',
 
+    // ---- Content Script: Temporary Chat ----
+    tempChatDeleteFailedToast: '臨時對話刪除失敗，請確認網路連線。',
+
     // ---- Content Script: Go Top ----
     goTopAriaLabel: '回到頂部',
 
@@ -341,6 +344,9 @@
     harvestDismissButton: 'Dismiss',
     harvestDismissButtonAriaLabel: 'Dismiss warning',
     harvestIncompleteToast: 'Export incomplete: {count} messages captured. Reason: {reason}',
+
+    // ---- Content Script: Temporary Chat ----
+    tempChatDeleteFailedToast: 'Failed to delete the temporary chat. Please check your network connection.',
 
     // ---- Content Script: Go Top ----
     goTopAriaLabel: 'Back to Top',

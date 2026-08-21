@@ -3,3 +3,5 @@
 - [Bash heredoc long files](pitfall_bash_heredoc_long_files.md) — write spec files in ~100-line chunked appends; a single giant heredoc truncates.
 - [ds-studio harness](ds-studio-harness.md) — no root package.json; run specs from test/ with npx vitest.
 - [Fixture reset masks removed fields](pitfall_fixture_masked_fields.md) — a shared reset helper can keep a deleted-field assertion green; grep all of test/.
+- [Prompt-injector specs](project_prompt_injector_specs.md) — send-button/controller module specs, single-injector harness, rAF stub, injected-value formats.
+- [Content-script broadcast bootstrap](project_content_script_broadcast_bootstrap.md) — poll runtime.onMessage.listenerCount()>=2; specs must deliver DSS_SETTINGS_CHANGED themselves.

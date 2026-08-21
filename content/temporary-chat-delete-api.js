@@ -65,7 +65,7 @@ const TemporaryChatDeleteApi = (() => {
     }
 
     /**
-     * 在頁面底部顯示刪除失敗的 toast 提示，6 秒後自動移除。
+     * 在頁面底部顯示刪除失敗的 toast 提示，6 秒後自動移除。樣式由 temporary-chat-toggle.css 提供。
      * 已存在時不重複建立。
      */
     function showDeleteFailedToast() {
@@ -74,22 +74,8 @@ const TemporaryChatDeleteApi = (() => {
 
         const toast = document.createElement('div');
         toast.id = 'dss-delete-failed-toast';
-        toast.textContent = '臨時對話刪除失敗，請確認網路連線。';
-        Object.assign(toast.style, {
-            position: 'fixed',
-            bottom: '24px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: '#1e2022',
-            color: '#f9fafb',
-            fontSize: '14px',
-            fontWeight: '500',
-            padding: '10px 20px',
-            borderRadius: '8px',
-            zIndex: '2147483647',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            pointerEvents: 'none',
-        });
+        toast.className = 'dss-temp-chat-delete-failed-toast';
+        toast.textContent = dsI18n.t('tempChatDeleteFailedToast');
 
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 6000);
