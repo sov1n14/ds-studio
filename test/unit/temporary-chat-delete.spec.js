@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
+import { setPathname } from '../helpers/set-pathname.js';
 
 // chrome.* comes from the shared mock in test/setup/vitest.setup.js (real in-memory
 // chrome.storage.local + a fan-in storage.onChanged), and the three
@@ -15,26 +17,11 @@ global.TemporaryChatDeleteApi = {
 };
 
 // ── TemporaryChatPendingStore mock ──────────────────────────────────────────────
-global.TemporaryChatPendingStore = {
-    getPendingDeletes: vi.fn().mockResolvedValue([]),
-    savePendingDeletes: vi.fn().mockResolvedValue(undefined),
-    addPendingDelete: vi.fn().mockResolvedValue(undefined),
-    removePendingDelete: vi.fn().mockResolvedValue(undefined),
-    getOpenUuids: vi.fn().mockResolvedValue([]),
-    addOpenUuid: vi.fn().mockResolvedValue(undefined),
-    removeOpenUuid: vi.fn().mockResolvedValue(undefined),
-    clearOpenUuids: vi.fn().mockResolvedValue(undefined),
-    getLastAuthToken: vi.fn().mockResolvedValue(null),
-    setLastAuthToken: vi.fn().mockResolvedValue(undefined),
-    trackForDeletion: vi.fn().mockResolvedValue(undefined),
-};
+global.TemporaryChatPendingStore = makePendingStoreMock();
 
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
-function setPathname(path) {
-    window.history.replaceState({}, '', path);
-}
 
 /** Build a minimal NavigateEvent-like object understood by handleNavigationEvent. */
 function makeNavigateEvent({ destinationUrl, navigationType = 'push' }) {

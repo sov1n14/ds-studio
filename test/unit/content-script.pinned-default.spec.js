@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 
@@ -23,10 +24,6 @@ describe('pinned default preset preselection (new-chat path only)', () => {
             map[uuid] = presetId;
             return map;
         });
-    }
-
-    function setPathname(path) {
-        window.history.replaceState({}, '', path);
     }
 
     beforeEach(async () => {

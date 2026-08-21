@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 
@@ -38,10 +39,6 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
 
         await seedPreset('p1', 'Helper', 'You are helpful.');
     });
-
-    function setPathname(path) {
-        window.history.replaceState({}, '', path);
-    }
 
     it('handles navigation to a new chat with no UUID (clears state)', async () => {
         setPathname('/a/chat/s');

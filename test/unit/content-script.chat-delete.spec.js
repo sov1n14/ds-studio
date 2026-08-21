@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
+import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 
 // ── chrome mocks ───────────────────────────────────────────────────────────────
@@ -39,26 +41,9 @@ global.TemporaryChatDeleteApi = {
 };
 
 // ── TemporaryChatPendingStore mock ──────────────────────────────────────────────
-global.TemporaryChatPendingStore = {
-    getPendingDeletes: vi.fn().mockResolvedValue([]),
-    savePendingDeletes: vi.fn().mockResolvedValue(undefined),
-    addPendingDelete: vi.fn().mockResolvedValue(undefined),
-    removePendingDelete: vi.fn().mockResolvedValue(undefined),
-    getOpenUuids: vi.fn().mockResolvedValue([]),
-    addOpenUuid: vi.fn().mockResolvedValue(undefined),
-    removeOpenUuid: vi.fn().mockResolvedValue(undefined),
-    clearOpenUuids: vi.fn().mockResolvedValue(undefined),
-    getLastAuthToken: vi.fn().mockResolvedValue(null),
-    setLastAuthToken: vi.fn().mockResolvedValue(undefined),
-    trackForDeletion: vi.fn().mockResolvedValue(undefined),
-};
+global.TemporaryChatPendingStore = makePendingStoreMock();
 
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
-
-// ── Helper ────────────────────────────────────────────────────────────────────
-function setPathname(path) {
-    window.history.replaceState({}, '', path);
-}
 
 // ── deleteChatSession is now in TemporaryChatDeleteApi, not TemporaryChatDelete ─
 // Those tests are covered in temporary-chat-delete-api.spec.js.

@@ -1,1 +1,1 @@
-- [Vitest harness pitfalls](vitest_harness_pitfalls.md) — runner lives in test/, shared chrome mock echoes onChanged, hoisting breaks spec-local chrome mocks
+- [Broadcast spec pitfall](pitfall-broadcast-specs.md) — global beforeEach storage clear fires onChanged; drain it, and install onMessage listeners only once.

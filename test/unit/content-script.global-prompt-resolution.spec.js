@@ -27,6 +27,7 @@
  * an internal call sequence.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import { getStorageOnChangedListenerCount } from '../setup/vitest.setup.js';
@@ -228,10 +229,6 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     // export the same way setupNavigationDetection() does (URL change -> handleChatChange()),
     // via window.history.replaceState + calling handleChatChange() directly, exactly as
     // content-script.binding.spec.js already does for this module.
-
-    function setPathname(path) {
-        window.history.replaceState({}, '', path);
-    }
 
     async function seedBinding(uuid, presetId) {
         await StorageManager.mutateChatPresetMap(map => {

@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import fs from 'fs';
-import path from 'path';
-import vm from 'vm';
-import { fileURLToPath } from 'url';
+import { loadClassicScript } from '../helpers/load-classic-script.js';
 
 /**
  * Unit tests for content/sse-parser.js — migrated from the orphaned
@@ -31,15 +28,8 @@ import { fileURLToPath } from 'url';
  * which does not exist in this repo, and are not portable.
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
-
 function loadSseParser() {
-    const src = fs.readFileSync(path.join(ROOT, 'content', 'sse-parser.js'), 'utf-8');
-    const sandbox = {};
-    vm.createContext(sandbox);
-    vm.runInContext(src, sandbox);
-    return sandbox.SseParser;
+    return loadClassicScript('content/sse-parser.js').SseParser;
 }
 
 describe('SseParser', () => {
