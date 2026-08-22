@@ -88,6 +88,9 @@ function startBodyObserver(onBodyMutation) {
 
 // 設定初始化
 async function initSettings() {
+    // i18n 由本檔明確初始化（utils/i18n.js 載入期不做任何事）
+    await dsI18n.init();
+
     // StorageManager 由 manifest.json 在本腳本之前注入
     // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
     const settings = await StorageManager.syncNow();

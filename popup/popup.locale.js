@@ -8,8 +8,7 @@
 
   /** 綁定地球按鈕與語言面板；需在 dsI18n.init() 完成後呼叫。 */
   function bindLocaleSwitcher() {
-    // i18n.js 的 DOMContentLoaded 自動套用可能早於本次 init 完成，故再套用一次
-    dsI18n.apply();
+    window.__DS_PopupI18nApply.apply();
 
     const localeBtn = document.getElementById('localeSwitcherBtn');
     const localePanel = document.getElementById('localePanel');

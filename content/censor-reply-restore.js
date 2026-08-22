@@ -27,7 +27,7 @@ const CensorReplyRestore = {
 
     enabled: false,
     _observer: null,
-    _xhrHooked: false,
+    _isFragmentListenerStarted: false,
     _pendingQueue: [],
     // 實際儲存體；外部一律透過下方存取子讀寫 _keyToMessageId。
     __keyToMessageIdStore: new __DS_CensorKeyToMessageIdMap(),
@@ -191,42 +191,14 @@ const CensorReplyRestore = {
     },
 
     // ────────────────────────────────────────────
-    // Subsystem A: XHR hook (main-world injection)
+    // Subsystem A: 接收 MAIN world 送回的片段
+    // （MAIN world 腳本由 content/main-world-injector.js 於啟動時統一注入）
     // ────────────────────────────────────────────
 
-    _installXhrHook() {
-        if (this._xhrHooked) return;
-        this._xhrHooked = true;
-
-        if (typeof document === 'undefined' || !document.documentElement) {
-            return;
-        }
-
-        try {
-            // Inject sse-parser.js first (dependency of censor-xhr-hook.js)
-            var sseParserScript = document.createElement('script');
-            sseParserScript.src = chrome.runtime.getURL('content/sse-parser.js');
-            document.documentElement.appendChild(sseParserScript);
-            sseParserScript.remove();
-
-            var script = document.createElement('script');
-            script.src = chrome.runtime.getURL('content/censor-xhr-hook.js');
-            document.documentElement.appendChild(script);
-            script.remove();
-
-            // 注入 history navigation hook，補強 Navigation API 不穩定的 SPA 導航偵測
-            var historyHookScript = document.createElement('script');
-            historyHookScript.src = chrome.runtime.getURL('content/temporary-chat-history-hook.js');
-            document.documentElement.appendChild(historyHookScript);
-            historyHookScript.remove();
-
-            var fiberScript = document.createElement('script');
-            fiberScript.src = chrome.runtime.getURL('content/temporary-chat-fiber-delete.js');
-            document.documentElement.appendChild(fiberScript);
-            fiberScript.remove();
-        } catch (e) {
-            return;
-        }
+    _startFragmentListener() {
+        if (this._isFragmentListenerStarted) return;
+        if (typeof window === 'undefined') return;
+        this._isFragmentListenerStarted = true;
 
         window.addEventListener('message', (e) => {
             if (e.source !== window) return;
@@ -308,7 +280,7 @@ const CensorReplyRestore = {
             return;
         }
         this.enabled = true;
-        this._installXhrHook();
+        this._startFragmentListener();
         this.applyToExisting();
         this._startObserver();
     },

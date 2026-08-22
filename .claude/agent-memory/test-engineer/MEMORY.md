@@ -9,3 +9,6 @@
 - [tab/window control adapters red](project_tab_window_control_red.md) — D5 singleton window + chrome.storage.session stub pattern; adapter args are the contract.
 - [Mutation restore pitfall](pitfall_mutation_restore_git_checkout.md) — restore a mutated spec from a byte copy; git checkout wipes uncommitted working-tree edits.
 - [websearch "default" normalization](project_websearch_default_normalization.md) — two read paths; getSettings() normalizes, the DSS_GET_SETTINGS key route does not.
+- [IIFE load side-effect sandbox](iife-load-side-effect-sandbox.md) — new Function param-shadowing to spec load-time side effects without clobbering setup-file globals.
+- [Injected-script spec pitfalls](pitfall_injected_scripts.md) — self-removing MAIN-world <script> tags; observe via MutationObserver, stub getURL to a data: URL.
+- [happy-dom localStorage leak](pitfall_happydom_localstorage_leak.md) — clear ds_studio_locale before i18n _reset()+init(); setup-file init() must precede the chrome mock.

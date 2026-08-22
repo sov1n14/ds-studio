@@ -18,8 +18,8 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 15 script tags', () => {
-        expect(scriptSrcs).toHaveLength(15);
+    it('has exactly 16 script tags', () => {
+        expect(scriptSrcs).toHaveLength(16);
     });
 
     it.each([
@@ -36,8 +36,9 @@ describe('editor.html script tag structure', () => {
         ['messaging.js eleventh', 10, '../../utils/messaging.js'],
         ['i18n.locales.js twelfth (immediately before i18n.js)', 11, '../../utils/i18n.locales.js'],
         ['i18n.js thirteenth (between i18n.locales.js and editor.js)', 12, '../../utils/i18n.js'],
-        ['popup.preset-domain.js fourteenth (before editor.js)', 13, '../popup.preset-domain.js'],
-        ['editor.js last (fifteenth)', 14, 'editor.js'],
+        ['popup.i18n-apply.js fourteenth (after i18n.js)', 13, '../popup.i18n-apply.js'],
+        ['popup.preset-domain.js fifteenth (before editor.js)', 14, '../popup.preset-domain.js'],
+        ['editor.js last (sixteenth)', 15, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });

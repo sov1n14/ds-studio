@@ -193,6 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nameInputEl = document.getElementById('editorNameInput');
 
     await dsI18n.init();
+    window.__DS_PopupI18nApply.apply();
 
     // 解析目標
     const target = parseTarget();

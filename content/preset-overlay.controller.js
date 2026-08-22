@@ -293,7 +293,7 @@
                 if (!this._localeListenerAttached) {
                     this._localeListenerAttached = true;
                     var self = this;
-                    document.addEventListener('dsI18n-locale-changed', function () {
+                    dsI18n.onLocaleChanged(function () {
                         if (self.dropdown && self.dropdown.updateLocale) {
                             self.dropdown.updateLocale();
                         }

@@ -1,7 +1,7 @@
 'use strict';
 
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
-// 注意：不載入 utils/i18n.js，該檔載入期需觸碰 DOM（document），service worker 無此環境
+// 注意：service worker 不載入 utils/i18n.js，背景層不輸出任何在地化字串
 importScripts(
     '../utils/logger.js',
     '../utils/storage-manager.chunk-lock.js',

@@ -200,6 +200,58 @@
         // Subsystem E: Content injection
         // ────────────────────────────────────────────
 
+        /**
+         * 建立復原內容容器（class / style / innerHTML 皆與原有 DOM 結構一致）。
+         * @param {string} innerHtml
+         * @returns {HTMLElement}
+         */
+        _createRestoredContainer(innerHtml) {
+            const restoredEl = document.createElement('div');
+            restoredEl.className = 'ds-markdown ds-assistant-message-main-content restored-content';
+            restoredEl.setAttribute('style', '--ds-md-zoom: 1.143;');
+            restoredEl.innerHTML = innerHtml;
+            return restoredEl;
+        },
+
+        /**
+         * 將 THINK 內容注入既有思考容器；若頁面尚無容器，改為在 restoredEl 前插入自建思考區塊。
+         * @param {Element} msgEl
+         * @param {string} thinkContent
+         * @param {Object} record
+         * @param {HTMLElement} restoredEl
+         */
+        _injectThinkContent(msgEl, thinkContent, record, restoredEl) {
+            const thinkContainer = msgEl.querySelector(selectors.THINK_BLOCK_SELECTOR);
+            if (!thinkContainer) {
+                const thinkEl = this._buildThinkBlock({ content: thinkContent }, record.thinking_elapsed_secs);
+                if (restoredEl.parentNode) {
+                    restoredEl.parentNode.insertBefore(thinkEl, restoredEl);
+                }
+                return;
+            }
+
+            thinkContainer.classList.add('restored-content');
+            const thinkContentEl = thinkContainer.querySelector(selectors.THINK_CONTENT_SELECTOR);
+            if (!thinkContentEl) return;
+
+            const thinkBody = thinkContentEl.querySelector(selectors.THINK_SEPARATOR_SELECTOR);
+            if (thinkBody) {
+                thinkBody.innerHTML = '';
+            }
+            let markdownEl = thinkContentEl.querySelector(selectors.MARKDOWN_SELECTOR);
+            if (!markdownEl) {
+                markdownEl = document.createElement('div');
+                markdownEl.className = selectors.MARKDOWN_CLASS;
+                if (thinkBody) {
+                    thinkBody.after(markdownEl);
+                } else {
+                    thinkContentEl.appendChild(markdownEl);
+                }
+            }
+            markdownEl.innerHTML = this._renderMarkdown(thinkContent);
+            markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');
+        },
+
         _injectRestoredContent(msgEl, record) {
             const fragments = record.fragments || [];
             if (fragments.length === 0) return;
@@ -212,91 +264,21 @@
             const mainContent = msgEl.querySelector('.ds-assistant-message-main-content');
             if (!mainContent) return;
 
-            // Hide original censored content
+            // 隱藏原始被審查內容
             if (!mainContent.classList.contains('dss-censored-hidden')) {
                 mainContent.classList.add('dss-censored-hidden');
             }
 
-            if (hasResponse) {
-                // 正常情況：有 RESPONSE 內容
-                const restoredEl = document.createElement('div');
-                restoredEl.className = 'ds-markdown ds-assistant-message-main-content restored-content';
-                restoredEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                let responseHtml = this._renderMarkdown(responseContent);
-                responseHtml += '<div class="restored-badge">' + dsI18n.t('restoredBadge') + '</div>';
-                restoredEl.innerHTML = responseHtml;
+            // 有 RESPONSE 則渲染回覆內容；否則為思考階段即被屏蔽，僅顯示 think-only 徽章
+            const innerHtml = hasResponse
+                ? this._renderMarkdown(responseContent) + '<div class="restored-badge">' + dsI18n.t('restoredBadge') + '</div>'
+                : '<div class="restored-badge">' + dsI18n.t('restoredBadgeThinkOnly') + '</div>';
 
-                mainContent.parentNode.insertBefore(restoredEl, mainContent.nextSibling);
+            const restoredEl = this._createRestoredContainer(innerHtml);
+            mainContent.parentNode.insertBefore(restoredEl, mainContent.nextSibling);
 
-                if (hasThink) {
-                    // 有 THINK 且有 RESPONSE 內容
-                    const thinkContainer = msgEl.querySelector('._74c0879');
-                    if (thinkContainer) {
-                        thinkContainer.classList.add('restored-content');
-                        const thinkContentEl = thinkContainer.querySelector(selectors.THINK_CONTENT_SELECTOR);
-                        if (thinkContentEl) {
-                            const thinkBody = thinkContentEl.querySelector('._9ecc93a');
-                            if (thinkBody) {
-                                thinkBody.innerHTML = '';
-                            }
-                            let markdownEl = thinkContentEl.querySelector(selectors.MARKDOWN_SELECTOR);
-                            if (!markdownEl) {
-                                markdownEl = document.createElement('div');
-                                markdownEl.className = selectors.MARKDOWN_CLASS;
-                                if (thinkBody) {
-                                    thinkBody.after(markdownEl);
-                                } else {
-                                    thinkContentEl.appendChild(markdownEl);
-                                }
-                            }
-                            markdownEl.innerHTML = this._renderMarkdown(thinkContent);
-                            markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                        }
-                    } else {
-                        const thinkEl = this._buildThinkBlock({ content: thinkContent }, record.thinking_elapsed_secs);
-                        if (restoredEl.parentNode) {
-                            restoredEl.parentNode.insertBefore(thinkEl, restoredEl);
-                        }
-                    }
-                }
-            } else {
-                // 情況 A：無 RESPONSE，只有 THINK（模型在思考階段被屏蔽）
-                const restoredEl = document.createElement('div');
-                restoredEl.className = 'ds-markdown ds-assistant-message-main-content restored-content';
-                restoredEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                let responseHtml = '<div class="restored-badge">' + dsI18n.t('restoredBadgeThinkOnly') + '</div>';
-                restoredEl.innerHTML = responseHtml;
-
-                mainContent.parentNode.insertBefore(restoredEl, mainContent.nextSibling);
-
-                const thinkContainer = msgEl.querySelector('._74c0879');
-                if (thinkContainer) {
-                    thinkContainer.classList.add('restored-content');
-                    const thinkContentEl = thinkContainer.querySelector(selectors.THINK_CONTENT_SELECTOR);
-                    if (thinkContentEl) {
-                        const thinkBody = thinkContentEl.querySelector('._9ecc93a');
-                        if (thinkBody) {
-                            thinkBody.innerHTML = '';
-                        }
-                        let markdownEl = thinkContentEl.querySelector(selectors.MARKDOWN_SELECTOR);
-                        if (!markdownEl) {
-                            markdownEl = document.createElement('div');
-                            markdownEl.className = selectors.MARKDOWN_CLASS;
-                            if (thinkBody) {
-                                thinkBody.after(markdownEl);
-                            } else {
-                                thinkContentEl.appendChild(markdownEl);
-                            }
-                        }
-                        markdownEl.innerHTML = this._renderMarkdown(thinkContent);
-                        markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                    }
-                } else {
-                    const thinkEl = this._buildThinkBlock({ content: thinkContent }, record.thinking_elapsed_secs);
-                    if (restoredEl.parentNode) {
-                        restoredEl.parentNode.insertBefore(thinkEl, restoredEl);
-                    }
-                }
+            if (hasThink) {
+                this._injectThinkContent(msgEl, thinkContent, record, restoredEl);
             }
         },
 

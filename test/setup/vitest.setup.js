@@ -6,6 +6,11 @@ import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 // IIFE runs and populates window.dsI18n before any dependent module evaluates.
 import '../../utils/i18n.locales.js';
 import '../../utils/i18n.js';
+// init() is explicit since autoInit was removed. Placement is load-bearing: it MUST run
+// while globalThis.chrome is still undefined, so init() skips the storage read and
+// registers NO storage listener -- moving it below the chrome mock would inflate
+// getStorageOnChangedListenerCount() for background specs.
+await globalThis.dsI18n.init();
 
 // __DS_Logger is referenced by content/temporary-chat-pending-store.js and
 // other modules via globalThis.__DS_Logger?.warn(...). Preload it here (a

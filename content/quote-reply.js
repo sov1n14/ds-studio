@@ -27,6 +27,7 @@ const QuoteReply = {
     isScrollAttached: false,
     debounceTimer: null,
     unregisterToggle: null,
+    hasLocaleSubscription: false,
 
     isSelectionInScope(node) {
         if (!node) return false;
@@ -216,13 +217,17 @@ const QuoteReply = {
         QuoteReply.getButtonEl();
         document.addEventListener('selectionchange', QuoteReply.handleSelectionEvent);
         document.addEventListener('mousedown', QuoteReply.handleDocumentMouseDown);
-        document.addEventListener('dsI18n-locale-changed', QuoteReply.handleLocaleChanged);
+        // dsI18n 訂閱無退訂機制，故只訂閱一次並常駐；
+        // 關閉期間 disable() 已把 btnEl 清為 null，handleLocaleChanged 自然成為無操作。
+        if (!QuoteReply.hasLocaleSubscription) {
+            QuoteReply.hasLocaleSubscription = true;
+            dsI18n.onLocaleChanged(QuoteReply.handleLocaleChanged);
+        }
     },
 
     disable() {
         document.removeEventListener('selectionchange', QuoteReply.handleSelectionEvent);
         document.removeEventListener('mousedown', QuoteReply.handleDocumentMouseDown);
-        document.removeEventListener('dsI18n-locale-changed', QuoteReply.handleLocaleChanged);
 
         clearTimeout(QuoteReply.debounceTimer);
         QuoteReply.debounceTimer = null;

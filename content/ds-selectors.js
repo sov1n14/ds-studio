@@ -57,6 +57,12 @@
     /** 訊息列表的可滾動根容器（與 SCROLL_AREA_CLASS 同一元素） */
     const SCROLL_ROOT_SELECTOR = '._765a5cd';
 
+    /** 思考區塊（think block）的外層容器 */
+    const THINK_BLOCK_SELECTOR = '._74c0879';
+
+    /** 思考區塊內容中的分隔／標題列（位於 ds-think-content 內、markdown 之前） */
+    const THINK_SEPARATOR_SELECTOR = '._9ecc93a';
+
     /** 聊天標題列容器（preset overlay 的定位母體） */
     const CHAT_HEADER_SELECTOR = '._2be88ba';
 
@@ -99,6 +105,7 @@
         VISIBLE_ITEMS_SELECTOR,
         MARKDOWN_CLASS, MARKDOWN_SELECTOR,
         THINK_CONTENT_CLASS, THINK_CONTENT_SELECTOR,
+        THINK_BLOCK_SELECTOR, THINK_SEPARATOR_SELECTOR,
         ASSISTANT_MESSAGE_SELECTOR, USER_CONTENT_SELECTOR,
         SCROLL_ROOT_SELECTOR, CHAT_HEADER_SELECTOR,
         CONTENT_COLUMN_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR,
