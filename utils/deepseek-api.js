@@ -11,16 +11,18 @@ const DSSDeepSeekApi = (() => {
 
     /**
      * 對 DeepSeek API 發送刪除對話請求。
-     * 使用 keepalive: true 確保在分頁關閉情境下請求仍可完成。
+     * keepalive 預設為 true，確保在分頁關閉情境下請求仍可完成；導航情境可傳 false。
      * @param {string} chatUuid - 要刪除的對話 UUID
      * @param {string} authToken - Bearer 授權 Token
+     * @param {{ keepalive?: boolean }} [options]
      * @returns {Promise<boolean>} 成功回傳 true，任何失敗回傳 false
      */
-    async function performDeleteFetch(chatUuid, authToken) {
+    async function performDeleteFetch(chatUuid, authToken, { keepalive = true } = {}) {
+        if (!authToken || !chatUuid) return false;
         try {
             const response = await fetch(DELETE_ENDPOINT_URL, {
                 method: 'POST',
-                keepalive: true,
+                keepalive,
                 headers: {
                     'authorization': authToken,
                     'content-type': 'application/json',

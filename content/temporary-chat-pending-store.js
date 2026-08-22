@@ -6,7 +6,7 @@
  * 兩種載入情境，因此不 ESM import 常數檔，改由 globalThis 解析常數並保留同值字面量作為 fallback。
  */
 
-// 同 content/temporary-chat-constants.js
+// 同 utils/temporary-chat-constants.js
 const DSS_PENDING_STORE_SYNC_KEY = globalThis.DSS_PENDING_DELETES_SYNC_KEY ?? 'dss-pending-deletes-sync';
 const DSS_PENDING_STORE_TOKEN_KEY = globalThis.DSS_LAST_AUTH_TOKEN_KEY ?? 'dss-last-auth-token';
 // 舊版共用陣列 key —— 僅允許讀取（相容升級中裝置尚未轉移的資料），永不再寫入

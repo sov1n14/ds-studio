@@ -14,7 +14,7 @@ importScripts(
     '../utils/storage-manager.settings-read.js',
     '../utils/storage-manager.js',
     '../utils/deepseek-api.js',
-    '../content/temporary-chat-constants.js',
+    '../utils/temporary-chat-constants.js',
     '../content/temporary-chat-pending-store.js',
     '../utils/settings-message-constants.js',
     '../utils/editor-window-constants.js',

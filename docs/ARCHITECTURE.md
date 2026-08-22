@@ -24,7 +24,6 @@ ds-studio/
 │   ├── preset-dropdown.keyboard.js  ─  Keyboard navigation for the dropdown (v4.18.1)
 │   ├── preset-settle.scheduler.js   ─  Bounded settle retry loop (mobile position race condition)
 │   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
-│   ├── temporary-chat-constants.js  ─  Shared constants for temporary-chat feature (v4.5.0)
 │   ├── temporary-chat-toggle.js     ─  Homepage toggle UI for temporary chat (v4.5.0)
 │   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
 │   ├── temporary-chat-delete.js     ─  Delete logic for temporary conversations (v4.5.0)
@@ -99,6 +98,8 @@ ds-studio/
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
 │   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants
 │   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)
+│   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
+│   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
@@ -190,7 +191,7 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 - **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup` reads the shared pending-delete queue from `chrome.storage.sync` and retries each entry with the device's own locally-cached auth token.
 - **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any queue entry.
 - **Privacy**: `authToken` (`dss-last-auth-token`) is stored in `chrome.storage.local` only — never synced.
-- **Storage ownership sits in the service worker**: the content layer no longer loads `content/temporary-chat-pending-store.js`; that file is absent from `manifest.json`'s `content_scripts` list and is pulled in only by `background/service-worker.js` via `importScripts`, so `TemporaryChatPendingStore` — and every `chrome.storage.*` call it makes — exists solely in the worker. Content modules request writes by message instead. The four request types are declared in `content/temporary-chat-constants.js` (also re-exported on `DSS_TEMP_CHAT_CONSTANTS` and assigned onto `globalThis`):
+- **Storage ownership sits in the service worker**: the content layer no longer loads `content/temporary-chat-pending-store.js`; that file is absent from `manifest.json`'s `content_scripts` list and is pulled in only by `background/service-worker.js` via `importScripts`, so `TemporaryChatPendingStore` — and every `chrome.storage.*` call it makes — exists solely in the worker. Content modules request writes by message instead. The four request types are declared in `utils/temporary-chat-constants.js` (also re-exported on `DSS_TEMP_CHAT_CONSTANTS` and assigned onto `globalThis`):
 
 | Message type | Payload | Effect in the service worker |
 |-|-|-|

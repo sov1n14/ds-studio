@@ -16,7 +16,7 @@
     const DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
     // 前綴型受監看鍵：預設集與 chatPresetMap 分塊，local 與 sync 兩區皆需廣播
     const WATCHED_KEY_PREFIXES = ['dsPreset_', 'chatPresetMap_'];
-    // 不屬於 StorageManager.KEYS 但仍需廣播的 local 鍵（同 content/temporary-chat-constants.js）
+    // 不屬於 StorageManager.KEYS 但仍需廣播的 local 鍵（同 utils/temporary-chat-constants.js）
     const EXTRA_WATCHED_LOCAL_KEYS = ['dss-temporary-chat-enabled'];
 
     /**

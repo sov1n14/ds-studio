@@ -53,7 +53,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 
 **DeepSeek selectors belong in `content/ds-selectors.js`.** A selector that targets DeepSeek's own markup MUST be declared there and read from there, never inlined at a `querySelector` call site. Rationale: DeepSeek ships new class names without notice, and a scattered selector turns one upstream change into a repo-wide hunt. A selector for markup this extension itself injected MAY stay local to the injecting file.
 
-**Message types and storage keys are named constants.** Every `chrome.runtime` / `chrome.tabs` message `type` string and every storage key MUST come from a constant, declared in a `*-constants.js` file co-located with the feature — the pattern set by `content/temporary-chat-constants.js`. A typo in a literal string fails silently; a typo in a constant name throws.
+**Message types and storage keys are named constants.** Every `chrome.runtime` / `chrome.tabs` message `type` string and every storage key MUST come from a constant, declared in a `*-constants.js` file co-located with the feature; when the constants are read by more than one layer (content plus service worker or popup), the file lives in `utils/` — the pattern set by `utils/temporary-chat-constants.js`. A typo in a literal string fails silently; a typo in a constant name throws.
 
 **Error reporting.** Pick by who can act on the failure:
 

@@ -1,12 +1,11 @@
 /**
  * DS studio — Temporary Chat Delete API
- * 單一職責：封裝刪除 fetch、重試邏輯與失敗 toast 通知。
+ * 單一職責：委派刪除 fetch（utils/deepseek-api.js）、重試邏輯與失敗 toast 通知。
  * auth token 與 UUID 皆以參數傳入，此模組無可變狀態。
  */
 const TemporaryChatDeleteApi = (() => {
     'use strict';
 
-    const DELETE_URL = globalThis.DSS_DELETE_ENDPOINT_URL ?? 'https://chat.deepseek.com/api/v0/chat_session/delete';
     // 最多重試次數（導航觸發刪除失敗時使用）
     const MAX_RETRY_ATTEMPTS = 3;
     // 每次重試間隔（毫秒）
@@ -21,27 +20,8 @@ const TemporaryChatDeleteApi = (() => {
      * @returns {Promise<boolean>}
      */
     async function deleteChatSession(chatUuid, authToken, { keepalive = false } = {}) {
-        if (!authToken || !chatUuid) return false;
-        try {
-            const response = await fetch(DELETE_URL, {
-                method: 'POST',
-                keepalive,
-                headers: {
-                    'authorization': authToken,
-                    'content-type': 'application/json',
-                    'x-app-version': '2.0.0',
-                    'x-client-bundle-id': 'com.deepseek.chat',
-                    'x-client-locale': 'zh_Hant',
-                    'x-client-platform': 'web',
-                    'x-client-timezone-offset': '28800',
-                    'x-client-version': '2.0.0',
-                },
-                body: JSON.stringify({ chat_session_id: chatUuid }),
-            });
-            return response.ok;
-        } catch {
-            return false;
-        }
+        // 委派至 utils/deepseek-api.js 的共用刪除實作；此檔案於 manifest 中須排在其後載入
+        return globalThis.DSSDeepSeekApi.performDeleteFetch(chatUuid, authToken, { keepalive });
     }
 
     /**

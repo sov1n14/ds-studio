@@ -7,7 +7,7 @@
  * chrome.storage.*（chrome-extension-coding-guidelines §1 層級界線）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
- * 相依：content/temporary-chat-constants.js、content/temporary-chat-pending-store.js 需先載入。
+ * 相依：utils/temporary-chat-constants.js、content/temporary-chat-pending-store.js 需先載入。
  */
 (function () {
     'use strict';
@@ -29,7 +29,7 @@
         };
         const missing = Object.keys(types).filter((name) => !types[name]);
         if (missing.length > 0) {
-            throw new Error('[DSS] pending-store-routes 需要 content/temporary-chat-constants.js 先行載入');
+            throw new Error('[DSS] pending-store-routes 需要 utils/temporary-chat-constants.js 先行載入');
         }
         return types;
     }

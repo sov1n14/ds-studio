@@ -34,8 +34,6 @@ const DSS_PENDING_DELETES_SYNC_KEY = 'dss-pending-deletes-sync';
 const DSS_LAST_AUTH_TOKEN_KEY = 'dss-last-auth-token';
 // chrome.storage.local：本機開啟中臨時對話 UUID 集合 string[]
 const DSS_OPEN_TEMP_UUIDS_KEY = 'dss-open-temp-uuids';
-// 刪除對話的 API 端點
-const DSS_DELETE_ENDPOINT_URL = 'https://chat.deepseek.com/api/v0/chat_session/delete';
 // content→SW：SPA 導航刪除失敗且情境存活時請 SW 排程重試 alarm
 const DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE = 'DSS_SCHEDULE_DELETE_RETRY';
 
@@ -61,7 +59,6 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_PENDING_DELETES_SYNC_KEY,
     DSS_LAST_AUTH_TOKEN_KEY,
     DSS_OPEN_TEMP_UUIDS_KEY,
-    DSS_DELETE_ENDPOINT_URL,
     DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
     DSS_MSG_TRACK_FOR_DELETION,
     DSS_MSG_REMOVE_PENDING_DELETE,

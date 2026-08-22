@@ -97,7 +97,7 @@
 - **目的**：開啟後，使用者**在首頁新建**的對話會被標記為臨時對話；離開該臨時對話時自動呼叫 `POST https://chat.deepseek.com/api/v0/chat_session/delete`（body `{ "chat_session_id": "<uuid>" }`）將其刪除，達成「不留紀錄」的臨時提問。
 - **臨時對話判定（僅刪除新建的對話）**：是否為臨時對話，以「是否觀察到新建對話 API（`/api/v0/chat_session/create`）請求」為權威依據。從清單點開歷史對話會呼叫 `/api/v0/chat/history_messages`，**永不標記、永不刪除**。最小風險原則：未觀察到 create 請求即視為歷史對話。
 - **整體閘控（預設關閉）**：標記新對話的行為由首頁開關控制，預設關閉。但若已存在「追蹤中的臨時對話」，即使關閉開關，離開該對話時仍會刪除（標記跟隨對話生命週期）；僅在無追蹤對話且開關關閉時才完全卸除監聽。
-- **共用契約**（`content/temporary-chat-constants.js`，載入順序最先以確保全域常數先就緒）：
+- **共用契約**（`utils/temporary-chat-constants.js`，載入順序最先以確保全域常數先就緒）：
   - `DSS_TEMP_CHAT_STORAGE_KEY = 'dss-temporary-chat-enabled'`：`chrome.storage.local` 鍵（v4.9.0 從 sessionStorage 遷移至 chrome.storage.local），值 `true`/`false`。
   - `DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed'`
   - `DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid'`：sessionStorage 鍵。
@@ -108,7 +108,6 @@
   - `DSS_PENDING_DELETES_SYNC_KEY`：跨裝置待刪佇列 sync 鍵
   - `DSS_LAST_AUTH_TOKEN_KEY`：本機 auth token 儲存鍵（僅 `chrome.storage.local`）
   - `DSS_OPEN_TEMP_UUIDS_KEY`：本機開啟中對話 UUID 集合
-  - `DSS_DELETE_ENDPOINT_URL`：刪除 API 完整 URL
   - `DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE`：Service Worker 排程重試訊息
   - `DSS_MSG_TRACK_FOR_DELETION = 'DSS_TRACK_FOR_DELETION'`（payload `{uuid}`）：登記為待刪並加入本機開啟集合
   - `DSS_MSG_REMOVE_PENDING_DELETE = 'DSS_REMOVE_PENDING_DELETE'`（payload `{uuid}`）：自跨裝置待刪佇列移除

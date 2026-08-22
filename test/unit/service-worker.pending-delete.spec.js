@@ -13,7 +13,7 @@
  * reads as bare globals.
  */
 import '../../utils/deepseek-api.js';
-import '../../content/temporary-chat-constants.js';
+import '../../utils/temporary-chat-constants.js';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const RETRY_ALARM_NAME = 'dss-delete-retry';
@@ -48,6 +48,7 @@ beforeAll(async () => {
     globalThis.TemporaryChatPendingStore = pendingStoreStub;
     globalThis.DSSSettingsRoutes = { install: vi.fn() };
     globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
+    globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
     globalThis.fetch = vi.fn();
 
     await import('../../background/service-worker.js');
