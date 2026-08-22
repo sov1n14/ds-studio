@@ -160,6 +160,16 @@ const StorageManager = {
     // --- Helper methods ---
 
     /**
+     * 網搜切換值正規化：舊版遺留的 'default' 已隨二態精簡，讀取時一律視為 'on'。
+     * 純查詢，不寫回儲存；其他值原樣回傳（含 undefined，由呼叫端自行套用 DEFAULTS）。
+     * @param {string|undefined} value 儲存中的原始值
+     * @returns {string|undefined} 正規化後的值
+     */
+    normalizeWebsearchToggle(value) {
+        return value === 'default' ? 'on' : value;
+    },
+
+    /**
      * Helper to get storage key for a specific preset
      */
     _presetKey(id) {

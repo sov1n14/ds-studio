@@ -78,7 +78,7 @@
         });
     }
 
-    /** 讀取指定鍵，缺漏者以 StorageManager.DEFAULTS 補齊後回應。 */
+    /** 讀取指定鍵，缺漏者以 StorageManager.DEFAULTS 補齊、網搜切換鍵經正規化後回應。 */
     async function handleGetSettings(message, sendResponse) {
         const keys = message?.keys;
         if (!Array.isArray(keys) || keys.length === 0) {
@@ -86,10 +86,17 @@
             return;
         }
         try {
-            const defaults = resolveStorageManager().DEFAULTS;
+            const manager = resolveStorageManager();
+            const defaults = manager.DEFAULTS;
             const stored = await readLocal(keys);
             const values = {};
-            keys.forEach((key) => { values[key] = key in stored ? stored[key] : defaults[key]; });
+            keys.forEach((key) => {
+                const rawValue = key in stored ? stored[key] : defaults[key];
+                // 僅網搜切換鍵需要舊值校正，規則與 StorageManager.getSettings() 共用一份
+                values[key] = key === manager.KEYS.WEBSEARCH_TOGGLE
+                    ? manager.normalizeWebsearchToggle(rawValue)
+                    : rawValue;
+            });
             sendResponse({ ok: true, values });
         } catch (err) {
             console.error('[DSS] settings-routes GET_SETTINGS:', err);

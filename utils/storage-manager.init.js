@@ -1,7 +1,8 @@
 /**
  * DS Studio — StorageManager 初始化與資料遷移方法群組
  * 負責 initialize()：預設值補齊、跨版本資料遷移（promptPresets /
- * chatPresetMap 分塊化）、首次同步衝突偵測，以及 chunk 快取失效監聽器安裝。
+ * chatPresetMap 分塊化）、chatPresetMap 孤兒綁定清理、首次同步衝突偵測，
+ * 以及 chunk 快取失效監聽器安裝。
  */
 (function (root) {
     'use strict';
@@ -156,6 +157,14 @@
                 if (Object.keys(missingInSync).length > 0) {
                     await this._set(missingInSync);
                 }
+            }
+
+            // 5. 清除指向已刪除提示詞組的 chatPresetMap 孤兒綁定。
+            // 索引為空時一律跳過：空索引代表索引尚未載入或仍在遷移中（並非「使用者刪光提示詞組」），
+            // 此時修剪會清空所有綁定，故以資料保全優先。
+            const validPresetIds = data[this.KEYS.PRESET_INDEX] || this.DEFAULTS.dsPresetIndex;
+            if (validPresetIds.length > 0) {
+                await this.pruneOrphanChatBindings(validPresetIds);
             }
 
             // 註冊 chunk 快取失效監聽器（此後其他 context 修改分塊時自動重載）

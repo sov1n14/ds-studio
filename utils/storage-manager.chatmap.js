@@ -261,6 +261,23 @@
         },
 
         /**
+         * 清除指向已不存在提示詞組的綁定（提示詞組刪除後殘留的孤兒條目）。
+         * 無孤兒條目時 mutateChatPresetMap 不會產生任何寫入。
+         * @param {string[]} validPresetIds - 目前仍存在的提示詞組 id 清單
+         * @returns {Promise<Object>} 修剪後的 chatPresetMap
+         */
+        async pruneOrphanChatBindings(validPresetIds) {
+            const validIds = new Set(validPresetIds || []);
+            return this.mutateChatPresetMap(map => {
+                for (const [uuid, presetId] of Object.entries(map)) {
+                    if (presetId && !validIds.has(presetId)) {
+                        delete map[uuid];
+                    }
+                }
+            });
+        },
+
+        /**
          * 讀取完整的 chatPresetMap（經由寫入佇列序列化，確保讀寫順序正確）。
          * @returns {Promise<Object>}
          */

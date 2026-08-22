@@ -5,21 +5,6 @@
 (function (global) {
     'use strict';
 
-    function _reorderPresets(presets, srcId, dstId, insertBefore) {
-        const srcIndex = presets.findIndex(p => p.id === srcId);
-        if (srcIndex === -1) return [...presets];
-        const result = [...presets];
-        const [removed] = result.splice(srcIndex, 1);
-        const dstIndex = result.findIndex(p => p.id === dstId);
-        if (dstIndex === -1) {
-            result.splice(srcIndex, 0, removed);
-            return result;
-        }
-        const insertIndex = insertBefore ? dstIndex : dstIndex + 1;
-        result.splice(insertIndex, 0, removed);
-        return result;
-    }
-
     function _fuzzyMatch(name, keyword) {
         if (!keyword) return true;
         const lowerName = String(name).toLowerCase();
@@ -52,17 +37,30 @@
         onRequestDeleteAll,
         onRequestTogglePin,
     }) {
+        const DragReorder = global.__DSSCustomSelectDrag;
+        if (!DragReorder) {
+            throw new Error('custom-select.js: 需先載入 custom-select.drag.js（popup.html 載入順序）');
+        }
+
         const { buildPresetItemMarkup } = global.__DS_PresetItemRenderer;
         const state = {
             isOpen: false,
             keyword: '',
             filteredIds: new Set(),
-            drag: null,
-            dragArmed: false,
         };
 
         let _outsideClickHandler = null;
-        let _insertionLineEl = null;
+
+        // 拖曳排序子系統由 custom-select.drag.js 提供（popup.html 於本檔之前載入）
+        const _dragReorder = DragReorder.createDragReorder({
+            listEl,
+            getPresets,
+            getKeyword: () => state.keyword,
+            onReorder,
+            onSelect,
+            closePanel: close,
+            renderList: _renderList,
+        });
 
         // ── Search / filter ──────────────────────────────────────────
 
@@ -95,7 +93,7 @@
         }
 
         function _renderList() {
-            if (state.drag !== null) return;
+            if (_dragReorder.isDragging()) return;
 
             const presets = getPresets();
             const activeId = getActivePresetId();
@@ -128,7 +126,7 @@
                 emptyHintEl.hidden = !(isFiltering && visibleCount === 0);
             }
 
-            _bindDrag();
+            _dragReorder.bindHandles();
         }
 
         // ── Open / close ─────────────────────────────────────────────
@@ -233,168 +231,6 @@
                     close();
                 }
             });
-        }
-
-        // ── Drag (pointer events) ─────────────────────────────────────
-
-        function _bindDrag() {
-            listEl.querySelectorAll('.ds-select__drag-handle').forEach(handle => {
-                handle.addEventListener('pointerdown', _onHandlePointerDown);
-            });
-        }
-
-        function _onHandlePointerDown(e) {
-            if (state.keyword) return;
-
-            e.stopPropagation();
-            e.preventDefault();
-
-            const item = e.currentTarget.closest('[data-id]');
-            if (!item || !item.dataset.id) return;
-
-            state.dragArmed = true;
-            state.drag = {
-                id: item.dataset.id,
-                startX: e.clientX,
-                startY: e.clientY,
-                ghostEl: null,
-                hoverTargetId: null,
-                hoverPosition: null,
-                sourceEl: item,
-            };
-
-            const handle = e.currentTarget;
-            handle.setPointerCapture(e.pointerId);
-
-            function onMove(ev) { _onPointerMove(ev); }
-            function onUp(ev) { _onPointerUp(ev); cleanup(); }
-            function onCancel(ev) { _onPointerCancel(ev); cleanup(); }
-            function cleanup() {
-                handle.removeEventListener('pointermove', onMove);
-                handle.removeEventListener('pointerup', onUp);
-                handle.removeEventListener('pointercancel', onCancel);
-            }
-
-            handle.addEventListener('pointermove', onMove);
-            handle.addEventListener('pointerup', onUp);
-            handle.addEventListener('pointercancel', onCancel);
-        }
-
-        function _onPointerMove(e) {
-            if (!state.drag) return;
-            const drag = state.drag;
-            const dx = e.clientX - drag.startX;
-            const dy = e.clientY - drag.startY;
-
-            if (state.dragArmed && Math.hypot(dx, dy) >= 5) {
-                state.dragArmed = false;
-                _activateDrag(drag, e.clientX, e.clientY);
-            }
-
-            if (!drag.ghostEl) return;
-
-            drag.ghostEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-            _updateInsertionLine(e.clientY, drag.id);
-        }
-
-        function _activateDrag(drag, clientX, clientY) {
-            drag.sourceEl.classList.add('ds-select__item--dragging');
-
-            const ghost = document.createElement('div');
-            ghost.className = 'ds-select__drag-ghost';
-            ghost.textContent = drag.sourceEl.querySelector('.ds-select__item-name')?.textContent || '';
-            ghost.style.transform = `translate(${clientX}px, ${clientY}px)`;
-            document.body.appendChild(ghost);
-            drag.ghostEl = ghost;
-        }
-
-        function _updateInsertionLine(clientY, srcId) {
-            if (_insertionLineEl && _insertionLineEl.parentNode) {
-                _insertionLineEl.parentNode.removeChild(_insertionLineEl);
-            }
-
-            const items = Array.from(
-                listEl.querySelectorAll('.ds-select__item[data-id]:not(.ds-select__item--dragging)')
-            );
-            if (items.length === 0) return;
-
-            const drag = state.drag;
-            let targetEl = null;
-            let insertBefore = true;
-
-            for (const item of items) {
-                const rect = item.getBoundingClientRect();
-                if (clientY < rect.top + rect.height / 2) {
-                    targetEl = item;
-                    insertBefore = true;
-                    break;
-                } else {
-                    targetEl = item;
-                    insertBefore = false;
-                }
-            }
-
-            if (!targetEl) return;
-
-            drag.hoverTargetId = targetEl.dataset.id;
-            drag.hoverPosition = insertBefore ? 'before' : 'after';
-
-            if (!_insertionLineEl) {
-                _insertionLineEl = document.createElement('div');
-                _insertionLineEl.className = 'ds-select__insertion-line';
-            }
-
-            if (insertBefore) {
-                targetEl.parentNode.insertBefore(_insertionLineEl, targetEl);
-            } else {
-                targetEl.parentNode.insertBefore(_insertionLineEl, targetEl.nextSibling);
-            }
-        }
-
-        function _onPointerUp(e) {
-            if (!state.drag) return;
-
-            const drag = state.drag;
-            const hadGhost = drag.ghostEl !== null;
-
-            _removeDragVisuals();
-            state.drag = null;
-            state.dragArmed = false;
-
-            if (hadGhost && drag.hoverTargetId && drag.hoverTargetId !== drag.id) {
-                const newPresets = _reorderPresets(
-                    getPresets(),
-                    drag.id,
-                    drag.hoverTargetId,
-                    drag.hoverPosition === 'before'
-                );
-                onReorder(newPresets);
-            } else if (!hadGhost) {
-                // Tap (no drag initiated) — treat as item click
-                onSelect(drag.id);
-                close();
-            }
-        }
-
-        function _onPointerCancel() {
-            if (!state.drag) return;
-            _removeDragVisuals();
-            state.drag = null;
-            state.dragArmed = false;
-            _renderList();
-        }
-
-        function _removeDragVisuals() {
-            if (state.drag?.sourceEl) {
-                state.drag.sourceEl.classList.remove('ds-select__item--dragging');
-            }
-            if (state.drag?.ghostEl) {
-                state.drag.ghostEl.remove();
-                state.drag.ghostEl = null;
-            }
-            if (_insertionLineEl && _insertionLineEl.parentNode) {
-                _insertionLineEl.parentNode.removeChild(_insertionLineEl);
-            }
         }
 
         // ── Init ──────────────────────────────────────────────────────

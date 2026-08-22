@@ -379,9 +379,9 @@
                 // Special handling for the ones already in DEFAULTS with different names
                 const defaultVal = this.DEFAULTS[storageKey];
                 let resolvedVal = data[storageKey] ?? defaultVal;
-                // 舊版遺留值 default 已隨網搜切換選項精簡為二態，讀取時就地校正為 on，不寫回儲存
-                if (storageKey === this.KEYS.WEBSEARCH_TOGGLE && resolvedVal === 'default') {
-                    resolvedVal = 'on';
+                // 舊版遺留值的校正規則集中於 StorageManager.normalizeWebsearchToggle，讀取路徑共用
+                if (storageKey === this.KEYS.WEBSEARCH_TOGGLE) {
+                    resolvedVal = this.normalizeWebsearchToggle(resolvedVal);
                 }
                 settings[settingsKey] = resolvedVal;
             }

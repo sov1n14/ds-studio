@@ -8,3 +8,4 @@
 - [restored_messages B2 wrapper shape](project_restored_messages_b2_wrapper.md) — getRestoredMessages() already exists and returns the get() wrapper, not the map.
 - [tab/window control adapters red](project_tab_window_control_red.md) — D5 singleton window + chrome.storage.session stub pattern; adapter args are the contract.
 - [Mutation restore pitfall](pitfall_mutation_restore_git_checkout.md) — restore a mutated spec from a byte copy; git checkout wipes uncommitted working-tree edits.
+- [websearch "default" normalization](project_websearch_default_normalization.md) — two read paths; getSettings() normalizes, the DSS_GET_SETTINGS key route does not.

@@ -51,6 +51,10 @@ function readPopupJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.js"), "utf-8");
 }
 
+function readPopupSettingsViewJs() {
+    return readFileSync(resolve(__dirname, "../../popup/popup.settings-view.js"), "utf-8");
+}
+
 function readPopupTogglesJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.toggles.js"), "utf-8");
 }
@@ -97,11 +101,13 @@ describe("popup.html - preventAutoScrollToggle checkbox markup", () => {
 // Requirements 1 and 3 - popup.js DOM ref + initial load reflects settings
 // -----------------------------------------------------------------------------
 
-describe("popup.js - preventAutoScrollToggle DOM ref and load wiring", () => {
+describe("popup - preventAutoScrollToggle DOM ref and load wiring", () => {
     let popupCode;
+    let settingsViewCode;
 
     beforeAll(() => {
         popupCode = readPopupJs();
+        settingsViewCode = readPopupSettingsViewJs();
     });
 
     it("declares a DOM reference for preventAutoScrollToggle", () => {
@@ -111,7 +117,7 @@ describe("popup.js - preventAutoScrollToggle DOM ref and load wiring", () => {
     });
 
     it("sets preventAutoScrollToggle.checked from settings.preventAutoScroll on load", () => {
-        expect(popupCode).toMatch(/preventAutoScrollToggle\.checked\s*=\s*settings\.preventAutoScroll\b/);
+        expect(settingsViewCode).toMatch(/preventAutoScrollToggle\.checked\s*=\s*settings\.preventAutoScroll\b/);
     });
 });
 

@@ -3,7 +3,7 @@
  *
  * editor.js exposes __DSSEditor (window namespace + guarded module.exports).
  * Functions under test: parseTarget, loadContent, saveContent,
- * renderDisabledState, updateSaveStatus, isDuplicateName.
+ * renderDisabledState, updateSaveStatus.
  *
  * StorageManager is loaded in the global scope by the content script import
  * mechanism. For editor.js we manually set globalThis.StorageManager before
@@ -13,6 +13,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 // editor.js does `const debounce = DSSDebounce;` at load time — publish the shared helper first.
 import '../../utils/debounce.js';
+// editor.js calls DSSPresetDomain.validatePresetName — publish the preset-domain module too.
+import '../../popup/popup.preset-domain.js';
 
 // editor.js references `location.search` and `window.DSVMessaging`, and
 // assigns to `window.__DSSEditor`. Set up mocks before importing.
@@ -27,7 +29,7 @@ globalThis.window = globalThis.window ?? {};
 const editor = await import('../../popup/editor/editor.js');
 
 // editor.js exports { parseTarget, loadContent, saveContent, renderDisabledState, updateSaveStatus }
-const { parseTarget, loadContent, saveContent, renderDisabledState, updateSaveStatus, isDuplicateName } = editor;
+const { parseTarget, loadContent, saveContent, renderDisabledState, updateSaveStatus } = editor;
 
 // ─────────────────────────────────────────────
 // parseTarget
@@ -375,45 +377,6 @@ describe('updateSaveStatus', () => {
 
     it('does not throw when statusEl is null', () => {
         expect(() => updateSaveStatus(null, 'saving')).not.toThrow();
-    });
-});
-
-// ─────────────────────────────────────────────
-// isDuplicateName
-// ─────────────────────────────────────────────
-
-describe('isDuplicateName — duplicate name detection', () => {
-    it('returns true when another preset has the exact same name', () => {
-        const presets = [
-            { id: 'a', name: 'Same', content: 'x', createdAt: 1, updatedAt: 1 },
-            { id: 'b', name: 'Same', content: 'y', createdAt: 2, updatedAt: 2 },
-        ];
-        expect(isDuplicateName(presets, 'Same', 'a')).toBe(true);
-    });
-
-    it('returns false when only the preset itself matches the name', () => {
-        const presets = [
-            { id: 'a', name: 'Same', content: 'x', createdAt: 1, updatedAt: 1 },
-            { id: 'b', name: 'Other', content: 'y', createdAt: 2, updatedAt: 2 },
-        ];
-        expect(isDuplicateName(presets, 'Same', 'a')).toBe(false);
-    });
-
-    it('returns false when the match differs only by case', () => {
-        const presets = [
-            { id: 'a', name: 'Alpha', content: 'x', createdAt: 1, updatedAt: 1 },
-            { id: 'b', name: 'alpha', content: 'y', createdAt: 2, updatedAt: 2 },
-        ];
-        expect(isDuplicateName(presets, 'Alpha', 'a')).toBe(false);
-    });
-
-    it('returns false when no preset matches', () => {
-        const presets = [{ id: 'a', name: 'Alpha', content: 'x', createdAt: 1, updatedAt: 1 }];
-        expect(isDuplicateName(presets, 'Gamma', 'a')).toBe(false);
-    });
-
-    it('returns false for an empty preset list', () => {
-        expect(isDuplicateName([], 'Anything', 'a')).toBe(false);
     });
 });
 

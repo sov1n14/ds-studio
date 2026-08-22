@@ -96,23 +96,6 @@ function updateSaveStatus(statusEl, state, message) {
 }
 
 // ─────────────────────────────────────────────
-// 重複名稱檢查
-// ─────────────────────────────────────────────
-
-/**
- * 檢查名稱是否已被其他提示詞組使用。
- * 大小寫視為相異；排除自身 id 以免把自己的名稱誤判為重複。
- * @param {Array<{ id: string, name: string }>} presets - 提示詞組清單
- * @param {string} name - 要檢查的名稱
- * @param {string} selfId - 自身 id（不列入比較）
- * @returns {boolean} 是否為重複名稱
- */
-function isDuplicateName(presets, name, selfId) {
-    return presets.some(p => p.name === name && p.id !== selfId);
-}
-
-
-// ─────────────────────────────────────────────
 // 儲存邏輯
 // ─────────────────────────────────────────────
 
@@ -140,7 +123,9 @@ async function saveContent(target, value, name) {
             return;
         }
         const nextName = name ?? preset.name;
-        if (isDuplicateName(settings.promptPresets, nextName, target.id)) {
+        // 名稱規則由 popup.preset-domain.js 集中定義（editor.html 於本檔之前載入）
+        const validation = DSSPresetDomain.validatePresetName(nextName, settings.promptPresets, { selfId: target.id });
+        if (validation.reason === 'duplicate') {
             // 名稱已被其他提示詞組使用：整次儲存取消，等待使用者修正
             throw Object.assign(new Error('duplicate preset name'), { code: 'DUPLICATE_NAME' });
         }
@@ -334,7 +319,6 @@ const __DSSEditor = {
     loadContent,
     renderDisabledState,
     updateSaveStatus,
-    isDuplicateName,
 };
 
 window.__DSSEditor = __DSSEditor;

@@ -19,6 +19,7 @@ beforeAll(() => {
     // custom-select.js does `const _debounce = DSSDebounce;` — the shared helper must be on globalThis first.
     evalPopupScript('utils/debounce.js');
     evalPopupScript('popup/preset-item-renderer.js');
+    evalPopupScript('popup/custom-select.drag.js');
     evalPopupScript('popup/custom-select.js');
 
     // happy-dom does not implement PointerEvent capture; the shipped code

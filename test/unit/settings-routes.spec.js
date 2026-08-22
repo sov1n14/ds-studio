@@ -78,6 +78,30 @@ describe('background/settings-routes', () => {
             });
         });
 
+        // B9: the read path must never hand out the legacy raw 'default' value.
+        // popup and content/websearch-toggle each re-implement "'default' means 'on'";
+        // normalizing here is what lets both drop their private copy.
+        it('normalizes a legacy dsWebSearchToggle value of "default" to "on"', async () => {
+            await chrome.storage.local.set({ dsWebSearchToggle: 'default' });
+
+            const sendResponse = await send({ type: MSG().GET_SETTINGS, keys: ['dsWebSearchToggle'] });
+
+            expect(sendResponse).toHaveBeenCalledTimes(1);
+            expect(sendResponse.mock.calls[0][0]).toEqual({ ok: true, values: { dsWebSearchToggle: 'on' } });
+        });
+
+        it.each([
+            ['an unset dsWebSearchToggle', undefined, 'on'],
+            ['a stored "off"', 'off', 'off'],
+            ['a stored "on"', 'on', 'on'],
+        ])('passes through %s', async (_label, stored, expected) => {
+            if (stored !== undefined) await chrome.storage.local.set({ dsWebSearchToggle: stored });
+
+            const sendResponse = await send({ type: MSG().GET_SETTINGS, keys: ['dsWebSearchToggle'] });
+
+            expect(sendResponse.mock.calls[0][0]).toEqual({ ok: true, values: { dsWebSearchToggle: expected } });
+        });
+
         it.each([
             ['a non-array keys field', { type: 'DSS_GET_SETTINGS', keys: 'dsHideThinking' }],
             ['an empty keys array', { type: 'DSS_GET_SETTINGS', keys: [] }],
