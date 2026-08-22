@@ -53,6 +53,7 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
+│   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
 │   ├── preset-dropdown.css  ─  Overlay dropdown component styles
@@ -62,7 +63,8 @@ ds-studio/
 ├── background/                 ─  Service worker
 │   ├── service-worker.js       ─  Background service worker: startup remediation, alarm-based retry, sync scheduling (v4.9.0)
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
-│   └── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
+│   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
+│   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
 │   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
@@ -96,6 +98,7 @@ ds-studio/
 │   ├── storage-manager.setters.js   ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
 │   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants
+│   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
@@ -206,6 +209,19 @@ Content modules likewise stopped reading and writing settings storage themselves
 - **Change broadcast**: the same `install()` registers `chrome.storage.onChanged` and forwards watched changes to every `*://chat.deepseek.com/*` tab as `{ type: DSS_SETTINGS_CHANGED, area, changes }`, preserving the original `changes` shape. Watched = any `StorageManager.KEYS` value in the `local` area, plus the extra local key `dss-temporary-chat-enabled`, plus anything under the `dsPreset_` / `chatPresetMap_` prefixes in either area. Per-tab send failures are swallowed so one unloaded tab cannot starve the rest.
 - **`content/feature-toggle.js`** is the shared consumer. `registerFeatureToggle({ ownKey, onEnable, onDisable })` records a feature, asks background for `isEnabled` plus the feature's own key, and computes effective state as "master is not `false` AND own key is not `false`" — an unset key counts as on. All registered features share **one** `chrome.runtime.onMessage` listener, attached on first registration. Callbacks fire only on an actual state transition, and a throwing callback is caught so it cannot block the other features. A failed initial read pins `masterValue` to `false`, leaving the feature dormant rather than enabling it under unknown settings. The returned `unregister()` is idempotent. Current registrants with `ownKey: null` (master-switch-only) include `content/go-top.js` and `content/quote-reply.js`.
 - **`content/temporary-chat-enabled-flag.js`** uses the same pipeline directly rather than through `registerFeatureToggle`, since its flag is independent of the master switch: `initFromStorage()` fetches `dss-temporary-chat-enabled` via `DSS_GET_SETTINGS`, `write()` persists via `DSS_SET_SETTINGS` (updating the in-memory cache first, so callers read the new value before the await resolves), and `startSync()` converges on `DSS_SETTINGS_CHANGED`. Only a boolean `true` counts as enabled; truthy strings such as `'true'` are coerced to disabled.
+
+### Editor Window Auto-Close (v4.29.0)
+
+The standalone prompt editor opens as its own OS window, so it can end up buried behind the DeepSeek tab the user just went back to. Returning focus to `chat.deepseek.com` is treated as "done editing" and closes it.
+
+| Message type | Payload | Effect in the service worker |
+|-|-|-|
+| `DSS_CLOSE_EDITOR_WINDOWS` | none | Reads both editor-window ids from `chrome.storage.session`, `chrome.windows.remove()` each one that is present, removes the corresponding keys, and replies `{ ok: true }` |
+
+- **`utils/editor-window-constants.js`** publishes `globalThis.DSS_EDITOR_WINDOW` with `CLOSE_MESSAGE_TYPE` (`'DSS_CLOSE_EDITOR_WINDOWS'`) and `STORAGE_KEYS` (`global: 'dss-editor-window-id-global'`, `preset: 'dss-editor-window-id-preset'`). It is a plain `globalThis` assignment rather than a top-level `const`, because a top-level `const` does not become a `globalThis` property. All three consumers — `content/editor-window-autoclose.js`, `background/editor-window-routes.js`, `popup/popup.editor-window.js` — read the same file, so the storage keys have one definition; each throws a named load-order error when the constants file is absent.
+- **`content/editor-window-autoclose.js`** is the sender: a `focus` listener on `window` posts `{ type: CLOSE_MESSAGE_TYPE }` and swallows the rejection, since a sleeping service worker with no receiver is expected rather than exceptional. It forwards the event and nothing more — window removal and session-storage access both belong to the background layer.
+- **`background/editor-window-routes.js`** owns that side. `DSSEditorWindowRoutes.install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener; unknown types return `false` without responding, leaving the worker's other listeners free to handle them. Each id is handled independently: a `chrome.windows.remove()` rejection (the user already closed that window) is logged via `console.error` and the storage key is removed in a `finally` regardless, so one stale id cannot leave the other tracked window open or its key behind.
+- **No data loss**: the editor's own auto-save pipeline — 500 ms debounced on `input`, immediate flush on `blur` / `visibilitychange` / `pagehide` — writes dirty content before the window goes away, the same guarantee that already covered the `Esc` shortcut.
 
 ### Data Flow
 

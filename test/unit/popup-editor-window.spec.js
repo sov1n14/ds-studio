@@ -26,6 +26,10 @@ const GLOBAL_KEY = 'dss-editor-window-id-global';
 const PRESET_KEY = 'dss-editor-window-id-preset';
 
 beforeAll(() => {
+    // popup.editor-window.js reads globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS behind a
+    // fail-fast throw, so utils/editor-window-constants.js MUST load first (matches
+    // the runtime load order declared in popup.html).
+    evalPopupScript('utils/editor-window-constants.js');
     evalPopupScript('popup/popup.editor-window.js');
     if (typeof window.__DS_PopupEditorWindow?.createEditorWindowManager !== 'function') {
         throw new Error('createEditorWindowManager was not exposed on window.__DS_PopupEditorWindow');

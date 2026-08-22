@@ -1,1 +1,1 @@
-- [No hard-wrap write hook](feedback_no-hard-wrap-hook.md) — writes fail unless comment paragraphs are single lines; unwrap JSDoc before rewriting a file.
+- [Vitest dynamic import red-phase quirk](vitest_dynamic_import_red.md) — missing-module import() fails whole suite at collection, not per-test; still valid red.

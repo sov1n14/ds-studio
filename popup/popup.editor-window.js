@@ -8,11 +8,13 @@
  * 此檔案以 classic script 載入，無 ES import/export。
  */
 
-// --- 編輯器視窗 ID 的 session 儲存鍵（全域與提示詞組各保留一個 slot） ---
-const EDITOR_WINDOW_STORAGE_KEYS = {
-    global: 'dss-editor-window-id-global',
-    preset: 'dss-editor-window-id-preset',
-};
+// --- 編輯器視窗 ID 的 session 儲存鍵（全域與提示詞組各保留一個 slot），
+// 與 background/editor-window-routes.js 共用同一份常數 ---
+const __DSEditorWindowConstants = globalThis.DSS_EDITOR_WINDOW;
+if (!__DSEditorWindowConstants) {
+    throw new Error('[DSS] popup.editor-window 需要 utils/editor-window-constants.js 先行載入');
+}
+const EDITOR_WINDOW_STORAGE_KEYS = __DSEditorWindowConstants.STORAGE_KEYS;
 
 // --- 編輯器視窗建立選項 ---
 const EDITOR_WINDOW_CREATE_OPTIONS = { type: 'popup', width: 1280, height: 720 };
