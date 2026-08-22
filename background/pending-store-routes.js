@@ -4,7 +4,7 @@
  * 職責：background 層的訊息路由。install() 於呼叫時（非載入時）註冊單一
  * chrome.runtime.onMessage 監聽器，將 content 端的待刪佇列／開啟集合／token
  * 寫入請求委派給 TemporaryChatPendingStore，使 content 層不再直接觸碰
- * chrome.storage.*（coding-guidelines §1 層級界線）。
+ * chrome.storage.*（chrome-extension-coding-guidelines §1 層級界線）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
  * 相依：content/temporary-chat-constants.js、content/temporary-chat-pending-store.js 需先載入。

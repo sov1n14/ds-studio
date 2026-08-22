@@ -110,8 +110,13 @@
   - `DSS_OPEN_TEMP_UUIDS_KEY`：本機開啟中對話 UUID 集合
   - `DSS_DELETE_ENDPOINT_URL`：刪除 API 完整 URL
   - `DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE`：Service Worker 排程重試訊息
+  - `DSS_MSG_TRACK_FOR_DELETION = 'DSS_TRACK_FOR_DELETION'`（payload `{uuid}`）：登記為待刪並加入本機開啟集合
+  - `DSS_MSG_REMOVE_PENDING_DELETE = 'DSS_REMOVE_PENDING_DELETE'`（payload `{uuid}`）：自跨裝置待刪佇列移除
+  - `DSS_MSG_REMOVE_OPEN_UUID = 'DSS_REMOVE_OPEN_UUID'`（payload `{uuid}`）：自本機開啟中 UUID 集合移除
+  - `DSS_MSG_SET_LAST_AUTH_TOKEN = 'DSS_SET_LAST_AUTH_TOKEN'`（payload `{token}`）：更新本機最近有效 bearer token 快取
+  - 常數以 `Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS)` 明確掛上 globalThis：classic script 的 top-level `const` 不會成為 globalThis 屬性，而 service worker 端經 `importScripts` 取用時必須以 `globalThis[name]` 解析。
 - **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
-  - **SPA 注入／移除**：以 Navigation API `navigate` 事件（並輔以 `popstate` 與 `MutationObserver`）在每次導航重新評估：`pathname === '/'` 時等待 `div.aaff8b8f` 出現後於其下方 38px 注入（以 id 去重），`pathname !== '/'` 時移除開關列。移除僅刪除 DOM 元素，**不更動 sessionStorage 狀態**；重新注入時依持久化旗標還原視覺。
+  - **SPA 注入／移除**：以 Navigation API `navigate` 事件（並輔以 `popstate` 與 `MutationObserver`）在每次導航重新評估：`pathname === '/'` 時等待 `div.aaff8b8f` 出現後於其下方 38px 注入（以 id 去重），`pathname !== '/'` 時移除開關列。移除僅刪除 DOM 元素，**不更動啟用旗標**（該旗標由 `TemporaryChatEnabledFlag` 持有於 `chrome.storage.local`）；重新注入時依持久化旗標還原視覺。旗標經 background 廣播同步至每個分頁並快取於記憶體，故 `readEnabledFlag()` 得以維持同步呼叫。
   - **診斷日誌**：於 init／navigation／anchor 查詢／注入／移除／observer 偵測斷線等決策點輸出 `[DV:TempChatToggle]` 前綴日誌，供在真實瀏覽器調查「開關偶爾未出現、重整後才出現」之用。
 - **新建偵測與授權擷取**（`content/censor-xhr-hook.js`，主 world）：
   - 沿用攔截 `setRequestHeader('authorization', ...)`，以 `window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization })` 廣播；`temporary-chat-delete.js` 僅在需要時消費並暫存 token。
@@ -132,3 +137,17 @@
   - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描時排除本機裝置目前開啟中的臨時對話 UUID（僅本機儲存），避免誤刪使用者正在使用的對話。
   - **開啟中對話護欄的儲存版面（v4.15.1）**：每個開啟中的 UUID 各自佔用一把 `chrome.storage.local` 鍵（前綴 `dss-open-temp-uuid:`），新增只寫自己那把、移除只刪自己那把。舊版將整份清單存於單一陣列鍵 `dss-open-temp-uuids` 並在每次增刪時整份重寫，任一 context 讀到過期快照就會把其他分頁的項目一併算掉，導致使用中的對話失去護欄而被掃描刪除。新版無 read-modify-write，因此不存在此類遺失。舊陣列鍵改為唯讀並在讀取時聯集進來（升級當下仍存活的對話不致失去護欄），`clearOpenUuids()` 會一併清除之。
   - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid` 與 `attemptCount`。
+  - **儲存權責歸 Service Worker**：`content/temporary-chat-pending-store.js` 已不在 `manifest.json` 的 `content_scripts` 清單中，僅由 `background/service-worker.js` 以 `importScripts` 載入，因此 `TemporaryChatPendingStore`（及其全部 `chrome.storage.*` 呼叫）只存在於 worker 情境。content 層改以上述四種訊息請求寫入，本身不再直接觸碰 `chrome.storage`（`chrome-extension-coding-guidelines` §1 層級界線）。
+    - **背景端路由**（`background/pending-store-routes.js`）：`install()` 於 service worker 頂層呼叫（確保 worker 重啟後仍存活），註冊單一 `chrome.runtime.onMessage` 監聽器，內含 `type` → 存取層操作對照表。未知型別回傳 `false` 且不回應，讓 worker 內其他監聽器仍能處理；已知型別回傳 `true`，並於 await 完成後回應 `{ ok: true }` 或 `{ ok: false, error }`。相依缺失（存取層或常數未先載入）於解析時即拋出並指名應載入的檔案。
+    - **送出端**：`temporary-chat-delete.tracking.js` 送 `DSS_TRACK_FOR_DELETION`；`temporary-chat-delete.coordinator.js` 送兩種移除訊息；`temporary-chat-delete.handlers.js` 送 `DSS_SET_LAST_AUTH_TOKEN`。
+
+## 23. 設定讀寫的訊息化（content → background）
+
+一般設定同樣不由 content 層直讀儲存區。型別常數集中於 `utils/settings-message-constants.js`，以 `globalThis.DSS_SETTINGS_MSG` 發布 `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED` 三種型別；content script 與 service worker 載入同一份檔案，兩端皆不硬編碼字串。
+
+- **背景端路由**（`background/settings-routes.js`，`install()` 同樣於頂層呼叫）：
+  - `DSS_GET_SETTINGS`（`{ keys: string[] }`）：自 `chrome.storage.local` 讀取指定鍵，缺漏者以 `StorageManager.DEFAULTS` 補齊，`dsWebSearchToggle` 經共用的 `normalizeWebsearchToggle()` 校正後回應 `{ ok: true, values }`。keys 非陣列或為空即回 `{ ok: false, error }`。
+  - `DSS_SET_SETTINGS`（`{ values: object }`）：寫入 `chrome.storage.local`；values 非物件、為陣列或無任何鍵即拒絕。
+  - **變更廣播**：同一個 `install()` 註冊 `chrome.storage.onChanged`，受監看鍵變更時以 `{ type: DSS_SETTINGS_CHANGED, area, changes }` 原樣轉發給所有 `*://chat.deepseek.com/*` 分頁。受監看範圍為：`local` 區的任一 `StorageManager.KEYS` 值、額外的 `dss-temporary-chat-enabled`，以及不分區的 `dsPreset_` / `chatPresetMap_` 前綴鍵。個別分頁送出失敗即略過，不影響其餘分頁。
+- **content 端共用管線**（`content/feature-toggle.js`）：`registerFeatureToggle({ ownKey, onEnable, onDisable })` 登記一項功能，向 background 索取 `isEnabled` 與該功能自身鍵，生效條件為「總開關 !== `false` 且自身鍵 !== `false`」（未儲存視為開啟）。全體功能共用單一 `chrome.runtime.onMessage` 監聽器，於第一次註冊時才掛上；僅在生效狀態真正轉換時才呼叫回呼，且單一回呼拋錯不中斷其他功能。初始讀取失敗時將 `masterValue` 釘為 `false`，讓功能維持休眠而非在設定未知下啟用。回傳的 `unregister()` 可重複呼叫。目前以 `ownKey: null`（僅跟隨總開關）註冊者包含 `content/go-top.js` 與 `content/quote-reply.js`。
+- **臨時對話啟用旗標**（`content/temporary-chat-enabled-flag.js`）：因其開關獨立於總開關，直接使用同一組訊息而不經 `registerFeatureToggle` —— `initFromStorage()` 以 `DSS_GET_SETTINGS` 取 `dss-temporary-chat-enabled`，`write()` 以 `DSS_SET_SETTINGS` 落盤（先更新記憶體快取，呼叫端在 await 前即可讀到新值），`startSync()` 以 `DSS_SETTINGS_CHANGED` 收斂並通知訂閱者。僅 boolean `true` 視為啟用，`'true'` 等真值字串一律為停用。

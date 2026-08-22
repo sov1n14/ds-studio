@@ -20,7 +20,7 @@ The popup includes a preset selector row composed of:
 
 **Content editing (v3.0.0, timing updated v4.8.1, name editing v4.14.0)**: The popup no longer hosts a content textarea. A pencil button (`#editPresetBtn`, rightmost in the controls row, disabled when `activePresetId === ''`) opens the standalone editor window at `popup/editor/editor.html?target=preset&id=<activePresetId>` (1280×720, singleton focus-or-create). The editor auto-saves via dirty flag + debounced input (500 ms) + `blur`/`visibilitychange`/`pagehide`, and broadcasts `ACTIVE_PRESET_CHANGED` after each preset save. Since v4.14.0 the editor is also the rename surface: preset targets show a focused name input in the header (the `#editorTitle` h1 is hidden), wired into the same auto-save pipeline, with duplicate-name rejection (`isDuplicateName` check in `saveContent`, error surfaced in `#editorSaveStatus`). Global targets keep the read-only h1.
 
-**Chat/input width sliders (debounced write, v4.8.1)**: `chatWidthSlider` and `inputWidthSlider` separate their `input` event (updates the live percentage label synchronously, no storage write) from their `change` event (calls a 500 ms debounced wrapper — `debouncedSaveChatWidth` / `debouncedSaveInputWidth` — that persists the value via `StorageManager.saveChatWidth()` / `saveInputWidth()`, then refreshes sync status). This aligns the slider write cadence with the editor's 500 ms auto-save debounce, reducing `chrome.storage` write pressure during drag. The corresponding toggle switches (`chatWidthToggle`, `inputWidthToggle`) remain synchronous/undebounced. `popup.js` carries its own local `debounce(fn, delayMs)` copy (same reasoning as `editor.js`: it is a classic script and cannot `import`).
+**Chat/input width sliders (debounced write, v4.8.1)**: `chatWidthSlider` and `inputWidthSlider` separate their `input` event (updates the live percentage label synchronously, no storage write) from their `change` event (calls a 500 ms debounced wrapper — `debouncedSaveChatWidth` / `debouncedSaveInputWidth` — that persists the value via `StorageManager.saveChatWidth()` / `saveInputWidth()`, then refreshes sync status). This aligns the slider write cadence with the editor's 500 ms auto-save debounce, reducing `chrome.storage` write pressure during drag. The corresponding toggle switches (`chatWidthToggle`, `inputWidthToggle`) remain synchronous/undebounced. The debounce wrapper itself comes from the shared `utils/debounce.js` module, which publishes `globalThis.DSSDebounce`; `popup.width-sliders.js` binds it as `const debounce = DSSDebounce;`.
 
 ## Custom Modal System
 
@@ -59,16 +59,15 @@ This design allows the component to be loaded as a plain `<script>` tag in `popu
 
 ### Public API
 
-`createPresetCustomSelect(options)` returns an object with six methods:
+`createPresetCustomSelect(options)` returns an object with three methods:
 
 | Method | Description |
 |-|-|
-| `render()` | Re-renders the trigger text and the dropdown list from current state. Called after any preset list mutation (add, delete, reorder, active change); renames from the editor window arrive via live-sync. |
+| `render()` | Re-renders the trigger text and the dropdown list from current state. Called after any preset list mutation (add, delete, reorder, active change, pin change); renames from the editor window arrive via live-sync. |
 | `open()` | Opens the dropdown panel. Clears search input, resets filter, re-renders full list, focuses search input. Registers an outside-click listener. |
 | `close()` | Closes the dropdown panel. Unregisters outside-click listener. |
-| `isOpen()` | Returns `true` if the panel is currently open. |
-| `setActive(presetId)` | Updates the trigger display text and re-highlights the active item in the list. Does not close the dropdown. |
-| `destroy()` | Cleans up: removes outside-click listener and any drag artifacts. |
+
+Open/closed state is tracked internally on `state.isOpen` and toggled by the trigger's own click handler; the active-preset display is a derived read inside `render()` (via the `getActivePresetId` callback), so callers re-render rather than pushing the active id in.
 
 ### Options (input contract)
 
@@ -103,8 +102,8 @@ The component maintains a single `state` object with the following fields:
 | `isOpen` | `boolean` | Whether the dropdown panel is visible. |
 | `keyword` | `string` | The current search input value. |
 | `filteredIds` | `Set<string>` | IDs of presets matching the current keyword. |
-| `drag` | `Object|null` | Active drag session data, or `null` when not dragging. |
-| `dragArmed` | `boolean` | Whether a pointer press is pending drag activation (used for the 5px threshold). |
+
+Drag session state (the active drag record and the pending-activation flag behind the 5px threshold) is not part of this object — it lives inside the `createDragReorder()` closure in `popup/custom-select.drag.js`, which `custom-select.js` consults only through `isDragging()`.
 
 ### Key Internal Functions
 
@@ -114,25 +113,23 @@ The component maintains a single `state` object with the following fields:
   - Drag handle (`⠿` character, class `ds-select__drag-handle`)
   - Item name (class `ds-select__item-name`, HTML-escaped)
   - Inline action buttons (delete only since v4.14.0, class `ds-select__item-btn--delete`), carrying an i18n `title`/`aria-label` (delete: `刪除提示詞`; the per-row rename pencil was removed in v4.14.0 — renaming moved into the editor window)
-  - Skips rendering when a drag is in progress (`state.drag !== null`) to avoid DOM churn during drag.
-  - Calls `_bindDrag()` after populating the list to attach pointer event handlers to each drag handle.
+  - Skips rendering when a drag is in progress (`_dragReorder.isDragging()`) to avoid DOM churn during drag.
+  - Calls `_dragReorder.bindHandles()` after populating the list to attach pointer event handlers to each drag handle.
   - Row markup is built by `buildPresetItemMarkup(preset)` in `popup/preset-item-renderer.js` (v4.10.0 — extracted from `custom-select.js` to stay under the 450-line proactive-split threshold). The delete button keeps the `✕` glyph.
 
 - **`_applyFilter()`**: Reads the current search input value, iterates all presets with `_fuzzyMatch()`, updates `filteredIds`, and calls `_renderList()`. Called via a debounced wrapper `_debouncedFilter`.
-
-- **`_bindDrag()`**: Iterates all `.ds-select__drag-handle` elements and attaches `pointerdown` listeners via `_onHandlePointerDown`.
 
 - **`_registerOutsideClick()` / `_unregisterOutsideClick()`**: Manages a `pointerdown` listener on `document` that calls `close()` when the user clicks outside the trigger, panel, or add-preset button.
 
 - **`_bindEvents()`**: Called once during construction. Sets up:
   - Trigger click → toggle open/close.
   - Search input `input` → `_debouncedFilter` (400ms debounce).
-  - Panel click → routes clicks to blank option selection, edit button, delete button, or preset selection.
+  - Panel click → routes clicks, in this order, to delete-all, blank-option selection, per-row delete, per-row pin, then preset selection.
   - `pointerdown` stop-propagation on trigger, search input, and panel to prevent outside-click handler from closing immediately after opening.
 
-- **`destroy()`**: Cleans up the outside-click listener and any residual drag DOM artifacts.
+### Drag and Reorder Implementation (custom-select.drag.js)
 
-### Drag and Reorder Implementation
+Drag lives in its own module, `popup/custom-select.drag.js`, which registers `window.__DSSCustomSelectDrag = { createDragReorder, reorderPresets }` and must load before `custom-select.js` — the factory throws a named error if it is missing. `createDragReorder(deps)` takes `listEl`, `getPresets`, `getKeyword`, `onReorder`, `onSelect`, `closePanel`, and `renderList`, and returns only `{ bindHandles, isDragging }`, so the whole drag session stays private to that closure. `reorderPresets(presets, srcId, dstId, isInsertBefore)` is exported separately as a pure array transform.
 
 Drag uses the Pointer Events API for unified mouse+touch handling, bypassing the HTML Drag and Drop API for finer control and visual fidelity:
 
@@ -146,7 +143,7 @@ Drag uses the Pointer Events API for unified mouse+touch handling, bypassing the
 3. **Insertion line**: `_updateInsertionLine()` iterates all non-dragging list items, finds the one closest to the cursor's Y position (bisected by each item's vertical midpoint), and places a `div.ds-select__insertion-line` at the appropriate position. This line is a thin visual indicator showing where the dragged preset will land.
 
 4. **Completion**: `_onPointerUp` finalizes the drag:
-   - If a ghost was created (meaning the 5px threshold was crossed), it calls the private `_reorderPresets()` helper and invokes the `onReorder` callback with the new array.
+   - If a ghost was created (meaning the 5px threshold was crossed), it calls the pure `reorderPresets()` helper and invokes the `onReorder` callback with the new array.
    - If no ghost was created (a tap rather than a drag), it treats the interaction as a selection click and calls `onSelect(drag.id)` + `close()`.
    - `_removeDragVisuals()` cleans up all drag artifacts.
 
@@ -156,9 +153,13 @@ Drag uses the Pointer Events API for unified mouse+touch handling, bypassing the
 
 - **`_fuzzyMatch(name, keyword)`**: A character-by-character sequential match (not true fuzzy / Levenshtein). Iterates characters in `name`; each character that matches the next unconsumed character of `keyword` advances the pointer. Returns `true` if all keyword characters are consumed. This handles substring matching and supports partial character skips in the name.
 
-- **`_debounce(fn, delayMs)`**: Standard debounce wrapper. Returns a function that delays invocation until `delayMs` of inactivity. The search input uses a 400ms debounce, balancing responsiveness against filtering cost during typing.
+- **Debounce**: The search input uses a 400ms debounce, balancing responsiveness against filtering cost during typing. The wrapper is the shared one — `custom-select.js` binds `const _debounce = DSSDebounce;` from `utils/debounce.js` and applies it as `_debounce(_applyFilter, 400)`.
 
-Note: `custom-select.js` contains its own private copies of `_fuzzyMatch()` and `_debounce()` (prefixed with `_`). The former ES-module duplicates in `popup/popup-utils.js` were deleted in the v4.11.x audit — that file existed only to be imported by tests, never by production code, so the tests were retargeted onto the real `_`-prefixed implementations and the duplicate removed.
+Note: `_fuzzyMatch()` remains a private module-level function in `custom-select.js`. The former ES-module duplicates in `popup/popup-utils.js` were deleted in the v4.11.x audit — that file existed only to be imported by tests, never by production code, so the tests were retargeted onto the real implementations and the duplicate removed.
+
+### Shared Debounce Module (utils/debounce.js)
+
+`utils/debounce.js` is the single trailing-edge debounce implementation for the whole extension. It is a classic script whose only load-time effect is `globalThis.DSSDebounce = debounce;`, plus a `module.exports` line for the Vitest path. Every consumer binds it by reference rather than redefining it: `custom-select.js` (`_debounce`), `popup.width-sliders.js` (`debounce`), and `popup/editor/editor.js` (`debounce`). `popup.html` and `editor.html` both load it immediately after `logger.js`, before any consumer.
 
 ### Delete-All Button (blank item, v4.10.0)
 
@@ -170,6 +171,9 @@ In `popup.html`, the script tags appear in this order:
 
 ```html
 <script src="../utils/logger.js"></script>
+<script src="../utils/debounce.js"></script>
+<script src="../utils/tab-control.js"></script>
+<script src="../utils/window-control.js"></script>
 <script src="../utils/storage-manager.chunk-lock.js"></script>
 <script src="../utils/storage-manager.sync.js"></script>
 <script src="../utils/storage-manager.presets.js"></script>
@@ -177,27 +181,33 @@ In `popup.html`, the script tags appear in this order:
 <script src="../utils/storage-manager.local.js"></script>
 <script src="../utils/storage-manager.init.js"></script>
 <script src="../utils/storage-manager.setters.js"></script>
+<script src="../utils/storage-manager.settings-read.js"></script>
 <script src="../utils/storage-manager.js"></script>
 <script src="../utils/messaging.js"></script>
 <script src="../utils/i18n.locales.js"></script>
 <script src="../utils/i18n.js"></script>
+<script src="popup.i18n-apply.js"></script>
 <script src="preset-item-renderer.js"></script>
+<script src="custom-select.drag.js"></script>
 <script src="custom-select.js"></script>
 <script src="popup.modal.js"></script>
 <script src="popup.toast.js"></script>
+<script src="popup.preset-domain.js"></script>
 <script src="popup.preset-manager.js"></script>
 <script src="popup.pin-manager.js"></script>
 <script src="popup.backup-manager.js"></script>
+<script src="popup.settings-view.js"></script>
 <script src="popup.live-sync.js"></script>
 <script src="popup.editor-window.js"></script>
 <script src="popup.width-sliders.js"></script>
 <script src="popup.markdown-export.js"></script>
 <script src="popup.toggles.js"></script>
-<script src="popup.js"></script>
 <script src="popup.locale.js"></script>
+<script src="popup.js"></script>
 ```
 
-- `utils/logger.js` loads first, providing structured logging. The seven `storage-manager.*.js` bundles (chunk-lock, sync, presets, chatmap, local, init, setters) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split; consolidated from nine bundles to six in v4.11.3, back up to seven when `setters` was split out of the entry file).
+- `utils/logger.js` loads first, providing structured logging, followed by the three layer-agnostic helpers `utils/debounce.js` (`DSSDebounce`), `utils/tab-control.js` (`DSSTabControl`), and `utils/window-control.js` (`DSSWindowControl`). The eight `storage-manager.*.js` bundles (chunk-lock, sync, presets, chatmap, local, init, setters, settings-read) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split; consolidated from nine bundles to six in v4.11.3, back up to seven when `setters` was split out of the entry file, and to eight when the settings-read group followed).
+- `utils/storage-manager.settings-read.js` registers `globalThis.__DS_StorageManager_settingsRead`, holding the read side of the settings API: `getSettings()` and `getActivePromptContent()`. `getSettings()` is allowlist-driven rather than key-space-driven — two module-level maps, `SYNCED_SETTINGS_KEYS` (17 entries: `presetIndex`, `activePresetId`, `pinnedPresetId`, `includeThinking`, `includeReferences`, `globalDefaultPrompt`, `sidebarAutoHide`, `hideThinking`, `preventAutoScroll`, `websearchToggle`, `showSystemTime`, `chatWidth`, `chatWidthEnabled`, `inputWidth`, `inputWidthEnabled`, `syncInitialized`, `syncConflictPending`) and `LOCAL_ONLY_SETTINGS_KEYS` (2 entries: `isEnabled`, `globalPromptEnabled`, read from `chrome.storage.local` without the sync merge path), name every key that may surface. Anything on `StorageManager.KEYS` that is absent from both maps — sync retry bookkeeping, chunk layout metadata, key-prefix constants — is internal detail and never appears in the returned object. `promptPresets` (hydrated from `PRESET_INDEX`) and `chatPresetMap` (chunked, fetched via `getChatPresetMap()`) are appended afterwards, so the returned object carries 21 fields. `websearchToggle` passes through the shared `normalizeWebsearchToggle()` so the legacy `'default'` value resolves consistently on every read path.
 - `storage-manager.js` (entry) loads next and runs `Object.assign(StorageManager, ...)` to merge the bundles before exposing `window.StorageManager`. Both custom-select.js users and popup.js depend on it at runtime.
 
 **Load-order invariant (v4.11.3).** The only ordering constraint is that **every bundle must be loaded before the entry file**. The order *among* the bundles is irrelevant: no bundle executes anything at IIFE top level beyond assigning its own global, and every cross-bundle call goes through `this.<method>()` inside an `async` body, resolved at call time rather than load time.
@@ -208,8 +218,12 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `messaging.js` registers `window.DSVMessaging` (used by popup.js and editor.js for the `ACTIVE_PRESET_CHANGED` broadcast). `broadcastActivePreset(presetId, presetContent)` is a true broadcast: it queries **every** open `chat.deepseek.com` tab and sends the message to all of them concurrently via `Promise.all`, rather than only the active tab. Tabs without an `id` are skipped, and each `sendMessage` rejection is swallowed per tab — a tab whose content script has not yet loaded (or is mid-navigation) cannot stop the remaining tabs from receiving the update, and the caller's `await` always resolves. The global attachment falls back to `globalThis` when `window` is absent, so the same file is loadable from the service worker via `importScripts`.
 - `utils/i18n.locales.js` (v4.11.14 split) holds the `zh_TW` and `en` translation dictionaries as pure data and registers `globalThis.__DS_I18N_Locales`. It carries no logic.
 - `utils/i18n.js` (v4.3.3) registers `window.dsI18n`, the core i18n engine with `setLocale()` and `t(key)` lookup — see the Language / Locale Switcher section below. As of v4.11.14 the ~340 lines of locale string maps no longer live here; the engine reads them off `__DS_I18N_Locales` synchronously at the top of its IIFE, with a `require('./i18n.locales.js')` fallback guarded by `typeof require !== 'undefined'` for the Node/vitest path. **The browser has no such fallback**, so every loader must place `i18n.locales.js` immediately before `i18n.js` or `zh_TW`/`en` resolve to undefined and every translated string breaks silently. Four loaders must stay in agreement: `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, `popup/editor/editor.html`, and `test/setup/vitest.setup.js`.
+- `popup/popup.i18n-apply.js` registers `window.__DS_PopupI18nApply` with a single `apply(root)` entry point: it walks `data-i18n` attributes under `root` and writes the translated text. It is the DOM applier for both the popup and the editor window (`editor.html` loads it as `../popup.i18n-apply.js`), called explicitly once each context has finished `await dsI18n.init()`. Keeping the applier out of `utils/i18n.js` is what lets the engine stay DOM-free — `utils/i18n.js` contains no `document` reference at all — see the Language / Locale Switcher section below.
 - `preset-item-renderer.js` (v4.10.0) registers `window.__DS_PresetItemRenderer` (`escapeHtml`, `buildPresetItemMarkup`) and must load before `custom-select.js`, which destructures it.
+- `custom-select.drag.js` registers `window.__DSSCustomSelectDrag` (`createDragReorder`, `reorderPresets`) and must load before `custom-select.js`, which reads it at factory time and throws a named error when it is absent.
 - `custom-select.js` registers `window.__DSSCustomSelect` on the global scope.
+- `popup.preset-domain.js` registers `globalThis.DSSPresetDomain` (`createPreset`, `validatePresetName`) — the pure preset-domain rules, free of DOM and storage access. `validatePresetName(name, existingPresets, options)` returns `{ ok: true }` or `{ ok: false, reason: 'empty' | 'duplicate' }`, with `options.selfId` excluding the preset being renamed from the duplicate scan. `editor.html` loads this same file, so the editor's rename validation and the popup's add validation run one implementation rather than two.
+- `popup.settings-view.js` registers `window.__DS_PopupSettingsView` with `applySettingsToDom(dom, settings)` — a one-way presentation mapping from a `StorageManager.getSettings()` result onto the popup controls. It reads and writes nothing in `chrome.storage` and fires no `change` listeners, so first-load restore and any later bulk UI restore share one key-to-control table instead of repeating it.
 - `popup.modal.js`, `popup.preset-manager.js`, `popup.backup-manager.js` (v4.0.0 split) register `window.__DS_PopupModal` / `window.__DS_PopupPresetManager` / `window.__DS_PopupBackupManager`. The two manager bundles expose `createPresetManager(ctx)` / `createBackupManager(ctx)` factories so they can read and mutate popup.js's `DOMContentLoaded` closure state via live getter/setter callbacks.
 - `popup.toast.js` (v4.11.10 split) registers the `Toast` key on that same `window.__DS_PopupModal` object. `popup.modal.js` previously held both `Modal` and `Toast` in one file — two unrelated components sharing a file, contrary to `coding-guidelines` §8. Both files now self-mount via `Object.assign(window.__DS_PopupModal || {}, { … })` rather than a single object literal, so neither clobbers the other's key and the two are order-independent. `popup.js:35` still destructures `const { Modal, Toast } = window.__DS_PopupModal;` unchanged. The manager bundles receive `Modal`/`Toast` through their `ctx` parameter, not the global, and were unaffected.
 - `popup.pin-manager.js` (v4.18.0) registers `window.__DS_PopupPinManager`, exposing `createPinManager(ctx)` → `{ togglePin, clearPinIfDeleted }`, following the same ctx-factory convention as the preset and backup managers. Its `ctx` takes `StorageManager`, `getPinnedPresetId`/`setPinnedPresetId` accessors into popup.js's closure state, and an optional `onPinChanged` re-render callback. It owns the entire pinned-default decision (toggle-on, toggle-off, and clear-on-delete) so that `popup.js` gains only wiring — the entry file was already over the `coding-guidelines` §8 threshold, so a new concern had to arrive as its own file. It was briefly written as an ES module and dynamically `import()`ed; that was corrected to a classic script because every other popup factory is one and `popup.html` has no `type="module"` tag.
@@ -217,10 +231,10 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `popup.editor-window.js` / `popup.width-sliders.js` / `popup.markdown-export.js` (v4.11.16 split) expose `createEditorWindowManager(ctx)` / `createWidthSliderManager(ctx)` / `createMarkdownExportManager(ctx)`, following the same ctx-factory convention as the preset and backup managers. `popup.js` was 572 lines — 122 over the `coding-guidelines` §8 threshold — and these three were self-contained concerns bundled inside its `DOMContentLoaded` handler; extracting them brought the entry file to 441 lines at the time. `popup.editor-window.js` owns `openEditorWindow` plus the two edit-button bindings and the `globalEditorWindowId`/`presetEditorWindowId` singleton state; `popup.width-sliders.js` owns the `debounce` helper and both width toggle/slider bindings (the DOM element `const`s stay in `popup.js`, since the live-sync wiring still references them); `popup.markdown-export.js` owns the export button binding.
 - `popup.toggles.js` registers `window.__DS_PopupToggles`, exposing `createToggleManager(ctx)` → `{ bindToggles, renderGlobalPromptToggle }` (the second export added in v4.20.0), following the same ctx-factory convention. Its `ctx` takes `StorageManager`, `refreshSyncStatus`, `showSaveStatus`, `applyMasterSwitchUI`, and (v4.20.0) `getPresets`/`setPresets`/`getActivePresetId`/`setActivePresetId` accessors. `renderGlobalPromptToggle(el)` resolves the active preset via a private `resolveActivePreset()` helper and sets `el.checked` from `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyFlag)`; the global-prompt `change` handler writes back to the active preset's `globalPromptEnabled` (bumping its `updatedAt` and persisting via `saveOnePromptPreset`) when one is active, and falls back to `saveGlobalPromptEnabled()` on the legacy device key when none is. All write paths for this toggle are centralized here. `bindToggles(elements)` receives the nine DOM refs (which stay declared in `popup.js`, since the live-sync wiring still references them) and attaches every feature-toggle `change` listener: global-prompt, master enable, include-thinking, include-references, sidebar-auto-hide, hide-thinking, show-system-time, prevent-auto-scroll, and the web-search radio group. `popup.js` was 484 lines — 34 over the `coding-guidelines` §8 threshold — before this extraction, which brought it to 428.
 - Specs that extract functions from raw source text with `readFileSync` + regex rather than importing them have to follow the code whenever a block moves. So far: `test/unit/popup-slider-debounce.spec.js` reads `popup.width-sliders.js`, `test/unit/popup.spec.js` reads `popup.editor-window.js`, and `test/unit/popup-prevent-auto-scroll-toggle.spec.js` / `test/unit/popup-websearch-toggle.spec.js` read `popup.toggles.js` for their change-handler assertions while keeping their DOM-ref, load-restore, and `applyMasterSwitchUI` assertions pointed at `popup.js`. Only the paths changed — every regex still matches, because the moves were verbatim including indentation. Anything moved out of `popup.js` in future must check these specs.
-- `popup.js` (entry) loads second-to-last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
-- `popup.locale.js` (v4.3.3) loads last, wiring `#localeSwitcherBtn` click to panel toggle and radio change to `dsI18n.setLocale()` — see the Language / Locale Switcher section below.
+- `popup.locale.js` (v4.3.3) registers `window.__DS_PopupLocale` with `bindLocaleSwitcher()` — see the Language / Locale Switcher section below.
+- `popup.js` (entry) loads last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 
-The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, the seven `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, then `editor.js` — 13 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` carries its own local `debounce` copy because it is a classic script and cannot `import`.
+The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, `../../utils/debounce.js`, the eight `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, `../popup.i18n-apply.js`, `../popup.preset-domain.js`, then `editor.js` — 17 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` takes its debounce from the shared `DSSDebounce` global rather than defining one.
 
 ### Data Flow Integration
 
@@ -267,9 +281,10 @@ The popup includes a built-in language switcher that toggles between Traditional
 **DOM Structure**: A globe-icon button (`#localeSwitcherBtn`) in the Features & Export card header, toggling a `#localePanel` with radio inputs for each locale.
 
 **Implementation**:
-- `utils/i18n.js` — Core i18n engine: defines a `dsI18n` object with locale string maps, `setLocale(locale)` method, and `t(key)` lookup. Processes `data-i18n` attributes on DOM elements. Persists the selected locale to `chrome.storage.local` as `dsLocale`.
-- `popup/popup.locale.js` — Popup locale switcher UI: wires `#localeSwitcherBtn` click to panel toggle, radio change to `dsI18n.setLocale()` plus page reload.
-- Content scripts also listen for `dsI18n-locale-changed` events to live-update UI text (e.g., Quote Reply button label, overlay preset text) without page reload.
+- `utils/i18n.js` — Core i18n engine: defines a `dsI18n` object with `setLocale(locale)`, `t(key)` lookup, and `onLocaleChanged(callback)` subscription. It holds no DOM code; locale strings come from `utils/i18n.locales.js`. Persists the selected locale to `chrome.storage.local` as `dsLocale`.
+- `popup/popup.i18n-apply.js` — The DOM applier, split out of the engine: `window.__DS_PopupI18nApply.apply(root)` processes `data-i18n` attributes under `root`. Loaded by both `popup.html` and `editor.html`; the editor calls it directly in `editor.js` right after `await dsI18n.init()`, the popup reaches it through `bindLocaleSwitcher()`.
+- `popup/popup.locale.js` — Popup locale switcher UI. It exports `bindLocaleSwitcher()` on `window.__DS_PopupLocale` and does nothing at load time; `popup.js` calls it immediately after `await dsI18n.init()`. The function first runs `window.__DS_PopupI18nApply.apply()` to paint the initial strings, then wires `#localeSwitcherBtn` click to panel toggle, an outside-click handler to close the panel, and radio change to `dsI18n.setLocale()` plus `window.location.reload()`. The reload is why the popup needs no `onLocaleChanged` subscription of its own — a fresh document re-runs the applier. Content scripts, which cannot reload, take the subscription route instead.
+- Content scripts subscribe via `dsI18n.onLocaleChanged(cb)` to live-update UI text without a page reload — `content/quote-reply.js` re-renders the Quote Reply button label, `content/preset-overlay.controller.js` calls the dropdown's `updateLocale()`. A direct callback registry is what keeps the engine DOM-free: it needs no event target, no bubbling assumptions, and no `document` in scope. It carries no unsubscribe, so subscribers register once and guard inside the callback — `quote-reply.js` keeps a `hasLocaleSubscription` flag and subscribes only on its first enable, relying on `btnEl === null` to make the callback a no-op while the feature is off.
 
 The `popup.js` `DOMContentLoaded` handler initializes `dsI18n` early, before rendering any locale-dependent text.
 
@@ -280,8 +295,10 @@ Prompt content editing lives in `popup/editor/` — an extension page opened as 
 ### Opening (popup side)
 
 - Two pencil buttons in the popup: `#editGlobalPromptBtn` (Global Prompt card) and `#editPresetBtn` (Prompt Group card, disabled when `activePresetId === ''`).
-- `openEditorWindow()` in `popup.js` builds the URL via `chrome.runtime.getURL('popup/editor/editor.html')` plus the query string, then creates the window with `chrome.windows.create({ url, type: 'popup', width: 1280, height: 720 })`.
-- **Singleton per target**: module-level slots (`globalEditorWindowId` / `presetEditorWindowId`) track open windows. A repeat click tries `chrome.windows.update(id, { focused: true })` first; if that rejects (window closed), the slot is cleared and a new window is created. Since v4.14.0, after focusing an existing window its tab is also navigated to the requested URL via `chrome.tabs.query({ windowId })` + `chrome.tabs.update(tab.id, { url })` (same URL = reload, different URL = switch to the now-active preset). This makes the name input's focus-on-open fire on every pencil click and fixes the stale-preset trap where a window opened for preset A stayed on A after the user switched to preset B. No data loss: the editor's `pagehide` handler flushes dirty content before unload. `chrome.windows.create` requires no extra permission, and no `web_accessible_resources` entry is needed for extension-origin pages.
+- `openEditorWindow(target, presetId)` in `popup/popup.editor-window.js` builds the URL via `chrome.runtime.getURL('popup/editor/editor.html')` plus the query string, then delegates window handling to `DSSWindowControl.openSingletonWindow({ url, createOptions, storageKey })` with `createOptions = { type: 'popup', width: 1280, height: 720 }`.
+- **True singleton per target**: the open window's id no longer lives in a popup-closure slot — `utils/window-control.js` persists it in `chrome.storage.session` under `dss-editor-window-id-global` / `dss-editor-window-id-preset` (`EDITOR_WINDOW_STORAGE_KEYS`). Because the id outlives the popup's page context, closing the popup and clicking the pencil again focuses the window that is already open instead of spawning a second one.
+- **Focus / navigate / recreate**: `openSingletonWindow()` reads the stored id; when one exists it calls `chrome.windows.get(id, { populate: true })` + `chrome.windows.update(id, { focused: true })`. If `get` rejects (the user closed the window), it falls through and creates a fresh one, persisting the new id. On a successful focus it compares the existing tab's `url` against the requested URL and issues `chrome.tabs.update(tab.id, { url })` **only when they differ** — so switching prompt groups swaps the editor's content in place, while re-clicking the same group focuses without reloading. No data loss on the swap: the editor's `pagehide` handler flushes dirty content before unload.
+- Failures degrade toward availability rather than deduplication: a `chrome.storage.session` read error is logged and treated as "no window recorded", so the user still gets an editor. `chrome.windows.create` requires no extra permission, and no `web_accessible_resources` entry is needed for extension-origin pages.
 
 ### Query-string contract
 
@@ -294,7 +311,7 @@ Invalid targets and presets that no longer exist (deleted while the link was sta
 
 ### Auto-save pipeline (editor side)
 
-A standalone window can be closed directly by the OS, so saving is defensive: `input` sets a dirty flag and schedules a 600 ms debounced save; `blur`, `visibilitychange` (hidden), and `pagehide` flush immediately (fire-and-forget). Saves only fire when dirty. Since v4.15.0, pressing `Esc` closes the window (window-level `keydown` listener → `window.close()`); the `pagehide` flush writes any dirty content first, so the shortcut never loses data. Routing: global → `StorageManager.saveGlobalDefaultPrompt()`; preset → re-fetch the preset, stamp `content` + `updatedAt` (+ `name` when the name input changed, v4.14.0), then `StorageManager.saveOnePromptPreset()` followed by `DSVMessaging.broadcastActivePreset()`. The name input (`#editorNameInput`) shares this pipeline: its `input`/`blur` handlers set the same dirty flag and call the same debounced/flush save, and `saveContent` rejects with `code: 'DUPLICATE_NAME'` when the new name collides with another preset (exact-match, case-sensitive, self-excluded) — the save-status area shows a red error and nothing is written. All persistence goes through `StorageManager` — the editor never touches `chrome.storage` directly.
+A standalone window can be closed directly by the OS, so saving is defensive: `input` sets a dirty flag and schedules a 500 ms debounced save (`debounce(performSave, 500)`, the wrapper taken from `DSSDebounce`); `blur`, `visibilitychange` (hidden), and `pagehide` flush immediately (fire-and-forget). Saves only fire when dirty. Since v4.15.0, pressing `Esc` closes the window (window-level `keydown` listener → `window.close()`); the `pagehide` flush writes any dirty content first, so the shortcut never loses data. Routing: global → `StorageManager.saveGlobalDefaultPrompt()`; preset → re-fetch the preset, stamp `content` + `updatedAt` (+ `name` when the name input changed, v4.14.0), then `StorageManager.saveOnePromptPreset()` followed by `DSVMessaging.broadcastActivePreset()`. The name input (`#editorNameInput`) shares this pipeline: its `input`/`blur` handlers set the same dirty flag and call the same debounced/flush save, and `saveContent` rejects with `code: 'DUPLICATE_NAME'` when `DSSPresetDomain.validatePresetName(nextName, settings.promptPresets, { selfId: target.id })` reports `reason: 'duplicate'` (exact-match, case-sensitive, self-excluded) — the save-status area shows a red error and nothing is written. All persistence goes through `StorageManager` — the editor never touches `chrome.storage` directly.
 
 ### Propagation
 
@@ -305,7 +322,7 @@ sequenceDiagram
     participant Storage as chrome.storage sync+local
     participant Content as Content Script (chat.deepseek.com)
 
-    Popup->>Editor: pencil click → chrome.windows.create / update(focused) + tabs.update(reload)
+    Popup->>Editor: pencil click → DSSWindowControl.openSingletonWindow (session-stored id → focus, or create)
     Editor->>Storage: StorageManager.initialize() + load target content
     Editor->>Storage: auto-save (debounced input / blur / pagehide)
     Storage-->>Content: onChanged → globalDefaultPrompt / dsPreset_* updated

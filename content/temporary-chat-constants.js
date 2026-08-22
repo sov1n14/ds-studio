@@ -1,7 +1,7 @@
 /**
  * DS studio — Temporary Chat 共用常數
  * 集中定義跨模組共用的 sessionStorage key 與 CustomEvent 名稱，
- * 避免硬編碼重複字串（coding-guidelines §7 反模式：Hardcoded message type strings）。
+ * 避免硬編碼重複字串（chrome-extension-coding-guidelines §2：訊息型別與 storage key 皆用具名常數）。
  */
 
 // chrome.storage.local key：臨時對話功能啟用狀態；值為 boolean；缺少時預設為停用
