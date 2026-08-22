@@ -169,9 +169,10 @@
                         // incoming 較新，取代
                         mergedMap.set(p.id, { ...p });
                     } else if (incUpdated === baseUpdated) {
-                        // 時間戳相同，內容有差異時以 createdAt 較早者為準（穩定 tiebreak）
-                        const contentDiffers = JSON.stringify(p) !== JSON.stringify(existing);
-                        if (contentDiffers && (p.createdAt || 0) < (existing.createdAt || 0)) {
+                        // 時間戳相同，內容有差異時以 createdAt 較早者為準（穩定 tiebreak）。
+                        // 先比 createdAt：不符資格時整包序列化比對就不必做。
+                        const isEarlierCreated = (p.createdAt || 0) < (existing.createdAt || 0);
+                        if (isEarlierCreated && JSON.stringify(p) !== JSON.stringify(existing)) {
                             mergedMap.set(p.id, { ...p });
                         }
                         // 否則 base 保持不變
@@ -220,7 +221,8 @@
             const data = await this._get([this.KEYS.PRESET_INDEX]);
             const oldIds = data[this.KEYS.PRESET_INDEX] || [];
             const newIds = presets.map(p => p.id);
-            const deletedIds = oldIds.filter(id => !newIds.includes(id));
+            const newIdSet = new Set(newIds);
+            const deletedIds = oldIds.filter(id => !newIdSet.has(id));
 
             // 2. 直接將 index 寫入兩個 storage — index 很小且必須同步至雲端。
             //    若與 preset 內容合批寫入，單一 preset 超過 per-item 配額時
@@ -301,7 +303,9 @@
          */
         _shouldPushPreset(preset, syncPreset) {
             if (syncPreset === undefined) return true;
-            if (JSON.stringify(preset) === JSON.stringify(syncPreset)) return false;
+            // updatedAt 不同時兩者必然不相等，直接交由 _pickNewerPreset 判定，省下整包序列化
+            const isSameTimestamp = (preset.updatedAt || 0) === (syncPreset.updatedAt || 0);
+            if (isSameTimestamp && JSON.stringify(preset) === JSON.stringify(syncPreset)) return false;
             return this._pickNewerPreset(preset, syncPreset) === preset;
         },
 

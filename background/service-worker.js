@@ -11,6 +11,7 @@ importScripts(
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',
     '../utils/storage-manager.setters.js',
+    '../utils/storage-manager.settings-read.js',
     '../utils/storage-manager.js',
     '../utils/deepseek-api.js',
     '../content/temporary-chat-constants.js',

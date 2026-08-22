@@ -6,12 +6,25 @@
 (function (root) {
     'use strict';
 
-    // 鎖定相關常數（與 entry file 的常數相同，僅在此模組內使用）
-    const LOCK_KEY = 'chatPresetMapLock';
-    const LOCK_TTL_MS = 3000;
-    const LOCK_ACQUIRE_TIMEOUT_MS = 5000;
-    const LOCK_POLL_INTERVAL_MS = 50;
-    const RECONCILIATION_RETRY_BUDGET = 3;
+    /**
+     * 鎖定相關常數的唯一定義處。透過下方 bundle 一併 mixin 至 StorageManager，
+     * 因此生產程式碼與測試都以 StorageManager.<名稱> 取用同一份值。
+     */
+    const LOCK_CONSTANTS = {
+        CHAT_PRESET_MAP_LOCK_KEY: 'chatPresetMapLock',
+        LOCK_TTL_MS: 3000,
+        LOCK_ACQUIRE_TIMEOUT_MS: 5000,
+        LOCK_POLL_INTERVAL_MS: 50,
+        RECONCILIATION_RETRY_BUDGET: 3,
+    };
+
+    const {
+        CHAT_PRESET_MAP_LOCK_KEY: LOCK_KEY,
+        LOCK_TTL_MS,
+        LOCK_ACQUIRE_TIMEOUT_MS,
+        LOCK_POLL_INTERVAL_MS,
+        RECONCILIATION_RETRY_BUDGET,
+    } = LOCK_CONSTANTS;
 
     /**
      * 可降級告警：本 bundle 亦由 background/service-worker.js 載入，該處刻意不載入
@@ -28,6 +41,8 @@
     }
 
     const bundle = {
+        ...LOCK_CONSTANTS,
+
         /**
          * 確保 _metaCache 與 _chunkIndexCache 已從 storage 載入。
          * 若兩者皆已存在則立即返回，避免重複讀取。
@@ -158,23 +173,6 @@
             } finally {
                 await this._releaseLock(lockKey, token);
             }
-        },
-
-        /**
-         * 向下相容封裝：睡眠輪詢取得 chatPresetMap 諮詢鎖，等同 _acquireLock(LOCK_KEY)。
-         * @returns {Promise<string>} owner token，必須傳入 _releaseChatPresetMapLock。
-         * @throws {LockAcquireTimeoutError} 超過 LOCK_ACQUIRE_TIMEOUT_MS 仍未取得鎖。
-         */
-        async _acquireChatPresetMapLock() {
-            return this._acquireLock(LOCK_KEY);
-        },
-
-        /**
-         * 向下相容封裝：冪等釋放 chatPresetMap 鎖，等同 _releaseLock(LOCK_KEY, token)。
-         * @param {string} token - _acquireChatPresetMapLock 回傳的 owner token
-         */
-        async _releaseChatPresetMapLock(token) {
-            return this._releaseLock(LOCK_KEY, token);
         },
 
         /**

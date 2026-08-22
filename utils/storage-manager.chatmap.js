@@ -5,10 +5,15 @@
 (function (root) {
     'use strict';
 
-    // chatPresetMap 單一分塊的位元組軟上限，僅供本模組使用
+    /**
+     * chatPresetMap 單一分塊的位元組軟上限。經下方 bundle mixin 至 StorageManager，
+     * 生產程式碼與測試共用同一份值。
+     */
     const CHUNK_SOFT_LIMIT_BYTES = 7168;
 
     const bundle = {
+        CHUNK_SOFT_LIMIT_BYTES,
+
         /**
          * 將 deletedKeys/changedKeys/addedKeys 差異套用至 chunks 工作副本與 meta 工作副本，
          * 並同步更新 _chunkIndexCache。供 mutateChatPresetMap 的鎖外快速路徑與鎖內路徑共用，

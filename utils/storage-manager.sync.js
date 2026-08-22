@@ -116,7 +116,7 @@
             // 導致某一側的舊值透過此處寫回而復活、覆蓋另一側裝置剛設定的新值。
             // 因此改為以 ownership 白名單重建 updates，而非直接展開原始快照。
             const ownedKeys = new Set(Object.values(this.KEYS));
-            const isOwnedKey = (key) => ownedKeys.has(key) || key.startsWith('dsPreset_');
+            const isOwnedKey = (key) => ownedKeys.has(key) || key.startsWith(this.PRESET_KEY_PREFIX);
             const updates = {};
             for (const key of Object.keys(localRaw)) {
                 if (isOwnedKey(key)) updates[key] = localRaw[key];
@@ -136,7 +136,7 @@
             presetIds.forEach(id => delete updates[this._presetKey(id)]);
             // 同時移除 raw data 中殘留的 dsPreset_ 金鑰
             Object.keys(updates).forEach(k => {
-                if (k.startsWith('dsPreset_')) delete updates[k];
+                if (k.startsWith(this.PRESET_KEY_PREFIX)) delete updates[k];
             });
 
             // restored_messages 僅存本機且可能超過 8KB 同步配額，排除以避免失敗
@@ -185,11 +185,13 @@
 
             // 預先讀取雲端快照，避免推送舊本機資料覆蓋較新的雲端資料
             const syncSnapshot = pendingKeys.length > 0
-                ? await new Promise(resolve => {
-                    try {
-                        chrome.storage.sync.get(pendingKeys, d => resolve(d || {}));
-                    } catch { resolve({}); }
-                })
+                ? await this._safeGet('sync', pendingKeys)
+                : {};
+
+            // 一次讀完所有待推送金鑰的本機值：各金鑰的本機值彼此獨立，
+            // 逐鍵重讀只會重複相同結果，卻讓儲存操作次數隨金鑰數線性膨脹。
+            const localSnapshot = pendingKeys.length > 0
+                ? await this._safeGet('local', pendingKeys)
                 : {};
 
             // 讀取雙側 order meta，供 PRESET_INDEX 比對使用
@@ -198,11 +200,7 @@
             if (pendingKeys.includes(this.KEYS.PRESET_INDEX)) {
                 const [lMeta, sMeta] = await Promise.all([
                     this._safeGet('local', [this.KEYS.PRESET_ORDER_META]),
-                    new Promise(resolve => {
-                        try {
-                            chrome.storage.sync.get([this.KEYS.PRESET_ORDER_META], d => resolve(d || {}));
-                        } catch { resolve({}); }
-                    }),
+                    this._safeGet('sync', [this.KEYS.PRESET_ORDER_META]),
                 ]);
                 localOrderMeta = lMeta[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
                 syncOrderMeta = sMeta[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
@@ -210,55 +208,62 @@
 
             // 收集已與雲端一致（reconciled）的 dsPreset_ 金鑰，供迴圈結束後統一從 dsLocalAuth 移除
             const reconciledPresetKeys = [];
+            // 收集離線期間已於本機刪除的金鑰，迴圈結束後一次清理 sync 與追蹤記錄
+            const locallyDeletedKeys = [];
 
             for (const key of pendingKeys) {
-                const localData = await this._safeGet('local', [key]);
-                if (localData[key] !== undefined) {
-                    let shouldPush = true;
-                    let pushValue = localData[key];
+                if (localSnapshot[key] === undefined) {
+                    // 金鑰在離線期間於本機被刪除：留待迴圈後統一清理 sync 與追蹤記錄
+                    locallyDeletedKeys.push(key);
+                    continue;
+                }
 
-                    if (key === this.KEYS.PRESET_INDEX) {
-                        // 僅在本機排序至少與雲端同新時才推送
-                        const localOrderTs = localOrderMeta.orderUpdatedAt || 0;
-                        const syncOrderTs = syncOrderMeta.orderUpdatedAt || 0;
-                        shouldPush = localOrderTs >= syncOrderTs;
-                    } else if (key.startsWith('dsPreset_')) {
-                        // 使用與其他同步流程一致的「較新者優先」共用規則判斷是否推送
-                        const localPreset = localData[key];
-                        const syncPreset = syncSnapshot[key];
-                        const winner = this._pickNewerPreset(localPreset, syncPreset);
-                        if (syncPreset !== undefined && winner !== localPreset) {
-                            // 雲端版本已勝出（較新或內容相同），不需推送，且視為已與雲端調和
-                            shouldPush = false;
-                            reconciledPresetKeys.push(key);
-                        }
-                    } else if (key === this.KEYS.PRESET_ORDER_META) {
-                        // 與 PRESET_INDEX 分支一致：僅在本機排序時間戳至少與雲端同新時才推送
-                        const localOrderTs = (localData[key] || {}).orderUpdatedAt || 0;
-                        const syncOrderTs = (syncSnapshot[key] || {}).orderUpdatedAt || 0;
-                        shouldPush = localOrderTs >= syncOrderTs;
-                    } else if (key === this.KEYS.PRESET_TOMBSTONES) {
-                        // 墓碑記錄需逐 id 聯集合併（重用既有 _mergeTombstones），
-                        // 避免整包覆寫復活對方裝置已刪除的 preset
-                        pushValue = this._mergeTombstones(localData[key] || {}, syncSnapshot[key] || {});
-                    }
+                let shouldPush = true;
+                let pushValue = localSnapshot[key];
 
-                    if (shouldPush) {
-                        await this._set({ [key]: pushValue });
+                if (key === this.KEYS.PRESET_INDEX) {
+                    // 僅在本機排序至少與雲端同新時才推送
+                    const localOrderTs = localOrderMeta.orderUpdatedAt || 0;
+                    const syncOrderTs = syncOrderMeta.orderUpdatedAt || 0;
+                    shouldPush = localOrderTs >= syncOrderTs;
+                } else if (key.startsWith(this.PRESET_KEY_PREFIX)) {
+                    // 使用與其他同步流程一致的「較新者優先」共用規則判斷是否推送
+                    const localPreset = localSnapshot[key];
+                    const syncPreset = syncSnapshot[key];
+                    const winner = this._pickNewerPreset(localPreset, syncPreset);
+                    if (syncPreset !== undefined && winner !== localPreset) {
+                        // 雲端版本已勝出（較新或內容相同），不需推送，且視為已與雲端調和
+                        shouldPush = false;
+                        reconciledPresetKeys.push(key);
                     }
-                } else {
-                    // 金鑰在離線期間於本機被刪除：清理 sync 與追蹤記錄
-                    await this._safeRemove('sync', [key]);
-                    const current = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE]);
-                    const newArr = (current[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => k !== key);
-                    await this._safeSet('local', { [this.KEYS.LOCAL_AUTHORITATIVE]: newArr });
+                } else if (key === this.KEYS.PRESET_ORDER_META) {
+                    // 與 PRESET_INDEX 分支一致：僅在本機排序時間戳至少與雲端同新時才推送
+                    const localOrderTs = (localSnapshot[key] || {}).orderUpdatedAt || 0;
+                    const syncOrderTs = (syncSnapshot[key] || {}).orderUpdatedAt || 0;
+                    shouldPush = localOrderTs >= syncOrderTs;
+                } else if (key === this.KEYS.PRESET_TOMBSTONES) {
+                    // 墓碑記錄需逐 id 聯集合併（重用既有 _mergeTombstones），
+                    // 避免整包覆寫復活對方裝置已刪除的 preset
+                    pushValue = this._mergeTombstones(localSnapshot[key] || {}, syncSnapshot[key] || {});
+                }
+
+                // 逐鍵寫入而非整批：chrome.storage.sync.set() 是全有全無的，
+                // 合批後任一鍵觸發配額失敗會讓整批一起退回本機授權佇列。
+                if (shouldPush) {
+                    await this._set({ [key]: pushValue });
                 }
             }
 
-            // 將已調和（雲端已勝出）的 dsPreset_ 金鑰從 dsLocalAuth 移除，避免下次重試時再度誤判為待推送
-            if (reconciledPresetKeys.length > 0) {
+            if (locallyDeletedKeys.length > 0) {
+                await this._safeRemove('sync', locallyDeletedKeys);
+            }
+
+            // 一次移除本回合所有不再待推送的金鑰（本機已刪除的，以及雲端已勝出而調和完成的），
+            // 避免下次重試時再度誤判為待推送
+            const resolvedKeys = new Set([...locallyDeletedKeys, ...reconciledPresetKeys]);
+            if (resolvedKeys.size > 0) {
                 const current = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE]);
-                const newArr = (current[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !reconciledPresetKeys.includes(k));
+                const newArr = (current[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !resolvedKeys.has(k));
                 await this._safeSet('local', { [this.KEYS.LOCAL_AUTHORITATIVE]: newArr });
             }
 
@@ -326,86 +331,6 @@
             if (Object.keys(updates).length > 0) {
                 return this._set(updates);
             }
-        },
-
-        /**
-         * Get all settings
-         * @returns {Promise<Object>} Object containing all settings
-         */
-        async getSettings() {
-            // 排除非使用者設定的內部金鑰，避免不必要的儲存讀取與記憶體開銷；
-            // isEnabled / globalPromptEnabled 為 local-only 金鑰，一併排除於 sync 讀取路徑，
-            // 改由下方直接讀取本機資料補齊。
-            const keysToFetch = Object.values(this.KEYS)
-                .filter(k => k !== this.KEYS.RESTORED_MESSAGES
-                    && k !== this.KEYS.PRESET_ORDER_META
-                    && k !== this.KEYS.PRESET_TOMBSTONES
-                    && k !== this.KEYS.IS_ENABLED
-                    && k !== this.KEYS.GLOBAL_PROMPT_ENABLED);
-            const data = await this._get(keysToFetch);
-            const localOnlyData = await this._safeGet('local', [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED]);
-
-            // Fetch individual presets based on index
-            const presetIds = data[this.KEYS.PRESET_INDEX] || [];
-            const presetData = await this._get(presetIds.map(id => this._presetKey(id)));
-            const presets = presetIds.map(id => presetData[this._presetKey(id)]).filter(Boolean);
-
-            const settings = {};
-            for (const [internalKey, storageKey] of Object.entries(this.KEYS)) {
-                // 跳過內部專用金鑰，不納入使用者設定回傳值
-                if (storageKey === this.KEYS.RESTORED_MESSAGES) continue;
-                if (storageKey === this.KEYS.PRESET_ORDER_META) continue;
-                if (storageKey === this.KEYS.PRESET_TOMBSTONES) continue;
-
-                // isEnabled / globalPromptEnabled 為 local-only 金鑰，直接取本機值，不走 sync 合併資料
-                if (storageKey === this.KEYS.IS_ENABLED) {
-                    settings.isEnabled = localOnlyData[storageKey] ?? this.DEFAULTS[storageKey];
-                    continue;
-                }
-                if (storageKey === this.KEYS.GLOBAL_PROMPT_ENABLED) {
-                    settings.globalPromptEnabled = localOnlyData[storageKey] ?? this.DEFAULTS[storageKey];
-                    continue;
-                }
-
-                // Special handling for presets array
-                if (storageKey === this.KEYS.PROMPT_PRESETS) {
-                    settings.promptPresets = presets;
-                    continue;
-                }
-
-                // Use defaults if missing
-                const settingsKey = internalKey.toLowerCase().replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-
-                // Special handling for the ones already in DEFAULTS with different names
-                const defaultVal = this.DEFAULTS[storageKey];
-                let resolvedVal = data[storageKey] ?? defaultVal;
-                // 舊版遺留值的校正規則集中於 StorageManager.normalizeWebsearchToggle，讀取路徑共用
-                if (storageKey === this.KEYS.WEBSEARCH_TOGGLE) {
-                    resolvedVal = this.normalizeWebsearchToggle(resolvedVal);
-                }
-                settings[settingsKey] = resolvedVal;
-            }
-
-            // 以分塊式版本覆寫 chatPresetMap
-            settings.chatPresetMap = await this.getChatPresetMap();
-
-            return settings;
-        },
-
-        /**
-         * Get the content of the currently active preset
-         * @returns {Promise<string>} The active preset content
-         */
-        async getActivePromptContent() {
-            const data = await this._get([this.KEYS.PRESET_INDEX, this.KEYS.ACTIVE_PRESET_ID]);
-            const ids = data[this.KEYS.PRESET_INDEX] || [];
-            const activeId = data[this.KEYS.ACTIVE_PRESET_ID] ?? this.DEFAULTS.activePresetId;
-
-            if (!activeId || !ids.includes(activeId)) return '';
-
-            const presetData = await this._get([this._presetKey(activeId)]);
-            const active = presetData[this._presetKey(activeId)];
-            return active?.content ?? '';
         },
 
         /**

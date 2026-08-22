@@ -120,12 +120,23 @@ describe('B — readEnabledFlag', () => {
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
 
-    it('B3: does NOT call chrome.storage.local (reads only from cache)', async () => {
-        const getSpy = vi.spyOn(chrome.storage.local, 'get');
+    it('B3: the in-memory cache wins over a diverging persisted value, and the read is synchronous', async () => {
+        // Observable form of "reads only from cache": persist the OPPOSITE value in
+        // both backing stores, then read. A cache-only read returns the cached value
+        // immediately; anything that consulted storage would have to return false --
+        // or a Promise, which `toBe(true)` also rejects.
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': false });
+        settingsStore['dss-temporary-chat-enabled'] = false;
         TemporaryChatDelete.__setState({ enabledFlagCache: true });
-        TemporaryChatDelete.readEnabledFlag();
-        expect(getSpy).not.toHaveBeenCalled();
-        getSpy.mockRestore();
+
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
+
+        // ...and symmetrically, so the assertion cannot pass on a hardcoded `true`.
+        await chrome.storage.local.set({ 'dss-temporary-chat-enabled': true });
+        settingsStore['dss-temporary-chat-enabled'] = true;
+        TemporaryChatDelete.__setState({ enabledFlagCache: false });
+
+        expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
     });
 });
 
@@ -550,12 +561,24 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
         setPathname(pathname);
         TemporaryChatDelete.__setState(state);
 
+        // DSS_FIBER_DELETE_SESSION is the PRIMARY navigation delete channel and
+        // deleteChatSessionWithRetry only its fallback, so asserting on the fallback
+        // alone would miss a delete that actually fired.
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: 'https://chat.deepseek.com/',
             navigationType: 'push',
         }));
 
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        // Nothing was deleted, so whatever was tracked must still be tracked --
+        // dropping it here would leak an undeleted temporary conversation.
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(state.trackedTemporaryUuid);
+
+        postMessageSpy.mockRestore();
     });
 });
 
@@ -583,13 +606,20 @@ describe('K — same-URL / reload must NOT delete', () => {
             capturedAuthToken: 'Bearer tok',
         });
 
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: `https://chat.deepseek.com/a/chat/s/${uuid}`,
             navigationType: 'reload',
         }));
 
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
+
+        postMessageSpy.mockRestore();
     });
 
     it('K1b: after a genuine reload navigation, the subsequent beforeunload does NOT dispatch the delete (suppress correctly armed)', () => {
@@ -608,6 +638,9 @@ describe('K — same-URL / reload must NOT delete', () => {
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        // Suppressed, not consumed: the conversation stays tracked so a later real
+        // departure can still delete it.
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
     });
 
     it('K2: same-URL push (navigationType "push") → no deletion on the navigate event itself, but does NOT arm suppressNextUnloadDelete (only a real reload arms it)', () => {
@@ -619,13 +652,20 @@ describe('K — same-URL / reload must NOT delete', () => {
         });
 
         const currentHref = window.location.href;
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: currentHref,
             navigationType: 'push',
         }));
 
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(false);
+
+        postMessageSpy.mockRestore();
     });
 
     it('K2b (regression): after a same-URL push, a subsequent leave to an external site (beforeunload) DOES dispatch the keepalive delete — suppress must not have been wrongly armed', () => {
@@ -678,13 +718,20 @@ describe('K — same-URL / reload must NOT delete', () => {
             isKeyboardRefresh: true,
         });
 
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
         TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
             destinationUrl: 'https://chat.deepseek.com/',
             navigationType: 'push',
         }));
 
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(uuid);
         expect(TemporaryChatDelete.__getState().suppressNextUnloadDelete).toBe(true);
+
+        postMessageSpy.mockRestore();
     });
 
     it('K5: isKeyboardRefresh is reset to false after handleNavigationEvent', () => {
@@ -786,12 +833,17 @@ describe('M — handleBeforeUnload (tab close)', () => {
         ['M7: does NOT delete when no auth token', '/a/chat/s/face0003-f00d-dead-beef-0123456789ab', { trackedTemporaryUuid: 'face0003-f00d-dead-beef-0123456789ab', capturedAuthToken: null, suppressNextUnloadDelete: false, isKeyboardRefresh: false }],
     ])('%s', (_label, pathname, state) => {
         setPathname(pathname);
+        sessionStorage.setItem('dss-temporary-chat-uuid', state.trackedTemporaryUuid);
         TemporaryChatDelete.__setState(state);
 
         TemporaryChatDelete.handleBeforeUnload();
 
         expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
         expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        // A suppressed unload leaves tracking intact, in memory and in sessionStorage,
+        // so the conversation is still deletable on the next real departure.
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(state.trackedTemporaryUuid);
+        expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBe(state.trackedTemporaryUuid);
     });
 });
 
@@ -980,12 +1032,23 @@ describe('N — deleteTrackedAndClear', () => {
         ['N6: is a no-op when trackedTemporaryUuid is null', { capturedAuthToken: 'Bearer tok', trackedTemporaryUuid: null }],
         ['N7: is a no-op when capturedAuthToken is null', { trackedTemporaryUuid: 'dede0004-dead-dead-dead-deaddeaddead', capturedAuthToken: null }],
     ])('%s', (_label, state) => {
+        if (state.trackedTemporaryUuid) sessionStorage.setItem('dss-temporary-chat-uuid', state.trackedTemporaryUuid);
         TemporaryChatDelete.__setState(state);
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
 
         TemporaryChatDelete.deleteTrackedAndClear();
 
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
         expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+        // A no-op must leave tracking exactly as it found it -- clearing here would
+        // silently orphan a conversation that was never deleted.
+        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBe(state.trackedTemporaryUuid);
+        expect(sessionStorage.getItem('dss-temporary-chat-uuid')).toBe(state.trackedTemporaryUuid);
+
+        postMessageSpy.mockRestore();
     });
 });
 

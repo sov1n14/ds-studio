@@ -26,12 +26,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createDualContext, clearSharedStorage } from '../helpers/dual-context-storage.js';
 
-// Lock constants (match utils/storage-manager.js — not exported from module)
-const LOCK_KEY = 'chatPresetMapLock';
-const LOCK_TTL_MS = 3000;
-const LOCK_ACQUIRE_TIMEOUT_MS = 5000;
-const CHUNK_SOFT_LIMIT_BYTES = 7168;
-
 // Shared helper: write chunk data to BOTH sync and local, firing the
 // onChanged invalidator via the local write so caches are nulled.
 async function seedStorageMultiChunk(meta, chunks) {
@@ -363,8 +357,8 @@ describe('Cross-context integration (Phase C+D)', () => {
             expect(metaAfter.chatPresetMapMeta.version).toBeGreaterThanOrEqual(2);
 
             // Lock was released after all operations
-            const lockAfter = await chrome.storage.local.get(LOCK_KEY);
-            expect(lockAfter[LOCK_KEY]).toBeUndefined();
+            const lockAfter = await chrome.storage.local.get(ctxA.CHAT_PRESET_MAP_LOCK_KEY);
+            expect(lockAfter[ctxA.CHAT_PRESET_MAP_LOCK_KEY]).toBeUndefined();
         },
     );
 
@@ -407,19 +401,23 @@ describe('Cross-context integration (Phase C+D)', () => {
             const metaCheck = await chrome.storage.sync.get('chatPresetMapMeta');
             expect(metaCheck.chatPresetMapMeta.chunkCount).toBe(2);
 
-            // ctxA acquires the lock.
-            const tokenA = await ctxA._acquireChatPresetMapLock();
-            expect(tokenA).toBeDefined();
-
-            // --- ctxA "crashes" (no release) ---
-
-            // Shorten lock TTL to simulate time passing.
-            await chrome.storage.local.set({
-                chatPresetMapLock: {
-                    owner: tokenA,
-                    expiresAt: Date.now() + 100,
-                },
+            // ctxA enters a lock-protected section and "crashes" inside it:
+            // it overwrites the lock record with a foreign owner and a 100 ms
+            // TTL, so ctxA's own owner-scoped release is a no-op and the
+            // lock stays held by an owner that never comes back.
+            const LOCK_KEY = ctxA.CHAT_PRESET_MAP_LOCK_KEY;
+            await ctxA._withChatPresetMapLock(async () => {
+                const held = (await chrome.storage.local.get(LOCK_KEY))[LOCK_KEY];
+                expect(held.owner).toBeDefined();
+                await chrome.storage.local.set({
+                    [LOCK_KEY]: { owner: 'crashed-ctxA', expiresAt: Date.now() + 100 },
+                });
             });
+
+            // The crashed owner's lock survived ctxA's release (owner-scoped),
+            // so ctxB must rely on TTL expiry to make progress.
+            const stillHeld = await chrome.storage.local.get(LOCK_KEY);
+            expect(stillHeld[LOCK_KEY].owner).toBe('crashed-ctxA');
 
             // ctxB's mutate replaces from 2 chunks to 1 entry.
             // Multi-chunk diff -> lock path -> _withChatPresetMapLock.
@@ -433,8 +431,8 @@ describe('Cross-context integration (Phase C+D)', () => {
             expect(Object.keys(map)).toHaveLength(1);
 
             // Lock was released after the operation
-            const lockAfter = await chrome.storage.local.get('chatPresetMapLock');
-            expect(lockAfter.chatPresetMapLock).toBeUndefined();
+            const lockAfter = await chrome.storage.local.get(LOCK_KEY);
+            expect(lockAfter[LOCK_KEY]).toBeUndefined();
         },
     );
 
@@ -493,7 +491,7 @@ describe('Cross-context integration (Phase C+D)', () => {
             const elapsed = performance.now() - start;
 
             // Both completed within the lock acquisition timeout (no deadlock).
-            expect(elapsed).toBeLessThan(LOCK_ACQUIRE_TIMEOUT_MS);
+            expect(elapsed).toBeLessThan(ctxA.LOCK_ACQUIRE_TIMEOUT_MS);
 
             // At least one operation's effect is visible (lock serialised the
             // writes).  Due to the stale-snapshot design, the second writer
@@ -502,8 +500,8 @@ describe('Cross-context integration (Phase C+D)', () => {
             expect(Object.keys(map).length).toBeGreaterThanOrEqual(1);
 
             // Lock was released after both operations.
-            const lockAfter = await chrome.storage.local.get(LOCK_KEY);
-            expect(lockAfter[LOCK_KEY]).toBeUndefined();
+            const lockAfter = await chrome.storage.local.get(ctxA.CHAT_PRESET_MAP_LOCK_KEY);
+            expect(lockAfter[ctxA.CHAT_PRESET_MAP_LOCK_KEY]).toBeUndefined();
         },
     );
 });

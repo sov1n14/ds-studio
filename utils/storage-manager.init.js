@@ -11,15 +11,23 @@
         /**
          * 安裝 chunk 快取失效監聽器。
          * 其他 context 修改分塊時，自動將 _chunkIndexCache 與 _metaCache 設為 null。
+         *
+         * initialize() 可被重複呼叫（popup / content script / service worker 各呼叫一次，
+         * 且 promptPresets 遷移分支會遞迴再進入一次），故安裝前先移除本 context 上一次
+         * 註冊的同一監聽器，確保每個 context 恆保持恰好一個監聽器。
          */
         _installChunkCacheInvalidator() {
+            if (this._chunkCacheInvalidator) {
+                chrome.storage.onChanged.removeListener(this._chunkCacheInvalidator);
+            }
+
             // 綁定至呼叫時的 this（即目前 context 自己的 StorageManager 實例），
             // 不可改用裸露的全域識別字 StorageManager —— 拆檔後 StorageManager
             // 已非本模組的區域繫結，裸露參照會經由 window.StorageManager 解析，
             // 而該屬性在多 context 測試情境下永遠指向「最後一次載入」的實例，
             // 導致監聽器誤將另一個 context 的快取清空，自己的快取卻從未失效。
             const self = this;
-            chrome.storage.onChanged.addListener((changes) => {
+            const invalidate = (changes) => {
                 const keys = Object.keys(changes);
                 const touched = keys.some(k =>
                     k === self.KEYS.CHAT_PRESET_MAP_META ||
@@ -29,7 +37,9 @@
                     self._chunkIndexCache = null;
                     self._metaCache = null;
                 }
-            });
+            };
+            this._chunkCacheInvalidator = invalidate;
+            chrome.storage.onChanged.addListener(invalidate);
         },
 
         /**

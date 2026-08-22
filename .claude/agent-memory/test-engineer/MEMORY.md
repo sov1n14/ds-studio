@@ -1,14 +1,1 @@
-- [Feature-toggle migration red suite](project_toggle_migration.md) — the full suite's known-failing spec families during the 2026-08 toggle migration, and how to baseline against them.
-- [Messaging spec harness](project_messaging_spec_harness.md) — how to spec modules that get settings via DSS_GET_SETTINGS/SETTINGS_CHANGED; auto-start double-registration trap.
-- [Bash heredoc long files](pitfall_bash_heredoc_long_files.md) — write spec files in ~100-line chunked appends; a single giant heredoc truncates.
-- [ds-studio harness](ds-studio-harness.md) — no root package.json; run specs from test/ with npx vitest.
-- [Fixture reset masks removed fields](pitfall_fixture_masked_fields.md) — a shared reset helper can keep a deleted-field assertion green; grep all of test/.
-- [Prompt-injector specs](project_prompt_injector_specs.md) — send-button/controller module specs, single-injector harness, rAF stub, injected-value formats.
-- [Content-script broadcast bootstrap](project_content_script_broadcast_bootstrap.md) — poll runtime.onMessage.listenerCount()>=2; specs must deliver DSS_SETTINGS_CHANGED themselves.
-- [restored_messages B2 wrapper shape](project_restored_messages_b2_wrapper.md) — getRestoredMessages() already exists and returns the get() wrapper, not the map.
-- [tab/window control adapters red](project_tab_window_control_red.md) — D5 singleton window + chrome.storage.session stub pattern; adapter args are the contract.
-- [Mutation restore pitfall](pitfall_mutation_restore_git_checkout.md) — restore a mutated spec from a byte copy; git checkout wipes uncommitted working-tree edits.
-- [websearch "default" normalization](project_websearch_default_normalization.md) — two read paths; getSettings() normalizes, the DSS_GET_SETTINGS key route does not.
-- [IIFE load side-effect sandbox](iife-load-side-effect-sandbox.md) — new Function param-shadowing to spec load-time side effects without clobbering setup-file globals.
-- [Injected-script spec pitfalls](pitfall_injected_scripts.md) — self-removing MAIN-world <script> tags; observe via MutationObserver, stub getURL to a data: URL.
-- [happy-dom localStorage leak](pitfall_happydom_localstorage_leak.md) — clear ds_studio_locale before i18n _reset()+init(); setup-file init() must precede the chrome mock.
+- [No hard-wrap write hook](feedback_no-hard-wrap-hook.md) — writes fail unless comment paragraphs are single lines; unwrap JSDoc before rewriting a file.
