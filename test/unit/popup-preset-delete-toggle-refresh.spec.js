@@ -172,8 +172,12 @@ describe('preset delete flows refresh the global prompt toggle (gap: requestDele
         });
 
         globalPromptToggle.checked = false;
+        // Drain the async change handler's StorageManager write chain in virtual
+        // time instead of waiting ~200ms of real chained setTimeout(0) turns.
+        vi.useFakeTimers();
         globalPromptToggle.dispatchEvent(new Event('change'));
-        await new Promise((r) => setTimeout(r, 200));
+        await vi.advanceTimersByTimeAsync(1000);
+        vi.useRealTimers();
 
         const localData = await chrome.storage.local.get([StorageManager.KEYS.GLOBAL_PROMPT_ENABLED]);
         expect(localData[StorageManager.KEYS.GLOBAL_PROMPT_ENABLED]).toBe(false);
