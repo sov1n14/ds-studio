@@ -13,7 +13,7 @@
 
         _buildThinkBlock(thinkFragment, elapsedSecs) {
             const container = document.createElement('div');
-            container.className = '_74c0879';
+            container.className = selectors.THINK_BLOCK_CLASS;
             container.setAttribute('style',
                 '--collapsible-area-title-height: 38px;' +
                 '--group-title-sticky-base-top: 0px;' +
@@ -68,7 +68,7 @@
             container.appendChild(spacer);
 
             const thinkContent = document.createElement('div');
-            thinkContent.className = 'e1675d8b ds-think-content _767406f';
+            thinkContent.className = 'e1675d8b ' + selectors.THINK_CONTENT_CLASS + ' _767406f';
 
             const loadingDots = document.createElement('div');
             loadingDots.className = 'ddd26891 _9b52f6c';
@@ -77,7 +77,7 @@
             thinkContent.appendChild(loadingDots);
 
             const sep = document.createElement('div');
-            sep.className = '_9ecc93a';
+            sep.className = selectors.THINK_SEPARATOR_CLASS;
             thinkContent.appendChild(sep);
 
             const md = document.createElement('div');

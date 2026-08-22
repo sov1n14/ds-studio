@@ -18,6 +18,10 @@ const __DS_CleanupFeatureToggle = globalThis.DSSFeatureToggle
 if (!__DS_CleanupMobileDevice || !__DS_CleanupFeatureToggle) {
     throw new Error('content/mobile-homepage-cleanup.js 需要 content/mobile-device.js 與 content/feature-toggle.js 先行載入');
 }
+
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_MobileHomepageSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 const MobileHomepageCleanup = {
     // === 狀態 ===
     enabled: false,
@@ -40,7 +44,7 @@ const MobileHomepageCleanup = {
      * 移除頁面中所有帶有 `_9579690` class 的 DOM 元素。
      */
     _removeTargetElements() {
-        document.querySelectorAll('._9579690').forEach(el => el.remove());
+        document.querySelectorAll(__DS_MobileHomepageSelectors.HOMEPAGE_MOBILE_CLEANUP_SELECTOR).forEach(el => el.remove());
     },
 
     // ─────────────────────────────

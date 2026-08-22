@@ -10,11 +10,14 @@
 (function (root) {
     'use strict';
 
+    var selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio && (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     // ── Selector / Hash 常數（僅限解析器使用） ───────────────────────────────
 
     // DeepSeek 建置產出的 hash class；隨版本可能改名，語意路徑為主要解析路徑，hash 僅作後備。
-    var HEADER_WRAPPER_HASH  = '._1aa2651';   // 容器內的標題列 wrapper div
-    var TITLE_HASH_FALLBACK  = '._9986c0c';   // 聊天標題節點（hash 後備）
+    var HEADER_WRAPPER_HASH  = selectors.CHAT_HEADER_TITLE_ROW_SELECTOR;   // 容器內的標題列 wrapper div
+    var TITLE_HASH_FALLBACK  = selectors.CHAT_TITLE_FALLBACK_SELECTOR;   // 聊天標題節點（hash 後備）
 
     // ── DOM 解析器：title ────────────────────────────────────────────────────
 

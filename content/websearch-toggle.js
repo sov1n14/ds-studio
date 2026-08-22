@@ -10,8 +10,8 @@
  * 設定來源：主開關閘控交由 content/feature-toggle.js；模式值以 DSS_GET_SETTINGS
  * 向 background 索取初始值，後續變更由 DSS_SETTINGS_CHANGED 廣播驅動。
  */
-// 搜尋圖示的 path[d] 前綴（語言無關的定位基準；真實頁面資料帶前導空白，比對前需 trim）
-const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_WebsearchSelectors = (globalThis.DSstudio && globalThis.DSstudio.Selectors) || (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 // 定位放棄期限（毫秒）：持續定位失敗超過此時長才提出唯一一次警告
 const LOCATE_GIVE_UP_MS = 15000;
 
@@ -30,7 +30,7 @@ const WebSearchToggle = {
     _pickByIcon(candidates) {
         for (const el of candidates) {
             const path = el.querySelector('path[d]');
-            if (path && path.getAttribute('d').trim().startsWith(SEARCH_ICON_PATH_PREFIX)) return el;
+            if (path && path.getAttribute('d').trim().startsWith(__DS_WebsearchSelectors.SEARCH_ICON_PATH_PREFIX)) return el;
         }
         return null;
     },
@@ -39,8 +39,8 @@ const WebSearchToggle = {
     //   第一層：合併兩組選擇器候選（去重）後，依搜尋圖示 path 前綴比對
     //   第二層：位置備援 — 僅在開關群組內取第二個按鈕（深度思考之後即為搜尋）
     findButton() {
-        const toggleButtons = Array.from(document.querySelectorAll('.ds-toggle-button[aria-pressed]'));
-        const genericCandidates = Array.from(document.querySelectorAll('[aria-pressed="true"], [aria-pressed="false"]'));
+        const toggleButtons = Array.from(document.querySelectorAll(__DS_WebsearchSelectors.TOGGLE_BUTTON_SELECTOR));
+        const genericCandidates = Array.from(document.querySelectorAll(__DS_WebsearchSelectors.TOGGLE_BUTTON_FALLBACK_SELECTOR));
         const iconMatch = this._pickByIcon(new Set([...toggleButtons, ...genericCandidates]));
         if (iconMatch) return iconMatch;
         if (toggleButtons.length >= 2) return toggleButtons[1];

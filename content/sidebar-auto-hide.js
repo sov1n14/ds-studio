@@ -15,11 +15,15 @@ if (!__DS_SidebarFeatureToggle || !__DS_SidebarRetryUntil) {
     throw new Error('content/sidebar-auto-hide.js 需要 content/feature-toggle.js 與 content/retry-until.js 先行載入');
 }
 
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_SidebarSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const SidebarAutoHide = {
     STYLE_ID: 'ds-sidebar-auto-hide-style',
     STORAGE_KEY: StorageManager.KEYS.SIDEBAR_AUTO_HIDE,
-    SIDEBAR_WRAPPER_SELECTOR: 'div.dc04ec1d',
-    SIDEBAR_INNER_SELECTOR: 'div.b8812f16.a2f3d50e',
+    SIDEBAR_WRAPPER_SELECTOR: __DS_SidebarSelectors.SIDEBAR_WRAPPER_SELECTOR,
+    SIDEBAR_INNER_SELECTOR: __DS_SidebarSelectors.SIDEBAR_INNER_SELECTOR,
     COLLAPSED_CLASS: 'ds-sidebar-auto-hide-collapsed',
     COLLAPSED_WIDTH: 60,
     ENTER_DELAY_MS: 150,
@@ -29,8 +33,7 @@ const SidebarAutoHide = {
     DOM_RETRY_INTERVAL_MS: 500,
     DOM_MAX_RETRIES: 1,
 
-    NATIVE_COLLAPSED_BAR_SELECTOR: 'div.ca6d4be1',
-    NATIVE_COLLAPSED_INNER_SELECTOR: 'div._70b689f',
+    NATIVE_COLLAPSED_BAR_SELECTOR: __DS_SidebarSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
 
     enabled: false,
     styleEl: null,
@@ -272,8 +275,8 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
             // 使用 closest 確保子元素也能正確識別浮動容器根元素
             // .ds-floating-position-wrapper 優先；其次找最近的 .ds-elevated 根節點
-            const floatingRoot = el.closest('.ds-floating-position-wrapper') ||
-                                  el.closest('.ds-elevated');
+            const floatingRoot = el.closest(__DS_SidebarSelectors.FLOATING_POSITION_WRAPPER_SELECTOR) ||
+                                  el.closest(__DS_SidebarSelectors.ELEVATED_SURFACE_SELECTOR);
             const isFloating = !!floatingRoot;
 
             if (isFloating) {

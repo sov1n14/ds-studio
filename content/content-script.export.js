@@ -80,7 +80,7 @@
 
     /** <a>：一般連結直接輸出；引用標記（.ds-markdown-cite）僅在啟用引用時輸出。 */
     function _renderAnchor(n, ctx) {
-        var citeSpan = n.querySelector('.ds-markdown-cite');
+        var citeSpan = n.querySelector(selectors.MARKDOWN_CITE_SELECTOR);
         if (!citeSpan) {
             return '[' + ctx.parseChildren(n, n.tagName) + '](' + n.href + ')';
         }
@@ -154,7 +154,7 @@
     }
 
     function _isCodeBlockContainer(n) {
-        return n.tagName === 'DIV' && n.classList && Array.from(n.classList).some(function (c) { return c.includes('md-code-block'); });
+        return n.tagName === 'DIV' && n.classList && Array.from(n.classList).some(function (c) { return c.includes(selectors.CODE_BLOCK_CLASS); });
     }
 
     /** <p> / <div>：一般區塊；DeepSeek 程式碼區塊容器改以 span 拼接輸出圍欄式程式碼。 */
@@ -276,12 +276,12 @@
                             var quoted = text.split('\n').map(function (line) { return '> ' + line; }).join('\n');
                             result += quoted + '\n';
                         }
-                    } else if (child.querySelector('._08cbf39')) {
-                        var span = child.querySelector('._08cbf39');
+                    } else if (child.querySelector(selectors.THINK_STATUS_SELECTOR)) {
+                        var span = child.querySelector(selectors.THINK_STATUS_SELECTOR);
                         result += '> ' + span.textContent.trim() + '\n';
-                    } else if (child.querySelector('._442c8e7')) {
-                        var labelDiv = child.querySelector('._442c8e7');
-                        var links = child.querySelectorAll('a._04ab7b1');
+                    } else if (child.querySelector(selectors.THINK_REFERENCE_LABEL_SELECTOR)) {
+                        var labelDiv = child.querySelector(selectors.THINK_REFERENCE_LABEL_SELECTOR);
+                        var links = child.querySelectorAll(selectors.THINK_REFERENCE_LINK_SELECTOR);
                         var line = '> ' + labelDiv.textContent.trim();
                         links.forEach(function (link) {
                             line += ' [' + link.textContent.trim() + '](' + link.href + ')';

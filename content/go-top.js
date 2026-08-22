@@ -63,7 +63,7 @@ const GoToTop = {
     VIRTUAL_LIST_FALLBACK: __DSSelectorsGoTop.VIRTUAL_LIST_FALLBACK,
     // 原生按鈕選擇器：精確雜湊 class 優先，再退回穩定 ds-* class 組合
     // confirmed in go-bottom.html: <div role="button" class="ds-button ... ds-button--floating _0706cde ...">
-    NATIVE_BTN_SELECTOR: '._0706cde:not(.dsw-gotop)',
+    NATIVE_BTN_SELECTOR: '.' + __DSSelectorsGoTop.GO_TOP_NATIVE_BUTTON_CLASS + ':not(.dsw-gotop)',
     INJECT_PARENT_SELECTOR: __DSSelectorsGoTop.FLOATING_BUTTON_BAR_SELECTOR,
     INJECT_PARENT_FALLBACK: __DSSelectorsGoTop.CONTENT_COLUMN_SELECTOR + ' > div:nth-child(2)',
     OUTER_WRAPPER_SELECTOR: __DSSelectorsGoTop.CONTENT_COLUMN_SELECTOR,

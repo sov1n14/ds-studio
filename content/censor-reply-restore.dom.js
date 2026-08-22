@@ -261,7 +261,7 @@
 
             if (!hasThink && !hasResponse) return;
 
-            const mainContent = msgEl.querySelector('.ds-assistant-message-main-content');
+            const mainContent = msgEl.querySelector(selectors.ASSISTANT_MAIN_CONTENT_SELECTOR);
             if (!mainContent) return;
 
             // 隱藏原始被審查內容

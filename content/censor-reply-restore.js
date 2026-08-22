@@ -118,16 +118,16 @@ const CensorReplyRestore = {
     _isCensored(toolbarGroupEl) {
         if (!toolbarGroupEl || !toolbarGroupEl.querySelectorAll) return false;
         // 舊設計系統：.ds-icon-button；新設計系統：.ds-button.ds-button--icon
-        let buttons = toolbarGroupEl.querySelectorAll('.ds-icon-button');
+        let buttons = toolbarGroupEl.querySelectorAll(__DS_CensorSelectors.ICON_BUTTON_SELECTOR);
         if (buttons.length === 0) {
-            buttons = toolbarGroupEl.querySelectorAll('[role="button"].ds-button.ds-button--icon');
+            buttons = toolbarGroupEl.querySelectorAll(__DS_CensorSelectors.ICON_BUTTON_ROLE_SELECTOR);
         }
         if (buttons.length < 5) return false;
         const isDisabled = (btn) =>
             // 舊版：同時需要 class 與 aria 屬性
-            (btn.classList.contains('ds-icon-button--disabled') && btn.getAttribute('aria-disabled') === 'true') ||
+            (btn.classList.contains(__DS_CensorSelectors.ICON_BUTTON_DISABLED_CLASS) && btn.getAttribute('aria-disabled') === 'true') ||
             // 新版：僅需 ds-button--disabled class（部分停用按鈕不帶 aria-disabled 屬性）
-            btn.classList.contains('ds-button--disabled');
+            btn.classList.contains(__DS_CensorSelectors.BUTTON_DISABLED_CLASS);
         return isDisabled(buttons[1]) && isDisabled(buttons[4]);
     },
 
@@ -135,13 +135,13 @@ const CensorReplyRestore = {
         // 工具欄是 messageEl 的兄弟元素 — 在虛擬列表項目容器中搜尋
         const container = messageEl.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR) || messageEl.parentElement;
         if (container) {
-            const toolbar = container.querySelector('.ds-flex._965abe9');
+            const toolbar = container.querySelector(__DS_CensorSelectors.MESSAGE_TOOLBAR_SELECTOR);
             if (toolbar) return toolbar;
 
             // 後備方案：尋找容器中任何有 5 個以上 icon buttons 的 .ds-flex
-            const allFlex = container.querySelectorAll('.ds-flex');
+            const allFlex = container.querySelectorAll(__DS_CensorSelectors.FLEX_ROW_SELECTOR);
             for (let i = 0; i < allFlex.length; i++) {
-                if (allFlex[i].querySelectorAll('.ds-icon-button, [role="button"].ds-button.ds-button--icon').length >= 5) return allFlex[i];
+                if (allFlex[i].querySelectorAll(__DS_CensorSelectors.ICON_BUTTON_ANY_SELECTOR).length >= 5) return allFlex[i];
             }
         }
 
