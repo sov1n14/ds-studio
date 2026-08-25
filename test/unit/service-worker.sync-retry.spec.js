@@ -11,18 +11,21 @@
  *
  * Harness notes:
  *   - service-worker.js is a classic (non-module) script that calls
- *     importScripts(...) at the top and references the bare `StorageManager`
- *     global. We stub both BEFORE importing the file so its top-level
- *     listener registrations see our stubs.
+ *     importScripts(...) at the top and references bare globals
+ *     (StorageManager, TemporaryChatPendingStore, and the DSS*Routes install
+ *     hooks it invokes at load time — DSSSettingsRoutes, DSSPendingStoreRoutes,
+ *     DSSEditorWindowRoutes). All are stubbed BEFORE importing so the file's
+ *     top-level code and listener registrations see our stubs; a missing
+ *     DSSEditorWindowRoutes stub makes the whole module fail to load.
  *   - Listener registration is a one-time module side effect; ESM import
  *     caching means the file's top-level code runs only once for this test
- *     file. Each test resets the StorageManager stub's mock state instead
- *     of re-importing the module.
+ *     file. Each test resets the stubs' mock state instead of re-importing.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const SYNC_RETRY_ALARM_NAME = 'dss-sync-retry';
 const DELETE_RETRY_ALARM_NAME = 'dss-delete-retry';
+const LEASE_TTL_MS = 600000;
 
 function flushMicrotasks() {
     return new Promise((resolve) => setTimeout(resolve, 0));
@@ -40,25 +43,31 @@ beforeAll(async () => {
     };
     globalThis.StorageManager = storageManagerStub;
 
-    // service-worker.js's onStartup listener now also calls TemporaryChatPendingStore
-    // (clearOpenUuids + remediatePendingDeletes via getPendingDeletes/getLastAuthToken).
-    // Stub it so the listener does not throw; pending-delete behaviour itself is
-    // covered by service-worker.pending-delete.spec.js.
+    // service-worker.js's onStartup listener also drives TemporaryChatPendingStore
+    // (getOpenUuids/releaseLease/clearOpenUuids + remediatePendingDeletes, which
+    // gates on isLeaseExpired). Stub the full surface so the listener does not
+    // throw; pending-delete behaviour itself is covered by
+    // service-worker.pending-delete.spec.js.
     pendingStoreStub = {
         getPendingDeletes: vi.fn().mockResolvedValue([]),
         savePendingDeletes: vi.fn().mockResolvedValue(undefined),
         getOpenUuids: vi.fn().mockResolvedValue([]),
         clearOpenUuids: vi.fn().mockResolvedValue(undefined),
         getLastAuthToken: vi.fn().mockResolvedValue(null),
+        isLeaseExpired: (entry, now) =>
+            !Number.isFinite(entry?.lastActiveAt) || now - entry.lastActiveAt > LEASE_TTL_MS,
+        refreshLease: vi.fn(),
+        releaseLease: vi.fn().mockResolvedValue(undefined),
     };
     globalThis.TemporaryChatPendingStore = pendingStoreStub;
 
     settingsRoutesStub = { install: vi.fn() };
     globalThis.DSSSettingsRoutes = settingsRoutesStub;
     globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
+    globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
 
-    // Import once; top-level chrome.runtime.onStartup / onInstalled / alarms.onAlarm
-    // registrations happen here.
+    // Import once; top-level installs and chrome.runtime.onStartup / onInstalled /
+    // alarms.onAlarm registrations happen here.
     await import('../../background/service-worker.js');
 });
 

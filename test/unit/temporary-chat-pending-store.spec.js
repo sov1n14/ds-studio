@@ -13,10 +13,16 @@ describe('TemporaryChatPendingStore', () => {
 
     // ── Group A: pending-delete sync queue ──────────────────────────────────
     describe('A — pending-delete sync queue', () => {
-        it('A1: addPendingDelete writes {chatUuid, attemptCount:0}', async () => {
-            await TemporaryChatPendingStore.addPendingDelete('uuid-1');
-            const queue = await TemporaryChatPendingStore.getPendingDeletes();
-            expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0 }]);
+        it('A1: addPendingDelete writes {chatUuid, attemptCount:0, lastActiveAt}', async () => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(1700000000000);
+            try {
+                await TemporaryChatPendingStore.addPendingDelete('uuid-1');
+                const queue = await TemporaryChatPendingStore.getPendingDeletes();
+                expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: 1700000000000 }]);
+            } finally {
+                vi.useRealTimers();
+            }
         });
 
         it('A2: addPendingDelete is idempotent (no dup on repeat)', async () => {
@@ -27,18 +33,30 @@ describe('TemporaryChatPendingStore', () => {
         });
 
         it('A3: removePendingDelete removes only the matching uuid', async () => {
-            await TemporaryChatPendingStore.addPendingDelete('uuid-1');
-            await TemporaryChatPendingStore.addPendingDelete('uuid-2');
-            await TemporaryChatPendingStore.removePendingDelete('uuid-1');
-            const queue = await TemporaryChatPendingStore.getPendingDeletes();
-            expect(queue).toEqual([{ chatUuid: 'uuid-2', attemptCount: 0 }]);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(1700000000000);
+            try {
+                await TemporaryChatPendingStore.addPendingDelete('uuid-1');
+                await TemporaryChatPendingStore.addPendingDelete('uuid-2');
+                await TemporaryChatPendingStore.removePendingDelete('uuid-1');
+                const queue = await TemporaryChatPendingStore.getPendingDeletes();
+                expect(queue).toEqual([{ chatUuid: 'uuid-2', attemptCount: 0, lastActiveAt: 1700000000000 }]);
+            } finally {
+                vi.useRealTimers();
+            }
         });
 
         it('A4: removePendingDelete is a no-op when uuid is absent', async () => {
-            await TemporaryChatPendingStore.addPendingDelete('uuid-1');
-            await TemporaryChatPendingStore.removePendingDelete('does-not-exist');
-            const queue = await TemporaryChatPendingStore.getPendingDeletes();
-            expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0 }]);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(1700000000000);
+            try {
+                await TemporaryChatPendingStore.addPendingDelete('uuid-1');
+                await TemporaryChatPendingStore.removePendingDelete('does-not-exist');
+                const queue = await TemporaryChatPendingStore.getPendingDeletes();
+                expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: 1700000000000 }]);
+            } finally {
+                vi.useRealTimers();
+            }
         });
 
         it('A5: getPendingDeletes returns [] when key is absent', async () => {
@@ -135,7 +153,7 @@ describe('TemporaryChatPendingStore', () => {
 
     // ── Group E: privacy — no token ever reaches sync storage ────────────────
     describe('E — privacy: sync storage never contains the auth token', () => {
-        it('E1: after trackForDeletion + setLastAuthToken, sync store contains only {chatUuid, attemptCount}', async () => {
+        it('E1: after trackForDeletion + setLastAuthToken, sync store contains only {chatUuid, attemptCount, lastActiveAt}', async () => {
             await TemporaryChatPendingStore.trackForDeletion('uuid-priv');
             await TemporaryChatPendingStore.setLastAuthToken('Bearer super-secret-token');
 
@@ -143,7 +161,7 @@ describe('TemporaryChatPendingStore', () => {
             const queue = syncData[SYNC_KEY];
             expect(Array.isArray(queue)).toBe(true);
             queue.forEach((entry) => {
-                expect(Object.keys(entry).sort()).toEqual(['attemptCount', 'chatUuid']);
+                expect(Object.keys(entry).sort()).toEqual(['attemptCount', 'chatUuid', 'lastActiveAt']);
             });
 
             // Deep-scan the whole sync store for the token string — must never appear.

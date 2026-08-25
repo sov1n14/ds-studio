@@ -212,6 +212,10 @@ initSettings().catch(e => {
     if (e?.message?.includes('Extension context invalidated')) return;
 });
 
+// 臨時對話側邊欄隱藏：無條件啟動（模組本身無載入期副作用，
+// 防禦性參照避免載入順序缺失時拋錯；沿用 sidebar-auto-hide.js 的自啟動模式）
+globalThis.TemporaryChatSidebarHide?.init();
+
 // Popup 訊息監聽
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'EXPORT_MARKDOWN') {

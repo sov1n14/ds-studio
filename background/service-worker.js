@@ -57,21 +57,25 @@ async function scheduleRetryAlarm() {
 
 /**
  * 補救待刪佇列：讀取 sync 佇列，以本機 token 逐筆刪除，僅確認成功才移除。
- * @param {{excludeUuids?: string[]}} [opts] excludeUuids 內的 UUID 一律跳過（本機仍開啟的對話）
+ * 租約未過期的項目（本機仍活躍的對話）一律跳過並原封保留於佇列。
  */
-async function remediatePendingDeletes({ excludeUuids = [] } = {}) {
+async function remediatePendingDeletes() {
     const pending = await TemporaryChatPendingStore.getPendingDeletes();
     if (pending.length === 0) return;
 
     const token = await TemporaryChatPendingStore.getLastAuthToken();
     if (!token) return; // 本機無 token → 保留佇列，交由具備 token 的裝置補救
 
-    const exclude = new Set(excludeUuids);
+    const now = Date.now();
     const stillPending = [];
     let hasChanged = false;
 
     for (const item of pending) {
-        if (exclude.has(item.chatUuid)) { stillPending.push(item); continue; }
+        // 租約未過期 → 本機仍活躍，跳過並原封保留
+        if (!TemporaryChatPendingStore.isLeaseExpired(item, now)) {
+            stillPending.push(item);
+            continue;
+        }
 
         const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
         if (isOk) { hasChanged = true; continue; }           // 確認成功 → 移除
@@ -84,8 +88,7 @@ async function remediatePendingDeletes({ excludeUuids = [] } = {}) {
     }
 
     if (hasChanged) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
-    const hasRetryable = stillPending.some(i => !exclude.has(i.chatUuid));
-    if (hasRetryable) await scheduleRetryAlarm();
+    if (stillPending.length > 0) await scheduleRetryAlarm();
 }
 
 /**
@@ -105,8 +108,15 @@ async function retryParkedSync() {
 chrome.runtime.onStartup.addListener(() => {
     retryParkedSync(); // 既有：cloud-preset 補推
     (async () => {
-        await TemporaryChatPendingStore.clearOpenUuids();    // 全新工作階段，尚無活動分頁
-        await remediatePendingDeletes({ excludeUuids: [] });
+        // 全新工作階段：先釋放仍在待刪佇列中的本機開啟對話租約，使其立即可刪
+        const openUuids = await TemporaryChatPendingStore.getOpenUuids();
+        const pending = await TemporaryChatPendingStore.getPendingDeletes();
+        const pendingUuids = new Set(pending.map(i => i.chatUuid));
+        for (const uuid of openUuids) {
+            if (pendingUuids.has(uuid)) await TemporaryChatPendingStore.releaseLease(uuid);
+        }
+        await TemporaryChatPendingStore.clearOpenUuids(); // 全新工作階段，尚無活動分頁
+        await remediatePendingDeletes();
     })();
 });
 
@@ -130,13 +140,30 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             retryParkedSync();
             return;
         case RETRY_ALARM_NAME:
-            (async () => {
-                const openUuids = await TemporaryChatPendingStore.getOpenUuids();
-                await remediatePendingDeletes({ excludeUuids: openUuids });
-            })();
+            remediatePendingDeletes();
             return;
     }
 });
+
+// 將目前待刪佇列 uuid 廣播給所有 DeepSeek 分頁，讓側邊欄同步隱藏／取消隱藏；未安裝 content script 的分頁 sendMessage 會 reject，逐一 catch 靜默忽略。
+// 不新增 tabs 權限、不帶 url 過濾：無過濾查詢加上 best-effort 送訊在既有 host 權限下即可運作。
+async function broadcastPendingUuids() {
+    const pending = await TemporaryChatPendingStore.getPendingDeletes();
+    const uuids = pending.map((item) => item.chatUuid);
+    let tabs;
+    try {
+        tabs = await chrome.tabs.query({});
+    } catch (err) {
+        console.error('[DSS] broadcastPendingUuids query:', err);
+        return;
+    }
+    if (!Array.isArray(tabs)) return; // 查詢結果非陣列（環境無 tabs API）時視為無分頁可送
+    for (const tab of tabs) {
+        if (typeof tab.id !== 'number') continue;
+        Promise.resolve(chrome.tabs.sendMessage(tab.id, { type: DSS_MSG_PENDING_UUIDS_CHANGED, uuids }))
+            .catch(() => {}); // 無 content script 的分頁會 reject，靜默忽略
+    }
+}
 
 // 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -146,10 +173,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
     (async () => {
         _remediationInFlight = true;
         try {
-            const openUuids = await TemporaryChatPendingStore.getOpenUuids();
-            await remediatePendingDeletes({ excludeUuids: openUuids });
+            await remediatePendingDeletes();
         } finally {
             _remediationInFlight = false;
         }
+        await broadcastPendingUuids(); // 佇列變更後同步通知各分頁側邊欄
     })();
 });

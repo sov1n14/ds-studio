@@ -113,6 +113,12 @@
   - `DSS_MSG_REMOVE_PENDING_DELETE = 'DSS_REMOVE_PENDING_DELETE'`（payload `{uuid}`）：自跨裝置待刪佇列移除
   - `DSS_MSG_REMOVE_OPEN_UUID = 'DSS_REMOVE_OPEN_UUID'`（payload `{uuid}`）：自本機開啟中 UUID 集合移除
   - `DSS_MSG_SET_LAST_AUTH_TOKEN = 'DSS_SET_LAST_AUTH_TOKEN'`（payload `{token}`）：更新本機最近有效 bearer token 快取
+  - `DSS_MSG_HEARTBEAT = 'DSS_HEARTBEAT'`（payload `{uuid}`）：續租該對話的租約
+  - `DSS_MSG_RELEASE_LEASE = 'DSS_RELEASE_LEASE'`（payload `{uuid}`）：將租約時戳歸零，讓任一裝置得以立即接手
+  - `DSS_MSG_GET_PENDING_UUIDS = 'DSS_GET_PENDING_UUIDS'`：向 background 索取目前待刪佇列中的 UUID 清單
+  - `DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED'`（payload `{uuids}`）：background 於佇列變動時推送給各分頁
+  - `LEASE_TTL_MS = 600000`（10 分鐘）：租約存續時間
+  - `HEARTBEAT_INTERVAL_MS = 60000`（1 分鐘）：心跳續租間隔
   - 常數以 `Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS)` 明確掛上 globalThis：classic script 的 top-level `const` 不會成為 globalThis 屬性，而 service worker 端經 `importScripts` 取用時必須以 `globalThis[name]` 解析。
 - **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
   - **SPA 注入／移除**：以 Navigation API `navigate` 事件（並輔以 `popstate` 與 `MutationObserver`）在每次導航重新評估：`pathname === '/'` 時等待 `div.aaff8b8f` 出現後於其下方 38px 注入（以 id 去重），`pathname !== '/'` 時移除開關列。移除僅刪除 DOM 元素，**不更動啟用旗標**（該旗標由 `TemporaryChatEnabledFlag` 持有於 `chrome.storage.local`）；重新注入時依持久化旗標還原視覺。旗標經 background 廣播同步至每個分頁並快取於記憶體，故 `readEnabledFlag()` 得以維持同步呼叫。
@@ -133,12 +139,29 @@
   - **Layer 1（即時路徑，content script）**：SPA 導航沿用 Fiber/API 刪除；`beforeunload`（關閉分頁／瀏覽器）改為直接 `fetch(keepalive: true)`，不再經過 Service Worker 中繼，消除 IPC 競態。刪除成功（API 明確回傳成功）才移除待刪項目。
   - **Layer 2（補救路徑，Service Worker，僅 `onStartup` 觸發）**：擴充既有的 `chrome.runtime.onStartup` 監聽器（原用於雲端預設集同步），讀取共用待刪佇列並以本機 `dss-last-auth-token` 逐筆補刪，僅確認成功後才移除項目，失敗則累加 `attemptCount` 並保留供下次補救。
   - **跨裝置單一事實來源**：待刪佇列（`dss-pending-deletes-sync`）僅存在於 `chrome.storage.sync`，不設本機獨立副本；任一登入同一 Chrome 帳戶的裝置皆可用自身的 `dss-last-auth-token` 補刪佇列中的任何項目，無論該項目是否由自己標記。
-  - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描時排除本機裝置目前開啟中的臨時對話 UUID（僅本機儲存），避免誤刪使用者正在使用的對話。
+  - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描僅刪除租約已過期的項目（見下方「租約與心跳」），故使用中的對話在任何裝置上都受保護。
   - **開啟中對話護欄的儲存版面（v4.15.1）**：每個開啟中的 UUID 各自佔用一把 `chrome.storage.local` 鍵（前綴 `dss-open-temp-uuid:`），新增只寫自己那把、移除只刪自己那把。舊版將整份清單存於單一陣列鍵 `dss-open-temp-uuids` 並在每次增刪時整份重寫，任一 context 讀到過期快照就會把其他分頁的項目一併算掉，導致使用中的對話失去護欄而被掃描刪除。新版無 read-modify-write，因此不存在此類遺失。舊陣列鍵改為唯讀並在讀取時聯集進來（升級當下仍存活的對話不致失去護欄），`clearOpenUuids()` 會一併清除之。
-  - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid` 與 `attemptCount`。
+  - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid`、`attemptCount` 與租約時戳 `lastActiveAt`。
   - **儲存權責歸 Service Worker**：`content/temporary-chat-pending-store.js` 已不在 `manifest.json` 的 `content_scripts` 清單中，僅由 `background/service-worker.js` 以 `importScripts` 載入，因此 `TemporaryChatPendingStore`（及其全部 `chrome.storage.*` 呼叫）只存在於 worker 情境。content 層改以上述四種訊息請求寫入，本身不再直接觸碰 `chrome.storage`（`chrome-extension-coding-guidelines` §1 層級界線）。
     - **背景端路由**（`background/pending-store-routes.js`）：`install()` 於 service worker 頂層呼叫（確保 worker 重啟後仍存活），註冊單一 `chrome.runtime.onMessage` 監聽器，內含 `type` → 存取層操作對照表。未知型別回傳 `false` 且不回應，讓 worker 內其他監聽器仍能處理；已知型別回傳 `true`，並於 await 完成後回應 `{ ok: true }` 或 `{ ok: false, error }`。相依缺失（存取層或常數未先載入）於解析時即拋出並指名應載入的檔案。
     - **送出端**：`temporary-chat-delete.tracking.js` 送 `DSS_TRACK_FOR_DELETION`；`temporary-chat-delete.coordinator.js` 送兩種移除訊息；`temporary-chat-delete.handlers.js` 送 `DSS_SET_LAST_AUTH_TOKEN`。
+
+- **跨裝置租約與心跳（v4.31.1）**：待刪佇列存於 `chrome.storage.sync`，會傳播到同一 Chrome 帳戶的其他裝置。為了讓「這個對話正被使用中」這項事實對所有裝置可見，佇列項目本身帶有租約時戳。
+  - **佇列項目結構**：`{ chatUuid, attemptCount, lastActiveAt }`，`lastActiveAt` 為 epoch 毫秒的租約時戳。`LEASE_TTL_MS` 訂為寬鬆的 10 分鐘，用以一次吸收 `chrome.storage.sync` 的傳播延遲、背景分頁的計時器節流，以及跨裝置時鐘偏移。
+  - **存取層 API**（`content/temporary-chat-pending-store.js`）：`refreshLease(chatUuid)` 續租、`releaseLease(chatUuid)` 將 `lastActiveAt` 歸零、純函式 `isLeaseExpired(entry, now)` 判定過期 —— `lastActiveAt` 非有限數值，或 `now - lastActiveAt > LEASE_TTL_MS` 時視為過期；恰好等於 TTL 仍屬有效。佇列的所有 read-modify-write 皆經由 promise 鏈式互斥閘序列化，多分頁同時送訊息也不會交錯 get/set 而遺失更新。
+  - **補救掃描一律受租約閘控**（`background/service-worker.js`）：`remediatePendingDeletes()` 不再接受參數，只刪除租約已過期的項目；`chrome.runtime.onStartup`、`dss-delete-retry` 排程與 sync 區的 `chrome.storage.onChanged` 三條路徑皆套用同一道閘。
+  - **心跳**（`content/temporary-chat-heartbeat.js`，發布 `{ start, stop }`）：分頁追蹤中的臨時對話會立即送出一次 `{type: 'DSS_HEARTBEAT', uuid}`，其後每 `HEARTBEAT_INTERVAL_MS` 續送一次，service worker 路由收到後呼叫 `refreshLease`。心跳於 `trackUuid()` 與 sessionStorage 還原路徑啟動，於追蹤結束或監聽卸除時停止。由於它綁定 content script／分頁生命週期，分頁崩潰或被強制結束時心跳自然停止，租約隨之到期，無需任何裝置識別碼。
+  - **快速重啟回收**：`onStartup` 時先將本機開啟集合中且仍在佇列內的每個 UUID 釋放租約，接著清空本機開啟集合，最後才執行補救掃描 —— 本裝置關機前開著的對話因此在重啟後即刻被刪除。
+  - **明確釋放租約**：離開流程的即時刪除完全失敗時（Fiber 刪除失敗且 API 後援重試耗盡），coordinator 送出 `DSS_RELEASE_LEASE` 將租約歸零，讓任一裝置立即接手，不必等到 TTL 到期。
+- **側邊欄隱藏待刪對話（v4.31.1）**：待刪佇列中的對話會在所有裝置的 DeepSeek 側邊欄中隱藏，包含標記來源裝置上目前正開啟的那一個 —— 這是刻意的產品決策：在即時對話情境下，讓側邊欄切換到一個正在被拆除的臨時對話並無意義。
+  - **資料來源**：`background/service-worker.js` 於每次 sync 佇列變動時將佇列 UUID 廣播給各分頁；`content/temporary-chat-sidebar-hide.js`（發布 `{ init, stop }`，由 `content/content-script.js` 啟動）維護一份記憶體內的 UUID 集合，初次以 `DSS_GET_PENDING_UUIDS` 取得，其後由 `DSS_PENDING_UUIDS_CHANGED` 推送更新。
+  - **群組收合規則**：側邊欄將對話錨點依日期分組，每個群組容器內含一個日期標籤與一至多個列錨點。判定以容器為單位 —— 容器內全部錨點皆在佇列中時隱藏整個容器，日期標籤隨之消失；只要有任一錨點不在佇列中，就僅隱藏個別的待刪錨點。僅含單一錨點的群組，該錨點在佇列中即視為全數待刪。
+  - **隱藏方式**：套用 `ds-` 前綴的 `ds-temp-chat-hidden` class 搭配注入的 `display: none !important` 規則，節點始終保留於頁面上。每次套用都會先全面清除該 class 再重新推導，因此項目離開佇列後群組會重新出現、個別錨點也會解除隱藏。
+  - **更新時機**：對側邊欄容器掛載 `MutationObserver`，將密集變動合併為每個動畫影格套用一次。
+  - **選擇器**（`content/ds-selectors.js`）：`SIDEBAR_DATE_GROUP_SELECTOR` 為日期群組容器的混淆 class，`SIDEBAR_CHAT_LINK_SELECTOR` 以 `/a/chat/s/` href 定位錨點。若 DeepSeek 改版導致群組選擇器失配，功能會降級為個別錨點隱藏 —— 該路徑以 href 尋找錨點，不受混淆 class 變動影響。
+- **已知限制**：
+  - `chrome.storage.sync` 的傳播延遲（通常為數秒）使對話在其他裝置上會短暫可見，待佇列送達後才隱藏。
+  - Chrome 同步登出或暫停時，清理降級為單機模式：標記來源裝置仍會刪除自己的對話，其他裝置則收不到佇列，因此不會發生誤刪。
 
 ## 23. 設定讀寫的訊息化（content → background）
 

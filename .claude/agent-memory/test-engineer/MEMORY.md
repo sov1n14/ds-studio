@@ -1,1 +1,3 @@
-- [Vitest dynamic import red-phase quirk](vitest_dynamic_import_red.md) — missing-module import() fails whole suite at collection, not per-test; still valid red.
+# Test Engineer Memory
+
+- [Service Worker Test Harness](sw-test-harness.md) — how to load background/service-worker.js under Vitest, and the Bash heredoc truncation limit.

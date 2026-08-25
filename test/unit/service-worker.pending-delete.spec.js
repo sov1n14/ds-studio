@@ -4,13 +4,15 @@
  * service-worker.js is a classic script that calls importScripts(...) at the top
  * and references bare globals (StorageManager, TemporaryChatPendingStore). We stub
  * both BEFORE importing so the file's top-level listener registrations see the stubs.
- * fetch is stubbed globally to drive performDeleteFetch's success/failure branches
- * (DSSDeepSeekApi.performDeleteFetch resolves `fetch` at call time, so the global
- * stub keeps intercepting the remediation path).
+ * fetch is stubbed globally to drive performDeleteFetch's success/failure branches.
  *
- * The two side-effect imports stand in for the real importScripts payload: they
- * publish globalThis.DSSDeepSeekApi and the DSS_* constants that service-worker.js
- * reads as bare globals.
+ * Lease gating: remediatePendingDeletes() takes no arguments and deletes a queue
+ * entry only when TemporaryChatPendingStore.isLeaseExpired(entry, now) is true.
+ * The store double carries a REAL isLeaseExpired plus refreshLease and a
+ * releaseLease that zeroes lastActiveAt on the queue the double serves, so fixtures
+ * drive deletion vs. retention purely through each entry's lease freshness. An
+ * expired lease is lastActiveAt: 0 (now - 0 exceeds LEASE_TTL_MS); a fresh lease is
+ * lastActiveAt: Date.now() at fixture time.
  */
 import '../../utils/deepseek-api.js';
 import '../../utils/temporary-chat-constants.js';
@@ -18,12 +20,14 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const RETRY_ALARM_NAME = 'dss-delete-retry';
 const SCHEDULE_DELETE_RETRY = 'DSS_SCHEDULE_DELETE_RETRY';
+const LEASE_TTL_MS = 600000;
+const EXPIRED = 0; // lastActiveAt far in the past → lease expired
+const fresh = () => Date.now(); // lease refreshed now → not expired
 
 function flushMicrotasks() {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Flush the macrotask queue multiple times to let long await-chains settle. */
 async function flushAll(times = 5) {
     for (let i = 0; i < times; i++) {
         await flushMicrotasks();
@@ -44,6 +48,14 @@ beforeAll(async () => {
         getOpenUuids: vi.fn().mockResolvedValue([]),
         clearOpenUuids: vi.fn().mockResolvedValue(undefined),
         getLastAuthToken: vi.fn().mockResolvedValue(null),
+        isLeaseExpired: (entry, now) =>
+            !Number.isFinite(entry?.lastActiveAt) || now - entry.lastActiveAt > LEASE_TTL_MS,
+        refreshLease: vi.fn(),
+        releaseLease: vi.fn(async (uuid) => {
+            const queue = await pendingStoreStub.getPendingDeletes();
+            const entry = queue.find((e) => e.chatUuid === uuid);
+            if (entry) entry.lastActiveAt = 0;
+        }),
     };
     globalThis.TemporaryChatPendingStore = pendingStoreStub;
     globalThis.DSSSettingsRoutes = { install: vi.fn() };
@@ -60,6 +72,8 @@ beforeEach(() => {
     pendingStoreStub.getOpenUuids.mockReset().mockResolvedValue([]);
     pendingStoreStub.clearOpenUuids.mockReset().mockResolvedValue(undefined);
     pendingStoreStub.getLastAuthToken.mockReset().mockResolvedValue(null);
+    pendingStoreStub.refreshLease.mockReset();
+    pendingStoreStub.releaseLease.mockClear();
     globalThis.StorageManager.isSyncedWithCloud.mockReset().mockResolvedValue(true);
     globalThis.StorageManager.retrySync.mockReset();
     globalThis.fetch.mockReset();
@@ -68,8 +82,8 @@ beforeEach(() => {
 });
 
 describe('onStartup — remediation', () => {
-    it('[CAP-02] happy path: queue [{u1,0}], token present, fetch ok → performDeleteFetch(u1, token), savePendingDeletes([]), clearOpenUuids called', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0 }]);
+    it('[CAP-02] happy path: expired queue [{u1,0}], token present, fetch ok → performDeleteFetch(u1, token), savePendingDeletes([]), clearOpenUuids called', async () => {
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: true });
 
@@ -88,7 +102,7 @@ describe('onStartup — remediation', () => {
     });
 
     it('[known limitation] cross-device no-token: token null → no fetch, savePendingDeletes NOT called', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0 }]);
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue(null);
 
         chrome.runtime.onStartup.callListeners();
@@ -98,8 +112,8 @@ describe('onStartup — remediation', () => {
         expect(pendingStoreStub.savePendingDeletes).not.toHaveBeenCalled();
     });
 
-    it('[invariant] confirmed-deletion: fetch not ok → savePendingDeletes([{u1, attemptCount:1}]) and scheduleRetryAlarm (chrome.alarms.create) called', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0 }]);
+    it('[invariant] confirmed-deletion: expired lease + fetch not ok → savePendingDeletes([{u1, attemptCount:1}]) and scheduleRetryAlarm called', async () => {
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: false });
 
@@ -110,8 +124,8 @@ describe('onStartup — remediation', () => {
         expect(chrome.alarms.create).toHaveBeenCalledWith(RETRY_ALARM_NAME, { delayInMinutes: 0.5 });
     });
 
-    it('attemptCount cap: entry {attemptCount:2} + not-ok → dropped (saved [])', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 2 }]);
+    it('attemptCount cap: expired entry {attemptCount:2} + not-ok → dropped (saved [])', async () => {
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 2, lastActiveAt: EXPIRED }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: false });
 
@@ -121,8 +135,8 @@ describe('onStartup — remediation', () => {
         expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([]);
     });
 
-    it('[idempotency] idempotent re-delete: fetch ok for already-deleted uuid → removed', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 1 }]);
+    it('[idempotency] idempotent re-delete: fetch ok for already-deleted expired uuid → removed', async () => {
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 1, lastActiveAt: EXPIRED }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: true });
 
@@ -151,9 +165,12 @@ describe('onMessage — DSS_SCHEDULE_DELETE_RETRY', () => {
 });
 
 describe('onAlarm — dss-delete-retry', () => {
-    it('triggers remediation with open-set exclusion', async () => {
-        pendingStoreStub.getOpenUuids.mockResolvedValue(['uOpen']);
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'uOpen', attemptCount: 0 }, { chatUuid: 'uOther', attemptCount: 0 }]);
+    it('remediates by lease expiry and does not consult the open set', async () => {
+        pendingStoreStub.getOpenUuids.mockResolvedValue(['uExpired']);
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([
+            { chatUuid: 'uExpired', attemptCount: 0, lastActiveAt: EXPIRED },
+            { chatUuid: 'uFresh', attemptCount: 0, lastActiveAt: fresh() },
+        ]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: true });
 
@@ -163,12 +180,15 @@ describe('onAlarm — dss-delete-retry', () => {
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
         expect(globalThis.fetch).toHaveBeenCalledWith(
             expect.any(String),
-            expect.objectContaining({ body: JSON.stringify({ chat_session_id: 'uOther' }) })
+            expect.objectContaining({ body: JSON.stringify({ chat_session_id: 'uExpired' }) })
         );
+        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([
+            expect.objectContaining({ chatUuid: 'uFresh' }),
+        ]);
     });
 
     it('ignores an unrelated alarm', async () => {
-        chrome.runtime.onStartup.callListeners; // no-op reference to avoid unused import warnings
+        chrome.runtime.onStartup.callListeners; // no-op reference
         pendingStoreStub.getPendingDeletes.mockClear();
 
         chrome.alarms.onAlarm.callListeners({ name: 'some-other-alarm' });
@@ -178,12 +198,11 @@ describe('onAlarm — dss-delete-retry', () => {
     });
 });
 
-describe('onChanged (sync, dss-pending-deletes-sync) — safeguard + loop guard + area filter', () => {
-    it('[safeguard] openSet=[uOpen], queue [{uOpen,0},{uOther,0}] → only uOther fetched/removed, uOpen retained', async () => {
-        pendingStoreStub.getOpenUuids.mockResolvedValue(['uOpen']);
+describe('onChanged (sync, dss-pending-deletes-sync) — lease gating + loop guard + area filter', () => {
+    it('[safeguard] fresh lease retains, expired lease deletes: [{uFresh},{uExpired}] → only uExpired fetched/removed, uFresh retained by its fresh lease', async () => {
         pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'uOpen', attemptCount: 0 },
-            { chatUuid: 'uOther', attemptCount: 0 },
+            { chatUuid: 'uFresh', attemptCount: 0, lastActiveAt: fresh() },
+            { chatUuid: 'uExpired', attemptCount: 0, lastActiveAt: EXPIRED },
         ]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: true });
@@ -192,12 +211,17 @@ describe('onChanged (sync, dss-pending-deletes-sync) — safeguard + loop guard 
         await flushAll();
 
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([{ chatUuid: 'uOpen', attemptCount: 0 }]);
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ body: JSON.stringify({ chat_session_id: 'uExpired' }) })
+        );
+        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([
+            expect.objectContaining({ chatUuid: 'uFresh' }),
+        ]);
     });
 
-    it('loop guard: every queue entry excluded → savePendingDeletes NOT called, fetch count 0', async () => {
-        pendingStoreStub.getOpenUuids.mockResolvedValue(['uOpen']);
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'uOpen', attemptCount: 0 }]);
+    it('loop guard: every queue entry has a fresh lease → savePendingDeletes NOT called, fetch count 0', async () => {
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'uFresh', attemptCount: 0, lastActiveAt: fresh() }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
 
         chrome.storage.onChanged.callListeners({ 'dss-pending-deletes-sync': { newValue: [] } }, 'sync');
