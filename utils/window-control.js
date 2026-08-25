@@ -91,9 +91,20 @@ async function openSingletonWindow({ url, createOptions, storageKey } = {}) {
     return { window: createdWindow, created: true };
 }
 
-globalThis.DSSWindowControl = { openSingletonWindow };
+/**
+ * 解析擴充功能內資源的絕對 URL。
+ * popup 層不可直接呼叫 chrome.*，需透過本模組取得資源 URL，維持 utils/ 為唯一 API 邊界。
+ * @param {string} resourcePath - 相對於擴充功能根目錄的資源路徑
+ * @returns {string} 該資源的 chrome-extension:// 絕對 URL
+ */
+function getExtensionUrl(resourcePath) {
+    if (!resourcePath) throw new Error('[DSS] getExtensionUrl: resourcePath is required');
+    return chrome.runtime.getURL(resourcePath);
+}
+
+globalThis.DSSWindowControl = { openSingletonWindow, getExtensionUrl };
 
 // 匯出供 Node.js 單元測試環境使用
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { openSingletonWindow };
+    module.exports = { openSingletonWindow, getExtensionUrl };
 }

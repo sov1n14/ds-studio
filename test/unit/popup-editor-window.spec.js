@@ -44,7 +44,13 @@ beforeEach(() => {
     activePresetId = '';
     chrome.runtime.getURL = vi.fn(() => BASE_URL);
     openSingletonWindow = vi.fn().mockResolvedValue({ created: true });
-    globalThis.DSSWindowControl = { openSingletonWindow };
+    // getExtensionUrl mirrors the popup->utils boundary: popup/ must not call chrome.*
+    // directly, so it resolves resource URLs through utils/window-control.js. Delegating
+    // to the SAME stubbed chrome.runtime.getURL keeps BASE_URL flowing whether the module
+    // still calls chrome.runtime.getURL directly (current) or DSSWindowControl.getExtensionUrl
+    // (post-fix) — the asserted url is BASE_URL either way, so no assertion moves.
+    const getExtensionUrl = vi.fn((resourcePath) => chrome.runtime.getURL(resourcePath));
+    globalThis.DSSWindowControl = { openSingletonWindow, getExtensionUrl };
 });
 
 const buildManager = () =>

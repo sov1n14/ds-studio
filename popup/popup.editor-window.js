@@ -31,7 +31,8 @@ function createEditorWindowManager(ctx) {
      * @param {string} [presetId] - 僅在 target==='preset' 時使用
      */
     async function openEditorWindow(target, presetId) {
-        const baseUrl = chrome.runtime.getURL('popup/editor/editor.html');
+        // popup 層不直接呼叫 chrome.*，改由 utils/window-control.js 解析資源 URL
+        const baseUrl = DSSWindowControl.getExtensionUrl('popup/editor/editor.html');
         const isGlobal = target === 'global';
         // URL 的 query string 即編輯器讀取編輯目標的機制，切換提示詞組時由此帶入新的 id
         const url = isGlobal
