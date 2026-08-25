@@ -26,6 +26,9 @@
             REMOVE_PENDING_DELETE: globalThis.DSS_MSG_REMOVE_PENDING_DELETE,
             REMOVE_OPEN_UUID: globalThis.DSS_MSG_REMOVE_OPEN_UUID,
             SET_LAST_AUTH_TOKEN: globalThis.DSS_MSG_SET_LAST_AUTH_TOKEN,
+            HEARTBEAT: globalThis.DSS_MSG_HEARTBEAT,
+            RELEASE_LEASE: globalThis.DSS_MSG_RELEASE_LEASE,
+            GET_PENDING_UUIDS: globalThis.DSS_MSG_GET_PENDING_UUIDS,
         };
         const missing = Object.keys(types).filter((name) => !types[name]);
         if (missing.length > 0) {
@@ -45,6 +48,12 @@
             [types.REMOVE_PENDING_DELETE]: (message) => resolvePendingStore().removePendingDelete(message?.uuid),
             [types.REMOVE_OPEN_UUID]: (message) => resolvePendingStore().removeOpenUuid(message?.uuid),
             [types.SET_LAST_AUTH_TOKEN]: (message) => resolvePendingStore().setLastAuthToken(message?.token),
+            [types.HEARTBEAT]: (message) => resolvePendingStore().refreshLease(message?.uuid),
+            [types.RELEASE_LEASE]: (message) => resolvePendingStore().releaseLease(message?.uuid),
+            [types.GET_PENDING_UUIDS]: async () => {
+                const pending = await resolvePendingStore().getPendingDeletes();
+                return { uuids: pending.map((item) => item.chatUuid) };
+            },
         };
     }
 
@@ -56,8 +65,9 @@
      */
     async function runRoute(route, message, sendResponse) {
         try {
-            await route(message);
-            sendResponse({ ok: true });
+            const result = await route(message);
+            // 回傳值為物件時併入回應（既有路由回傳 undefined，回應維持 {ok:true} 不變）
+            sendResponse(result && typeof result === 'object' ? { ok: true, ...result } : { ok: true });
         } catch (err) {
             console.error(`[DSS] pending-store-routes ${message?.type}:`, err);
             sendResponse({ ok: false, error: String(err) });

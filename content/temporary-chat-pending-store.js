@@ -14,6 +14,16 @@ const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = globalThis.DSS_OPEN_TEMP_UUIDS_KEY ?? 'd
 // 新版：每個 uuid 各自一把獨立 key，任何呼叫端都不會讀改寫到其他 uuid 擁有的資料，
 // 因此不再需要跨 context 鎖 —— 沒有共用結構就沒有讀改寫競態可言。
 const DSS_OPEN_UUID_KEY_PREFIX = 'dss-open-temp-uuid:';
+const DSS_LEASE_TTL_MS = globalThis.LEASE_TTL_MS ?? 600000;
+
+// 讀改寫互斥鏈：所有對同步佇列的讀改寫依序排隊，避免並行覆蓋彼此結果。
+// 單一 job 拒絕不污染後續 job（鏈以 catch 收斂），呼叫端仍取得原始結果 Promise。
+let pendingWriteChain = Promise.resolve();
+function runExclusive(job) {
+    const result = pendingWriteChain.then(job);
+    pendingWriteChain = result.catch(() => {});
+    return result;
+}
 
 function logWriteFailure(context, error) {
     // 儲存寫入失敗時僅記錄，絕不拋出以免中斷呼叫端流程
@@ -45,19 +55,54 @@ const TemporaryChatPendingStore = (() => {
 
     async function addPendingDelete(chatUuid) {
         if (!chatUuid) return;
-        const queue = await getPendingDeletes();
-        const hasExisting = queue.some((entry) => entry.chatUuid === chatUuid);
-        if (hasExisting) return;
-        queue.push({ chatUuid, attemptCount: 0 });
-        await savePendingDeletes(queue);
+        return runExclusive(async () => {
+            const queue = await getPendingDeletes();
+            const hasExisting = queue.some((entry) => entry.chatUuid === chatUuid);
+            if (hasExisting) return;
+            queue.push({ chatUuid, attemptCount: 0, lastActiveAt: Date.now() });
+            await savePendingDeletes(queue);
+        });
     }
 
     async function removePendingDelete(chatUuid) {
         if (!chatUuid) return;
-        const queue = await getPendingDeletes();
-        const filtered = queue.filter((entry) => entry.chatUuid !== chatUuid);
-        if (filtered.length === queue.length) return;
-        await savePendingDeletes(filtered);
+        return runExclusive(async () => {
+            const queue = await getPendingDeletes();
+            const filtered = queue.filter((entry) => entry.chatUuid !== chatUuid);
+            if (filtered.length === queue.length) return;
+            await savePendingDeletes(filtered);
+        });
+    }
+
+    // 續約：將目標 entry 的 lastActiveAt 更新為現在；未知 uuid 不寫入
+    async function refreshLease(chatUuid) {
+        if (!chatUuid) return;
+        return runExclusive(async () => {
+            const queue = await getPendingDeletes();
+            const entry = queue.find((item) => item.chatUuid === chatUuid);
+            if (!entry) return;
+            entry.lastActiveAt = Date.now();
+            await savePendingDeletes(queue);
+        });
+    }
+
+    // 釋放：將目標 entry 的 lastActiveAt 歸零（保留於佇列）；未知 uuid 不寫入
+    async function releaseLease(chatUuid) {
+        if (!chatUuid) return;
+        return runExclusive(async () => {
+            const queue = await getPendingDeletes();
+            const entry = queue.find((item) => item.chatUuid === chatUuid);
+            if (!entry) return;
+            entry.lastActiveAt = 0;
+            await savePendingDeletes(queue);
+        });
+    }
+
+    // 純函式判定：lastActiveAt 非有限數，或 now 超過 lastActiveAt 逾 TTL 即過期（剛好等於 TTL 不算過期）
+    function isLeaseExpired(entry, now) {
+        const lastActiveAt = entry?.lastActiveAt;
+        if (typeof lastActiveAt !== 'number' || !Number.isFinite(lastActiveAt)) return true;
+        return now - lastActiveAt > DSS_LEASE_TTL_MS;
     }
 
     // 讀取舊版共用陣列 key（唯讀，永不寫回）
@@ -149,6 +194,9 @@ const TemporaryChatPendingStore = (() => {
         savePendingDeletes,
         addPendingDelete,
         removePendingDelete,
+        refreshLease,
+        releaseLease,
+        isLeaseExpired,
         getOpenUuids,
         addOpenUuid,
         removeOpenUuid,

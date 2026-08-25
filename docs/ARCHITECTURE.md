@@ -31,6 +31,8 @@ ds-studio/
 │   ├── temporary-chat-pending-store.js † ─  Pending-delete queue storage layer — owned by the service worker, NOT a content script
 │   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
 │   ├── temporary-chat-fiber-delete.js   ─  React Fiber-based conversation deletion integration
+│   ├── temporary-chat-heartbeat.js      ─  Lease heartbeat for the tracked temporary conversation (v4.31.1)
+│   ├── temporary-chat-sidebar-hide.js   ─  Hides queued temporary conversations from the DeepSeek sidebar (v4.31.1)
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
@@ -188,8 +190,8 @@ per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) �
 Temporary conversation deletion uses a two-layer architecture for reliability:
 
 - **Layer 1 (real-time, content script)**: `beforeunload` calls `fetch(..., { keepalive: true })` directly. SPA navigation uses Fiber/API deletion.
-- **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup` reads the shared pending-delete queue from `chrome.storage.sync` and retries each entry with the device's own locally-cached auth token.
-- **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any queue entry.
+- **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup`, the `dss-delete-retry` alarm, and the sync-area `chrome.storage.onChanged` listener each call `remediatePendingDeletes()`, which reads the shared pending-delete queue from `chrome.storage.sync` and retries every lease-expired entry with the device's own locally-cached auth token. The function takes no argument and applies the same lease gate on all three paths.
+- **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount, lastActiveAt }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any expired queue entry.
 - **Privacy**: `authToken` (`dss-last-auth-token`) is stored in `chrome.storage.local` only — never synced.
 - **Storage ownership sits in the service worker**: the content layer no longer loads `content/temporary-chat-pending-store.js`; that file is absent from `manifest.json`'s `content_scripts` list and is pulled in only by `background/service-worker.js` via `importScripts`, so `TemporaryChatPendingStore` — and every `chrome.storage.*` call it makes — exists solely in the worker. Content modules request writes by message instead. The four request types are declared in `utils/temporary-chat-constants.js` (also re-exported on `DSS_TEMP_CHAT_CONSTANTS` and assigned onto `globalThis`):
 
@@ -199,8 +201,31 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 | `DSS_REMOVE_PENDING_DELETE` | `{ uuid }` | `removePendingDelete(uuid)` — drop from the cross-device queue |
 | `DSS_REMOVE_OPEN_UUID` | `{ uuid }` | `removeOpenUuid(uuid)` — drop from the local open-UUID set |
 | `DSS_SET_LAST_AUTH_TOKEN` | `{ token }` | `setLastAuthToken(token)` — refresh the local bearer-token cache |
+| `DSS_HEARTBEAT` | `{ uuid }` | `refreshLease(uuid)` — stamp `lastActiveAt` with the current epoch ms |
+| `DSS_RELEASE_LEASE` | `{ uuid }` | `releaseLease(uuid)` — zero `lastActiveAt` so any device may take the entry immediately |
+| `DSS_GET_PENDING_UUIDS` | none | Replies with the uuids currently in the sync queue, used to seed a tab's sidebar-hide set |
+| `DSS_PENDING_UUIDS_CHANGED` | `{ uuids }` | Pushed *to* tabs on every sync-queue change so their sidebar-hide set stays current |
 
   `background/pending-store-routes.js` owns this side. Its `install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener holding a `type` → store-operation table. Unknown types return `false` without responding, leaving the worker's other `onMessage` listeners free to handle them; known types return `true` and reply `{ ok: true }` or `{ ok: false, error }` once the awaited operation settles. Senders: `temporary-chat-delete.tracking.js` (track), `temporary-chat-delete.coordinator.js` (both removals), `temporary-chat-delete.handlers.js` (token).
+
+#### Delete Lease & Heartbeat (v4.31.1)
+
+Ownership of a queued conversation is expressed as a lease that lives in the synced queue itself, so every device sees it. `lastActiveAt` is an epoch-ms timestamp on the entry, and `utils/temporary-chat-constants.js` publishes the two knobs: `LEASE_TTL_MS = 600000` (10 minutes) and `HEARTBEAT_INTERVAL_MS = 60000` (1 minute). The TTL is deliberately generous — it has to absorb `chrome.storage.sync` propagation delay, background-tab timer throttling, and cross-device clock skew all at once.
+
+- **`content/temporary-chat-pending-store.js`** exposes `refreshLease(chatUuid)`, `releaseLease(chatUuid)` (which zeroes `lastActiveAt`), and the pure predicate `isLeaseExpired(entry, now)`. An entry counts as expired when `lastActiveAt` is not a finite number, or when `now - lastActiveAt > LEASE_TTL_MS`; a value exactly at the TTL is still live. Every read-modify-write over the sync queue runs through a promise-chain mutex, so messages arriving concurrently from several tabs cannot interleave their `get`/`set` pairs and lose an update.
+- **`content/temporary-chat-heartbeat.js`** publishes `{ start, stop }`. While a tab is tracking a temporary conversation it sends `{ type: 'DSS_HEARTBEAT', uuid }` once immediately and then every `HEARTBEAT_INTERVAL_MS`. It starts from `trackUuid()` and from the restore-from-`sessionStorage` path, and stops when tracking ends or the listeners detach. Being bound to the content-script/tab lifecycle is the whole design: a crashed or force-killed tab simply stops renewing, and the lease expires on its own — no device identifier or liveness protocol is needed.
+- **Fast-restart recovery**: on `chrome.runtime.onStartup` the worker first releases the lease of every locally-open uuid that is also queued, then clears the local open set, then runs remediation. A conversation this device had open at shutdown is therefore deleted immediately on the next start rather than waiting out the TTL.
+- **Explicit release**: when the leave flow's immediate delete fails outright — the Fiber delete fails *and* the API fallback exhausts its retries — the coordinator sends `DSS_RELEASE_LEASE`, zeroing the lease so another device can take over instantly.
+
+#### Sidebar Hiding of Queued Conversations (v4.31.1)
+
+A conversation sitting in the pending-delete queue is hidden from the DeepSeek sidebar on every device, including the one that queued it and still has it open. That last part is a deliberate product decision: in a live chat, letting the sidebar navigate to a conversation that is being torn down is not useful.
+
+- `background/service-worker.js` broadcasts the queue's uuids to all DeepSeek tabs on every sync-queue change. `content/temporary-chat-sidebar-hide.js` publishes `{ init, stop }` and is bootstrapped from `content/content-script.js`; it holds an in-memory uuid set seeded via `DSS_GET_PENDING_UUIDS` and refreshed by `DSS_PENDING_UUIDS_CHANGED` pushes.
+- **Group-collapse rule**: the sidebar nests conversation anchors inside date-group containers, each holding a date label plus one or more row anchors. Evaluation is per container — if *every* anchor inside is queued, the container itself is hidden so the date label disappears with it; if at least one anchor is not queued, only the individual queued anchors are hidden. A single-anchor group whose one anchor is queued counts as fully queued.
+- **Hiding mechanism**: the `ds-` prefixed class `ds-temp-chat-hidden` plus an injected `display: none !important` rule. Nodes stay in the page. Each application clears the class everywhere and re-derives it from the current set, so a group reappears — and an individual anchor unhides — as soon as its entry leaves the queue.
+- A `MutationObserver` on the sidebar wrapper coalesces bursts into a single application per animation frame.
+- **Selectors** live in `content/ds-selectors.js`: `SIDEBAR_DATE_GROUP_SELECTOR` (the obfuscated date-group container class) and `SIDEBAR_CHAT_LINK_SELECTOR` (anchors matched by their `/a/chat/s/` href). If a DeepSeek markup change breaks the group selector, the feature degrades to individual-anchor hiding, which locates anchors by href and is independent of obfuscated class names.
 
 ### Content Settings Access (content → background)
 

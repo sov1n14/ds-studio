@@ -28,7 +28,7 @@ const DSS_FIBER_DELETE_MESSAGE_TYPE = 'DSS_FIBER_DELETE_SESSION';
 // window.postMessage type：MAIN world 回報 Fiber 刪除結果給 ISOLATED world
 const DSS_FIBER_DELETE_RESULT_TYPE = 'DSS_FIBER_DELETE_RESULT';
 
-// chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount}>
+// chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt}>
 const DSS_PENDING_DELETES_SYNC_KEY = 'dss-pending-deletes-sync';
 // chrome.storage.local：本機最近有效 bearer token（絕不同步）
 const DSS_LAST_AUTH_TOKEN_KEY = 'dss-last-auth-token';
@@ -46,6 +46,19 @@ const DSS_MSG_REMOVE_PENDING_DELETE = 'DSS_REMOVE_PENDING_DELETE';
 const DSS_MSG_REMOVE_OPEN_UUID = 'DSS_REMOVE_OPEN_UUID';
 // payload {token}：更新本機最近有效 bearer token 快取
 const DSS_MSG_SET_LAST_AUTH_TOKEN = 'DSS_SET_LAST_AUTH_TOKEN';
+// payload {uuid}：追蹤中臨時對話定期續約 lease，避免其他裝置誤刪
+const DSS_MSG_HEARTBEAT = 'DSS_HEARTBEAT';
+// payload {uuid}：刪除失敗且重試耗盡時歸零該項 lease，讓其他裝置可立即接手
+const DSS_MSG_RELEASE_LEASE = 'DSS_RELEASE_LEASE';
+// content->SW：索取目前待刪佇列 uuid 快照，回應 {ok:true, uuids:string[]}
+const DSS_MSG_GET_PENDING_UUIDS = 'DSS_GET_PENDING_UUIDS';
+// SW->content：待刪佇列變更後推送最新 uuid 快照，payload {uuids:string[]}
+const DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED';
+
+// 待刪佇列 lease 存活時間（毫秒）：now-lastActiveAt 超過此值即視為過期，可由其他裝置接手
+const LEASE_TTL_MS = 600000;
+// 待刪佇列 lease 心跳間隔（毫秒）：擁有裝置定期 refreshLease 續約的週期
+const HEARTBEAT_INTERVAL_MS = 60000;
 
 const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_TEMP_CHAT_STORAGE_KEY,
@@ -64,6 +77,12 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_MSG_REMOVE_PENDING_DELETE,
     DSS_MSG_REMOVE_OPEN_UUID,
     DSS_MSG_SET_LAST_AUTH_TOKEN,
+    DSS_MSG_HEARTBEAT,
+    DSS_MSG_RELEASE_LEASE,
+    DSS_MSG_GET_PENDING_UUIDS,
+    DSS_MSG_PENDING_UUIDS_CHANGED,
+    LEASE_TTL_MS,
+    HEARTBEAT_INTERVAL_MS,
 };
 
 // 發布至 globalThis：classic script 的 top-level const 僅存在於全域語彙環境而非 globalThis 屬性，消費端以 globalThis[name] 解析常數時需要此份掛載

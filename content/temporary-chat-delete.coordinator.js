@@ -68,6 +68,8 @@
             const tokenSnapshot = state.capturedAuthToken;
             state.trackedTemporaryUuid = null;
             tracking.saveTrackedUuid(null);
+            // 追蹤結束：停止心跳（防禦性參照，缺失不拋）
+            root.TemporaryChatHeartbeat?.stop?.();
 
             // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
             // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
@@ -105,6 +107,12 @@
                             type: _getConst('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE', 'DSS_SCHEDULE_DELETE_RETRY'),
                             chatUuid: uuidToDelete,
                         });
+                        // 同步歸零本項 lease，讓其他裝置可立即接手（保留佇列項目，不移除）
+                        sendPendingStoreRoute(
+                            _getConst('DSS_MSG_RELEASE_LEASE', 'DSS_RELEASE_LEASE'),
+                            { uuid: uuidToDelete },
+                            'releaseLease'
+                        );
                     }
                 };
 

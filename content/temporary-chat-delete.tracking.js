@@ -109,6 +109,8 @@
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })
                 .catch((err) => console.error('[DSS] temporary-chat-delete.tracking trackUuid:', err));
             state.isPendingCreate = false;
+            // 追蹤開始即啟動心跳續約 lease（防禦性參照：單檔測試 bootstrap 可能未載入本模組）
+            root.TemporaryChatHeartbeat?.start?.(uuid);
         }
 
         /**

@@ -105,6 +105,8 @@ const TemporaryChatDelete = (() => {
     function detachListeners() {
         if (!state.isListening) return;
         state.isListening = false;
+        // 卸載監聽器同時停止心跳（防禦性參照，缺失不拋）
+        _root.TemporaryChatHeartbeat?.stop?.();
 
         window.removeEventListener('message', handlers.handleWindowMessage);
         window.removeEventListener('beforeunload', handlers.handleBeforeUnload);
@@ -145,6 +147,8 @@ const TemporaryChatDelete = (() => {
         // 先恢復追蹤 UUID，再掛載監聽器，確保 handleWindowMessage（含 auth token 擷取）
         // 在 await 之前即已就緒，避免 DSS_AUTH_CAPTURED 訊息在等待儲存時遺失
         state.trackedTemporaryUuid = tracking.loadTrackedUuid();
+        // 刷新後恢復追蹤即續傳心跳（防禦性參照，缺失不拋）
+        if (state.trackedTemporaryUuid) _root.TemporaryChatHeartbeat?.start?.(state.trackedTemporaryUuid);
 
         if (state.trackedTemporaryUuid) {
             attachListeners();

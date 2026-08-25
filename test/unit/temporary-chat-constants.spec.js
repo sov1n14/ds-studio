@@ -25,9 +25,9 @@ describe('temporary-chat-constants', () => {
         expect(constants.DSS_CHAT_CREATE_ENDPOINT).toBe('/api/v0/chat_session/create');
     });
 
-    it('exports exactly seventeen constants', () => {
+    it('exports exactly twenty-two constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(16);
+        expect(keys).toHaveLength(22);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
         expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
@@ -44,6 +44,12 @@ describe('temporary-chat-constants', () => {
         expect(keys).toContain('DSS_MSG_REMOVE_PENDING_DELETE');
         expect(keys).toContain('DSS_MSG_REMOVE_OPEN_UUID');
         expect(keys).toContain('DSS_MSG_SET_LAST_AUTH_TOKEN');
+        expect(keys).toContain('LEASE_TTL_MS');
+        expect(keys).toContain('HEARTBEAT_INTERVAL_MS');
+        expect(keys).toContain('DSS_MSG_HEARTBEAT');
+        expect(keys).toContain('DSS_MSG_RELEASE_LEASE');
+        expect(keys).toContain('DSS_MSG_GET_PENDING_UUIDS');
+        expect(keys).toContain('DSS_MSG_PENDING_UUIDS_CHANGED');
         expect(keys).not.toContain('DSS_SW_DELETE_MESSAGE_TYPE');
     });
 
@@ -76,6 +82,12 @@ describe('temporary-chat-constants', () => {
         ['DSS_MSG_REMOVE_PENDING_DELETE', 'DSS_REMOVE_PENDING_DELETE'],
         ['DSS_MSG_REMOVE_OPEN_UUID', 'DSS_REMOVE_OPEN_UUID'],
         ['DSS_MSG_SET_LAST_AUTH_TOKEN', 'DSS_SET_LAST_AUTH_TOKEN'],
+        ['LEASE_TTL_MS', 600000],
+        ['HEARTBEAT_INTERVAL_MS', 60000],
+        ['DSS_MSG_HEARTBEAT', 'DSS_HEARTBEAT'],
+        ['DSS_MSG_RELEASE_LEASE', 'DSS_RELEASE_LEASE'],
+        ['DSS_MSG_GET_PENDING_UUIDS', 'DSS_GET_PENDING_UUIDS'],
+        ['DSS_MSG_PENDING_UUIDS_CHANGED', 'DSS_PENDING_UUIDS_CHANGED'],
     ])('%s has the exact expected value', (name, value) => {
         expect(constants[name]).toBe(value);
     });
