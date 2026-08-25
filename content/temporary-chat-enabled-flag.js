@@ -22,11 +22,25 @@ const TemporaryChatEnabledFlag = (() => {
     const ENABLED_KEY = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
 
     let _isEnabledCache = false;
+    // 世代計數：每次寫入快取即遞增，供 write() 判斷回滾時快取是否已被更新的寫入取代
+    let _cacheGeneration = 0;
     let _hasSyncStarted = false;
     const _subscribers = new Set();
 
     // 嚴格布林：僅 boolean true 視為啟用，字串 'true' 等真值一律為停用
     const _coerce = (value) => value === true;
+
+    /**
+     * 唯一的快取寫入點：同時落值與遞增世代，回傳本次產生的世代編號。
+     * 所有指派快取的路徑都必須經由此處，回滾守衛才不會出現漏洞。
+     * @param {boolean} isEnabledValue 已完成嚴格布林化的值
+     * @returns {number} 本次寫入所產生的世代編號
+     */
+    function _setCache(isEnabledValue) {
+        _isEnabledCache = isEnabledValue;
+        _cacheGeneration += 1;
+        return _cacheGeneration;
+    }
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
     function _messageTypes() {
@@ -50,18 +64,26 @@ const TemporaryChatEnabledFlag = (() => {
             if (!response || response.ok !== true) {
                 throw new Error(response?.error || 'GET_SETTINGS 未回傳有效結果');
             }
-            _isEnabledCache = _coerce(response.values?.[ENABLED_KEY]);
+            _setCache(_coerce(response.values?.[ENABLED_KEY]));
         } catch (error) {
             // 讀取失敗時維持停用預設，不向呼叫端拋出
-            _isEnabledCache = false;
+            _setCache(false);
         }
     }
 
     function write(isEnabledNext) {
         const isEnabledValue = _coerce(isEnabledNext);
-        // 先同步更新快取，呼叫端在 await 前即可讀到新值
-        // 已知並接受的技術債：background 拒絕寫入時快取不回滾
-        _isEnabledCache = isEnabledValue;
+        // 保留寫入前的值，供落盤失敗時回滾
+        const previousValue = _isEnabledCache;
+        // 先同步更新快取，呼叫端在 await 前即可讀到新值；記下本次寫入的世代
+        const writeGeneration = _setCache(isEnabledValue);
+        // 回滾判斷以世代而非值比對：R3.8 中較新的寫入可能與被拒值相同，
+        // 值比對無法區分「無人接手」與「同值的新寫入」，唯世代能精準辨識
+        const rollback = () => {
+            if (_cacheGeneration === writeGeneration) {
+                _isEnabledCache = previousValue;
+            }
+        };
         Promise.resolve(chrome.runtime.sendMessage({
             type: _messageTypes().SET_SETTINGS,
             values: { [ENABLED_KEY]: isEnabledValue },
@@ -71,7 +93,11 @@ const TemporaryChatEnabledFlag = (() => {
                     throw new Error(response?.error || 'SET_SETTINGS 未回傳有效結果');
                 }
             })
-            .catch((error) => console.error('[DSS] enabled-flag:write:', error));
+            .catch((error) => {
+                // 落盤失敗且期間無更新的寫入接手時，將快取回滾至寫入前的值
+                rollback();
+                console.error('[DSS] enabled-flag:write:', error);
+            });
     }
 
     /**
@@ -85,7 +111,7 @@ const TemporaryChatEnabledFlag = (() => {
         const changes = message.changes;
         if (!changes || !(ENABLED_KEY in changes)) return;
 
-        _isEnabledCache = _coerce(changes[ENABLED_KEY]?.newValue);
+        _setCache(_coerce(changes[ENABLED_KEY]?.newValue));
         _subscribers.forEach((subscriber) => {
             try {
                 subscriber(_isEnabledCache);
@@ -112,7 +138,7 @@ const TemporaryChatEnabledFlag = (() => {
      * @param {boolean} isEnabledNext
      */
     function __setCache(isEnabledNext) {
-        _isEnabledCache = _coerce(isEnabledNext);
+        _setCache(_coerce(isEnabledNext));
     }
 
     return { isEnabled, initFromStorage, write, startSync, subscribe, __setCache };

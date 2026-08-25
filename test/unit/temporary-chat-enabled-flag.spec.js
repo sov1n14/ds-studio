@@ -201,6 +201,53 @@ describe('TemporaryChatEnabledFlag', () => {
             expect(localSet).not.toHaveBeenCalled();
             expect(syncSet).not.toHaveBeenCalled();
         });
+
+        // ---- rollback contract on a refused/rejected write (behavior not yet implemented) ----
+
+        /** Let all pending microtasks + the current macrotask turn drain. */
+        const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        it('R3.5 (R-A): a rejected write rolls the cache back to the value that was actually persisted', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const Flag = await loadFlagModule();
+            Flag.__setCache(true);                 // known persisted value = true
+            chrome.runtime.sendMessage.mockRejectedValue(new Error('port closed'));
+            Flag.write(false);                     // opposite value; background refuses it
+            await settle();
+            expect(Flag.isEnabled()).toBe(true);   // never persisted -> must revert to true
+        });
+
+        it('R3.6 (R-B): an ok:false response rolls the cache back the same way', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const Flag = await loadFlagModule();
+            Flag.__setCache(true);                 // known persisted value = true
+            chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'nope' });
+            Flag.write(false);                     // background reports failure
+            await settle();
+            expect(Flag.isEnabled()).toBe(true);   // not persisted -> must revert to true
+        });
+
+        it('R3.7 (R-C): the optimistic cache update stays readable synchronously in the rejection scenario', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const Flag = await loadFlagModule();
+            Flag.__setCache(false);
+            chrome.runtime.sendMessage.mockRejectedValue(new Error('port closed'));
+            Flag.write(true);
+            expect(Flag.isEnabled()).toBe(true);   // read BEFORE the rejection settles
+        });
+
+        it('R3.8 (R-D): a rejected write must not clobber a newer value that arrived after it', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const Flag = await loadFlagModule();
+            Flag.__setCache(true);                 // A (persisted)
+            chrome.runtime.sendMessage.mockRejectedValue(new Error('port closed'));
+            Flag.write(false);                     // B (refused)
+            Flag.__setCache(false);                // C arrives before the rejection settles
+            await settle();
+            // C must survive; a blind restore-old-value rollback would resurrect A (true)
+            expect(Flag.isEnabled()).toBe(false);
+        });
+
     });
 
     describe('R4 - startSync()', () => {
