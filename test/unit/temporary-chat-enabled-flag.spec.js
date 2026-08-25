@@ -15,8 +15,12 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import '../../utils/settings-message-constants.js';
+// Mounts DSS_TEMP_CHAT_* on globalThis before the module under test reads them,
+// matching temporary-chat-sidebar-hide.spec.js. The module reads
+// globalThis.DSS_TEMP_CHAT_STORAGE_KEY directly (no hardcoded fallback).
+import '../../utils/temporary-chat-constants.js';
 
-const ENABLED_KEY = 'dss-temporary-chat-enabled';
+const ENABLED_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
 const MSG = () => globalThis.DSS_SETTINGS_MSG;
 
 /** Backing store the fake settings route answers from; re-seeded per test. */

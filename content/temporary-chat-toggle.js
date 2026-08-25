@@ -17,15 +17,6 @@
 const TemporaryChatToggle = (() => {
     'use strict';
 
-    // ── 常數參照（由 temporary-chat-constants.js 在前載入） ──────────────────
-    // 瀏覽器環境下已為全域變數；Node.js 測試環境下由外部注入
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
     const _selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
@@ -154,7 +145,8 @@ const TemporaryChatToggle = (() => {
      * @param {boolean} isEnabled
      */
     function dispatchToggleEvent(isEnabled) {
-        const EVENT_NAME = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
+        // 常數由 temporary-chat-constants.js 在前載入時掛上 globalThis
+        const EVENT_NAME = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { isEnabled } }));
     }
 

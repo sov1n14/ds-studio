@@ -9,10 +9,14 @@ import '../../utils/storage-manager.js';
 // mock here: a spec-local `global.chrome = {...}` runs AFTER this hoisted import and
 // therefore produced two mock universes -- the module registered against the setup
 // mock while the tests drove a stub nobody listened to.
+// Mounts DSS_TEMP_CHAT_* on globalThis before temporary-chat-toggle.js evaluates
+// (it reads DSS_TEMP_CHAT_STORAGE_KEY / DSS_TEMP_CHAT_CHANGED_EVENT at load time,
+// no hardcoded fallback). Same arrangement as temporary-chat-sidebar-hide.spec.js.
+import '../../utils/temporary-chat-constants.js';
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
-const STORAGE_KEY = 'dss-temporary-chat-enabled';
-const CHANGED_EVENT = 'dss-temporary-chat-changed';
+const STORAGE_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
+const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
 const IS_ENABLED_KEY = StorageManager.KEYS.IS_ENABLED;
 const MSG = () => globalThis.DSS_SETTINGS_MSG;
 
