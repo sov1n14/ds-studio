@@ -7,7 +7,7 @@
  * chrome.storage.*（chrome-extension-coding-guidelines §1 層級界線）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
- * 相依：utils/temporary-chat-constants.js、content/temporary-chat-pending-store.js 需先載入。
+ * 相依：utils/temporary-chat-constants.js、background/pending-store.js 需先載入。
  */
 (function () {
     'use strict';
@@ -15,7 +15,7 @@
     /** 於呼叫時解析待刪佇列存取層（service worker 以全域提供），缺失即拋出並指名修法。 */
     function resolvePendingStore() {
         const store = globalThis.TemporaryChatPendingStore;
-        if (!store) throw new Error('[DSS] pending-store-routes 需要 content/temporary-chat-pending-store.js 先行載入');
+        if (!store) throw new Error('[DSS] pending-store-routes 需要 background/pending-store.js 先行載入');
         return store;
     }
 

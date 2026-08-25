@@ -12,7 +12,7 @@ import '../../utils/i18n.js';
 // getStorageOnChangedListenerCount() for background specs.
 await globalThis.dsI18n.init();
 
-// __DS_Logger is referenced by content/temporary-chat-pending-store.js and
+// __DS_Logger is referenced by background/pending-store.js and
 // other modules via globalThis.__DS_Logger?.warn(...). Preload it here (a
 // small, dependency-free util with no chrome.* usage at load time) so specs
 // exercise the REAL warn() implementation instead of silently falling through

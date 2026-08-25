@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'module';
-import TemporaryChatPendingStore from '../../content/temporary-chat-pending-store.js';
+import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 // Load the constants module as CommonJS so we can inspect its module.exports
 // object (requirement 1) AND trigger its Object.assign(globalThis, ...) that

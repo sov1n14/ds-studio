@@ -7,7 +7,7 @@
  * 載入順序（manifest.json 必須依此順序）：
  *   1. temporary-chat-constants.js   （常數）
  *   2. temporary-chat-enabled-flag.js（啟用旗標，經 background 設定路由；需 utils/settings-message-constants.js 先行載入）
- *   3. temporary-chat-pending-store.js / temporary-chat-delete-api.js
+ *   3. background/pending-store.js / temporary-chat-delete-api.js
  *   4. temporary-chat-delete.tracking.js
  *   5. temporary-chat-delete.coordinator.js
  *   6. temporary-chat-delete.handlers.js
