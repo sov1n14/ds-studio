@@ -325,10 +325,6 @@ const TemporaryChatToggle = (() => {
         // New exports for unit tests (SPA-aware behavior)
         removeToggleRow,
         handleNavigation,
-        // 供跨分頁同步與單元測試使用：直接更新快取並同步 UI
-        __setCacheForCrossTabSync: setCacheForCrossTabSync,
-        // 供主開關管線與單元測試使用：更新主開關狀態並同步顯示／隱藏切換列
-        __setMasterEnabled: setMasterEnabled,
     };
 })();
 
