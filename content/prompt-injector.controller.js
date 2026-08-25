@@ -28,6 +28,11 @@
         resolveTextareaForButton,
     } = sendButton;
 
+    // 行動裝置判定共用工具（瀏覽器：content/mobile-device.js 於前載入；Node.js 測試：直接 require）
+    const mobileDevice = root.DSSMobileDevice ||
+        (typeof require !== 'undefined' ? require('./mobile-device.js') : {});
+    const { isMobileDevice } = mobileDevice;
+
     /**
      * 建立 PromptInjector 實例。ctx 的 getter/setter 直接讀寫 content-script.js
      * 模組層級的 let 變數，確保狀態異動對本模組即時可見，反之亦然。
@@ -80,13 +85,6 @@
             textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
             return true;
-        }
-
-        /**
-         * 偵測目前是否為行動裝置或行動裝置模擬器。
-         */
-        function isMobileDevice() {
-            return navigator.maxTouchPoints > 0 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         }
 
         // 攔截原始事件，改由本模組於注入完成後自行重送
