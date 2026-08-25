@@ -12,7 +12,7 @@
  */
 // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
 var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
-    (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+    (typeof require !== 'undefined' ? require('../utils/chat-session-id.js') : {});
 
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
 var __DS_CensorSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||

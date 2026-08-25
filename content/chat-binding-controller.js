@@ -18,7 +18,7 @@
 
     // Session id 擷取共用工具（由 chat-session-id.js 在前載入；Node.js 測試：直接 require）
     var __chatSessionIdModule = root.DSSChatSessionId ||
-        (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+        (typeof require !== 'undefined' ? require('../utils/chat-session-id.js') : {});
 
     // 新對話送出訊息後，允許 auto-bind 的等待時間（毫秒）
     const NEW_CHAT_UUID_WAIT_MS = 5000;
