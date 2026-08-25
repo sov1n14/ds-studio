@@ -7,14 +7,6 @@
 (function (root) {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     const FIBER_RESULT_TIMEOUT_MS = 3000;
 
     /**
@@ -33,7 +25,7 @@
     /** 自跨裝置待刪佇列移除指定 UUID（確認刪除成功後呼叫）。 */
     function removePendingDeleteRoute(uuid) {
         sendPendingStoreRoute(
-            _getConst('DSS_MSG_REMOVE_PENDING_DELETE', 'DSS_REMOVE_PENDING_DELETE'),
+            globalThis.DSS_MSG_REMOVE_PENDING_DELETE,
             { uuid },
             'removePendingDelete'
         );
@@ -74,7 +66,7 @@
             // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
             // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
             sendPendingStoreRoute(
-                _getConst('DSS_MSG_REMOVE_OPEN_UUID', 'DSS_REMOVE_OPEN_UUID'),
+                globalThis.DSS_MSG_REMOVE_OPEN_UUID,
                 { uuid: uuidToDelete },
                 'removeOpenUuid'
             );
@@ -87,8 +79,8 @@
                 // teardown 期間 .then 可能不執行 → 項目留在 sync 佇列，交由 onStartup 補救（confirmed-deletion invariant）
             } else {
                 // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
-                const FIBER_REQ = _getConst('DSS_FIBER_DELETE_MESSAGE_TYPE', 'DSS_FIBER_DELETE_SESSION');
-                const FIBER_RES = _getConst('DSS_FIBER_DELETE_RESULT_TYPE', 'DSS_FIBER_DELETE_RESULT');
+                const FIBER_REQ = globalThis.DSS_FIBER_DELETE_MESSAGE_TYPE;
+                const FIBER_RES = globalThis.DSS_FIBER_DELETE_RESULT_TYPE;
 
                 let fallbackTriggered = false;
                 let timeoutId = null;
@@ -104,12 +96,12 @@
                     } else {
                         // 情境存活但重試耗盡 → 保留佇列項目，請 SW 排程 alarm 重試
                         chrome.runtime.sendMessage({
-                            type: _getConst('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE', 'DSS_SCHEDULE_DELETE_RETRY'),
+                            type: globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
                             chatUuid: uuidToDelete,
                         });
                         // 同步歸零本項 lease，讓其他裝置可立即接手（保留佇列項目，不移除）
                         sendPendingStoreRoute(
-                            _getConst('DSS_MSG_RELEASE_LEASE', 'DSS_RELEASE_LEASE'),
+                            globalThis.DSS_MSG_RELEASE_LEASE,
                             { uuid: uuidToDelete },
                             'releaseLease'
                         );

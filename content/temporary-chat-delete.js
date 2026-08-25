@@ -17,14 +17,6 @@
 const TemporaryChatDelete = (() => {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     const _root = (typeof globalThis !== 'undefined') ? globalThis : window;
 
     /**
@@ -137,7 +129,7 @@ const TemporaryChatDelete = (() => {
      * @returns {Promise<void>}
      */
     async function init() {
-        const CHANGED_EVENT = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
+        const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
 
         const flag = _flag();

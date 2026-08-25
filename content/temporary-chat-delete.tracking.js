@@ -8,14 +8,6 @@
 (function (root) {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
     const chatSessionId = root.DSSChatSessionId ||
         (typeof require !== 'undefined' ? require('../utils/chat-session-id.js') : {});
@@ -52,7 +44,7 @@
      */
     function loadTrackedUuid() {
         try {
-            const key = _getConst('DSS_TEMP_CHAT_UUID_KEY', 'dss-temporary-chat-uuid');
+            const key = globalThis.DSS_TEMP_CHAT_UUID_KEY;
             return sessionStorage.getItem(key) || null;
         } catch {
             return null;
@@ -65,7 +57,7 @@
      */
     function saveTrackedUuid(uuid) {
         try {
-            const key = _getConst('DSS_TEMP_CHAT_UUID_KEY', 'dss-temporary-chat-uuid');
+            const key = globalThis.DSS_TEMP_CHAT_UUID_KEY;
             if (uuid) {
                 sessionStorage.setItem(key, uuid);
             } else {
@@ -103,7 +95,7 @@
             // 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）；
             // fire-and-forget，失敗僅記錄不中斷追蹤流程
             Promise.resolve(chrome.runtime.sendMessage({
-                type: _getConst('DSS_MSG_TRACK_FOR_DELETION', 'DSS_TRACK_FOR_DELETION'),
+                type: globalThis.DSS_MSG_TRACK_FOR_DELETION,
                 uuid,
             }))
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })
