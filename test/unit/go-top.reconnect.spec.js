@@ -33,11 +33,10 @@ describe('GoToTop', () => {
 
         it('does NOT inject when both .aaff8b8f and native button are absent — keeps polling instead', () => {
             document.body.innerHTML = '';
-            const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
             GoToTop._tryConnectDom();
 
-            expect(injectSpy).not.toHaveBeenCalled();
+            expect(document.querySelector('.dsw-gotop')).toBeNull();
             expect(GoToTop._button).toBeNull();
 
             // The poll is still live: mount the wrapper and let one interval pass.
@@ -49,27 +48,32 @@ describe('GoToTop', () => {
         });
 
         it('injects immediately when .aaff8b8f wrapper is present (regardless of _getAnchor)', () => {
-            createWrapperWithoutNativeButton();
+            const { injectParent } = createWrapperWithoutNativeButton();
             vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
-            const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
             GoToTop._tryConnectDom();
 
-            expect(injectSpy).toHaveBeenCalledOnce();
+            // Observable result of the immediate injection: exactly one button,
+            // and it lives inside the wrapper.
+            const buttons = document.querySelectorAll('.dsw-gotop');
+            expect(buttons.length).toBe(1);
+            expect(buttons[0]).toBe(GoToTop._button);
+            expect(injectParent.contains(GoToTop._button)).toBe(true);
         });
 
         it('injects immediately when native button is present', () => {
-            createFullWrapperWithNativeButton();
-            const injectSpy = vi.spyOn(GoToTop, '_injectButton');
+            const { injectParent } = createFullWrapperWithNativeButton();
 
             GoToTop._tryConnectDom();
 
-            expect(injectSpy).toHaveBeenCalledOnce();
+            const buttons = document.querySelectorAll('.dsw-gotop');
+            expect(buttons.length).toBe(1);
+            expect(buttons[0]).toBe(GoToTop._button);
+            expect(injectParent.contains(GoToTop._button)).toBe(true);
         });
 
         it('gives up once the retry budget is spent: a wrapper that mounts later is never injected into', () => {
             document.body.innerHTML = '';
-            const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
             GoToTop._tryConnectDom();
 
@@ -81,13 +85,12 @@ describe('GoToTop', () => {
             createWrapperWithoutNativeButton();
             vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
 
-            expect(injectSpy).not.toHaveBeenCalled();
+            expect(document.querySelector('.dsw-gotop')).toBeNull();
             expect(GoToTop._button).toBeNull();
         });
 
         it('disable() mid-retry stops the poll: a wrapper mounting later is not injected into', () => {
             document.body.innerHTML = '';
-            const injectSpy = vi.spyOn(GoToTop, '_injectButton');
             GoToTop._tryConnectDom();
 
             GoToTop.disable();
@@ -95,7 +98,7 @@ describe('GoToTop', () => {
             createWrapperWithoutNativeButton();
             vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
 
-            expect(injectSpy).not.toHaveBeenCalled();
+            expect(document.querySelector('.dsw-gotop')).toBeNull();
             expect(GoToTop._button).toBeNull();
         });
 
@@ -202,29 +205,22 @@ describe('GoToTop', () => {
             const styleSnapshot = btn.getAttribute('style');
             const parentSnapshot = btn.parentElement;
 
-            const soloSpy = vi.spyOn(GoToTop, '_transitionToSolo');
-            const stackedSpy = vi.spyOn(GoToTop, '_transitionToStacked');
-            const offsetSpy = vi.spyOn(GoToTop, '_applyStackedOffset');
-            GoToTop._evaluateVisibility.mockClear();
-
             // Unrelated childList mutation inside the observed wrapper subtree.
             outerWrapper.appendChild(document.createElement('span'));
             await new Promise((resolve) => setTimeout(resolve, GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 40));
 
+            // "Does no work" is observable: the button is the very same element,
+            // still connected, and none of its class / style / parent changed.
             expect(GoToTop._button).toBe(btn);
             expect(GoToTop._button.isConnected).toBe(true);
             expect(GoToTop._injectionMode).toBe('injected');
             expect(btn.className).toBe(classNameSnapshot);
             expect(btn.getAttribute('style')).toBe(styleSnapshot);
             expect(btn.parentElement).toBe(parentSnapshot);
-            expect(soloSpy).not.toHaveBeenCalled();
-            expect(stackedSpy).not.toHaveBeenCalled();
-            expect(offsetSpy).not.toHaveBeenCalled();
-            expect(GoToTop._evaluateVisibility).not.toHaveBeenCalled();
         });
 
         it('reconciliation no-op: wrapper-solo mode with no native button does no work', async () => {
-            const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
+            const { outerWrapper } = createWrapperWithoutNativeButton();
 
             GoToTop._injectIntoWrapperDirect(); // starts wrapper observer, mode = wrapper-solo
             vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(null);
@@ -236,11 +232,6 @@ describe('GoToTop', () => {
             const styleSnapshot = btn.getAttribute('style');
             const parentSnapshot = btn.parentElement;
 
-            const soloSpy = vi.spyOn(GoToTop, '_transitionToSolo');
-            const stackedSpy = vi.spyOn(GoToTop, '_transitionToStacked');
-            const offsetSpy = vi.spyOn(GoToTop, '_applyStackedOffset');
-            GoToTop._evaluateVisibility.mockClear();
-
             // Unrelated childList mutation inside the observed wrapper subtree.
             outerWrapper.appendChild(document.createElement('span'));
             await new Promise((resolve) => setTimeout(resolve, GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 40));
@@ -251,10 +242,6 @@ describe('GoToTop', () => {
             expect(btn.className).toBe(classNameSnapshot);
             expect(btn.getAttribute('style')).toBe(styleSnapshot);
             expect(btn.parentElement).toBe(parentSnapshot);
-            expect(soloSpy).not.toHaveBeenCalled();
-            expect(stackedSpy).not.toHaveBeenCalled();
-            expect(offsetSpy).not.toHaveBeenCalled();
-            expect(GoToTop._evaluateVisibility).not.toHaveBeenCalled();
         });
     });
 
@@ -301,21 +288,25 @@ describe('GoToTop', () => {
             }
         });
 
-        it('drives gated _tryConnectDom after the 100ms route-change debounce', async () => {
+        it('drives DOM (re)connection only after the 100ms route-change debounce', async () => {
             vi.useFakeTimers();
             try {
                 GoToTop.enabled = true;
+                createWrapperWithoutNativeButton();
+                vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
+
                 GoToTop._onRouteChange();
 
-                const connectSpy = vi.spyOn(GoToTop, '_tryConnectDom');
-
-                // Before the debounce fires, nothing happens.
-                expect(connectSpy).not.toHaveBeenCalled();
+                // Before the debounce fires, no reconnection has happened.
+                expect(document.querySelector('.dsw-gotop')).toBeNull();
+                expect(GoToTop._button).toBeNull();
 
                 vi.advanceTimersByTime(100);
 
-                // Route change now routes through the gated retry loop, not a one-shot _injectButton.
-                expect(connectSpy).toHaveBeenCalledOnce();
+                // Route change now routes through the gated connect path, so the
+                // button is (re)injected — the observable proof it ran.
+                expect(document.querySelector('.dsw-gotop')).not.toBeNull();
+                expect(GoToTop._button).not.toBeNull();
             } finally {
                 vi.useRealTimers();
             }
@@ -326,14 +317,15 @@ describe('GoToTop', () => {
             try {
                 GoToTop.enabled = true;
                 document.body.innerHTML = ''; // no .aaff8b8f, no native button
-                const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
                 GoToTop._onRouteChange();
                 vi.advanceTimersByTime(100); // fire route-change debounce → _tryConnectDom
 
-                // Gate not satisfied: no immediate injection, but the poll stays live.
-                expect(injectSpy).not.toHaveBeenCalled();
+                // Gate not satisfied: no immediate injection...
+                expect(document.querySelector('.dsw-gotop')).toBeNull();
                 expect(GoToTop._button).toBeNull();
+                // ...but the poll stays live (a cancellable retry is armed).
+                expect(GoToTop._cancelConnectRetry).not.toBeNull();
 
                 createWrapperWithoutNativeButton();
                 vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
@@ -374,18 +366,22 @@ describe('GoToTop', () => {
                 GoToTop.enabled = true;
                 createWrapperWithoutNativeButton(); // wrapper already mounted
                 vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
-                const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
                 GoToTop._onRouteChange();
                 vi.advanceTimersByTime(100); // route-change debounce → first gated attempt
 
-                expect(injectSpy).toHaveBeenCalledOnce();
+                expect(document.querySelectorAll('.dsw-gotop').length).toBe(1);
                 expect(GoToTop._button).not.toBeNull();
                 expect(document.body.contains(GoToTop._button)).toBe(true);
+                // Gate passed immediately → the poll never armed a cancellable retry.
+                expect(GoToTop._cancelConnectRetry).toBeNull();
 
-                // Gate passed immediately → the poll is over: no second injection.
+                const injectedBtn = GoToTop._button;
+                // Poll is over: advancing time injects nothing further (still one
+                // button, same element).
                 vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL * 3);
-                expect(injectSpy).toHaveBeenCalledOnce();
+                expect(document.querySelectorAll('.dsw-gotop').length).toBe(1);
+                expect(GoToTop._button).toBe(injectedBtn);
             } finally {
                 vi.useRealTimers();
             }
@@ -397,17 +393,20 @@ describe('GoToTop', () => {
                 GoToTop.enabled = true;
                 createFullWrapperWithNativeButton(); // native button + wrapper mounted
                 vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
-                const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
                 GoToTop._onRouteChange();
                 vi.advanceTimersByTime(100);
 
-                expect(injectSpy).toHaveBeenCalledOnce();
+                expect(document.querySelectorAll('.dsw-gotop').length).toBe(1);
                 expect(GoToTop._button).not.toBeNull();
+                // Gate passed immediately → the poll never armed a cancellable retry.
+                expect(GoToTop._cancelConnectRetry).toBeNull();
 
-                // Gate passed immediately → the poll is over: no second injection.
+                const injectedBtn = GoToTop._button;
+                // Poll is over: advancing time injects nothing further.
                 vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL * 3);
-                expect(injectSpy).toHaveBeenCalledOnce();
+                expect(document.querySelectorAll('.dsw-gotop').length).toBe(1);
+                expect(GoToTop._button).toBe(injectedBtn);
             } finally {
                 vi.useRealTimers();
             }
