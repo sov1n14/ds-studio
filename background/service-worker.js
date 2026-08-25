@@ -39,7 +39,7 @@ const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MINUTES = 0.5;
 // onChanged 掃描重入防護（記憶體內）
 // SW 終止時本旗標歸零；補救流程幂等，代價僅為最多多跑一次結果相同的補救
-let _remediationInFlight = false;
+let isRemediationInFlight = false;
 
 // 雲端同步重試週期（分鐘）
 const SYNC_RETRY_PERIOD_MINUTES = 5;
@@ -166,13 +166,13 @@ async function broadcastPendingUuids() {
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
     if (!(DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
-    if (_remediationInFlight) return;                       // 重入防護
+    if (isRemediationInFlight) return;                       // 重入防護
     (async () => {
-        _remediationInFlight = true;
+        isRemediationInFlight = true;
         try {
             await remediatePendingDeletes();
         } finally {
-            _remediationInFlight = false;
+            isRemediationInFlight = false;
         }
         await broadcastPendingUuids(); // 佇列變更後同步通知各分頁側邊欄
     })();

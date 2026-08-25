@@ -290,8 +290,8 @@
                 this.render(presets, activeId);
                 if (enable !== undefined) this.setVisible(enable);
 
-                if (!this._localeListenerAttached) {
-                    this._localeListenerAttached = true;
+                if (!this._isLocaleListenerAttached) {
+                    this._isLocaleListenerAttached = true;
                     var self = this;
                     dsI18n.onLocaleChanged(function () {
                         if (self.dropdown && self.dropdown.updateLocale) {

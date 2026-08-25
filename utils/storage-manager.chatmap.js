@@ -56,7 +56,7 @@
             // 3. 新增 uuid：先嘗試填入既有 chunk，否則附加新 chunk
             for (const key of addedKeys) {
                 const entrySize = this._byteLen({ [key]: finalMap[key] });
-                let placed = false;
+                let isPlaced = false;
 
                 for (let i = 0; i < chunks.length; i++) {
                     const currentSize = i < meta.chunkSizes.length && meta.chunkSizes[i] > 0
@@ -68,12 +68,12 @@
                         modifiedChunks.add(i);
                         meta.chunkSizes[i] = this._byteLen(chunks[i]);
                         this._chunkIndexCache.set(key, i);
-                        placed = true;
+                        isPlaced = true;
                         break;
                     }
                 }
 
-                if (!placed) {
+                if (!isPlaced) {
                     const newIdx = chunks.length;
                     chunks.push({ [key]: finalMap[key] });
                     meta.chunkSizes.push(this._byteLen(chunks[newIdx]));

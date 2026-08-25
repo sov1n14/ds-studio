@@ -80,8 +80,8 @@ const Modal = {
      */
     prompt({ title, value, placeholder } = {}) {
         return new Promise((resolve) => {
-            let settled = false;
-            const finish = (result) => { if (!settled) { settled = true; this._cleanup(); resolve(result); } };
+            let isSettled = false;
+            const finish = (result) => { if (!isSettled) { isSettled = true; this._cleanup(); resolve(result); } };
 
             this._dismiss = () => finish(null);
             this.titleEl.textContent = title || '';
@@ -137,8 +137,8 @@ const Modal = {
      */
     confirm({ title, message, confirmText, cancelText, variant } = {}) {
         return new Promise((resolve) => {
-            let settled = false;
-            const finish = (result) => { if (!settled) { settled = true; this._cleanup(); resolve(result); } };
+            let isSettled = false;
+            const finish = (result) => { if (!isSettled) { isSettled = true; this._cleanup(); resolve(result); } };
 
             this._dismiss = () => finish(false);
             this.titleEl.textContent = title || '';

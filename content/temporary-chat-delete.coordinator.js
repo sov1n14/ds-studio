@@ -82,12 +82,12 @@
                 const FIBER_REQ = globalThis.DSS_FIBER_DELETE_MESSAGE_TYPE;
                 const FIBER_RES = globalThis.DSS_FIBER_DELETE_RESULT_TYPE;
 
-                let fallbackTriggered = false;
+                let hasFallbackTriggered = false;
                 let timeoutId = null;
 
                 const fallbackToApi = async () => {
-                    if (fallbackTriggered) return;
-                    fallbackTriggered = true;
+                    if (hasFallbackTriggered) return;
+                    hasFallbackTriggered = true;
                     window.removeEventListener('message', resultListener);
                     if (timeoutId) clearTimeout(timeoutId);
                     const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);

@@ -36,7 +36,7 @@
         if (typeof scheduleFrame !== 'function') throw new Error('setupResizeObserver: scheduleFrame must be a function');
         if (typeof isExtensionContextValid !== 'function') throw new Error('setupResizeObserver: isExtensionContextValid must be a function');
 
-        var rafPending = false;
+        var isRafPending = false;
         var observer = new ResizeObserver(function () {
             // context 失效 → 停止觀察
             if (!isExtensionContextValid()) {
@@ -44,10 +44,10 @@
                 return;
             }
             // rAF 節流：多次 callback 合併為單次 onResize
-            if (rafPending) return;
-            rafPending = true;
+            if (isRafPending) return;
+            isRafPending = true;
             scheduleFrame(function () {
-                rafPending = false;
+                isRafPending = false;
                 onResize();
             });
         });
@@ -70,12 +70,12 @@
         if (typeof onResize !== 'function') throw new Error('setupWindowResizeListener: onResize must be a function');
         if (typeof scheduleFrame !== 'function') throw new Error('setupWindowResizeListener: scheduleFrame must be a function');
 
-        var rafPending = false;
+        var isRafPending = false;
         var handler = function () {
-            if (rafPending) return;
-            rafPending = true;
+            if (isRafPending) return;
+            isRafPending = true;
             scheduleFrame(function () {
-                rafPending = false;
+                isRafPending = false;
                 onResize();
             });
         };

@@ -351,7 +351,7 @@
             }
 
             // 6. 對兩邊都存在的 prompt_key：將 records 依 message_id 排序後逐對匹配
-            var matchedAny = false;
+            var hasMatchedAny = false;
             for (var promptKey in domByPrompt) {
                 if (!recordsByPrompt[promptKey]) {
                     continue;
@@ -368,11 +368,11 @@
                         this._keyToMessageId.set(key, recList[i].message_id);
                     }
                     this._injectRestoredContent(domList[i], recList[i]);
-                    matchedAny = true;
+                    hasMatchedAny = true;
                 }
             }
 
-            return matchedAny;
+            return hasMatchedAny;
         },
     };
 

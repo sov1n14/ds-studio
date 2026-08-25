@@ -41,7 +41,7 @@
 
                 let consecutiveMisses = 0;
                 let mutationTimer = null;
-                let aborted = false;
+                let isAborted = false;
                 // 追蹤穩定狀態以應對虛擬列表動態增長
                 let _stableTopCount = 0;
                 let _lastScrollHeight = -1;
@@ -100,7 +100,7 @@
                 };
 
                 const step = () => {
-                    if (aborted) return;
+                    if (isAborted) return;
 
                     if (Date.now() - startTime > effectiveTimeout) {
                         cleanup();
@@ -158,7 +158,7 @@
                 };
 
                 const scheduleNext = () => {
-                    if (aborted) return;
+                    if (isAborted) return;
                     mutationTimer = setTimeout(() => {
                         mutationTimer = null;
                         step();
@@ -167,7 +167,7 @@
 
                 // 透過 reject 路徑暴露中止接口（供 _onRouteChange 使用）
                 this._scrollReject = (result) => {
-                    aborted = true;
+                    isAborted = true;
                     cleanup();
                     reject(result);
                 };
