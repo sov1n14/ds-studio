@@ -17,7 +17,7 @@
 const TemporaryChatDelete = (() => {
     'use strict';
 
-    const _root = (typeof globalThis !== 'undefined') ? globalThis : window;
+    const _root = globalThis;
 
     /**
      * 取得部件 bundle，缺少時以載入順序錯誤明確失敗。

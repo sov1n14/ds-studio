@@ -29,4 +29,4 @@
     // === 掛載至全域（標準 util 自附模式） ===
     root.__DS_Logger = __DS_Logger;
     if (typeof module !== 'undefined' && module.exports) module.exports = __DS_Logger;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

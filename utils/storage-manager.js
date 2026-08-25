@@ -447,7 +447,7 @@ const StorageManager = {
         root.__DS_StorageManager_setters  || {},
         root.__DS_StorageManager_settingsRead || {}
     );
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);
 
 // Make it available globally depending on context
 if (typeof window !== 'undefined') {

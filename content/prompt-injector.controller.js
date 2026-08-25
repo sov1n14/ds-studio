@@ -191,4 +191,4 @@
         module.exports = { createPromptInjector };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

@@ -9,7 +9,7 @@
     'use strict';
 
     // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const _DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const _DSSelectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     // ─────────────────────────────────────────────────────────────────
@@ -221,4 +221,4 @@
 
     root.__DS_Harvest_dom = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

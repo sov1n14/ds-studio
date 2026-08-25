@@ -10,7 +10,7 @@
 (function (root) {
     'use strict';
 
-    var selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio && (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio.Selectors ||
+    var selectors = (globalThis).DSstudio && (globalThis).DSstudio.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     // ── Selector / Hash 常數（僅限解析器使用） ───────────────────────────────
@@ -100,4 +100,4 @@
         module.exports = { resolveTitleEl, resolveNewChatButtonEl };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

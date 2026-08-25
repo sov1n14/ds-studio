@@ -53,4 +53,4 @@
         module.exports = { positionMenu };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

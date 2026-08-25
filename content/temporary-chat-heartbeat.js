@@ -54,4 +54,4 @@
 
     // Test export（瀏覽器中為 no-op）
     if (typeof module !== 'undefined' && module.exports) module.exports = root.TemporaryChatHeartbeat;
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

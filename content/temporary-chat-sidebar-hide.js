@@ -8,7 +8,7 @@
     'use strict';
 
     // 共用 DOM 選擇器（瀏覽器：ds-selectors.js 於前載入設定 window.DSstudio；Node 測試：直接 require）
-    const _selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const _selectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     const STYLE_ID = 'ds-temp-chat-sidebar-hide-style';
@@ -182,4 +182,4 @@
 
     // Test export（瀏覽器中為 no-op）
     if (typeof module !== 'undefined' && module.exports) module.exports = root.TemporaryChatSidebarHide;
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

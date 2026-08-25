@@ -13,7 +13,7 @@
 
     // ── 依賴解析（瀏覽器：全域命名空間；Node.js/Vitest：require） ────────────
 
-    var __settleModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetSettle ||
+    var __settleModule = (globalThis).__DS_PresetSettle ||
         (typeof require !== 'undefined' ? require('./preset-settle.scheduler.js') : {});
 
     var runSettle = __settleModule.runSettle;
@@ -121,4 +121,4 @@
         module.exports = { setupResizeObserver, setupWindowResizeListener, startSettle };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

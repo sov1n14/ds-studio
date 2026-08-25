@@ -297,4 +297,4 @@
         module.exports = { createChatBindingController };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

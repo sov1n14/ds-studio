@@ -385,4 +385,4 @@
   // Node.js require() 支援（供單元測試）
   if (typeof module !== 'undefined' && module.exports) module.exports = locales;
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

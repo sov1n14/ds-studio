@@ -8,7 +8,7 @@
  */
 
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-const __DS_QuoteReplySelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+const __DS_QuoteReplySelectors = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 /** 選取變更後的防抖間隔（ms）：selectionchange 於拖曳選取期間會連續觸發 */

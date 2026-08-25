@@ -18,7 +18,7 @@ const TemporaryChatToggle = (() => {
     'use strict';
 
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const _selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const _selectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     // ── 私有狀態 ──────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ const TemporaryChatToggle = (() => {
      * 取得共享啟用旗標模組（temporary-chat-enabled-flag.js 在前載入提供）。
      */
     function _flag() {
-        const flag = (typeof globalThis !== 'undefined' && globalThis.TemporaryChatEnabledFlag)
+        const flag = globalThis.TemporaryChatEnabledFlag
             || (typeof window !== 'undefined' && window.TemporaryChatEnabledFlag);
         if (!flag) {
             throw new Error('[DSS] temporary-chat-toggle: TemporaryChatEnabledFlag is missing — load content/temporary-chat-enabled-flag.js before this file');

@@ -438,4 +438,4 @@
 
     root.__DS_StorageManager_chatmap = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

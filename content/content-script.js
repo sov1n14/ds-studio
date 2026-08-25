@@ -9,7 +9,7 @@
  */
 
 // 全域解析根：僅計算一次，其餘相依模組一律直接讀 __root.__DS_X
-var __root = (typeof globalThis !== 'undefined' ? globalThis : window);
+var __root = (globalThis);
 
 // 綁定 Export 模組（瀏覽器：由 content-script.export.js 在前載入；Node.js 測試：直接 require）
 var __DSExport = __root.__DS_ContentExport ||

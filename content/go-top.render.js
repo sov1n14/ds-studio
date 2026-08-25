@@ -7,7 +7,7 @@
     'use strict';
 
     // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const __DSSelectorsRender = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const __DSSelectorsRender = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     // 原生 go-top 按鈕的雜湊 class（單一來源定義於 content/ds-selectors.js）
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectorsRender.GO_TOP_NATIVE_BUTTON_CLASS;
@@ -357,4 +357,4 @@
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
     root.__DS_GoToTop_render = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

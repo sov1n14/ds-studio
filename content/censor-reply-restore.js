@@ -11,15 +11,15 @@
  *   6. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
  */
 // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
-var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
+var __DS_CensorChatSessionId = (globalThis).DSSChatSessionId ||
     (typeof require !== 'undefined' ? require('../utils/chat-session-id.js') : {});
 
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-var __DS_CensorSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+var __DS_CensorSelectors = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 // key <-> messageId 雙向對應表（瀏覽器：censor-reply-restore.keymap.js 在前載入；Node.js 測試：直接 require）
-var __DS_CensorKeyToMessageIdMap = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_CensorKeyToMessageIdMap ||
+var __DS_CensorKeyToMessageIdMap = (globalThis).__DS_CensorKeyToMessageIdMap ||
     (typeof require !== 'undefined' ? require('./censor-reply-restore.keymap.js') : null);
 
 const CensorReplyRestore = {
@@ -312,7 +312,7 @@ const CensorReplyRestore = {
         root.__DS_CensorReplyRestore_dom || {},
         root.__DS_CensorReplyRestore_thinkblock || {},
         root.__DS_CensorReplyRestore_storage || {});
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);
 
 if (typeof document !== 'undefined' && document.documentElement) {
     CensorReplyRestore.start();

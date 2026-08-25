@@ -26,7 +26,7 @@
  */
 
 // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-const __DSSelectorsGoTop = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+const __DSSelectorsGoTop = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 const GoToTop = {
@@ -408,7 +408,7 @@ const GoToTop = {
 // 合併 DOM bundle 與 Scroll bundle（bundle 檔案須在 manifest 中先於此檔案載入）
 (function (root) {
     Object.assign(GoToTop, root.__DS_GoToTop_locate || {}, root.__DS_GoToTop_render || {}, root.__DS_GoToTop_scroll || {});
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);
 
 // Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 GoToTop.init();

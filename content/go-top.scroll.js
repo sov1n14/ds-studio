@@ -182,4 +182,4 @@
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
     root.__DS_GoToTop_scroll = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

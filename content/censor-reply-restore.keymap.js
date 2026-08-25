@@ -64,4 +64,4 @@
     root.__DS_CensorKeyToMessageIdMap = KeyToMessageIdMap;
     if (typeof module !== 'undefined' && module.exports) module.exports = KeyToMessageIdMap;
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

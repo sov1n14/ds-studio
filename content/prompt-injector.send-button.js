@@ -131,4 +131,4 @@
         module.exports = root.__DS_PromptInjectorSendButton;
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

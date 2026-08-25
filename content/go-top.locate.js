@@ -7,7 +7,7 @@
     'use strict';
 
     // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const __DSSelectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
     const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
@@ -258,4 +258,4 @@
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
     root.__DS_GoToTop_locate = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);
