@@ -177,6 +177,23 @@ const StorageManager = {
     },
 
     /**
+     * 訂閱 local / sync 兩個儲存區的設定變更。
+     * 讓 popup 等呼叫端無需直接觸碰 chrome.storage.onChanged，符合分層規則
+     * （popup 一律經由 utils/ 存取擴充 API）。僅 namespace 為 local 或 sync 時回呼，
+     * 其餘區域（如 managed）一律略過，回呼只收到 changes 物件。
+     * @param {(changes: Object) => void} callback 每次設定變更時呼叫
+     */
+    subscribeToSettingChanges(callback) {
+        if (typeof callback !== 'function') {
+            throw new Error('[DSS] subscribeToSettingChanges: callback must be a function');
+        }
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace !== 'local' && namespace !== 'sync') return;
+            callback(changes);
+        });
+    },
+
+    /**
      * 每個 preset 各自獨立 storage key 的共同前綴。
      * 組出 preset key 與判斷某 key 是否為 preset 的位置皆引用此常數，前綴僅此一處定義。
      */
