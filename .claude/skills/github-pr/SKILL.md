@@ -1,7 +1,6 @@
 ---
 name: github-pr
-description: >
-  Create a GitHub Pull Request from the current branch to main using the gh CLI, with an auto-generated Traditional Chinese title and a categorized description (Added / Updated / Moved / Renamed / Deleted) synthesized from all commits and file changes that exist on the current branch but not on main. Always use this skill whenever the user wants to create, open, send, or submit a PR / pull request, or mentions "發 PR"、"建 PR"、"開 PR"、"pr"、"gh pr" or even "mr" — even if they don't specify the title or description, because this skill generates both automatically and previews them before creating.
+description: Use when the user wants a PR created — "發 PR", "開 PR", "pr", "mr", gh pr — or asks to merge an existing one; the merge rules here are binding (merge commit only, never squash or rebase). Generates the Traditional Chinese title and Added/Updated/Deleted description from the branch diff, so trigger even when no title is given. Also covers gh 401 and PR-already-exists failures.
 ---
 
 # GitHub PR Creation Flow (gh CLI)

@@ -11,9 +11,11 @@
  *      markup.
  *   3. popup.js holds a DOM ref websearchRadios = Array.from(...) over the
  *      websearchToggle radios.
- *   4. On popup load, the checked radio reflects settings.websearchToggle,
- *      falling back to 'on' when missing, and normalizing the legacy stored
- *      value 'default' to 'on' (backward compatibility).
+ *   4. On popup load, applySettingsToDom() in popup.settings-view.js sets the
+ *      checked radio from settings.websearchToggle, falling back to 'on' when
+ *      the setting is missing. Normalization of the legacy stored value
+ *      'default' happens in StorageManager and is certified by
+ *      storage-manager.websearch-toggle.spec.js / settings-routes.spec.js.
  *   5. A change handler persists the selected value via
  *      StorageManager.saveWebsearchToggle(r.value), then runs
  *      refreshSyncStatus() and showSaveStatus(); the deselected radio is
@@ -34,8 +36,8 @@
  * Testing strategy: static source-pattern assertions for markup/DOM-ref/
  * change-handler wiring (identical style to popup-prevent-auto-scroll-toggle.spec.js),
  * plus genuine runtime extraction via new Function(...) for (a) the existing
- * applyMasterSwitchUI behavior, (b) the NEW load-restore normalization block
- * in popup.js, and (c) the NEW live-sync normalization block in
+ * applyMasterSwitchUI behavior, (b) the load-restore block in
+ * popup.settings-view.js, and (c) the live-sync normalization block in
  * popup.live-sync.js. The runtime extractions execute the real block against
  * real DOM radio elements / plain objects and assert on resulting .checked
  * values for a matrix of stored inputs - never on the internal statement
@@ -56,6 +58,10 @@ function readPopupHtml() {
 
 function readPopupJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.js"), "utf-8");
+}
+
+function readPopupSettingsViewJs() {
+    return readFileSync(resolve(__dirname, "../../popup/popup.settings-view.js"), "utf-8");
 }
 
 function readPopupLiveSyncJs() {
@@ -151,19 +157,18 @@ function makeToggleRadio(value, isChecked) {
 }
 
 function buildLoadRestoreWebsearchRadios() {
-    const code = readPopupJs();
+    const code = readPopupSettingsViewJs();
     const match = code.match(/if \(websearchRadios\.length\) \{[\s\S]*?\n {4}\}/);
-    expect(match, "could not locate the load-restore block in popup.js").not.toBeNull();
+    expect(match, "could not locate the load-restore block in popup.settings-view.js").not.toBeNull();
     const factory = new Function("websearchRadios", "settings", match[0]);
     return factory;
 }
 
-describe("popup.js - websearchToggle load-restore checked state", () => {
+describe("popup.settings-view.js - websearchToggle load-restore checked state", () => {
     it.each([
         { stored: "on", expectedChecked: "on" },
         { stored: "off", expectedChecked: "off" },
         { stored: undefined, expectedChecked: "on" },
-        { stored: "default", expectedChecked: "on" },
     ])("stored websearchToggle=$stored results in the correct radio being checked", ({ stored, expectedChecked }) => {
         const onRadio = makeToggleRadio("on", false);
         const offRadio = makeToggleRadio("off", false);

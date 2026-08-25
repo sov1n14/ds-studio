@@ -24,6 +24,9 @@ function dsI18n() { return globalThis.dsI18n; }
 // Wait for dsI18n to be ready before each test
 beforeEach(async () => {
     if (!dsI18n()) return; // skip if eval didn't run yet
+    // setLocale('en') persists to localStorage and init() now honours that stored
+    // preference, so a prior test's locale would leak into this one.
+    localStorage.removeItem('ds_studio_locale');
     dsI18n()._reset();
     await dsI18n().init();
     // Set up in-memory storage for tests that need chrome

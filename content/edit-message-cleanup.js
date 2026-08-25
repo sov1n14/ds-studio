@@ -19,20 +19,24 @@
 // 常數
 // ─────────────────────────────────────────────
 
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_EditCleanupSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 /** 編輯按鈕的混淆 class 名稱 */
-const EDIT_BUTTON_CLASS = 'd4910adc';
+const EDIT_BUTTON_CLASS = __DS_EditCleanupSelectors.EDIT_MESSAGE_BUTTON_CLASS;
 
 /** 需移除 max-height（設為 none）的容器 selector */
-const REMOVE_MAX_HEIGHT_SELECTOR = '.cc852ac5';
+const REMOVE_MAX_HEIGHT_SELECTOR = __DS_EditCleanupSelectors.EDIT_BOX_SELECTOR;
 
 /** 需動態設定 max-height 的容器 selector */
-const DYNAMIC_MAX_HEIGHT_SELECTOR = '._646a522';
+const DYNAMIC_MAX_HEIGHT_SELECTOR = __DS_EditCleanupSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR;
 
 /** 動態 max-height 計算來源元素 A 的 selector */
-const HEIGHT_SOURCE_SELECTOR_A = '._2be88ba';
+const HEIGHT_SOURCE_SELECTOR_A = __DS_EditCleanupSelectors.CHAT_HEADER_SELECTOR;
 
 /** 動態 max-height 計算來源元素 B 的 selector */
-const HEIGHT_SOURCE_SELECTOR_B = '._871cbca';
+const HEIGHT_SOURCE_SELECTOR_B = __DS_EditCleanupSelectors.CONTENT_COLUMN_SELECTOR;
 
 /** 動態 max-height 公式中扣除的固定偏移量（px） */
 const MAX_HEIGHT_OFFSET_PX = 32;
@@ -209,7 +213,7 @@ function applyEditScrollPosition(root) {
     if (!header) return;
 
     // 找到 ._6f2c522 容器，再向上尋找真正可捲動的祖先
-    const listItems = document.querySelector('._6f2c522');
+    const listItems = document.querySelector(__DS_EditCleanupSelectors.VIRTUAL_LIST_CONTAINER_SELECTOR);
     if (!listItems) return;
 
     const scrollContainer = findScrollableAncestor(listItems) || listItems;

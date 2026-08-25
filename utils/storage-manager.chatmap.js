@@ -5,10 +5,15 @@
 (function (root) {
     'use strict';
 
-    // chatPresetMap 分塊的軟上限（與 entry file 一致）
+    /**
+     * chatPresetMap 單一分塊的位元組軟上限。經下方 bundle mixin 至 StorageManager，
+     * 生產程式碼與測試共用同一份值。
+     */
     const CHUNK_SOFT_LIMIT_BYTES = 7168;
 
     const bundle = {
+        CHUNK_SOFT_LIMIT_BYTES,
+
         /**
          * 將 deletedKeys/changedKeys/addedKeys 差異套用至 chunks 工作副本與 meta 工作副本，
          * 並同步更新 _chunkIndexCache。供 mutateChatPresetMap 的鎖外快速路徑與鎖內路徑共用，
@@ -82,6 +87,41 @@
         },
 
         /**
+         * 執行 mutator，並將其造成的 map 差異套用至 chunks/meta 的工作副本。涵蓋「快照 → 執行 mutator → 計算 key 差異 → 建立工作副本 → 套用差異」整段流程，供 mutateChatPresetMap 的鎖外快速路徑與鎖內路徑共用。
+         *
+         * @param {Function} mutator - 接收當前 map，可原地修改或回傳新 map
+         * @param {{ map: Object, metaCopy: Object, chunksByIdx: Object[] }} state - _readAllChunks 的結果
+         * @returns {Promise<Object>} isNoop 為 true 代表無任何差異，此時 newChunks/newMeta/modifiedChunks 不具意義，呼叫端應直接返回。
+         */
+        async _computeChatPresetMapDiff(mutator, { map, metaCopy, chunksByIdx }) {
+            // 在呼叫 mutator 前快照原始 state，因為 mutator 可能原地修改 map
+            const snapshotMap = Object.fromEntries(Object.entries(map));
+
+            const result = await mutator(map);
+            // 重新載入快取：async mutator 的 await 可能觸發 onChanged 導致快取失效
+            await this._ensureChunkCachesLoaded();
+
+            const finalMap = result === undefined ? map : result;
+
+            // 使用快照計算差異
+            const newKeys = Object.keys(finalMap);
+            const deletedKeys = Object.keys(snapshotMap).filter(k => !(k in finalMap));
+            const addedKeys = newKeys.filter(k => !(k in snapshotMap));
+            const changedKeys = newKeys.filter(k => k in snapshotMap && snapshotMap[k] !== finalMap[k]);
+
+            if (deletedKeys.length === 0 && addedKeys.length === 0 && changedKeys.length === 0) {
+                return { finalMap, deletedKeys, changedKeys, addedKeys, isNoop: true };
+            }
+
+            // 建立工作副本並套用差異
+            const newChunks = chunksByIdx.map(c => ({ ...c }));
+            const newMeta = this._buildNextMeta(metaCopy, {});
+            const modifiedChunks = this._applyChatPresetMapDiff(newChunks, newMeta, deletedKeys, changedKeys, addedKeys, finalMap);
+
+            return { finalMap, deletedKeys, changedKeys, addedKeys, newChunks, newMeta, modifiedChunks, isNoop: false };
+        },
+
+        /**
          * 透過 mutator 函式安全地讀取-修改-寫入 chatPresetMap。
          * 所有 chatPresetMap 的寫入皆經由內部 promise-chain 佇列序列化，
          * 避免同 context 內的競爭條件。
@@ -102,33 +142,9 @@
             return this._enqueueChatPresetMapWrite(async () => {
                 const { map, metaCopy, chunksByIdx } = await this._readAllChunks();
 
-                // 在呼叫 mutator 前快照原始 state，因為 mutator 可能原地修改 map
-                const snapshotEntries = Object.entries(map);
-                const snapshotMap = Object.fromEntries(snapshotEntries);
+                const { finalMap, deletedKeys, changedKeys, addedKeys, newMeta, modifiedChunks, isNoop } = await this._computeChatPresetMapDiff(mutator, { map, metaCopy, chunksByIdx });
 
-                const result = await mutator(map);
-                // 重新載入快取：async mutator 的 await 可能觸發 onChanged 導致快取失效
-                await this._ensureChunkCachesLoaded();
-
-                const finalMap = result === undefined ? map : result;
-
-                // 使用快照計算差異
-                const oldKeys = Object.keys(snapshotMap);
-                const newKeys = Object.keys(finalMap);
-                const deletedKeys = oldKeys.filter(k => !(k in finalMap));
-                const addedKeys = newKeys.filter(k => !(k in snapshotMap));
-                const changedKeys = newKeys.filter(k => k in snapshotMap && snapshotMap[k] !== finalMap[k]);
-
-                if (deletedKeys.length === 0 && addedKeys.length === 0 && changedKeys.length === 0) {
-                    return map;
-                }
-
-                // 建立工作副本
-                const newChunks = chunksByIdx.map(c => ({ ...c }));
-                let newMeta = this._buildNextMeta(metaCopy, {});
-
-                // 套用差異並取得被修改過的 chunk 索引
-                const modifiedChunks = this._applyChatPresetMapDiff(newChunks, newMeta, deletedKeys, changedKeys, addedKeys, finalMap);
+                if (isNoop) return map;
 
                 // === Phase C+D: 路徑選擇 — 單 chunk diff vs 多 chunk / 重新平衡 ===
                 const isSingleChunkPath = modifiedChunks.size === 1
@@ -163,31 +179,15 @@
                     await this._ensureChunkCachesLoaded();
                     const { map: lockMap, metaCopy: lockMetaCopy, chunksByIdx: lockChunksByIdx } = await this._readAllChunks();
 
-                    // 在呼叫 mutator 前快照原始 state
-                    const lockSnapshotEntries = Object.entries(lockMap);
-                    const lockSnapshotMap = Object.fromEntries(lockSnapshotEntries);
+                    // 對最新 state 重新套用 mutator 並計算差異
+                    const lockDiff = await this._computeChatPresetMapDiff(mutator, { map: lockMap, metaCopy: lockMetaCopy, chunksByIdx: lockChunksByIdx });
+                    const lockFinalMap = lockDiff.finalMap;
 
-                    // 對最新 state 重新套用 mutator
-                    const lockResult = await mutator(lockMap);
-                    const lockFinalMap = lockResult === undefined ? lockMap : lockResult;
+                    if (lockDiff.isNoop) return lockFinalMap;
 
-                    // 使用快照計算差異
-                    const lockOldKeys = Object.keys(lockSnapshotMap);
-                    const lockNewKeys = Object.keys(lockFinalMap);
-                    const lockDeletedKeys = lockOldKeys.filter(k => !(k in lockFinalMap));
-                    const lockAddedKeys = lockNewKeys.filter(k => !(k in lockSnapshotMap));
-                    const lockChangedKeys = lockNewKeys.filter(k => k in lockSnapshotMap && lockSnapshotMap[k] !== lockFinalMap[k]);
-
-                    if (lockDeletedKeys.length === 0 && lockAddedKeys.length === 0 && lockChangedKeys.length === 0) {
-                        return lockFinalMap;
-                    }
-
-                    // 建立工作副本
-                    const lockNewChunks = lockChunksByIdx.map(c => ({ ...c }));
-                    let lockNewMeta = this._buildNextMeta(lockMetaCopy, {});
-
-                    // 套用差異並取得被修改過的 chunk 索引
-                    const lockModifiedChunks = this._applyChatPresetMapDiff(lockNewChunks, lockNewMeta, lockDeletedKeys, lockChangedKeys, lockAddedKeys, lockFinalMap);
+                    const lockNewChunks = lockDiff.newChunks;
+                    const lockNewMeta = lockDiff.newMeta;
+                    const lockModifiedChunks = lockDiff.modifiedChunks;
 
                     // 4. 重新計算被修改 chunk 的大小
                     for (const idx of lockModifiedChunks) {
@@ -257,6 +257,23 @@
 
                     return lockFinalMap;
                 });
+            });
+        },
+
+        /**
+         * 清除指向已不存在提示詞組的綁定（提示詞組刪除後殘留的孤兒條目）。
+         * 無孤兒條目時 mutateChatPresetMap 不會產生任何寫入。
+         * @param {string[]} validPresetIds - 目前仍存在的提示詞組 id 清單
+         * @returns {Promise<Object>} 修剪後的 chatPresetMap
+         */
+        async pruneOrphanChatBindings(validPresetIds) {
+            const validIds = new Set(validPresetIds || []);
+            return this.mutateChatPresetMap(map => {
+                for (const [uuid, presetId] of Object.entries(map)) {
+                    if (presetId && !validIds.has(presetId)) {
+                        delete map[uuid];
+                    }
+                }
             });
         },
 

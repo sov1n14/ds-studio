@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import fs from 'fs';
-import path from 'path';
-import vm from 'vm';
-import { fileURLToPath } from 'url';
+import { loadClassicScript } from '../helpers/load-classic-script.js';
 
 /**
  * Test Suite: Bug 1 — SSE Catch-All Filter
@@ -25,15 +22,8 @@ import { fileURLToPath } from 'url';
  * polluting fragment content.
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
-
 function loadSseParser() {
-    const src = fs.readFileSync(path.join(ROOT, 'content', 'sse-parser.js'), 'utf-8');
-    const sandbox = {};
-    vm.createContext(sandbox);
-    vm.runInContext(src, sandbox);
-    return sandbox.SseParser;
+    return loadClassicScript('content/sse-parser.js').SseParser;
 }
 
 describe('Bug 1: SSE Catch-All Filter (SseParser.parseLine)', () => {

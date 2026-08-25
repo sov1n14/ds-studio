@@ -1,7 +1,8 @@
 /**
  * DS Studio — StorageManager 初始化與資料遷移方法群組
  * 負責 initialize()：預設值補齊、跨版本資料遷移（promptPresets /
- * chatPresetMap 分塊化）、首次同步衝突偵測，以及 chunk 快取失效監聽器安裝。
+ * chatPresetMap 分塊化）、chatPresetMap 孤兒綁定清理、首次同步衝突偵測，
+ * 以及 chunk 快取失效監聽器安裝。
  */
 (function (root) {
     'use strict';
@@ -10,15 +11,23 @@
         /**
          * 安裝 chunk 快取失效監聽器。
          * 其他 context 修改分塊時，自動將 _chunkIndexCache 與 _metaCache 設為 null。
+         *
+         * initialize() 可被重複呼叫（popup / content script / service worker 各呼叫一次，
+         * 且 promptPresets 遷移分支會遞迴再進入一次），故安裝前先移除本 context 上一次
+         * 註冊的同一監聽器，確保每個 context 恆保持恰好一個監聽器。
          */
         _installChunkCacheInvalidator() {
+            if (this._chunkCacheInvalidator) {
+                chrome.storage.onChanged.removeListener(this._chunkCacheInvalidator);
+            }
+
             // 綁定至呼叫時的 this（即目前 context 自己的 StorageManager 實例），
             // 不可改用裸露的全域識別字 StorageManager —— 拆檔後 StorageManager
             // 已非本模組的區域繫結，裸露參照會經由 window.StorageManager 解析，
             // 而該屬性在多 context 測試情境下永遠指向「最後一次載入」的實例，
             // 導致監聽器誤將另一個 context 的快取清空，自己的快取卻從未失效。
             const self = this;
-            chrome.storage.onChanged.addListener((changes) => {
+            const invalidate = (changes) => {
                 const keys = Object.keys(changes);
                 const touched = keys.some(k =>
                     k === self.KEYS.CHAT_PRESET_MAP_META ||
@@ -28,7 +37,9 @@
                     self._chunkIndexCache = null;
                     self._metaCache = null;
                 }
-            });
+            };
+            this._chunkCacheInvalidator = invalidate;
+            chrome.storage.onChanged.addListener(invalidate);
         },
 
         /**
@@ -156,6 +167,14 @@
                 if (Object.keys(missingInSync).length > 0) {
                     await this._set(missingInSync);
                 }
+            }
+
+            // 5. 清除指向已刪除提示詞組的 chatPresetMap 孤兒綁定。
+            // 索引為空時一律跳過：空索引代表索引尚未載入或仍在遷移中（並非「使用者刪光提示詞組」），
+            // 此時修剪會清空所有綁定，故以資料保全優先。
+            const validPresetIds = data[this.KEYS.PRESET_INDEX] || this.DEFAULTS.dsPresetIndex;
+            if (validPresetIds.length > 0) {
+                await this.pruneOrphanChatBindings(validPresetIds);
             }
 
             // 註冊 chunk 快取失效監聽器（此後其他 context 修改分塊時自動重載）

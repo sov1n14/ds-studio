@@ -16,19 +16,13 @@
  * chrome.storage.onChanged (aliased to the local area only in vitest.setup.js).
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import StorageManager from '../../utils/storage-manager.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript, readProjectFile } from '../helpers/popup-script-loader.js';
 
 const K = StorageManager.KEYS;
 
 beforeAll(() => {
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.live-sync.js'), 'utf-8');
-    eval(code);
+    evalPopupScript('popup/popup.live-sync.js');
     if (typeof window.__DS_PopupLiveSync?.createLiveSyncListener !== 'function') {
         throw new Error('createLiveSyncListener was not exposed on window.__DS_PopupLiveSync');
     }
@@ -132,15 +126,18 @@ function startAndCapture(ctx) {
     return captured;
 }
 
-async function flushMicrotasks() {
-    // StorageManager's storage mock resolves via chained setTimeout(0) calls plus
-    // an internal write-lock queue (_get -> _safeGet -> per-preset _get, etc. for
-    // getSettings/getChatPresetMap). Empirically this needs several hundred ms of
-    // real wall time to fully drain, not just a couple of event-loop turns.
-    await new Promise((r) => setTimeout(r, 500));
+// StorageManager's storage mock settles every read and write on its own setTimeout(0), and getSettings/getChatPresetMap issue those sequentially through an internal write-lock queue, so the pending chain needs one timer turn per link. Under happy-dom a real timer turn costs ~15ms, so draining the chain in real time costs hundreds of milliseconds per call site. Tests that need it drained call useVirtualTime() right before triggering the chain, and this helper then runs the whole chain in virtual time - same drain, no wall clock.
+async function drainStorageChain() {
+    await vi.advanceTimersByTimeAsync(1000);
+}
+
+/** Switches to virtual time for the storage chain a listener is about to kick off. Called AFTER any real-timer setup (e.g. seeding storage), so that setup still resolves against real timers. */
+function useVirtualTime() {
+    vi.useFakeTimers();
 }
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
 });
 
@@ -437,10 +434,11 @@ describe('createLiveSyncListener — preset list reload', () => {
 
         const customSelect = { render: vi.fn() };
         const { ctx, state, updateEditPresetBtnState } = buildCtx({ customSelect });
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         listener({ [K.PRESET_INDEX]: { oldValue: [], newValue: ['p1'] } }, 'sync');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(state.presets).toEqual([
             expect.objectContaining({ id: 'p1', name: 'Alpha' }),
@@ -456,10 +454,11 @@ describe('createLiveSyncListener — preset list reload', () => {
 
         const customSelect = { render: vi.fn() };
         const { ctx, state } = buildCtx({ customSelect });
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         listener({ dsPreset_p2: { oldValue: null, newValue: { id: 'p2' } } }, 'sync');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(state.presets.some((p) => p.id === 'p2')).toBe(true);
         expect(customSelect.render).toHaveBeenCalled();
@@ -472,10 +471,11 @@ describe('createLiveSyncListener — preset list reload', () => {
 
         const customSelect = { render: vi.fn() };
         const { ctx, state } = buildCtx({ customSelect });
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         listener({ [K.PRESET_ORDER_META]: { oldValue: {}, newValue: { order: ['p3'], orderUpdatedAt: Date.now() } } }, 'sync');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(state.presets.some((p) => p.id === 'p3')).toBe(true);
     });
@@ -483,22 +483,24 @@ describe('createLiveSyncListener — preset list reload', () => {
     it('does NOT reload presets for unrelated key changes', async () => {
         const customSelect = { render: vi.fn() };
         const { ctx } = buildCtx({ customSelect });
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         listener({ [K.IS_ENABLED]: { oldValue: false, newValue: true } }, 'local');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(customSelect.render).not.toHaveBeenCalled();
     });
 
     it('does not throw when customSelect has not been created yet (getCustomSelect returns falsy)', async () => {
         const { ctx } = buildCtx({ customSelect: null });
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         expect(() => {
             listener({ [K.PRESET_INDEX]: { oldValue: [], newValue: [] } }, 'sync');
         }).not.toThrow();
-        await flushMicrotasks();
+        await drainStorageChain();
     });
 });
 
@@ -511,10 +513,11 @@ describe('createLiveSyncListener — chat preset map reload', () => {
         await StorageManager.mutateChatPresetMap(() => ({ uuidA: 'p1' }));
 
         const { ctx, state } = buildCtx();
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         listener({ [K.CHAT_PRESET_MAP_META]: { oldValue: {}, newValue: { version: 1 } } }, 'sync');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(state.chatPresetMap).toEqual({ uuidA: 'p1' });
     });
@@ -523,21 +526,23 @@ describe('createLiveSyncListener — chat preset map reload', () => {
         await StorageManager.mutateChatPresetMap(() => ({ uuidB: 'p2' }));
 
         const { ctx, state } = buildCtx();
+        useVirtualTime();
         const listener = startAndCapture(ctx);
 
         listener({ [`${K.CHAT_PRESET_MAP_CHUNK_PREFIX}0`]: { oldValue: null, newValue: '{}' } }, 'sync');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(state.chatPresetMap).toEqual({ uuidB: 'p2' });
     });
 
     it('does NOT reload chatPresetMap for unrelated key changes', async () => {
         const { ctx, state } = buildCtx();
+        useVirtualTime();
         const listener = startAndCapture(ctx);
         const originalMap = state.chatPresetMap;
 
         listener({ [K.HIDE_THINKING]: { oldValue: false, newValue: true } }, 'local');
-        await flushMicrotasks();
+        await drainStorageChain();
 
         expect(state.chatPresetMap).toBe(originalMap);
     });
@@ -642,7 +647,7 @@ describe('popup.js — Live Sync wiring block', () => {
     let popupCode;
 
     beforeAll(() => {
-        popupCode = readFileSync(resolve(__dirname, '../../popup/popup.js'), 'utf-8');
+        popupCode = readProjectFile('popup/popup.js');
     });
 
     function extractWiringBlock() {

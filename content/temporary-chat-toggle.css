@@ -83,3 +83,20 @@
     outline: 2px solid #679efe;
     outline-offset: 2px;
 }
+
+/* ── 刪除失敗提示：固定於頁面底部置中，僅作提示不攔截點擊 ── */
+.dss-temp-chat-delete-failed-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e2022;
+    color: #f9fafb;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: 8px;
+    z-index: 2147483647;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}

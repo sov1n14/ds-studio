@@ -1,19 +1,20 @@
 /**
- * Tests for the slider debounce wiring in popup.js (Step 5: debounce timing alignment).
+ * Tests for the slider debounce wiring in popup/popup.width-sliders.js.
  *
- * popup.js defines a module-level `debounce(fn, delayMs)` helper (line ~20) and wires
- * chatWidthSlider / inputWidthSlider so that:
+ * The width sliders take their `debounce` from the shared utils/debounce.js
+ * (`const debounce = DSSDebounce;`); the helper's own timing contract is owned by
+ * test/unit/debounce.spec.js. What this file guards is the wiring around it:
  *   - the `input` event updates the live percentage label synchronously (undebounced)
  *   - the `change` event calls a `debounce(asyncFn, 500)`-wrapped save
- *     (debouncedSaveChatWidth / debouncedSaveInputWidth, defined around lines 488 / 514)
+ *     (debouncedSaveChatWidth / debouncedSaveInputWidth)
  *
- * popup.js has no ESM export surface (classic script executed inside
- * DOMContentLoaded), so — following the extraction convention already used in
- * popup-editor-window.spec.js and popup.spec.js — we extract the exact `debounce`
- * source from the file and adapt the slider wiring into an injectable harness that
- * mirrors the production closures line-for-line.
+ * popup.width-sliders.js has no ESM export surface (classic script executed inside
+ * DOMContentLoaded), so the wiring is covered two ways: source-level regex assertions
+ * on the shipped file, plus an injectable harness that mirrors the production closures
+ * line-for-line using the real shared debounce.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/debounce.js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -25,85 +26,6 @@ const __dirname = dirname(__filename);
 function getPopupCode() {
     return readFileSync(resolve(__dirname, '../../popup/popup.width-sliders.js'), 'utf-8');
 }
-
-// ─────────────────────────────────────────────
-// Extract the module-level debounce() from popup.js source
-// ─────────────────────────────────────────────
-
-describe('popup.js debounce() helper (extracted from source)', () => {
-    let debounce;
-
-    beforeAll(() => {
-        const code = getPopupCode();
-        const match = code.match(/function debounce\(fn, delayMs\)\s*\{[\s\S]*?\n\}/);
-        if (!match) {
-            throw new Error('Could not extract debounce() from popup.js — has the helper been renamed or moved?');
-        }
-        // eslint-disable-next-line no-eval
-        debounce = eval(`(${match[0]})`);
-    });
-
-    beforeEach(() => {
-        vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
-    it('delays invocation until delayMs has elapsed', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 500);
-
-        debounced();
-        expect(fn).not.toHaveBeenCalled();
-
-        vi.advanceTimersByTime(499);
-        expect(fn).not.toHaveBeenCalled();
-
-        vi.advanceTimersByTime(1);
-        expect(fn).toHaveBeenCalledOnce();
-    });
-
-    it('collapses rapid successive calls into a single invocation', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 500);
-
-        debounced(1);
-        debounced(2);
-        debounced(3);
-
-        vi.advanceTimersByTime(500);
-        expect(fn).toHaveBeenCalledOnce();
-    });
-
-    it('invokes with the arguments from the final call ("last write wins")', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 500);
-
-        debounced('first');
-        debounced('second');
-        debounced('third');
-
-        vi.advanceTimersByTime(500);
-        expect(fn).toHaveBeenCalledWith('third');
-        expect(fn).toHaveBeenCalledTimes(1);
-    });
-
-    it('fires again for a call made after the previous debounce window completed', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 500);
-
-        debounced('a');
-        vi.advanceTimersByTime(500);
-        expect(fn).toHaveBeenCalledTimes(1);
-
-        debounced('b');
-        vi.advanceTimersByTime(500);
-        expect(fn).toHaveBeenCalledTimes(2);
-        expect(fn).toHaveBeenLastCalledWith('b');
-    });
-});
 
 // ─────────────────────────────────────────────
 // Source-level guard: slider saves must be wired at 500ms
@@ -176,10 +98,8 @@ describe('chatWidthSlider behavior — input vs change wiring (harness mirroring
     let debounce;
 
     beforeAll(() => {
-        const code = getPopupCode();
-        const match = code.match(/function debounce\(fn, delayMs\)\s*\{[\s\S]*?\n\}/);
-        // eslint-disable-next-line no-eval
-        debounce = eval(`(${match[0]})`);
+        // The shipped file does `const debounce = DSSDebounce;` — the harness uses that same shared helper.
+        debounce = globalThis.DSSDebounce;
     });
 
     beforeEach(() => {

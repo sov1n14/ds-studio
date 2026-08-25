@@ -11,8 +11,17 @@
 ### Trigger and Scope
 
 - **Scope guard** (`isSelectionInScope`): Only activates when both `anchorNode` and `focusNode` of the selection reside inside `div.ds-virtual-list-visible-items`. Selections crossing outside this container are ignored.
-- **Trigger events**: `document.mouseup` (250ms debounce), `document.selectionchange` (250ms debounce), and `keyup` for Shift/Arrow keys (250ms debounce, skips `isComposing`).
-- **Snapshot strategy**: `_selectedText` is captured synchronously at debounce-end. The button `click` handler uses this snapshot rather than re-reading the live selection — mitigates virtual-list node unmount race conditions.
+- **Trigger event**: `document.selectionchange`, funnelled through the single `handleSelectionEvent` scheduler with a 250 ms debounce (`QUOTE_REPLY_DEBOUNCE_MS`). One event source is enough — `selectionchange` already fires for mouse drags, Shift/Arrow keyboard selection, and IME-composed input alike, so no `mouseup` or `keyup` listener is needed. `document.mousedown` is bound separately, but only to dismiss the button on an outside click.
+- **Snapshot strategy**: `QuoteReply.selectedText` is captured synchronously at debounce-end. The button `click` handler uses this snapshot rather than re-reading the live selection — mitigates virtual-list node unmount race conditions.
+
+### Lifecycle (registerFeatureToggle)
+
+`QuoteReply.init()` registers the module with `content/feature-toggle.js` using `ownKey: null`, so the feature has no toggle of its own and follows the extension master switch alone. `registerFeatureToggle` resolves the initial state by asking the background service worker (`DSS_GET_SETTINGS`) and thereafter reacts to the `DSS_SETTINGS_CHANGED` broadcast — the module never reads `chrome.storage` directly.
+
+- `enable()` creates the button element and attaches the `selectionchange` and `mousedown` document listeners.
+- `disable()` detaches both, clears the pending debounce timer, calls `hideButton()` (which also drops the scroll/resize listeners), and removes the button element, resetting `btnEl` to `null`.
+- The `dsI18n.onLocaleChanged` subscription is the one exception: `dsI18n` exposes no unsubscribe, so it is registered once behind the `hasLocaleSubscription` flag and left in place across disable cycles. While the feature is off, `handleLocaleChanged` returns immediately because `btnEl` is `null`.
+- `init()` itself only registers the toggle; listeners are attached lazily, the first time the master switch resolves to on. A `window.__DSS_QR_INITIALIZED__` guard keeps a duplicate script injection from registering twice.
 
 ### Button Positioning (`unionClientRects` + `computeButtonPosition`)
 
@@ -27,7 +36,7 @@
 
 ### Scroll and Resize Handling
 
-Scroll/resize event listeners (`_scrollHandler`, `_resizeHandler`) are attached only while the button is visible (`showButton`) and detached on `hideButton`, preventing unnecessary event processing when the button is hidden. Both handlers use `requestAnimationFrame` to re-run `handleSelectionChange` without blocking the scroll thread.
+A single `handleViewportChange` handler serves both `scroll` (capture, passive) and `resize`. It is attached to `window` only while the button is visible (`showButton`) and detached on `hideButton`, tracked by the `isScrollAttached` flag so the pair is never double-bound. The handler defers to `requestAnimationFrame` before re-running `handleSelectionChange`, so it does not block the scroll thread.
 
 ### Textarea Injection (`injectQuote`)
 
@@ -43,7 +52,7 @@ A `<style id="dss-quote-reply-style">` is injected into `document.head` with `.d
 
 - `position: fixed; z-index: 2147483000` for proper stacking above the DeepSeek UI.
 - Light/dark mode handled by both `@media (prefers-color-scheme: dark)` and `html[data-theme="dark"]` selectors (the latter covers DeepSeek's runtime theme toggle).
-- **i18n support** (v4.3.3+): The button label text is sourced via `dsI18n.t('quoteReplyBtnLabel')` instead of being hardcoded, and a `dsI18n-locale-changed` document event listener live-updates the button text when the user switches language without requiring a page reload.
+- **i18n support** (v4.3.3+): The button label text is sourced via `dsI18n.t('quoteReplyBtnLabel')` instead of being hardcoded, and a `dsI18n.onLocaleChanged(QuoteReply.handleLocaleChanged)` subscription live-updates the button text when the user switches language without requiring a page reload. `handleLocaleChanged` preserves the existing `<svg>` node and rebuilds only the label `<span>`.
 
 ### Dismissal Conditions
 
@@ -51,7 +60,7 @@ The button hides when: (1) text selection is cleared or collapses, (2) selection
 
 ### Test Interface
 
-Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQuote`, `computeButtonPosition`, `isSelectionInScope`, `formatQuote`, `showButton`, `hideButton`, `getButtonEl`, `__resetState`, `__setState`, `__getState`.
+Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQuote`, `unionClientRects`, `computeButtonPosition`, `isSelectionInScope`, `formatQuote`, `showButton`, `hideButton`, `getButtonEl`, `enable`, `disable`, `__resetState`, `__setState`, `__getState`.
 
 ## Edit Message Cleanup Module
 

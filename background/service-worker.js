@@ -1,8 +1,9 @@
 'use strict';
 
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
-// 注意：不載入 utils/i18n.js 與 utils/logger.js，避免觸碰 window / 選用性 __DS_Logger 之外的載入期副作用
+// 注意：service worker 不載入 utils/i18n.js，背景層不輸出任何在地化字串
 importScripts(
+    '../utils/logger.js',
     '../utils/storage-manager.chunk-lock.js',
     '../utils/storage-manager.sync.js',
     '../utils/storage-manager.presets.js',
@@ -10,9 +11,26 @@ importScripts(
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',
     '../utils/storage-manager.setters.js',
+    '../utils/storage-manager.settings-read.js',
     '../utils/storage-manager.js',
-    '../content/temporary-chat-pending-store.js'
+    '../utils/deepseek-api.js',
+    '../utils/temporary-chat-constants.js',
+    '../content/temporary-chat-pending-store.js',
+    '../utils/settings-message-constants.js',
+    '../utils/editor-window-constants.js',
+    'settings-routes.js',
+    'pending-store-routes.js',
+    'editor-window-routes.js'
 );
+
+// 註冊設定訊息路由與變更廣播（頂層呼叫，確保 worker 重啟後仍存活）
+DSSSettingsRoutes.install();
+
+// 註冊待刪佇列訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
+DSSPendingStoreRoutes.install();
+
+// 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
+DSSEditorWindowRoutes.install();
 
 // 重試 alarm 名稱
 const RETRY_ALARM_NAME = 'dss-delete-retry';
@@ -20,45 +38,14 @@ const RETRY_ALARM_NAME = 'dss-delete-retry';
 const MAX_ATTEMPTS = 3;
 // 重試間隔（分鐘），0.5 = 30 秒
 const RETRY_DELAY_MINUTES = 0.5;
-// 同 content/temporary-chat-constants.js
-const SCHEDULE_DELETE_RETRY = 'DSS_SCHEDULE_DELETE_RETRY';
 // onChanged 掃描重入防護（記憶體內）
+// SW 終止時本旗標歸零；補救流程幂等，代價僅為最多多跑一次結果相同的補救
 let _remediationInFlight = false;
 
 // 雲端同步重試 alarm 名稱
 const SYNC_RETRY_ALARM_NAME = 'dss-sync-retry';
 // 雲端同步重試週期（分鐘）
 const SYNC_RETRY_PERIOD_MINUTES = 5;
-
-/**
- * 對 DeepSeek API 發送刪除對話請求。
- * 使用 keepalive: true 確保在分頁關閉情境下請求仍可完成。
- * @param {string} chatUuid - 要刪除的對話 UUID
- * @param {string} authToken - Bearer 授權 Token
- * @returns {Promise<boolean>} 成功回傳 true，任何失敗回傳 false
- */
-async function performDeleteFetch(chatUuid, authToken) {
-    try {
-        const response = await fetch('https://chat.deepseek.com/api/v0/chat_session/delete', {
-            method: 'POST',
-            keepalive: true,
-            headers: {
-                'authorization': authToken,
-                'content-type': 'application/json',
-                'x-app-version': '2.0.0',
-                'x-client-bundle-id': 'com.deepseek.chat',
-                'x-client-locale': 'zh_Hant',
-                'x-client-platform': 'web',
-                'x-client-timezone-offset': '28800',
-                'x-client-version': '2.0.0',
-            },
-            body: JSON.stringify({ chat_session_id: chatUuid }),
-        });
-        return response.ok;
-    } catch {
-        return false;
-    }
-}
 
 /**
  * 建立（或重建）重試 alarm，確保同一時間只有一個 alarm 存在。
@@ -86,7 +73,7 @@ async function remediatePendingDeletes({ excludeUuids = [] } = {}) {
     for (const item of pending) {
         if (exclude.has(item.chatUuid)) { stillPending.push(item); continue; }
 
-        const isOk = await performDeleteFetch(item.chatUuid, token);
+        const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
         if (isOk) { hasChanged = true; continue; }           // 確認成功 → 移除
 
         const nextCount = (item.attemptCount ?? 0) + 1;
@@ -129,31 +116,32 @@ chrome.runtime.onInstalled.addListener(() => {
     retryParkedSync();
 });
 
-// 監聽雲端同步重試 alarm，與現有刪除重試 alarm 監聽器互不干擾
-chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === SYNC_RETRY_ALARM_NAME) retryParkedSync();
-});
-
 // 監聽來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除
 chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type !== SCHEDULE_DELETE_RETRY) return false;
+    if (msg?.type !== DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
     scheduleRetryAlarm();
     return false;
 });
 
-// 監聽 alarm 觸發以執行重試邏輯
+// 單一 alarm 監聽器：依 alarm 名稱分派雲端同步補推與待刪佇列補救
 chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name !== RETRY_ALARM_NAME) return;
-    (async () => {
-        const openUuids = await TemporaryChatPendingStore.getOpenUuids();
-        await remediatePendingDeletes({ excludeUuids: openUuids });
-    })();
+    switch (alarm.name) {
+        case SYNC_RETRY_ALARM_NAME:
+            retryParkedSync();
+            return;
+        case RETRY_ALARM_NAME:
+            (async () => {
+                const openUuids = await TemporaryChatPendingStore.getOpenUuids();
+                await remediatePendingDeletes({ excludeUuids: openUuids });
+            })();
+            return;
+    }
 });
 
 // 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
-    if (!('dss-pending-deletes-sync' in changes)) return; // 同 constants：DSS_PENDING_DELETES_SYNC_KEY
+    if (!(DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
     if (_remediationInFlight) return;                       // 重入防護
     (async () => {
         _remediationInFlight = true;

@@ -46,7 +46,14 @@
     var startSettleSync               = __viewportSyncModule.startSettle;
     var resolveOverlayPresetId        = __presetIdResolverModule.resolveOverlayPresetId;
 
-    var TARGET_SELECTOR = '._2be88ba';
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const __selectorsModule = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
+    var TARGET_SELECTOR = __selectorsModule.CHAT_HEADER_SELECTOR;
+
+    // DOM 變動後重掛浮動選單的去抖動間隔（毫秒）
+    const FIND_AND_MOUNT_DEBOUNCE_MS = 150;
 
     function scheduleFrame(fn) {
         if (typeof requestAnimationFrame === 'function') {
@@ -57,23 +64,28 @@
     }
 
     function createPresetOverlay(ctx) {
+        // 依賴注入（P11）：優先取 ctx 提供的實作，未提供時退回 manifest 載入順序建立的全域物件。
+        const resolveStorage = () => (ctx && ctx.storageManager) || StorageManager;
+        const resolveI18n    = () => (ctx && ctx.i18n) || dsI18n;
+
         const PresetOverlay = {
             TARGET_SELECTOR: TARGET_SELECTOR,
 
             dropdown:           null,
             wrapperEl:          null,
             targetEl:           null,
-            domObserver:        null,
             resizeObserver:     null,
-            _debounceTimer:     null,
+            _findAndMountTimer: null,
             _windowResizeHandler: null,
             _settle:            null,
 
             buildDOM() {
+                const i18n = resolveI18n();
                 this.dropdown = createPresetDropdown({
                     onChange: (id) => this.onSelectChange(id),
-                    placeholderText: dsI18n.t('dropdownPlaceholder'),
-                    emptyOptionText: dsI18n.t('dropdownEmptyOption')
+                    i18n: i18n,
+                    placeholderText: i18n.t('dropdownPlaceholder'),
+                    emptyOptionText: i18n.t('dropdownEmptyOption')
                 });
                 this.wrapperEl = this.dropdown.el;
             },
@@ -86,7 +98,7 @@
                 this._applyPlacementSync();
                 this.setupResizeObserver();
                 this.setupWindowResizeListener();
-                this.startSettle('initial-settle');
+                this.startSettle();
             },
 
             unmount() {
@@ -104,6 +116,8 @@
                     this._windowResizeHandler = null;
                 }
                 if (this._settle) { this._settle.cancel(); this._settle = null; }
+                clearTimeout(this._findAndMountTimer);
+                this._findAndMountTimer = null;
                 this.targetEl = null;
             },
 
@@ -111,7 +125,7 @@
                 if (!this.dropdown) return;
                 this.dropdown.setOptions(presets);
                 this.dropdown.setValue(activeId || '');
-                this.reposition('render');
+                this.reposition();
             },
 
             updateActiveId(id) {
@@ -126,7 +140,7 @@
                 if (enabled) this.reposition();
             },
 
-            reposition(reason) {
+            reposition() {
                 if (!this.wrapperEl || !this.targetEl) return;
                 if (this.wrapperEl.style.display === 'none') return;
                 scheduleFrame(() => this._applyPlacementSync());
@@ -169,7 +183,7 @@
                 this.wrapperEl.style.transform   = 'translateY(-50%)';
             },
 
-            startSettle: function startSettle(reason) {
+            startSettle: function startSettle() {
                 if (!startSettleSync) return;
                 if (this._settle) return;
                 var self = this;
@@ -178,31 +192,44 @@
                         var result = resolveNewChatButtonEl(self.targetEl);
                         return result && result.el ? result.el.getBoundingClientRect().left : null;
                     },
-                    function (r) { self.reposition(r); },
+                    function () { self.reposition(); },
                     scheduleFrame
                 );
             },
 
             onSelectChange(newId) {
                 const currentChatUuid = ctx.getCurrentChatUuid();
-                const chatPresetMap   = ctx.getChatPresetMap();
+                const storage         = resolveStorage();
 
-                if (currentChatUuid && newId !== '') {
-                    chatPresetMap[currentChatUuid] = newId;
-                    StorageManager.bindChatToPreset(currentChatUuid, newId).then(() =>
-                        StorageManager.getChatPresetMap().then(m => { ctx.setChatPresetMap(m); })
-                    );
-                } else if (currentChatUuid && newId === '') {
-                    delete chatPresetMap[currentChatUuid];
-                    StorageManager.unbindChat(currentChatUuid).then(() =>
-                        StorageManager.getChatPresetMap().then(m => { ctx.setChatPresetMap(m); })
-                    );
+                if (currentChatUuid) {
+                    const isBinding = newId !== '';
+
+                    // 記憶體狀態改以「發布新實例」更新，不就地改動 ctx 持有的物件；
+                    // 同步發布確保緊接其後的 updatePromptPrefixFromBinding 讀得到新綁定。
+                    const nextMap = { ...ctx.getChatPresetMap() };
+                    if (isBinding) {
+                        nextMap[currentChatUuid] = newId;
+                    } else {
+                        delete nextMap[currentChatUuid];
+                    }
+                    ctx.setChatPresetMap(nextMap);
+
+                    // 實際寫入一律走 StorageManager 的交易式路徑，完成後以儲存結果覆寫記憶體狀態。
+                    const persisted = isBinding
+                        ? storage.bindChatToPreset(currentChatUuid, newId)
+                        : storage.unbindChat(currentChatUuid);
+                    Promise.resolve(persisted)
+                        .then(() => storage.getChatPresetMap())
+                        .then(map => { ctx.setChatPresetMap(map); })
+                        .catch(err => console.error('[DSS] preset-overlay onSelectChange: chatPresetMap 持久化失敗:', err));
                 } else {
                     ctx.setPendingPresetId(newId ?? null);
                 }
-                StorageManager.saveActivePresetId(newId);
+
+                Promise.resolve(storage.saveActivePresetId(newId))
+                    .catch(err => console.error('[DSS] preset-overlay onSelectChange: saveActivePresetId 失敗:', err));
                 ctx.updatePromptPrefixFromBinding();
-                this.reposition('onSelectChange');
+                this.reposition();
             },
 
             findAndMount() {
@@ -211,7 +238,7 @@
                 if (this.targetEl === found) return;
                 this.mountTo(found);
                 this.setVisible(ctx.getIsEnabled());
-                StorageManager.getSettings().then(s => {
+                resolveStorage().getSettings().then(s => {
                     const currentChatUuid = ctx.getCurrentChatUuid();
                     const chatPresetMap   = ctx.getChatPresetMap();
                     const pendingPresetId = ctx.getPendingPresetId ? ctx.getPendingPresetId() : undefined;
@@ -226,18 +253,13 @@
                 });
             },
 
-            setupDomObserver() {
-                if (this.domObserver) return;
-                this.domObserver = new MutationObserver(() => {
-                    if (!ctx.isExtensionContextValid()) {
-                        this.domObserver.disconnect();
-                        this.domObserver = null;
-                        return;
-                    }
-                    clearTimeout(this._debounceTimer);
-                    this._debounceTimer = setTimeout(() => this.findAndMount(), 150);
-                });
-                this.domObserver.observe(document.body, { childList: true, subtree: true });
+            /**
+             * 去抖動地重掛浮動選單。本檔不自建 body 觀察器：DOM 變動由
+             * content-script.js 的單一 body 觀察器扇出呼叫本方法。
+             */
+            scheduleFindAndMount() {
+                clearTimeout(this._findAndMountTimer);
+                this._findAndMountTimer = setTimeout(() => this.findAndMount(), FIND_AND_MOUNT_DEBOUNCE_MS);
             },
 
             setupWindowResizeListener() {
@@ -247,7 +269,7 @@
                     this._windowResizeHandler = null;
                 }
                 this._windowResizeHandler = setupWindowResizeListenerSync(
-                    () => this.reposition('window-resize'),
+                    () => this.reposition(),
                     scheduleFrame
                 );
             },
@@ -264,7 +286,6 @@
 
             start(presets, activeId, enable) {
                 injectOverlayStyles();
-                this.setupDomObserver();
                 this.findAndMount();
                 this.render(presets, activeId);
                 if (enable !== undefined) this.setVisible(enable);
@@ -272,7 +293,7 @@
                 if (!this._localeListenerAttached) {
                     this._localeListenerAttached = true;
                     var self = this;
-                    document.addEventListener('dsI18n-locale-changed', function () {
+                    dsI18n.onLocaleChanged(function () {
                         if (self.dropdown && self.dropdown.updateLocale) {
                             self.dropdown.updateLocale();
                         }

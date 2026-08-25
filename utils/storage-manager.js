@@ -10,7 +10,8 @@
  *   5. storage-manager.local.js
  *   6. storage-manager.init.js
  *   7. storage-manager.setters.js
- *   8. storage-manager.js  （本檔）
+ *   8. storage-manager.settings-read.js
+ *   9. storage-manager.js  （本檔）
  */
 
 // === 錯誤類別（供 instanceof 檢查） ===
@@ -140,6 +141,12 @@ const StorageManager = {
     _metaCache: null,
 
     /**
+     * 本 context 已註冊的 chunk 快取失效監聽器。initialize() 重複執行時，
+     * _installChunkCacheInvalidator() 依此參照先移除舊監聽器再註冊，維持恰好一個。
+     */
+    _chunkCacheInvalidator: null,
+
+    /**
      * 內部 promise-chain 寫入佇列，用於序列化 chatPresetMap 的寫入操作，
      * 避免同 context 內的競爭條件（race condition）。
      */
@@ -160,10 +167,26 @@ const StorageManager = {
     // --- Helper methods ---
 
     /**
+     * 網搜切換值正規化：舊版遺留的 'default' 已隨二態精簡，讀取時一律視為 'on'。
+     * 純查詢，不寫回儲存；其他值原樣回傳（含 undefined，由呼叫端自行套用 DEFAULTS）。
+     * @param {string|undefined} value 儲存中的原始值
+     * @returns {string|undefined} 正規化後的值
+     */
+    normalizeWebsearchToggle(value) {
+        return value === 'default' ? 'on' : value;
+    },
+
+    /**
+     * 每個 preset 各自獨立 storage key 的共同前綴。
+     * 組出 preset key 與判斷某 key 是否為 preset 的位置皆引用此常數，前綴僅此一處定義。
+     */
+    PRESET_KEY_PREFIX: 'dsPreset_',
+
+    /**
      * Helper to get storage key for a specific preset
      */
     _presetKey(id) {
-        return 'dsPreset_' + id;
+        return this.PRESET_KEY_PREFIX + id;
     },
 
     /**
@@ -217,7 +240,8 @@ const StorageManager = {
 
     /**
      * Internal getter that prioritizes sync, then falls back to local.
-     * NOTE: File exceeds 450-line threshold. Net additions kept minimal; see chatmap.js split.
+     * 合併順序為 sync 覆寫 local，逐筆 preset 與 preset 排序再依時間戳收斂；
+     * 遠端勝出的項目會由 _reconcileRemoteWins() 回寫本機。
      */
     async _get(keys) {
         const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING]);
@@ -248,13 +272,29 @@ const StorageManager = {
 
         const merged = { ...lData, ...sData };
 
+        await this._reconcileRemoteWins({ merged, lData, sData, effectiveKeys });
+
+        return merged;
+    },
+
+    /**
+     * 收斂 _get() 的合併結果，並將「遠端較新」的項目回寫 chrome.storage.local。
+     * 這是讀取路徑中唯一會寫入儲存的步驟，獨立命名以免寫入行為藏在 _get() 之下。
+     * merged 會被原地修改。
+     * @param {Object} args
+     * @param {Object} args.merged - lData 與 sData 的合併結果（原地修改）
+     * @param {Object} args.lData - chrome.storage.local 的原始讀取結果
+     * @param {Object} args.sData - chrome.storage.sync 的原始讀取結果
+     * @param {string[]|string|null} args.effectiveKeys - 本次實際請求的金鑰
+     */
+    async _reconcileRemoteWins({ merged, lData, sData, effectiveKeys }) {
         // 用於收集本次判定為「遠端較新」的項目，稍後一次性持久化回 chrome.storage.local，
         // 確保回傳值與本機持久化狀態一致（避免僅存在於記憶體中的合併結果）。
         const remoteWinsToPersist = {};
 
         // === 逐筆 preset 依 updatedAt 挑最新版本，避免 Chrome 同步收斂時以較舊版本覆蓋較新編輯 ===
         for (const key of Object.keys(merged)) {
-            if (!key.startsWith('dsPreset_')) continue;
+            if (!key.startsWith(this.PRESET_KEY_PREFIX)) continue;
             const localPreset = lData[key];
             const syncPreset = sData[key];
             if (localPreset === undefined || syncPreset === undefined) continue; // 僅在兩端都存在時比較
@@ -295,8 +335,6 @@ const StorageManager = {
             keysToPersist.forEach((key) => { persistPayload[key] = remoteWinsToPersist[key]; });
             await this._safeSet('local', persistPayload);
         }
-
-        return merged;
     },
 
     /**
@@ -307,17 +345,22 @@ const StorageManager = {
      */
     async _set(items) {
         const keysWritten = Object.keys(items);
-        const oversizedKeys = keysWritten.filter(k => this._byteLen({ [k]: items[k] }) > this.QUOTA_BYTES_PER_ITEM);
-        const normalKeys = keysWritten.filter(k => !oversizedKeys.includes(k));
+        // 每個金鑰的位元組長度只序列化一次，超量判定與告警共用同一結果
+        const byteLenByKey = new Map(keysWritten.map(k => [k, this._byteLen({ [k]: items[k] })]));
+        const oversizedKeys = keysWritten.filter(k => byteLenByKey.get(k) > this.QUOTA_BYTES_PER_ITEM);
+        const oversizedKeySet = new Set(oversizedKeys);
+        const normalKeys = keysWritten.filter(k => !oversizedKeySet.has(k));
+        const normalKeySet = new Set(normalKeys);
 
         const localStatus = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE, this.KEYS.OVERSIZED_KEYS]);
-        let localAuth = (localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !oversizedKeys.includes(k));
+        let localAuth = (localStatus[this.KEYS.LOCAL_AUTHORITATIVE] || []).filter(k => !oversizedKeySet.has(k));
         const originalOversizedAuth = localStatus[this.KEYS.OVERSIZED_KEYS] || [];
-        const oversizedAuth = originalOversizedAuth.filter(k => !normalKeys.includes(k));
+        const oversizedAuth = originalOversizedAuth.filter(k => !normalKeySet.has(k));
 
+        const oversizedAuthSet = new Set(oversizedAuth);
         oversizedKeys.forEach(k => {
-            globalThis.__DS_Logger?.warn('push:oversized', { key: k, bytes: this._byteLen({ [k]: items[k] }) });
-            if (!oversizedAuth.includes(k)) oversizedAuth.push(k);
+            globalThis.__DS_Logger?.warn('push:oversized', { key: k, bytes: byteLenByKey.get(k) });
+            if (!oversizedAuthSet.has(k)) { oversizedAuthSet.add(k); oversizedAuth.push(k); }
         });
 
         const localUpdates = { ...items };
@@ -357,7 +400,7 @@ const StorageManager = {
             return this._safeSet('local', localUpdates);
         } else {
             // Sync success: remove these keys from local authoritative list
-            const newLocalAuth = localAuth.filter(k => !normalKeys.includes(k));
+            const newLocalAuth = localAuth.filter(k => !normalKeySet.has(k));
             if (newLocalAuth.length !== localAuth.length) {
                 localUpdates[this.KEYS.LOCAL_AUTHORITATIVE] = newLocalAuth;
             }
@@ -384,7 +427,8 @@ const StorageManager = {
         root.__DS_StorageManager_chatmap  || {},
         root.__DS_StorageManager_local    || {},
         root.__DS_StorageManager_init     || {},
-        root.__DS_StorageManager_setters  || {}
+        root.__DS_StorageManager_setters  || {},
+        root.__DS_StorageManager_settingsRead || {}
     );
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 

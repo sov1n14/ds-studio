@@ -53,17 +53,11 @@
  *   business logic.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import StorageManager from '../../utils/storage-manager.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript } from '../helpers/popup-script-loader.js';
 
 beforeAll(() => {
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.toggles.js'), 'utf-8');
-    eval(code);
+    evalPopupScript('popup/popup.toggles.js');
     if (typeof window.__DS_PopupToggles?.createToggleManager !== 'function') {
         throw new Error('createToggleManager was not exposed on window.__DS_PopupToggles');
     }
@@ -108,12 +102,21 @@ function buildElements(globalPromptToggle) {
     };
 }
 
-async function flush() {
-    await new Promise((r) => setTimeout(r, 200));
-}
-
 function fireChange(el) {
     el.dispatchEvent(new Event('change'));
+}
+
+// The async change handler drains a StorageManager write chain that settles on
+// chained setTimeout(0) turns; under happy-dom each real timer turn costs ~15ms,
+// so waiting it out in real time burned ~200ms per call site. Virtual time drains
+// the same chain instantly. Fake timers must be active BEFORE the change fires so
+// the chain's timers are scheduled onto the virtual clock; real timers are restored
+// afterward so the subsequent storage-read awaits settle normally.
+async function fireChangeAndSettle(el) {
+    vi.useFakeTimers();
+    fireChange(el);
+    await vi.advanceTimersByTimeAsync(1000);
+    vi.useRealTimers();
 }
 
 describe('createToggleManager - renderGlobalPromptToggle (initial load + live preset switch)', () => {
@@ -204,8 +207,7 @@ describe('createToggleManager - bindToggles change handler, WITH an active prese
         manager.bindToggles(buildElements(toggle));
 
         toggle.checked = false;
-        fireChange(toggle);
-        await flush();
+        await fireChangeAndSettle(toggle);
 
         const settings = await StorageManager.getSettings();
         const stored = settings.promptPresets.find(p => p.id === 'p1');
@@ -225,8 +227,7 @@ describe('createToggleManager - bindToggles change handler, WITH an active prese
         manager.bindToggles(buildElements(toggle));
 
         toggle.checked = false;
-        fireChange(toggle);
-        await flush();
+        await fireChangeAndSettle(toggle);
 
         const settings = await StorageManager.getSettings();
         expect(settings.globalPromptEnabled).toBe(true);
@@ -241,8 +242,7 @@ describe('createToggleManager - bindToggles change handler, with NO active prese
         manager.bindToggles(buildElements(toggle));
 
         toggle.checked = false;
-        fireChange(toggle);
-        await flush();
+        await fireChangeAndSettle(toggle);
 
         const localData = await chrome.storage.local.get([StorageManager.KEYS.GLOBAL_PROMPT_ENABLED]);
         expect(localData[StorageManager.KEYS.GLOBAL_PROMPT_ENABLED]).toBe(false);

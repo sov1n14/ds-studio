@@ -1,12 +1,11 @@
 /**
  * DS studio — Temporary Chat Delete API
- * 單一職責：封裝刪除 fetch、重試邏輯與失敗 toast 通知。
+ * 單一職責：委派刪除 fetch（utils/deepseek-api.js）、重試邏輯與失敗 toast 通知。
  * auth token 與 UUID 皆以參數傳入，此模組無可變狀態。
  */
 const TemporaryChatDeleteApi = (() => {
     'use strict';
 
-    const DELETE_URL = 'https://chat.deepseek.com/api/v0/chat_session/delete';
     // 最多重試次數（導航觸發刪除失敗時使用）
     const MAX_RETRY_ATTEMPTS = 3;
     // 每次重試間隔（毫秒）
@@ -21,27 +20,8 @@ const TemporaryChatDeleteApi = (() => {
      * @returns {Promise<boolean>}
      */
     async function deleteChatSession(chatUuid, authToken, { keepalive = false } = {}) {
-        if (!authToken || !chatUuid) return false;
-        try {
-            const response = await fetch(DELETE_URL, {
-                method: 'POST',
-                keepalive,
-                headers: {
-                    'authorization': authToken,
-                    'content-type': 'application/json',
-                    'x-app-version': '2.0.0',
-                    'x-client-bundle-id': 'com.deepseek.chat',
-                    'x-client-locale': 'zh_Hant',
-                    'x-client-platform': 'web',
-                    'x-client-timezone-offset': '28800',
-                    'x-client-version': '2.0.0',
-                },
-                body: JSON.stringify({ chat_session_id: chatUuid }),
-            });
-            return response.ok;
-        } catch {
-            return false;
-        }
+        // 委派至 utils/deepseek-api.js 的共用刪除實作；此檔案於 manifest 中須排在其後載入
+        return globalThis.DSSDeepSeekApi.performDeleteFetch(chatUuid, authToken, { keepalive });
     }
 
     /**
@@ -65,7 +45,7 @@ const TemporaryChatDeleteApi = (() => {
     }
 
     /**
-     * 在頁面底部顯示刪除失敗的 toast 提示，6 秒後自動移除。
+     * 在頁面底部顯示刪除失敗的 toast 提示，6 秒後自動移除。樣式由 temporary-chat-toggle.css 提供。
      * 已存在時不重複建立。
      */
     function showDeleteFailedToast() {
@@ -74,22 +54,8 @@ const TemporaryChatDeleteApi = (() => {
 
         const toast = document.createElement('div');
         toast.id = 'dss-delete-failed-toast';
-        toast.textContent = '臨時對話刪除失敗，請確認網路連線。';
-        Object.assign(toast.style, {
-            position: 'fixed',
-            bottom: '24px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: '#1e2022',
-            color: '#f9fafb',
-            fontSize: '14px',
-            fontWeight: '500',
-            padding: '10px 20px',
-            borderRadius: '8px',
-            zIndex: '2147483647',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            pointerEvents: 'none',
-        });
+        toast.className = 'dss-temp-chat-delete-failed-toast';
+        toast.textContent = dsI18n.t('tempChatDeleteFailedToast');
 
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 6000);

@@ -2,8 +2,8 @@
  * Tests for popup/editor/editor.js
  *
  * editor.js exposes __DSSEditor (window namespace + guarded module.exports).
- * Functions under test: parseTarget, loadContent, saveContent, debounce,
- * renderDisabledState, updateSaveStatus, isDuplicateName.
+ * Functions under test: parseTarget, loadContent, saveContent,
+ * renderDisabledState, updateSaveStatus.
  *
  * StorageManager is loaded in the global scope by the content script import
  * mechanism. For editor.js we manually set globalThis.StorageManager before
@@ -11,6 +11,10 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
+// editor.js does `const debounce = DSSDebounce;` at load time — publish the shared helper first.
+import '../../utils/debounce.js';
+// editor.js calls DSSPresetDomain.validatePresetName — publish the preset-domain module too.
+import '../../popup/popup.preset-domain.js';
 
 // editor.js references `location.search` and `window.DSVMessaging`, and
 // assigns to `window.__DSSEditor`. Set up mocks before importing.
@@ -24,8 +28,8 @@ globalThis.window = globalThis.window ?? {};
 
 const editor = await import('../../popup/editor/editor.js');
 
-// editor.js exports { parseTarget, loadContent, saveContent, debounce, renderDisabledState, updateSaveStatus }
-const { parseTarget, loadContent, saveContent, debounce, renderDisabledState, updateSaveStatus, isDuplicateName } = editor;
+// editor.js exports { parseTarget, loadContent, saveContent, renderDisabledState, updateSaveStatus }
+const { parseTarget, loadContent, saveContent, renderDisabledState, updateSaveStatus } = editor;
 
 // ─────────────────────────────────────────────
 // parseTarget
@@ -213,65 +217,12 @@ describe('saveContent — routing with spied StorageManager', () => {
 });
 
 // ─────────────────────────────────────────────
-// debounce
-// ─────────────────────────────────────────────
-
-describe('debounce', () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
-    it('fires only once for rapid successive calls', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 100);
-
-        debounced();
-        debounced();
-        debounced();
-
-        expect(fn).not.toHaveBeenCalled();
-        vi.advanceTimersByTime(100);
-        expect(fn).toHaveBeenCalledOnce();
-    });
-
-    it('fires again after the delay following the last call', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 200);
-
-        debounced();
-        vi.advanceTimersByTime(200);
-        expect(fn).toHaveBeenCalledTimes(1);
-
-        debounced();
-        vi.advanceTimersByTime(200);
-        expect(fn).toHaveBeenCalledTimes(2);
-    });
-
-    it('does not fire before the delay elapses', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 300);
-
-        debounced();
-        vi.advanceTimersByTime(299);
-        expect(fn).not.toHaveBeenCalled();
-
-        vi.advanceTimersByTime(1);
-        expect(fn).toHaveBeenCalledOnce();
-    });
-});
-
-// ─────────────────────────────────────────────
 // Auto-save debounce wiring — must be 500ms, not 600ms
 //
 // performSave/debouncedSave live inside the DOMContentLoaded closure and are not
 // exported via __DSSEditor, so we assert the literal wiring in source. This is
-// paired with the generic `debounce()` timing tests above (which prove the
-// debounce implementation itself delays/collapses correctly) to fully cover the
-// "auto-save now fires at 500ms" requirement.
+// paired with test/unit/debounce.spec.js (which owns the shared helper's timing
+// contract) to fully cover the "auto-save now fires at 500ms" requirement.
 // ─────────────────────────────────────────────
 
 describe('editor.js auto-save debounce wiring — source assertion', () => {
@@ -426,45 +377,6 @@ describe('updateSaveStatus', () => {
 
     it('does not throw when statusEl is null', () => {
         expect(() => updateSaveStatus(null, 'saving')).not.toThrow();
-    });
-});
-
-// ─────────────────────────────────────────────
-// isDuplicateName
-// ─────────────────────────────────────────────
-
-describe('isDuplicateName — duplicate name detection', () => {
-    it('returns true when another preset has the exact same name', () => {
-        const presets = [
-            { id: 'a', name: 'Same', content: 'x', createdAt: 1, updatedAt: 1 },
-            { id: 'b', name: 'Same', content: 'y', createdAt: 2, updatedAt: 2 },
-        ];
-        expect(isDuplicateName(presets, 'Same', 'a')).toBe(true);
-    });
-
-    it('returns false when only the preset itself matches the name', () => {
-        const presets = [
-            { id: 'a', name: 'Same', content: 'x', createdAt: 1, updatedAt: 1 },
-            { id: 'b', name: 'Other', content: 'y', createdAt: 2, updatedAt: 2 },
-        ];
-        expect(isDuplicateName(presets, 'Same', 'a')).toBe(false);
-    });
-
-    it('returns false when the match differs only by case', () => {
-        const presets = [
-            { id: 'a', name: 'Alpha', content: 'x', createdAt: 1, updatedAt: 1 },
-            { id: 'b', name: 'alpha', content: 'y', createdAt: 2, updatedAt: 2 },
-        ];
-        expect(isDuplicateName(presets, 'Alpha', 'a')).toBe(false);
-    });
-
-    it('returns false when no preset matches', () => {
-        const presets = [{ id: 'a', name: 'Alpha', content: 'x', createdAt: 1, updatedAt: 1 }];
-        expect(isDuplicateName(presets, 'Gamma', 'a')).toBe(false);
-    });
-
-    it('returns false for an empty preset list', () => {
-        expect(isDuplicateName([], 'Anything', 'a')).toBe(false);
     });
 });
 

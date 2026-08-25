@@ -1,23 +1,41 @@
 /**
- * DS studio v1.5.3 — Sidebar Auto-Hide
+ * DS studio — Sidebar Auto-Hide（content/sidebar-auto-hide.js）
  * Collapses the sidebar to 60px when idle, expands on hover.
+ *
+ * 總開關與自身開關的閘控委派 content/feature-toggle.js 的共用管線
+ * （單一 chrome.runtime.onMessage 監聽器，僅 local 區域），
+ * 側邊欄 DOM 就緒的輪詢委派 content/retry-until.js。
  */
+// 共用模組（瀏覽器：由 manifest 於前載入設定 globalThis；Node.js 測試：直接 require）
+const __DS_SidebarFeatureToggle = globalThis.DSSFeatureToggle
+    || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+const __DS_SidebarRetryUntil = globalThis.DSSRetryUntil
+    || (typeof require !== 'undefined' ? require('./retry-until.js') : null);
+if (!__DS_SidebarFeatureToggle || !__DS_SidebarRetryUntil) {
+    throw new Error('content/sidebar-auto-hide.js 需要 content/feature-toggle.js 與 content/retry-until.js 先行載入');
+}
+
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_SidebarSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const SidebarAutoHide = {
     STYLE_ID: 'ds-sidebar-auto-hide-style',
-    STORAGE_KEY: 'dsSidebarAutoHide',
-    SIDEBAR_WRAPPER_SELECTOR: 'div.dc04ec1d',
-    SIDEBAR_INNER_SELECTOR: 'div.b8812f16.a2f3d50e',
+    STORAGE_KEY: StorageManager.KEYS.SIDEBAR_AUTO_HIDE,
+    SIDEBAR_WRAPPER_SELECTOR: __DS_SidebarSelectors.SIDEBAR_WRAPPER_SELECTOR,
+    SIDEBAR_INNER_SELECTOR: __DS_SidebarSelectors.SIDEBAR_INNER_SELECTOR,
     COLLAPSED_CLASS: 'ds-sidebar-auto-hide-collapsed',
     COLLAPSED_WIDTH: 60,
     ENTER_DELAY_MS: 150,
     LEAVE_DELAY_MS: 400,
     RESIZE_DEBOUNCE_MS: 200,
+    // 側邊欄 DOM 就緒輪詢：立即判定一次，未就緒則 500ms 後再試一次
+    DOM_RETRY_INTERVAL_MS: 500,
+    DOM_MAX_RETRIES: 1,
 
-    NATIVE_COLLAPSED_BAR_SELECTOR: 'div.ca6d4be1',
-    NATIVE_COLLAPSED_INNER_SELECTOR: 'div._70b689f',
+    NATIVE_COLLAPSED_BAR_SELECTOR: __DS_SidebarSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
 
     enabled: false,
-    _masterEnabled: false,
     styleEl: null,
     sidebarEl: null,
     originalWidth: null,
@@ -26,8 +44,11 @@ const SidebarAutoHide = {
     mutationObserver: null,
     sidebarObserver: null,
     resizeTimer: null,
+    _eventAbortController: null,
     _hoverMonitorHandler: null,
     _activeDropdownEl: null,
+    _unregisterToggle: null,
+    _domRetryCancel: null,
 
     getTransitionCSS() {
         return `
@@ -153,8 +174,14 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         this.sidebarEl = this.getSidebar();
         if (!this.sidebarEl) return false;
 
-        this.sidebarEl.addEventListener('mouseenter', () => this.handleMouseEnter());
-        this.sidebarEl.addEventListener('mouseleave', () => this.handleMouseLeave());
+        // 每個 enable 週期共用一個 AbortController，disable() 一次移除所有 hover 監聽，
+        // 避免反覆開關時堆疊重複 handler（每個都會再開一組計時器）
+        if (!this._eventAbortController) {
+            this._eventAbortController = new AbortController();
+        }
+        const { signal } = this._eventAbortController;
+        this.sidebarEl.addEventListener('mouseenter', () => this.handleMouseEnter(), { signal });
+        this.sidebarEl.addEventListener('mouseleave', () => this.handleMouseLeave(), { signal });
         return true;
     },
 
@@ -248,8 +275,8 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
             // 使用 closest 確保子元素也能正確識別浮動容器根元素
             // .ds-floating-position-wrapper 優先；其次找最近的 .ds-elevated 根節點
-            const floatingRoot = el.closest('.ds-floating-position-wrapper') ||
-                                  el.closest('.ds-elevated');
+            const floatingRoot = el.closest(__DS_SidebarSelectors.FLOATING_POSITION_WRAPPER_SELECTOR) ||
+                                  el.closest(__DS_SidebarSelectors.ELEVATED_SURFACE_SELECTOR);
             const isFloating = !!floatingRoot;
 
             if (isFloating) {
@@ -278,32 +305,11 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         document.addEventListener('mouseover', this._hoverMonitorHandler, true);
     },
 
-    setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-
-            // Master switch
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                if (this._masterEnabled) {
-                    chrome.storage.local.get([this.STORAGE_KEY], (data) => {
-                        if (data[this.STORAGE_KEY]) this.enable();
-                    });
-                } else {
-                    this.disable();
-                }
-            }
-
-            // Own toggle
-            if (changes[this.STORAGE_KEY]) {
-                if (!this._masterEnabled) return;
-                if (changes[this.STORAGE_KEY].newValue) {
-                    this.enable();
-                } else {
-                    this.disable();
-                }
-            }
-        });
+    /** 取消進行中的 DOM 就緒輪詢（可重複呼叫）。 */
+    _cancelDomRetry() {
+        if (!this._domRetryCancel) return;
+        this._domRetryCancel();
+        this._domRetryCancel = null;
     },
 
     enable() {
@@ -311,23 +317,24 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         this.enabled = true;
 
         this.injectStyles();
+        // disable() 會拆掉 observer，故每次啟用都重建
+        this.setupMutationObserver();
         this.setupHoverZone();
-        const bound = this.bindEvents();
-        if (!bound) {
-            // Retry shortly in case DOM is not ready
-            setTimeout(() => {
-                if (this.enabled) {
-                    this.bindEvents();
-                    this.observeSidebar();
-                    this.storeOriginalWidth();
-                    this.collapse();
-                }
-            }, 500);
-            return;
-        }
-        this.observeSidebar();
-        this.storeOriginalWidth();
-        this.collapse();
+
+        // 側邊欄可能尚未掛載：輪詢至就緒後才綁定 hover 與 observer。
+        // 已就緒時輪詢同步完成，與原本的直接綁定路徑等價。
+        this._cancelDomRetry();
+        this._domRetryCancel = __DS_SidebarRetryUntil(() => this.getSidebar(), {
+            intervalMs: this.DOM_RETRY_INTERVAL_MS,
+            maxRetries: this.DOM_MAX_RETRIES,
+            onReady: () => {
+                if (!this.enabled) return;
+                this.bindEvents();
+                this.observeSidebar();
+                this.storeOriginalWidth();
+                this.collapse();
+            },
+        });
     },
 
     disable() {
@@ -335,6 +342,7 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         this.enabled = false;
 
         this.removeStyles();
+        this._cancelDomRetry();
         if (this.sidebarEl) {
             this.sidebarEl.classList.remove(this.COLLAPSED_CLASS);
             this.sidebarEl.style.width = '';
@@ -349,8 +357,26 @@ ${this.SIDEBAR_INNER_SELECTOR} {
             document.removeEventListener('mouseover', this._hoverMonitorHandler, true);
             this._hoverMonitorHandler = null;
         }
+        if (this._eventAbortController) {
+            this._eventAbortController.abort();
+            this._eventAbortController = null;
+        }
         if (this._activeDropdownEl) {
             this._activeDropdownEl = null;
+        }
+        // 停用時拆掉兩個 subtree observer：enable() 重建 mutationObserver，
+        // sidebarObserver 由後續 observeSidebar() 重建
+        if (this.sidebarObserver) {
+            this.sidebarObserver.disconnect();
+            this.sidebarObserver = null;
+        }
+        if (this.mutationObserver) {
+            this.mutationObserver.disconnect();
+            this.mutationObserver = null;
+        }
+        if (this.resizeTimer) {
+            clearTimeout(this.resizeTimer);
+            this.resizeTimer = null;
         }
         this.originalWidth = null;
         if (this.enterTimer) {
@@ -365,46 +391,23 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
     destroy() {
         this.disable();
-        if (this.sidebarObserver) {
-            this.sidebarObserver.disconnect();
-            this.sidebarObserver = null;
-        }
-        if (this.mutationObserver) {
-            this.mutationObserver.disconnect();
-            this.mutationObserver = null;
-        }
-        if (this.resizeTimer) {
-            clearTimeout(this.resizeTimer);
-            this.resizeTimer = null;
-        }
-        if (this._hoverMonitorHandler) {
-            document.removeEventListener('mouseover', this._hoverMonitorHandler, true);
-            this._hoverMonitorHandler = null;
-        }
-        if (this._activeDropdownEl) {
-            this._activeDropdownEl = null;
+        if (this._unregisterToggle) {
+            this._unregisterToggle();
+            this._unregisterToggle = null;
         }
     },
 
-    async start() {
-        const data = await chrome.storage.local.get([
-            this.STORAGE_KEY,
-            StorageManager.KEYS.IS_ENABLED
-        ]);
-        const enabled = data[this.STORAGE_KEY] ?? false;
-        this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
-
-        this.setupStorageListener();
-        this.setupMutationObserver();
+    start() {
         this.setupResizeHandler();
-
-        if (enabled && this._masterEnabled) {
-            this.enable();
-        }
+        this._unregisterToggle = __DS_SidebarFeatureToggle.registerFeatureToggle({
+            ownKey: this.STORAGE_KEY,
+            onEnable: () => this.enable(),
+            onDisable: () => this.disable(),
+        });
     }
 };
 
-// Auto-start
+// Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 SidebarAutoHide.start();
 
 // === Test export (no-op in browser) ===

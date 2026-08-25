@@ -1,243 +1,140 @@
 /**
- * Tests for the openEditorWindow singleton logic in popup.js.
+ * Spec for popup/popup.editor-window.js — the real module, loaded as a classic
+ * script (window.__DS_PopupEditorWindow.createEditorWindowManager).
  *
- * openEditorWindow lives inside the DOMContentLoaded callback of popup.js and
- * closes over `globalEditorWindowId` and `presetEditorWindowId`.
- * We extract the function source and adapt it to use testable globals.
+ * Contract under test (popup layer only):
+ *   The popup owns NO singleton bookkeeping. It translates a click into ONE
+ *   delegation to DSSWindowControl.openSingletonWindow, choosing:
+ *     - the url  — '?target=global' for the global prompt editor, and
+ *                  '?target=preset&id=<encoded presetId>' for a prompt group
+ *                  (the group rides the query string, so switching group while a
+ *                  window is open navigates it), and
+ *     - the storageKey — a DIFFERENT session slot per target, so the global and
+ *                  the preset editor are independent singletons rather than
+ *                  fighting over one window.
+ *   Focus / navigate / re-create behaviour belongs to utils/window-control.js and
+ *   is covered by test/unit/window-control.spec.js — not duplicated here.
+ *
+ * DSSWindowControl is stubbed: what the popup passes to it IS the wiring
+ * contract, and no real window can be opened under happy-dom.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { evalPopupScript } from '../helpers/popup-script-loader.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const BASE_URL = 'chrome-extension://EXTID/popup/editor/editor.html';
+const GLOBAL_KEY = 'dss-editor-window-id-global';
+const PRESET_KEY = 'dss-editor-window-id-preset';
 
-// ─────────────────────────────────────────────
-// Extract and adapt openEditorWindow from source
-// ─────────────────────────────────────────────
+beforeAll(() => {
+    // popup.editor-window.js reads globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS behind a
+    // fail-fast throw, so utils/editor-window-constants.js MUST load first (matches
+    // the runtime load order declared in popup.html).
+    evalPopupScript('utils/editor-window-constants.js');
+    evalPopupScript('popup/popup.editor-window.js');
+    if (typeof window.__DS_PopupEditorWindow?.createEditorWindowManager !== 'function') {
+        throw new Error('createEditorWindowManager was not exposed on window.__DS_PopupEditorWindow');
+    }
+});
 
-/**
- * We cannot run the DOMContentLoaded block (it requires StorageManager.initialize(),
- * tabs API, etc.). Instead we replicate the openEditorWindow logic faithfully from
- * the source, driven by injectable state. This approach tests the exact same
- * behaviour as the production code without needing the full popup bootstrap.
- */
+let openSingletonWindow;
+let activePresetId;
 
-function makeOpenEditorWindow(state) {
-    // state = { globalEditorWindowId, presetEditorWindowId }
-    // Returns the function closed over state and chrome mocks.
-    return async function openEditorWindow(target, presetId) {
-        const baseUrl = 'chrome-extension://EXTID/popup/editor/editor.html';
-        const url = target === 'global'
-            ? `${baseUrl}?target=global`
-            : `${baseUrl}?target=preset&id=${encodeURIComponent(presetId)}`;
+beforeEach(() => {
+    activePresetId = '';
+    chrome.runtime.getURL = vi.fn(() => BASE_URL);
+    openSingletonWindow = vi.fn().mockResolvedValue({ created: true });
+    globalThis.DSSWindowControl = { openSingletonWindow };
+});
 
-        const isGlobal = target === 'global';
-        const trackedId = isGlobal ? state.globalEditorWindowId : state.presetEditorWindowId;
-
-        if (trackedId !== null) {
-            try {
-                await chrome.windows.update(trackedId, { focused: true });
-                // Reload/navigate the window's tab to the requested URL (mirrors popup.editor-window.js).
-                try {
-                    const tabs = await chrome.tabs.query({ windowId: trackedId });
-                    const tab = tabs[0];
-                    if (tab && typeof tab.id === 'number') {
-                        await chrome.tabs.update(tab.id, { url });
-                    }
-                } catch {
-                    // window may have been closed concurrently; ignore
-                }
-                return;
-            } catch {
-                if (isGlobal) {
-                    state.globalEditorWindowId = null;
-                } else {
-                    state.presetEditorWindowId = null;
-                }
-            }
-        }
-
-        try {
-            const win = await chrome.windows.create({ url, type: 'popup', width: 1280, height: 720 });
-            if (isGlobal) {
-                state.globalEditorWindowId = win.id;
-            } else {
-                state.presetEditorWindowId = win.id;
-            }
-        } catch (err) {
-            // silent
-        }
-    };
-}
-
-// ─────────────────────────────────────────────
-// Tests
-// ─────────────────────────────────────────────
-
-describe('openEditorWindow — singleton logic with mocked chrome.windows', () => {
-    let state;
-    let openEditorWindow;
-
-    beforeEach(() => {
-        state = { globalEditorWindowId: null, presetEditorWindowId: null };
-        openEditorWindow = makeOpenEditorWindow(state);
-        vi.restoreAllMocks();
+const buildManager = () =>
+    window.__DS_PopupEditorWindow.createEditorWindowManager({
+        getActivePresetId: () => activePresetId,
     });
 
-    // ── First click creates window ──────────────────────────────────────────
+/** The single argument object handed to DSSWindowControl.openSingletonWindow. */
+const delegatedCall = () => {
+    expect(openSingletonWindow).toHaveBeenCalledOnce();
+    return openSingletonWindow.mock.calls[0][0];
+};
 
-    it('first call for global creates window with type=popup, width=1280, height=720', async () => {
-        chrome.windows.create = vi.fn().mockResolvedValue({ id: 101 });
-        chrome.windows.update = vi.fn();
+describe('createEditorWindowManager — openEditorWindow delegation', () => {
+    it("target=global asks for the global url and the GLOBAL session slot", async () => {
+        await buildManager().openEditorWindow('global');
 
-        await openEditorWindow('global');
+        const arg = delegatedCall();
+        expect(arg.url).toBe(`${BASE_URL}?target=global`);
+        expect(arg.storageKey).toBe(GLOBAL_KEY);
+        expect(arg.createOptions).toEqual({ type: 'popup', width: 1280, height: 720 });
+    });
 
-        expect(chrome.windows.create).toHaveBeenCalledWith({
-            url: expect.stringContaining('?target=global'),
-            type: 'popup',
-            width: 1280,
-            height: 720,
+    it("target=preset carries the preset id in the url and uses the PRESET session slot", async () => {
+        await buildManager().openEditorWindow('preset', 'my-preset-id');
+
+        const arg = delegatedCall();
+        expect(arg.url).toBe(`${BASE_URL}?target=preset&id=my-preset-id`);
+        expect(arg.storageKey).toBe(PRESET_KEY);
+    });
+
+    it('percent-encodes a preset id containing url-significant characters', async () => {
+        await buildManager().openEditorWindow('preset', 'a b&c=d');
+
+        expect(delegatedCall().url).toBe(`${BASE_URL}?target=preset&id=a%20b%26c%3Dd`);
+    });
+
+    it('the two targets occupy separate session slots, so neither evicts the other', async () => {
+        const manager = buildManager();
+        await manager.openEditorWindow('global');
+        await manager.openEditorWindow('preset', 'p1');
+
+        const keys = openSingletonWindow.mock.calls.map(([arg]) => arg.storageKey);
+        expect(keys).toEqual([GLOBAL_KEY, PRESET_KEY]);
+        expect(new Set(keys).size).toBe(2);
+    });
+
+    it('a rejected openSingletonWindow is swallowed and reported, never thrown at the click handler', async () => {
+        openSingletonWindow.mockRejectedValue(new Error('no window'));
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(buildManager().openEditorWindow('global')).resolves.toBeUndefined();
+
+        expect(errorSpy.mock.calls.flat().some((a) => typeof a === 'string' && a.includes('[DSS]'))).toBe(true);
+        errorSpy.mockRestore();
+    });
+});
+
+describe('createEditorWindowManager — button bindings', () => {
+    it('editPresetBtn click with no active preset opens nothing', () => {
+        const btn = document.createElement('button');
+        buildManager().bindEditPresetButton(btn);
+
+        activePresetId = '';
+        btn.click();
+
+        expect(openSingletonWindow).not.toHaveBeenCalled();
+    });
+
+    it('editPresetBtn click with an active preset opens that preset editor', () => {
+        const btn = document.createElement('button');
+        buildManager().bindEditPresetButton(btn);
+
+        activePresetId = 'preset-123';
+        btn.click();
+
+        expect(delegatedCall()).toMatchObject({
+            url: `${BASE_URL}?target=preset&id=preset-123`,
+            storageKey: PRESET_KEY,
         });
-        expect(state.globalEditorWindowId).toBe(101);
     });
 
-    it('first call for preset creates window with correct ?target=preset&id= URL', async () => {
-        chrome.windows.create = vi.fn().mockResolvedValue({ id: 202 });
-        chrome.windows.update = vi.fn();
+    it('editGlobalPromptBtn click opens the global editor', () => {
+        const btn = document.createElement('button');
+        buildManager().bindEditGlobalPromptButton(btn);
 
-        await openEditorWindow('preset', 'my-preset-id');
+        btn.click();
 
-        expect(chrome.windows.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                url: expect.stringContaining('?target=preset&id=my-preset-id'),
-                type: 'popup',
-                width: 1280,
-                height: 720,
-            })
-        );
-        expect(state.presetEditorWindowId).toBe(202);
-    });
-
-    // ── Second invocation focuses existing window and reloads its tab ─────────
-
-    it('second call for global focuses tracked id, then queries and reloads the tab to the requested URL', async () => {
-        state.globalEditorWindowId = 101;
-        chrome.windows.update = vi.fn().mockResolvedValue({});
-        chrome.tabs.query = vi.fn().mockResolvedValue([{ id: 7 }]);
-        chrome.tabs.update = vi.fn().mockResolvedValue({});
-        chrome.windows.create = vi.fn();
-
-        await openEditorWindow('global');
-
-        expect(chrome.windows.update).toHaveBeenCalledWith(101, { focused: true });
-        expect(chrome.tabs.query).toHaveBeenCalledWith({ windowId: 101 });
-        expect(chrome.tabs.update).toHaveBeenCalledWith(7, { url: 'chrome-extension://EXTID/popup/editor/editor.html?target=global' });
-        expect(chrome.windows.create).not.toHaveBeenCalled();
-    });
-
-    it('second call for preset focuses tracked id, then queries and reloads the tab to the requested URL', async () => {
-        state.presetEditorWindowId = 202;
-        chrome.windows.update = vi.fn().mockResolvedValue({});
-        chrome.tabs.query = vi.fn().mockResolvedValue([{ id: 8 }]);
-        chrome.tabs.update = vi.fn().mockResolvedValue({});
-        chrome.windows.create = vi.fn();
-
-        await openEditorWindow('preset', 'any-id');
-
-        expect(chrome.windows.update).toHaveBeenCalledWith(202, { focused: true });
-        expect(chrome.tabs.query).toHaveBeenCalledWith({ windowId: 202 });
-        expect(chrome.tabs.update).toHaveBeenCalledWith(8, { url: 'chrome-extension://EXTID/popup/editor/editor.html?target=preset&id=any-id' });
-        expect(chrome.windows.create).not.toHaveBeenCalled();
-    });
-
-    it('when tab query rejects, still returns without throwing and does not re-create the window', async () => {
-        state.globalEditorWindowId = 101;
-        chrome.windows.update = vi.fn().mockResolvedValue({});
-        chrome.tabs.query = vi.fn().mockRejectedValue(new Error('tabs API unavailable'));
-        chrome.tabs.update = vi.fn();
-        chrome.windows.create = vi.fn();
-
-        await expect(openEditorWindow('global')).resolves.toBeUndefined();
-
-        expect(chrome.tabs.update).not.toHaveBeenCalled();
-        expect(chrome.windows.create).not.toHaveBeenCalled();
-    });
-
-    it('when the tracked window has no usable tab, still returns without throwing', async () => {
-        state.presetEditorWindowId = 202;
-        chrome.windows.update = vi.fn().mockResolvedValue({});
-        chrome.tabs.query = vi.fn().mockResolvedValue([]);
-        chrome.tabs.update = vi.fn();
-        chrome.windows.create = vi.fn();
-
-        await expect(openEditorWindow('preset', 'any-id')).resolves.toBeUndefined();
-
-        expect(chrome.tabs.update).not.toHaveBeenCalled();
-        expect(chrome.windows.create).not.toHaveBeenCalled();
-    });
-
-    // ── update failure clears id and re-creates ─────────────────────────────
-
-    it('when update rejects for global, clears id and re-creates window', async () => {
-        state.globalEditorWindowId = 101;
-        chrome.windows.update = vi.fn().mockRejectedValue(new Error('window not found'));
-        chrome.windows.create = vi.fn().mockResolvedValue({ id: 999 });
-
-        await openEditorWindow('global');
-
-        expect(chrome.windows.update).toHaveBeenCalledWith(101, { focused: true });
-        expect(chrome.windows.create).toHaveBeenCalledOnce();
-        expect(state.globalEditorWindowId).toBe(999);
-    });
-
-    it('when update rejects for preset, clears id and re-creates window', async () => {
-        state.presetEditorWindowId = 202;
-        chrome.windows.update = vi.fn().mockRejectedValue(new Error('window not found'));
-        chrome.windows.create = vi.fn().mockResolvedValue({ id: 888 });
-
-        await openEditorWindow('preset', 'my-id');
-
-        expect(chrome.windows.update).toHaveBeenCalledWith(202, { focused: true });
-        expect(chrome.windows.create).toHaveBeenCalledOnce();
-        expect(state.presetEditorWindowId).toBe(888);
-    });
-
-    // ── global and preset slots are independent ─────────────────────────────
-
-    it('global and preset editor windows track separate slot IDs', async () => {
-        chrome.windows.create = vi.fn()
-            .mockResolvedValueOnce({ id: 101 })
-            .mockResolvedValueOnce({ id: 202 });
-
-        await openEditorWindow('global');
-        await openEditorWindow('preset', 'p1');
-
-        expect(state.globalEditorWindowId).toBe(101);
-        expect(state.presetEditorWindowId).toBe(202);
-    });
-
-    // ── pencil disabled when no active preset ───────────────────────────────
-
-    it('editPresetBtn is disabled when activePresetId is empty string', () => {
-        const editPresetBtn = document.createElement('button');
-        let activePresetId = '';
-        function updateEditPresetBtnState() {
-            if (editPresetBtn) editPresetBtn.disabled = (activePresetId === '');
-        }
-        updateEditPresetBtnState();
-        expect(editPresetBtn.disabled).toBe(true);
-    });
-
-    it('editPresetBtn is enabled when activePresetId is set', () => {
-        const editPresetBtn = document.createElement('button');
-        let activePresetId = 'preset-123';
-        function updateEditPresetBtnState() {
-            if (editPresetBtn) editPresetBtn.disabled = (activePresetId === '');
-        }
-        updateEditPresetBtnState();
-        expect(editPresetBtn.disabled).toBe(false);
+        expect(delegatedCall()).toMatchObject({
+            url: `${BASE_URL}?target=global`,
+            storageKey: GLOBAL_KEY,
+        });
     });
 });

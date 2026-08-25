@@ -31,6 +31,9 @@ function fireMouseover(target) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+    // disable() itself tears down both observers, the hover listener and the timers
+    SidebarAutoHide.disable();
+
     // Remove any registered hover-zone listener before resetting the reference
     if (SidebarAutoHide._hoverMonitorHandler) {
         document.removeEventListener('mouseover', SidebarAutoHide._hoverMonitorHandler, true);
@@ -55,14 +58,6 @@ beforeEach(() => {
     if (SidebarAutoHide.leaveTimer) {
         clearTimeout(SidebarAutoHide.leaveTimer);
         SidebarAutoHide.leaveTimer = null;
-    }
-    if (SidebarAutoHide.mutationObserver) {
-        SidebarAutoHide.mutationObserver.disconnect();
-        SidebarAutoHide.mutationObserver = null;
-    }
-    if (SidebarAutoHide.sidebarObserver) {
-        SidebarAutoHide.sidebarObserver.disconnect();
-        SidebarAutoHide.sidebarObserver = null;
     }
 
     document.body.innerHTML = '';
@@ -682,5 +677,67 @@ describe('Group H — expand() fallback when originalWidth is invalid', () => {
         // Falls back to CSS default, NOT '60px'
         expect(SidebarAutoHide.sidebarEl.style.width).toBe('');
         expect(SidebarAutoHide.sidebarEl.classList.contains(SidebarAutoHide.COLLAPSED_CLASS)).toBe(false);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Group I — enable() / disable() lifecycle teardown and rebuild
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Group I — enable() / disable() lifecycle', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        createSidebarInner(createSidebar());
+    });
+
+    it('I1: disable() tears down both MutationObservers', () => {
+        SidebarAutoHide.enable();
+        expect(SidebarAutoHide.mutationObserver).not.toBeNull();
+        expect(SidebarAutoHide.sidebarObserver).not.toBeNull();
+
+        SidebarAutoHide.disable();
+
+        expect(SidebarAutoHide.mutationObserver).toBeNull();
+        expect(SidebarAutoHide.sidebarObserver).toBeNull();
+    });
+
+    it('I2: after disable(), hovering the sidebar re-arms no timer and never expands', () => {
+        SidebarAutoHide.enable();
+        const sidebar = SidebarAutoHide.sidebarEl;
+
+        SidebarAutoHide.disable();
+
+        const expandSpy = vi.spyOn(SidebarAutoHide, 'expand');
+        sidebar.dispatchEvent(new MouseEvent('mouseenter'));
+        sidebar.dispatchEvent(new MouseEvent('mouseleave'));
+        vi.advanceTimersByTime(SidebarAutoHide.ENTER_DELAY_MS + SidebarAutoHide.LEAVE_DELAY_MS);
+
+        expect(SidebarAutoHide.enterTimer).toBeNull();
+        expect(SidebarAutoHide.leaveTimer).toBeNull();
+        expect(expandSpy).not.toHaveBeenCalled();
+    });
+
+    it('I3: enable() → disable() → enable() behaves like a fresh enable — one hover cycle, one expand', () => {
+        SidebarAutoHide.enable();
+        const firstController = SidebarAutoHide._eventAbortController;
+
+        SidebarAutoHide.disable();
+        // The whole enable cycle's hover bindings are revoked in one shot
+        expect(firstController.signal.aborted).toBe(true);
+        expect(SidebarAutoHide._eventAbortController).toBeNull();
+
+        SidebarAutoHide.enable();
+        expect(SidebarAutoHide._eventAbortController).not.toBe(firstController);
+
+        const sidebar = SidebarAutoHide.sidebarEl;
+        expect(SidebarAutoHide.isCollapsed()).toBe(true);
+
+        const expandSpy = vi.spyOn(SidebarAutoHide, 'expand');
+        sidebar.dispatchEvent(new MouseEvent('mouseenter'));
+        vi.advanceTimersByTime(SidebarAutoHide.ENTER_DELAY_MS);
+
+        expect(expandSpy).toHaveBeenCalledTimes(1);
+        expect(SidebarAutoHide.isCollapsed()).toBe(false);
+        expect(SidebarAutoHide.enterTimer).toBeNull();
     });
 });

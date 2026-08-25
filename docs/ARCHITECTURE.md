@@ -24,12 +24,11 @@ ds-studio/
 │   ├── preset-dropdown.keyboard.js  ─  Keyboard navigation for the dropdown (v4.18.1)
 │   ├── preset-settle.scheduler.js   ─  Bounded settle retry loop (mobile position race condition)
 │   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
-│   ├── temporary-chat-constants.js  ─  Shared constants for temporary-chat feature (v4.5.0)
 │   ├── temporary-chat-toggle.js     ─  Homepage toggle UI for temporary chat (v4.5.0)
 │   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
 │   ├── temporary-chat-delete.js     ─  Delete logic for temporary conversations (v4.5.0)
 │   ├── temporary-chat-delete-api.js ─  Delete API fetch wrapper for temporary chat
-│   ├── temporary-chat-pending-store.js  ─  Pending-delete queue for cross-device remediation
+│   ├── temporary-chat-pending-store.js † ─  Pending-delete queue storage layer — owned by the service worker, NOT a content script
 │   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
 │   ├── temporary-chat-fiber-delete.js   ─  React Fiber-based conversation deletion integration
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
@@ -53,6 +52,7 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
+│   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
 │   ├── preset-dropdown.css  ─  Overlay dropdown component styles
@@ -60,7 +60,10 @@ ds-studio/
 │   ├── censor-xhr-hook.js * ─  XHR monkey-patch for SSE interception (web accessible)
 │   └── prevent-auto-scroll.js *       ─  Main-world auto-scroll patch (web accessible)
 ├── background/                 ─  Service worker
-│   └── service-worker.js       ─  Background service worker: startup remediation, alarm-based retry, sync scheduling (v4.9.0)
+│   ├── service-worker.js       ─  Background service worker: startup remediation, alarm-based retry, sync scheduling (v4.9.0)
+│   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
+│   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
+│   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
 │   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
@@ -72,7 +75,11 @@ ds-studio/
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
 │   ├── popup.live-sync.js   ─  chrome.storage.onChanged reactivity for the open popup (createLiveSyncListener ctx factory, v4.8.0)
 │   ├── popup.toggles.js     ─  Feature-toggle change listeners, nine of them (createToggleManager ctx factory)
+│   ├── popup.settings-view.js  ─  applySettingsToDom: one-way settings → control mapping, no storage access
+│   ├── popup.preset-domain.js  ─  Pure preset rules: createPreset / validatePresetName (shared with the editor window)
+│   ├── popup.i18n-apply.js     ─  data-i18n DOM applier (shared with the editor window)
 │   ├── custom-select.js        ─  Custom ARIA combobox component for preset selection (v1.9.0)
+│   ├── custom-select.drag.js   ─  Pointer-Events drag-reorder subsystem: createDragReorder / reorderPresets
 │   ├── popup.locale.js         ─  Language switcher UI (v4.3.3)
 │   ├── popup-modal.css         ─  Modal overlay styles
 │   ├── popup-select.css        ─  Custom select component styles
@@ -88,7 +95,16 @@ ds-studio/
 │   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
 │   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
 │   ├── storage-manager.setters.js   ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
-│   ├── i18n.js                 ─  Internationalization system: locale switching, data-i18n attribute processing (v4.3.3)
+│   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
+│   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants
+│   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)
+│   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
+│   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
+│   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
+│   ├── tab-control.js          ─  DeepSeek tab query / send helpers (DSSTabControl)
+│   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
+│   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
+│   ├── i18n.locales.js         ─  zh_TW / en string dictionaries, pure data (v4.11.14 split)
 │   ├── logger.js               ─  Diagnostic logger, .warn() only after v4.8.4 cleanup
 │   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
 ├── samples/                 ─  DOM reference HTML samples
@@ -98,6 +114,8 @@ ds-studio/
 ```
 
 > `*` = 標記者為 web_accessible_resources，注入至頁面 MAIN world，不受 content script 的 isolated world CSP 限制。
+>
+> `†` = 檔案位於 `content/`，但**不在** `manifest.json` 的 `content_scripts` 清單中；僅由 `background/service-worker.js` 以 `importScripts` 載入，執行情境為 service worker。
 
 ### Modular Load Order (v4.0.0)
 
@@ -105,7 +123,7 @@ Several large files were split into smaller modules using a **dual-load pattern*
 
 - **Bundle files** define a method group / helper and attach it to a global key (e.g., `globalThis.__DS_GoToTop_render`), guarded by `if (typeof module !== 'undefined' && module.exports)` for the test runner.
 - **Entry files** (keeping the original filename) declare the state-bearing singleton, then run `Object.assign(Singleton, globalThis.__DS_* )` to merge the bundles before attaching to `window` / `module.exports`. Helpers that close over mutable state (`popup.preset-manager.js`, `popup.backup-manager.js`, and the overlay modules via `preset-overlay.controller.js`) use a `createX(ctx)` factory with live getter/setter callbacks instead.
-- **Load order is mandatory**: every bundle MUST load before its entry file. This is enforced in `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, and `popup/editor/editor.html`, and replicated for tests via preload imports in `test/setup/vitest.setup.js`.
+- **Load order is mandatory**: every bundle MUST load before its entry file. Five loaders must stay in agreement: `manifest.json` (`content_scripts[0].js`), `popup/popup.html`, `popup/editor/editor.html`, `background/service-worker.js` (`importScripts`), and — replicated for tests via preload imports — `test/setup/vitest.setup.js`. `test/unit/storage-manager.loader-contract.spec.js` enforces this for the storage-manager bundle set automatically.
 - Runtime behavior and public APIs are **unchanged**; the split is purely structural.
 
 ## Key Mechanisms
@@ -142,7 +160,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 
 - **Tier 1 — icon geometry**: the first candidate whose descendant `path[d]`, trimmed, starts with `M7.9995999336` (named constant `SEARCH_ICON_PATH_PREFIX`). Verified identical across zh-CN / zh-TW / en DOM snapshots and across toggle states. Candidates come from `.ds-toggle-button[aria-pressed]` plus the generic `[aria-pressed="true"], [aria-pressed="false"]` selector, merged and deduped — the icon check alone disambiguates against the deep-thinking toggle, so the generic selector is safe here.
 - **Tier 2 — positional fallback**: the second `.ds-toggle-button[aria-pressed]` candidate (index 1; search sits after deep-thinking in the toggle group). Restricted to the toggle group — positional guessing among generic candidates is forbidden.
-- **Total failure**: `null` plus exactly one `console.warn('[ds-studio] websearch-toggle: failed to locate the web-search button')`, so a future DeepSeek redesign is diagnosable from a user's console paste. No warning on success.
+- **Total failure**: `null` plus exactly one `console.warn('[DSS] websearch-toggle: failed to locate the web-search button')`, so a future DeepSeek redesign is diagnosable from a user's console paste. No warning on success.
 
 The two tiers have mutually exclusive failure modes (icon redesign vs. toolbar reorder); both would have to change in one release for the feature to fail. Recovery procedure: re-capture `to-do/samples/input-bar-*.html` against the new build.
 
@@ -173,6 +191,38 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 - **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup` reads the shared pending-delete queue from `chrome.storage.sync` and retries each entry with the device's own locally-cached auth token.
 - **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any queue entry.
 - **Privacy**: `authToken` (`dss-last-auth-token`) is stored in `chrome.storage.local` only — never synced.
+- **Storage ownership sits in the service worker**: the content layer no longer loads `content/temporary-chat-pending-store.js`; that file is absent from `manifest.json`'s `content_scripts` list and is pulled in only by `background/service-worker.js` via `importScripts`, so `TemporaryChatPendingStore` — and every `chrome.storage.*` call it makes — exists solely in the worker. Content modules request writes by message instead. The four request types are declared in `utils/temporary-chat-constants.js` (also re-exported on `DSS_TEMP_CHAT_CONSTANTS` and assigned onto `globalThis`):
+
+| Message type | Payload | Effect in the service worker |
+|-|-|-|
+| `DSS_TRACK_FOR_DELETION` | `{ uuid }` | `trackForDeletion(uuid)` — enqueue for deletion and add to the local open-UUID set |
+| `DSS_REMOVE_PENDING_DELETE` | `{ uuid }` | `removePendingDelete(uuid)` — drop from the cross-device queue |
+| `DSS_REMOVE_OPEN_UUID` | `{ uuid }` | `removeOpenUuid(uuid)` — drop from the local open-UUID set |
+| `DSS_SET_LAST_AUTH_TOKEN` | `{ token }` | `setLastAuthToken(token)` — refresh the local bearer-token cache |
+
+  `background/pending-store-routes.js` owns this side. Its `install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener holding a `type` → store-operation table. Unknown types return `false` without responding, leaving the worker's other `onMessage` listeners free to handle them; known types return `true` and reply `{ ok: true }` or `{ ok: false, error }` once the awaited operation settles. Senders: `temporary-chat-delete.tracking.js` (track), `temporary-chat-delete.coordinator.js` (both removals), `temporary-chat-delete.handlers.js` (token).
+
+### Content Settings Access (content → background)
+
+Content modules likewise stopped reading and writing settings storage themselves. `utils/settings-message-constants.js` publishes `globalThis.DSS_SETTINGS_MSG` with three types — `DSS_GET_SETTINGS`, `DSS_SET_SETTINGS`, `DSS_SETTINGS_CHANGED` — and both the content scripts and the service worker load that same file, so neither side hardcodes the strings.
+
+- **`background/settings-routes.js`** installs the counterpart at worker top level. `DSS_GET_SETTINGS` takes `{ keys: string[] }`, reads them from `chrome.storage.local`, fills gaps from `StorageManager.DEFAULTS`, routes `dsWebSearchToggle` through the shared `normalizeWebsearchToggle()`, and replies `{ ok: true, values }`. `DSS_SET_SETTINGS` takes `{ values: object }` and writes it to `chrome.storage.local`. Both reject empty or malformed payloads with `{ ok: false, error }`.
+- **Change broadcast**: the same `install()` registers `chrome.storage.onChanged` and forwards watched changes to every `*://chat.deepseek.com/*` tab as `{ type: DSS_SETTINGS_CHANGED, area, changes }`, preserving the original `changes` shape. Watched = any `StorageManager.KEYS` value in the `local` area, plus the extra local key `dss-temporary-chat-enabled`, plus anything under the `dsPreset_` / `chatPresetMap_` prefixes in either area. Per-tab send failures are swallowed so one unloaded tab cannot starve the rest.
+- **`content/feature-toggle.js`** is the shared consumer. `registerFeatureToggle({ ownKey, onEnable, onDisable })` records a feature, asks background for `isEnabled` plus the feature's own key, and computes effective state as "master is not `false` AND own key is not `false`" — an unset key counts as on. All registered features share **one** `chrome.runtime.onMessage` listener, attached on first registration. Callbacks fire only on an actual state transition, and a throwing callback is caught so it cannot block the other features. A failed initial read pins `masterValue` to `false`, leaving the feature dormant rather than enabling it under unknown settings. The returned `unregister()` is idempotent. Current registrants with `ownKey: null` (master-switch-only) include `content/go-top.js` and `content/quote-reply.js`.
+- **`content/temporary-chat-enabled-flag.js`** uses the same pipeline directly rather than through `registerFeatureToggle`, since its flag is independent of the master switch: `initFromStorage()` fetches `dss-temporary-chat-enabled` via `DSS_GET_SETTINGS`, `write()` persists via `DSS_SET_SETTINGS` (updating the in-memory cache first, so callers read the new value before the await resolves), and `startSync()` converges on `DSS_SETTINGS_CHANGED`. Only a boolean `true` counts as enabled; truthy strings such as `'true'` are coerced to disabled.
+
+### Editor Window Auto-Close (v4.29.0)
+
+The standalone prompt editor opens as its own OS window, so it can end up buried behind the DeepSeek tab the user just went back to. Returning focus to `chat.deepseek.com` is treated as "done editing" and closes it.
+
+| Message type | Payload | Effect in the service worker |
+|-|-|-|
+| `DSS_CLOSE_EDITOR_WINDOWS` | none | Reads both editor-window ids from `chrome.storage.session`, `chrome.windows.remove()` each one that is present, removes the corresponding keys, and replies `{ ok: true }` |
+
+- **`utils/editor-window-constants.js`** publishes `globalThis.DSS_EDITOR_WINDOW` with `CLOSE_MESSAGE_TYPE` (`'DSS_CLOSE_EDITOR_WINDOWS'`) and `STORAGE_KEYS` (`global: 'dss-editor-window-id-global'`, `preset: 'dss-editor-window-id-preset'`). It is a plain `globalThis` assignment rather than a top-level `const`, because a top-level `const` does not become a `globalThis` property. All three consumers — `content/editor-window-autoclose.js`, `background/editor-window-routes.js`, `popup/popup.editor-window.js` — read the same file, so the storage keys have one definition; each throws a named load-order error when the constants file is absent.
+- **`content/editor-window-autoclose.js`** is the sender: a `focus` listener on `window` posts `{ type: CLOSE_MESSAGE_TYPE }` and swallows the rejection, since a sleeping service worker with no receiver is expected rather than exceptional. It forwards the event and nothing more — window removal and session-storage access both belong to the background layer.
+- **`background/editor-window-routes.js`** owns that side. `DSSEditorWindowRoutes.install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener; unknown types return `false` without responding, leaving the worker's other listeners free to handle them. Each id is handled independently: a `chrome.windows.remove()` rejection (the user already closed that window) is logged via `console.error` and the storage key is removed in a `finally` regardless, so one stale id cannot leave the other tracked window open or its key behind.
+- **No data loss**: the editor's own auto-save pipeline — 500 ms debounced on `input`, immediate flush on `blur` / `visibilitychange` / `pagehide` — writes dirty content before the window goes away, the same guarantee that already covered the `Esc` shortcut.
 
 ### Data Flow
 
@@ -194,7 +244,7 @@ sequenceDiagram
     Note over Popup,Content: 一般流程 — 提示詞操作
     Popup->>Popup: Modal.prompt/confirm 管理提示詞 CRUD
     Popup->>Storage: 儲存 promptPresets / activePresetId
-    Popup->>Content: sendMessage ACTIVE_PRESET_CHANGED (per-tab)
+    Popup->>Content: broadcastActivePreset ACTIVE_PRESET_CHANGED (all chat.deepseek.com tabs)
     Content->>Content: updatePromptPrefixFromBinding()
     Storage-->>Content: onChanged (PROMPT_PRESETS / CHAT_PRESET_MAP)
 

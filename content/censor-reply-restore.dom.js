@@ -5,6 +5,14 @@
 (function (root) {
     'use strict';
 
+    // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
+    const chatSessionId = root.DSSChatSessionId ||
+        (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     const bundle = {
 
         // ────────────────────────────────────────────
@@ -39,9 +47,9 @@
         // ────────────────────────────────────────────
 
         _getMessageIdFromElement(msgEl) {
-            const virtualItem = msgEl.closest('[data-virtual-list-item-key]');
+            const virtualItem = msgEl.closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                const key = virtualItem.getAttribute('data-virtual-list-item-key');
+                const key = virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR);
                 if (this._keyToMessageId.has(key)) {
                     const mid = this._keyToMessageId.get(key);
                     // 同步清除 pendingQueue 中相同 messageId 的條目，避免後續 queue 後備誤配
@@ -100,9 +108,8 @@
          */
         _resolveMessageIdFromStorage(msgEl) {
             // 取得當前 session ID；明確要求非 falsy，避免 null !== null 意外通過
-            var currentSessionId = null;
-            var urlMatch = window.location.pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-            if (urlMatch) currentSessionId = urlMatch[1];
+            // 此處獨立於 _currentSessionId 自行讀取 URL：本函式為純查詢，不得呼叫會清除執行期狀態的 _checkSessionChange()
+            var currentSessionId = chatSessionId.extractChatSessionId();
 
             // 明確規則：任一端 session ID 為 falsy → 禁止比對
             if (!currentSessionId) return null;
@@ -122,11 +129,8 @@
                 if (rec.chat_session_id !== currentSessionId) continue;
                 if (rec.prompt_key !== promptKey) continue;
                 // 若此 messageId 已有對應的 virtualItem key，視為已使用
-                var alreadyMapped = false;
-                this._keyToMessageId.forEach(function (v) {
-                    if (String(v) === String(rec.message_id)) alreadyMapped = true;
-                });
-                if (!alreadyMapped) candidates.push(rec);
+                if (this._findKeyForMessageId(rec.message_id) !== null) continue;
+                candidates.push(rec);
             }
 
             if (candidates.length === 0) return null;
@@ -138,9 +142,9 @@
 
             var chosen = candidates[0];
             // 將對應關係寫入 _keyToMessageId 以供後續快速查詢
-            var virtualItem = msgEl.closest('[data-virtual-list-item-key]');
+            var virtualItem = msgEl.closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                this._keyToMessageId.set(virtualItem.getAttribute('data-virtual-list-item-key'), chosen.message_id);
+                this._keyToMessageId.set(virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR), chosen.message_id);
             }
             return chosen.message_id;
         },
@@ -184,9 +188,9 @@
                 return;
             }
 
-            const virtualItem = msgEl.closest('[data-virtual-list-item-key]');
+            const virtualItem = msgEl.closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                this._keyToMessageId.set(virtualItem.getAttribute('data-virtual-list-item-key'), messageId);
+                this._keyToMessageId.set(virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR), messageId);
             }
 
             this._injectRestoredContent(msgEl, record);
@@ -195,6 +199,58 @@
         // ────────────────────────────────────────────
         // Subsystem E: Content injection
         // ────────────────────────────────────────────
+
+        /**
+         * 建立復原內容容器（class / style / innerHTML 皆與原有 DOM 結構一致）。
+         * @param {string} innerHtml
+         * @returns {HTMLElement}
+         */
+        _createRestoredContainer(innerHtml) {
+            const restoredEl = document.createElement('div');
+            restoredEl.className = 'ds-markdown ds-assistant-message-main-content restored-content';
+            restoredEl.setAttribute('style', '--ds-md-zoom: 1.143;');
+            restoredEl.innerHTML = innerHtml;
+            return restoredEl;
+        },
+
+        /**
+         * 將 THINK 內容注入既有思考容器；若頁面尚無容器，改為在 restoredEl 前插入自建思考區塊。
+         * @param {Element} msgEl
+         * @param {string} thinkContent
+         * @param {Object} record
+         * @param {HTMLElement} restoredEl
+         */
+        _injectThinkContent(msgEl, thinkContent, record, restoredEl) {
+            const thinkContainer = msgEl.querySelector(selectors.THINK_BLOCK_SELECTOR);
+            if (!thinkContainer) {
+                const thinkEl = this._buildThinkBlock({ content: thinkContent }, record.thinking_elapsed_secs);
+                if (restoredEl.parentNode) {
+                    restoredEl.parentNode.insertBefore(thinkEl, restoredEl);
+                }
+                return;
+            }
+
+            thinkContainer.classList.add('restored-content');
+            const thinkContentEl = thinkContainer.querySelector(selectors.THINK_CONTENT_SELECTOR);
+            if (!thinkContentEl) return;
+
+            const thinkBody = thinkContentEl.querySelector(selectors.THINK_SEPARATOR_SELECTOR);
+            if (thinkBody) {
+                thinkBody.innerHTML = '';
+            }
+            let markdownEl = thinkContentEl.querySelector(selectors.MARKDOWN_SELECTOR);
+            if (!markdownEl) {
+                markdownEl = document.createElement('div');
+                markdownEl.className = selectors.MARKDOWN_CLASS;
+                if (thinkBody) {
+                    thinkBody.after(markdownEl);
+                } else {
+                    thinkContentEl.appendChild(markdownEl);
+                }
+            }
+            markdownEl.innerHTML = this._renderMarkdown(thinkContent);
+            markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');
+        },
 
         _injectRestoredContent(msgEl, record) {
             const fragments = record.fragments || [];
@@ -205,94 +261,24 @@
 
             if (!hasThink && !hasResponse) return;
 
-            const mainContent = msgEl.querySelector('.ds-assistant-message-main-content');
+            const mainContent = msgEl.querySelector(selectors.ASSISTANT_MAIN_CONTENT_SELECTOR);
             if (!mainContent) return;
 
-            // Hide original censored content
+            // 隱藏原始被審查內容
             if (!mainContent.classList.contains('dss-censored-hidden')) {
                 mainContent.classList.add('dss-censored-hidden');
             }
 
-            if (hasResponse) {
-                // 正常情況：有 RESPONSE 內容
-                const restoredEl = document.createElement('div');
-                restoredEl.className = 'ds-markdown ds-assistant-message-main-content restored-content';
-                restoredEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                let responseHtml = this._renderMarkdown(responseContent);
-                responseHtml += '<div class="restored-badge">' + dsI18n.t('restoredBadge') + '</div>';
-                restoredEl.innerHTML = responseHtml;
+            // 有 RESPONSE 則渲染回覆內容；否則為思考階段即被屏蔽，僅顯示 think-only 徽章
+            const innerHtml = hasResponse
+                ? this._renderMarkdown(responseContent) + '<div class="restored-badge">' + dsI18n.t('restoredBadge') + '</div>'
+                : '<div class="restored-badge">' + dsI18n.t('restoredBadgeThinkOnly') + '</div>';
 
-                mainContent.parentNode.insertBefore(restoredEl, mainContent.nextSibling);
+            const restoredEl = this._createRestoredContainer(innerHtml);
+            mainContent.parentNode.insertBefore(restoredEl, mainContent.nextSibling);
 
-                if (hasThink) {
-                    // 有 THINK 且有 RESPONSE 內容
-                    const thinkContainer = msgEl.querySelector('._74c0879');
-                    if (thinkContainer) {
-                        thinkContainer.classList.add('restored-content');
-                        const thinkContentEl = thinkContainer.querySelector('.ds-think-content');
-                        if (thinkContentEl) {
-                            const thinkBody = thinkContentEl.querySelector('._9ecc93a');
-                            if (thinkBody) {
-                                thinkBody.innerHTML = '';
-                            }
-                            let markdownEl = thinkContentEl.querySelector('.ds-markdown');
-                            if (!markdownEl) {
-                                markdownEl = document.createElement('div');
-                                markdownEl.className = 'ds-markdown';
-                                if (thinkBody) {
-                                    thinkBody.after(markdownEl);
-                                } else {
-                                    thinkContentEl.appendChild(markdownEl);
-                                }
-                            }
-                            markdownEl.innerHTML = this._renderMarkdown(thinkContent);
-                            markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                        }
-                    } else {
-                        const thinkEl = this._buildThinkBlock({ content: thinkContent }, record.thinking_elapsed_secs);
-                        if (restoredEl.parentNode) {
-                            restoredEl.parentNode.insertBefore(thinkEl, restoredEl);
-                        }
-                    }
-                }
-            } else {
-                // 情況 A：無 RESPONSE，只有 THINK（模型在思考階段被屏蔽）
-                const restoredEl = document.createElement('div');
-                restoredEl.className = 'ds-markdown ds-assistant-message-main-content restored-content';
-                restoredEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                let responseHtml = '<div class="restored-badge">' + dsI18n.t('restoredBadgeThinkOnly') + '</div>';
-                restoredEl.innerHTML = responseHtml;
-
-                mainContent.parentNode.insertBefore(restoredEl, mainContent.nextSibling);
-
-                const thinkContainer = msgEl.querySelector('._74c0879');
-                if (thinkContainer) {
-                    thinkContainer.classList.add('restored-content');
-                    const thinkContentEl = thinkContainer.querySelector('.ds-think-content');
-                    if (thinkContentEl) {
-                        const thinkBody = thinkContentEl.querySelector('._9ecc93a');
-                        if (thinkBody) {
-                            thinkBody.innerHTML = '';
-                        }
-                        let markdownEl = thinkContentEl.querySelector('.ds-markdown');
-                        if (!markdownEl) {
-                            markdownEl = document.createElement('div');
-                            markdownEl.className = 'ds-markdown';
-                            if (thinkBody) {
-                                thinkBody.after(markdownEl);
-                            } else {
-                                thinkContentEl.appendChild(markdownEl);
-                            }
-                        }
-                        markdownEl.innerHTML = this._renderMarkdown(thinkContent);
-                        markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');
-                    }
-                } else {
-                    const thinkEl = this._buildThinkBlock({ content: thinkContent }, record.thinking_elapsed_secs);
-                    if (restoredEl.parentNode) {
-                        restoredEl.parentNode.insertBefore(thinkEl, restoredEl);
-                    }
-                }
+            if (hasThink) {
+                this._injectThinkContent(msgEl, thinkContent, record, restoredEl);
             }
         },
 
@@ -313,7 +299,7 @@
             }
 
             // 2. 收集 DOM 中尚未復原且被審查的 assistant 訊息（按 DOM 順序）
-            var msgEls = document.querySelectorAll('.ds-message._63c77b1');
+            var msgEls = document.querySelectorAll(selectors.ASSISTANT_MESSAGE_SELECTOR);
             var unrestoredEls = [];
             for (var i = 0; i < msgEls.length; i++) {
                 var el = msgEls[i];
@@ -376,9 +362,9 @@
                 recList.sort(function (a, b) { return String(a.message_id).localeCompare(String(b.message_id)); });
                 var pairs = Math.min(domList.length, recList.length);
                 for (var i = 0; i < pairs; i++) {
-                    var virtualItem = domList[i].closest('[data-virtual-list-item-key]');
+                    var virtualItem = domList[i].closest(selectors.VIRTUAL_ITEM_KEY_SELECTOR);
                     if (virtualItem) {
-                        var key = virtualItem.getAttribute('data-virtual-list-item-key');
+                        var key = virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR);
                         this._keyToMessageId.set(key, recList[i].message_id);
                     }
                     this._injectRestoredContent(domList[i], recList[i]);

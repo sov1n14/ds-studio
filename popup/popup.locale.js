@@ -1,26 +1,27 @@
-/* ===== Popup i18n Initialization & Language Switcher =====
- * Separate file (not inline script) to comply with MV3 CSP
- * that blocks inline <script> blocks.
+/* ===== Popup 語言切換器 =====
+ * 獨立檔案（非 inline script）以符合 MV3 CSP。
+ * 匯出 bindLocaleSwitcher()，由 popup.js 的 DOMContentLoaded 流程呼叫；
+ * 本檔不在載入時執行任何工作，dsI18n.init() 一次開啟只跑一次（在 popup.js）。
  */
+(function (root) {
+  'use strict';
 
-(async function () {
-  await dsI18n.init();
-  // dsI18n.apply() is called automatically by i18n.js auto-init on DOMContentLoaded,
-  // but we call it here again in case the auto-init already fired before the DOM was ready.
-  dsI18n.apply();
+  /** 綁定地球按鈕與語言面板；需在 dsI18n.init() 完成後呼叫。 */
+  function bindLocaleSwitcher() {
+    window.__DS_PopupI18nApply.apply();
 
-  // ── 語言切換：地球按鈕 → 面板切換 ──
-  const localeBtn = document.getElementById('localeSwitcherBtn');
-  const localePanel = document.getElementById('localePanel');
-  if (localeBtn && localePanel) {
+    const localeBtn = document.getElementById('localeSwitcherBtn');
+    const localePanel = document.getElementById('localePanel');
+    if (!localeBtn || !localePanel) return;
+
     localeBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      const hidden = localePanel.hasAttribute('hidden');
+      const isHidden = localePanel.hasAttribute('hidden');
       localePanel.toggleAttribute('hidden');
-      if (hidden) {
-        const cur = dsI18n.getLocale();
+      if (isHidden) {
+        const currentLocale = dsI18n.getLocale();
         localePanel.querySelectorAll('input[type="radio"]').forEach(function (r) {
-          r.checked = r.value === cur;
+          r.checked = r.value === currentLocale;
         });
       }
     });
@@ -38,12 +39,14 @@
 
     localePanel.addEventListener('change', async function (e) {
       if (e.target.matches('input[type="radio"]') && e.target.checked) {
-        var val = e.target.value;
-        if (val !== dsI18n.getLocale()) {
-          await dsI18n.setLocale(val);
+        const value = e.target.value;
+        if (value !== dsI18n.getLocale()) {
+          await dsI18n.setLocale(value);
           window.location.reload();
         }
       }
     });
   }
-})();
+
+  root.__DS_PopupLocale = { bindLocaleSwitcher };
+})(typeof window !== 'undefined' ? window : globalThis);

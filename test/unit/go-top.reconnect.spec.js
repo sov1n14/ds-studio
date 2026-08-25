@@ -25,15 +25,13 @@ describe('GoToTop', () => {
         beforeEach(() => {
             vi.useFakeTimers();
             GoToTop.enabled = true;
-            GoToTop._enableRetryCount = 0;
-            GoToTop._enableRetryTimer = null;
         });
 
         afterEach(() => {
             vi.useRealTimers();
         });
 
-        it('does NOT inject when both .aaff8b8f and native button are absent — schedules retry instead', () => {
+        it('does NOT inject when both .aaff8b8f and native button are absent — keeps polling instead', () => {
             document.body.innerHTML = '';
             const injectSpy = vi.spyOn(GoToTop, '_injectButton');
 
@@ -41,7 +39,13 @@ describe('GoToTop', () => {
 
             expect(injectSpy).not.toHaveBeenCalled();
             expect(GoToTop._button).toBeNull();
-            expect(GoToTop._enableRetryTimer).not.toBeNull();
+
+            // The poll is still live: mount the wrapper and let one interval pass.
+            createWrapperWithoutNativeButton();
+            vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
+
+            expect(GoToTop._button).not.toBeNull();
+            expect(document.body.contains(GoToTop._button)).toBe(true);
         });
 
         it('injects immediately when .aaff8b8f wrapper is present (regardless of _getAnchor)', () => {
@@ -63,39 +67,38 @@ describe('GoToTop', () => {
             expect(injectSpy).toHaveBeenCalledOnce();
         });
 
-        it('after 120 misses: _injectButton NOT called, _button stays null, no further timer scheduled', () => {
+        it('gives up once the retry budget is spent: a wrapper that mounts later is never injected into', () => {
             document.body.innerHTML = '';
             const injectSpy = vi.spyOn(GoToTop, '_injectButton');
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-            GoToTop._enableRetryCount = 120; // already at cap
             GoToTop._tryConnectDom();
+
+            // Burn the whole budget (1 immediate attempt + MAX_CONNECT_RETRIES).
+            vi.advanceTimersByTime(
+                GoToTop.CONNECT_RETRY_INTERVAL * (GoToTop.MAX_CONNECT_RETRIES + 1));
+
+            // Too late: the poll has been abandoned, so this wrapper is ignored.
+            createWrapperWithoutNativeButton();
+            vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
 
             expect(injectSpy).not.toHaveBeenCalled();
             expect(GoToTop._button).toBeNull();
-            expect(GoToTop._enableRetryTimer).toBeNull();
-            expect(GoToTop._enableRetryCount).toBe(0); // reset after giving up
-            warnSpy.mockRestore();
         });
 
-        it('disable() mid-retry cancels the pending timer', () => {
+        it('disable() mid-retry stops the poll: a wrapper mounting later is not injected into', () => {
             document.body.innerHTML = '';
+            const injectSpy = vi.spyOn(GoToTop, '_injectButton');
             GoToTop._tryConnectDom();
-            expect(GoToTop._enableRetryTimer).not.toBeNull();
 
             GoToTop.disable();
-            expect(GoToTop._enableRetryTimer).toBeNull();
-        });
 
-        it('resets _enableRetryCount to 0 on successful injection', () => {
             createWrapperWithoutNativeButton();
-            GoToTop._enableRetryCount = 5;
-            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
+            vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
 
-            GoToTop._tryConnectDom();
-
-            expect(GoToTop._enableRetryCount).toBe(0);
+            expect(injectSpy).not.toHaveBeenCalled();
+            expect(GoToTop._button).toBeNull();
         });
+
     });
 
     // ─────────────────────────────────────
@@ -328,10 +331,13 @@ describe('GoToTop', () => {
                 GoToTop._onRouteChange();
                 vi.advanceTimersByTime(100); // fire route-change debounce → _tryConnectDom
 
-                // Gate not satisfied: no immediate injection, retry timer armed instead.
+                // Gate not satisfied: no immediate injection, but the poll stays live.
                 expect(injectSpy).not.toHaveBeenCalled();
                 expect(GoToTop._button).toBeNull();
-                expect(GoToTop._enableRetryTimer).not.toBeNull();
+
+                createWrapperWithoutNativeButton();
+                vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL);
+                expect(GoToTop._button).not.toBeNull();
             } finally {
                 vi.useRealTimers();
             }
@@ -348,7 +354,6 @@ describe('GoToTop', () => {
                 vi.advanceTimersByTime(100); // route-change debounce → first gated attempt fails
 
                 expect(GoToTop._button).toBeNull();
-                expect(GoToTop._enableRetryTimer).not.toBeNull();
 
                 // Wrapper mounts later (React finishes rendering the new conversation).
                 createWrapperWithoutNativeButton();
@@ -377,8 +382,10 @@ describe('GoToTop', () => {
                 expect(injectSpy).toHaveBeenCalledOnce();
                 expect(GoToTop._button).not.toBeNull();
                 expect(document.body.contains(GoToTop._button)).toBe(true);
-                // Gate passed immediately → no retry timer left armed.
-                expect(GoToTop._enableRetryTimer).toBeNull();
+
+                // Gate passed immediately → the poll is over: no second injection.
+                vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL * 3);
+                expect(injectSpy).toHaveBeenCalledOnce();
             } finally {
                 vi.useRealTimers();
             }
@@ -397,7 +404,10 @@ describe('GoToTop', () => {
 
                 expect(injectSpy).toHaveBeenCalledOnce();
                 expect(GoToTop._button).not.toBeNull();
-                expect(GoToTop._enableRetryTimer).toBeNull();
+
+                // Gate passed immediately → the poll is over: no second injection.
+                vi.advanceTimersByTime(GoToTop.CONNECT_RETRY_INTERVAL * 3);
+                expect(injectSpy).toHaveBeenCalledOnce();
             } finally {
                 vi.useRealTimers();
             }

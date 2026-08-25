@@ -109,9 +109,8 @@ function createBackupManager(ctx) {
         if (!exportRestoredBtn) return;
         exportRestoredBtn.addEventListener('click', async () => {
             try {
-                const data             = await chrome.storage.local.get('restored_messages');
-                const restoredMessages = data.restored_messages || {};
-                const dataStr = JSON.stringify({ restored_messages: restoredMessages }, null, 2);
+                const restoredMessages = await ctx.StorageManager.getRestoredMessages();
+                const dataStr = JSON.stringify({ [ctx.StorageManager.KEYS.RESTORED_MESSAGES]: restoredMessages }, null, 2);
                 const blob    = new Blob([dataStr], { type: 'application/json' });
                 const { yyyy, mm, dd } = _formatDate(new Date());
                 _triggerDownload(blob, `ds-studio-restore-backup-${yyyy}-${mm}-${dd}.json`);
@@ -138,14 +137,12 @@ function createBackupManager(ctx) {
                 const text         = await file.text();
                 const importedData = JSON.parse(text);
 
-                if (!importedData.restored_messages || typeof importedData.restored_messages !== 'object') {
+                const importedMessages = importedData[ctx.StorageManager.KEYS.RESTORED_MESSAGES];
+                if (!importedMessages || typeof importedMessages !== 'object') {
                     throw new Error(dsI18n.t('invalidRestoredBackupFormatError'));
                 }
 
-                const existing = await chrome.storage.local.get('restored_messages');
-                const merged   = { ...(existing.restored_messages || {}), ...importedData.restored_messages };
-
-                await chrome.storage.local.set({ restored_messages: merged });
+                await ctx.StorageManager.mergeRestoredMessages(importedMessages);
                 ctx.Toast.show(dsI18n.t('restoredBackupImportedToast'));
 
                 // 重新載入 popup 以更新開關狀態
@@ -179,15 +176,15 @@ function createBackupManager(ctx) {
 
             try {
                 // 清除本地儲存
-                await chrome.storage.local.set({ restored_messages: {} });
+                await ctx.StorageManager.clearRestoredMessages();
 
                 // 通知所有 DeepSeek 分頁的內容腳本
-                const tabs = await chrome.tabs.query({});
-                for (const tab of tabs) {
-                    if (tab.url && tab.url.includes('chat.deepseek.com')) {
-                        chrome.tabs.sendMessage(tab.id, { type: 'clearRestoredMessages' }).catch(() => {});
-                    }
-                }
+                const tabs = await DSSTabControl.queryDeepseekTabs();
+                await Promise.all(
+                    tabs
+                        .filter((tab) => typeof tab.id === 'number')
+                        .map((tab) => DSSTabControl.sendToTab(tab.id, { type: 'clearRestoredMessages' }))
+                );
 
                 ctx.Toast.show(dsI18n.t('restoredRecordsClearedToast'));
             } catch (err) {

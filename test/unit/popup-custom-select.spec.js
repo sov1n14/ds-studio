@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript, loadI18nOnce, readProjectFile } from '../helpers/popup-script-loader.js';
 
 let Modal;
 
@@ -13,19 +8,15 @@ beforeAll(() => {
     // each row's markup, and that renderer calls dsI18n.t(...), so both must
     // be loaded (and i18n initialized) before custom-select.js is evaluated —
     // mirrors the <script> load order declared in popup/popup.html.
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
-
-    const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
-    eval(rendererCode);
-
-    const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
-    eval(code);
+    loadI18nOnce();
+    // custom-select.js does `const _debounce = DSSDebounce;` — the shared helper must be on globalThis first.
+    evalPopupScript('utils/debounce.js');
+    evalPopupScript('popup/preset-item-renderer.js');
+    evalPopupScript('popup/custom-select.drag.js');
+    evalPopupScript('popup/custom-select.js');
 
     // Extract Modal object from popup.js for modal-integration tests
-    const popupCode = readFileSync(resolve(__dirname, '../../popup/popup.modal.js'), 'utf-8');
+    const popupCode = readProjectFile('popup/popup.modal.js');
     const match = popupCode.match(/const Modal = \{[\s\S]*?\n\};/);
     if (!match) {
         throw new Error('Could not extract Modal object from popup.js');
@@ -106,7 +97,6 @@ describe('createPresetCustomSelect', () => {
             expect(typeof sel.render).toBe('function');
             expect(typeof sel.open).toBe('function');
             expect(typeof sel.close).toBe('function');
-            expect(typeof sel.setActive).toBe('function');
         });
 
         it('初始面板應為隱藏狀態', () => {
@@ -171,24 +161,6 @@ describe('createPresetCustomSelect', () => {
             sel.open();
             sel.open();
             expect(document.querySelectorAll('#list .ds-select__item').length).toBe(3);
-        });
-    });
-
-    describe('setActive()', () => {
-        it('setActive() 更新 trigger 顯示文字', () => {
-            const { sel, setActiveId } = createSelect();
-            setActiveId('c');
-            sel.setActive('c');
-            expect(document.getElementById('value').textContent).toBe('Gamma');
-        });
-
-        it('setActive() 在面板開啟時更新選中狀態', () => {
-            const { sel, setActiveId } = createSelect();
-            sel.open();
-            setActiveId('b');
-            sel.setActive('b');
-            const selected = document.querySelector('#list .ds-select__item--selected');
-            expect(selected?.dataset.id).toBe('b');
         });
     });
 

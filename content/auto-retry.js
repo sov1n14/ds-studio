@@ -4,8 +4,9 @@
  *
  * 架構決策：
  *   - 使用 setInterval 輪詢（每 1000ms），與 sidebar-auto-hide.js 的
- *     MUTATION_CHECK_INTERVAL_MS 慣例一致，避免引入 MutationObserver。
- *   - 透過 StorageManager.KEYS.IS_ENABLED 追蹤擴充功能主開關，無獨立功能開關。
+ *     RESIZE_DEBOUNCE_MS 的毫秒常數命名慣例一致，避免引入 MutationObserver。
+ *   - 主開關（isEnabled）閘控交由 content/feature-toggle.js，本層不直讀儲存區；
+ *     無獨立功能開關。
  *   - 選擇器採 fallback chain：語意 ds-* class 優先，hash class 為備援。
  */
 const AutoRetry = {
@@ -18,7 +19,6 @@ const AutoRetry = {
 
     // === 狀態 ===
     enabled: false,
-    _masterEnabled: false,
     _timer: null,
 
     // ─────────────────────────────
@@ -67,29 +67,6 @@ const AutoRetry = {
     },
 
     // ─────────────────────────────
-    //  Private: Storage listener
-    // ─────────────────────────────
-
-    /**
-     * 監聽 chrome.storage.onChanged，僅追蹤擴充功能主開關（IS_ENABLED）。
-     * 無各別功能切換 — 完全跟隨主開關啟用/停用。
-     */
-    _setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                if (this._masterEnabled) {
-                    this.enable();
-                } else {
-                    this.disable();
-                }
-            }
-        });
-    },
-
-    // ─────────────────────────────
     //  Public: Lifecycle methods
     // ─────────────────────────────
 
@@ -116,24 +93,24 @@ const AutoRetry = {
     },
 
     /**
-     * 初始化模組：從 storage 讀取主開關，設置變更監聽器，
-     * 並在條件滿足時啟用。
+     * 初始化模組：把主開關閘控交給共用 registerFeatureToggle，
+     * 初始值與後續變更皆由 background 透過訊息提供。
      */
-    async start() {
-        const data = await new Promise((resolve) => {
-            chrome.storage.local.get([StorageManager.KEYS.IS_ENABLED], resolve);
-        });
-        this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
-
-        this._setupStorageListener();
-
-        if (this._masterEnabled) {
-            this.enable();
+    start() {
+        const featureToggle = globalThis.DSSFeatureToggle
+            || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+        if (!featureToggle) {
+            throw new Error('content/auto-retry.js 需要 content/feature-toggle.js 先行載入');
         }
+
+        featureToggle.registerFeatureToggle({
+            onEnable: () => this.enable(),
+            onDisable: () => this.disable(),
+        });
     }
 };
 
-// Auto-start
+// Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 AutoRetry.start();
 
 // === Test export (no-op in browser) ===

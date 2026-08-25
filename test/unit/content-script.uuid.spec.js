@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { setPathname } from '../helpers/set-pathname.js';
 
 // Load StorageManager first so content-script can reference it globally
 import '../../utils/storage-manager.js';
@@ -10,11 +11,6 @@ describe('extractUuidFromUrl (2.1.x, 2.8.x scenarios)', () => {
     beforeEach(() => {
         contentScript.__resetState();
     });
-
-    function setPathname(path) {
-        // happy-dom allows writing location.pathname via pushState/replaceState
-        window.history.replaceState({}, '', path);
-    }
 
     it('returns UUID from valid /a/chat/s/<uuid> path', () => {
         setPathname('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');

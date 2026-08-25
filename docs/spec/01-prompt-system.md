@@ -72,7 +72,7 @@
 - **彈出選單同步**：當彈出選單在已綁定的對話上開啟時，下拉選單會自動選取已綁定的提示詞組。在未綁定的對話上時，下拉選單會透過 `GET_PENDING_PRESET` 訊息查詢 Content Script 的記憶體中 `pendingPresetId`，若無待選選取則顯示空白選項。
 - **解除綁定**：在有 UUID 的對話上選取下拉選單的空白選項，會從 `chatPresetMap` 中移除綁定。
 - **新建提示詞組綁定**：在已綁定的對話上建立新提示詞組時，會更新綁定至新提示詞組。
-- **分頁獨立性**：提示詞組選取為各分頁獨立。當彈出選單在一個分頁上選取提示詞組時，會透過 `chrome.tabs.sendMessage` 將 `ACTIVE_PRESET_CHANGED` 訊息直接發送至該分頁的 Content Script。其他分頁的 Content Script 透過各自的 `chatPresetMap` 綁定保留自己的提示詞組選取，避免跨分頁污染。
+- **分頁獨立性**：提示詞組選取為各分頁獨立。當彈出選單在一個分頁上選取提示詞組時，會透過 `broadcastActivePreset()` 將 `ACTIVE_PRESET_CHANGED` 訊息併發廣播至所有已開啟的 `chat.deepseek.com` 分頁的 Content Script（個別分頁送出失敗各自吞掉）。其他分頁的 Content Script 透過各自的 `chatPresetMap` 綁定保留自己的提示詞組選取，避免跨分頁污染。
 
 ## 5. 全域提示詞
 

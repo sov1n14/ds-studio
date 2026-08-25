@@ -1,6 +1,6 @@
 ---
 name: chrome-extension-release
-description: Use when the user asks to merge a PR and cut a release, "pack for chrome", "跑 pack-for-chrome.ps1", "發 release", or "打包上傳 zip" — the full path from an approved PR through gh pr merge, running pack-for-chrome.ps1, and gh release create with a v{version} tag matching manifest.json. Also covers recovering from gh returning HTTP 503 mid-operation.
+description: Use when the user asks to merge a PR and cut a release — "pack for chrome", "跑 pack-for-chrome.ps1", "發 release", "打包 zip". Covers gh pr merge, running pack-for-chrome.ps1, gh release create with a v{version} tag matching manifest.json, and recovering when gh returns HTTP 503 mid-operation. Not for creating the PR (github-pr skill) or choosing the version number (version-bump skill).
 ---
 
 # Chrome Extension Release Flow

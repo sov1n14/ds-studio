@@ -22,7 +22,7 @@
          * @param {...*}   rest
          */
         warn(event, ...rest) {
-            console.warn('[DS-Sync]', event, ...(rest.length ? rest : ['']));
+            console.warn('[DSS]', event, ...(rest.length ? rest : ['']));
         },
     };
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import constants from '../../content/temporary-chat-constants.js';
+import constants from '../../utils/temporary-chat-constants.js';
 
 // These constants are the shared contract between modules.
 // A typo in any value would silently break the feature — hence dedicated assertions.
@@ -25,9 +25,9 @@ describe('temporary-chat-constants', () => {
         expect(constants.DSS_CHAT_CREATE_ENDPOINT).toBe('/api/v0/chat_session/create');
     });
 
-    it('exports exactly thirteen constants', () => {
+    it('exports exactly seventeen constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(13);
+        expect(keys).toHaveLength(16);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
         expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
@@ -39,8 +39,11 @@ describe('temporary-chat-constants', () => {
         expect(keys).toContain('DSS_PENDING_DELETES_SYNC_KEY');
         expect(keys).toContain('DSS_LAST_AUTH_TOKEN_KEY');
         expect(keys).toContain('DSS_OPEN_TEMP_UUIDS_KEY');
-        expect(keys).toContain('DSS_DELETE_ENDPOINT_URL');
         expect(keys).toContain('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE');
+        expect(keys).toContain('DSS_MSG_TRACK_FOR_DELETION');
+        expect(keys).toContain('DSS_MSG_REMOVE_PENDING_DELETE');
+        expect(keys).toContain('DSS_MSG_REMOVE_OPEN_UUID');
+        expect(keys).toContain('DSS_MSG_SET_LAST_AUTH_TOKEN');
         expect(keys).not.toContain('DSS_SW_DELETE_MESSAGE_TYPE');
     });
 
@@ -68,8 +71,13 @@ describe('temporary-chat-constants', () => {
         expect(constants.DSS_OPEN_TEMP_UUIDS_KEY).toBe('dss-open-temp-uuids');
     });
 
-    it('DSS_DELETE_ENDPOINT_URL has the exact expected value', () => {
-        expect(constants.DSS_DELETE_ENDPOINT_URL).toBe('https://chat.deepseek.com/api/v0/chat_session/delete');
+    it.each([
+        ['DSS_MSG_TRACK_FOR_DELETION', 'DSS_TRACK_FOR_DELETION'],
+        ['DSS_MSG_REMOVE_PENDING_DELETE', 'DSS_REMOVE_PENDING_DELETE'],
+        ['DSS_MSG_REMOVE_OPEN_UUID', 'DSS_REMOVE_OPEN_UUID'],
+        ['DSS_MSG_SET_LAST_AUTH_TOKEN', 'DSS_SET_LAST_AUTH_TOKEN'],
+    ])('%s has the exact expected value', (name, value) => {
+        expect(constants[name]).toBe(value);
     });
 
     it('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE has the exact expected value', () => {

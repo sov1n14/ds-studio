@@ -1,6 +1,6 @@
 /**
  * DS studio — Popup Preset Manager 模組
- * 封裝提示詞組的刪除等操作。
+ * 封裝提示詞組的新增、刪除、對話綁定與分頁活躍狀態解析等操作。
  * 使用 factory 模式接收 ctx 上下文物件，以保持與 popup.js 的共享狀態同步。
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -12,6 +12,8 @@
  * @param {Function} ctx.setPresets - 更新 presets 陣列
  * @param {Function} ctx.getActivePresetId - 取得目前 activePresetId
  * @param {Function} ctx.setActivePresetId - 更新 activePresetId
+ * @param {Function} ctx.getCurrentTabUuid - 取得目前分頁的對話 UUID
+ * @param {Function} ctx.setCurrentTabUuid - 更新目前分頁的對話 UUID
  * @param {Function} ctx.getChatPresetMap - 取得目前 chatPresetMap
  * @param {Function} ctx.setChatPresetMap - 更新 chatPresetMap
  * @param {Function} ctx.getCustomSelect - 取得 customSelect 實例
@@ -113,12 +115,8 @@ function createPresetManager(ctx) {
 
     // --- 從內容腳本查詢 pending preset ID ---
     async function getPendingPresetIdFromContentScript(tabId) {
-        try {
-            const response = await chrome.tabs.sendMessage(tabId, { action: 'GET_PENDING_PRESET' });
-            return response?.pendingPresetId || null;
-        } catch (err) {
-            return null;
-        }
+        const response = await DSSTabControl.sendToTab(tabId, { action: 'GET_PENDING_PRESET' });
+        return response?.pendingPresetId || null;
     }
 
     // --- 從 URL 解析對話 UUID（純函式） ---
@@ -131,11 +129,110 @@ function createPresetManager(ctx) {
         }
     }
 
+    /**
+     * 將目前分頁的對話綁定至指定提示詞組（id 為空字串則解除綁定），
+     * 並把最新的 chatPresetMap 讀回共享狀態。非對話分頁時不做事。
+     */
+    async function bindCurrentChat(id) {
+        const currentTabUuid = ctx.getCurrentTabUuid();
+        if (!currentTabUuid) return;
+
+        if (id === '') {
+            await ctx.StorageManager.unbindChat(currentTabUuid);
+        } else {
+            await ctx.StorageManager.bindChatToPreset(currentTabUuid, id);
+        }
+        ctx.setChatPresetMap((await ctx.StorageManager.getSettings()).chatPresetMap);
+    }
+
+    /**
+     * 依目前分頁決定活躍提示詞組：已綁定的對話沿用綁定值，未綁定則採用內容腳本回報的
+     * pending preset，非 DeepSeek 分頁或查詢失敗則回退為空白。
+     * 同時把解析到的對話 UUID 寫回共享狀態。
+     */
+    async function syncActivePresetWithCurrentTab() {
+        try {
+            const activeTab = await DSSTabControl.queryActiveDeepseekTab();
+            if (!activeTab || !activeTab.url) {
+                // 非 DeepSeek 頁面：預設空白選項
+                ctx.setActivePresetId('');
+                return;
+            }
+
+            const uuid = extractUuidFromUrl(activeTab.url);
+            ctx.setCurrentTabUuid(uuid || null);
+
+            const boundPresetId = uuid ? ctx.getChatPresetMap()[uuid] : undefined;
+            if (boundPresetId) {
+                // 已綁定對話：自動選擇對應提示詞組
+                ctx.setActivePresetId(boundPresetId);
+            } else {
+                // 未綁定對話：從內容腳本查詢 pending preset
+                const pending = await getPendingPresetIdFromContentScript(activeTab.id);
+                const isPendingUsable = Boolean(pending) && ctx.getPresets().some(p => p.id === pending);
+                ctx.setActivePresetId(isPendingUsable ? pending : '');
+            }
+            await ctx.StorageManager.saveActivePresetId(ctx.getActivePresetId());
+        } catch (err) {
+            // 查詢分頁失敗：安全回退為空白
+            ctx.setActivePresetId('');
+        }
+    }
+
+    // --- 新增提示詞組 ---
+    async function requestAddPreset() {
+        const name = await ctx.Modal.prompt({
+            title: dsI18n.t('addPresetDialogTitle'),
+            placeholder: dsI18n.t('addPresetPlaceholder')
+        });
+
+        // 名稱驗證（規則由 popup.preset-domain.js 集中定義）
+        const validation = DSSPresetDomain.validatePresetName(name, ctx.getPresets());
+        if (!validation.ok) {
+            // 空白名稱與使用者取消一律靜默結束；僅重複名稱需要提示
+            if (validation.reason === 'duplicate') {
+                await ctx.Modal.confirm({
+                    title: dsI18n.t('duplicateNameTitle'),
+                    message: dsI18n.t('duplicateNameMessage', { name }),
+                    confirmText: dsI18n.t('confirmButton'),
+                    cancelText: null
+                });
+            }
+            return;
+        }
+
+        const newPreset = DSSPresetDomain.createPreset(name);
+        const presets = ctx.getPresets();
+
+        presets.push(newPreset);
+        ctx.setActivePresetId(newPreset.id);
+
+        await Promise.all([
+            ctx.StorageManager.savePromptPresets(presets),
+            ctx.StorageManager.saveActivePresetId(ctx.getActivePresetId())
+        ]);
+        await ctx.refreshSyncStatus();
+
+        // 若在對話頁面則自動綁定新提示詞組
+        if (ctx.getCurrentTabUuid()) {
+            await bindCurrentChat(ctx.getActivePresetId());
+            await ctx.refreshSyncStatus();
+        }
+
+        ctx.getCustomSelect().render();
+        ctx.updateEditPresetBtnState();
+        ctx.showSaveStatus();
+        ctx.sendActivePresetToContentScript();
+    }
+
     return {
+        requestAddPreset,
         requestDeletePreset,
         requestDeleteAllPresets,
         getPendingPresetIdFromContentScript,
         extractUuidFromUrl,
+        bindCurrentChat,
+        syncActivePresetWithCurrentTab,
     };
 }
 

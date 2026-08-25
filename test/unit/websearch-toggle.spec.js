@@ -1,10 +1,26 @@
+/**
+ * content/websearch-toggle.js — button location and the one-shot apply/re-arm cycle.
+ *
+ * Settings surface: the module reads no storage. It asks background for its own
+ * mode key with DSS_GET_SETTINGS, subscribes to DSS_SETTINGS_CHANGED for later
+ * mode changes, and delegates master-switch gating to content/feature-toggle.js
+ * (which issues its own DSS_GET_SETTINGS for isEnabled and reacts to the same
+ * broadcast). Tests therefore drive it entirely through chrome.runtime:
+ *   - sendMessage stub answers each GET from the message's `keys`;
+ *   - onMessage.callListeners() delivers SETTINGS_CHANGED broadcasts.
+ *
+ * The module auto-starts on load, so a test that needs a specific settings
+ * snapshot (and a specific pre-existing DOM) builds the DOM first and then
+ * calls loadWebSearch(), which resets modules and re-imports -- start() must
+ * not be invoked twice on one instance, or its one-shot would arm twice.
+ */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import "../../utils/settings-message-constants.js";
 import "../../utils/storage-manager.js";
-import WebSearchToggle from "../../content/websearch-toggle.js";
-import { resetStorageOnChangedListeners } from "../setup/vitest.setup.js";
+import StorageManager from "../../utils/storage-manager.js";
 
 const MASTER_KEY = "isEnabled";
-const MODE_KEY = "dsWebSearchToggle";
+const MODE_KEY = StorageManager.KEYS.WEBSEARCH_TOGGLE;
 
 function makeButton(pressed) {
     const btn = document.createElement("button");
@@ -83,24 +99,94 @@ function makeToggle(pressed, label, iconPath, generic = false) {
     return toggle;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Messaging harness (same shape as width-feature.spec.js)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fresh chrome.runtime.onMessage stub with a fireable listener set. */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
+
+let onMessage;
+let sendMessage;
+let WebSearchToggle;
+
+/**
+ * Answer every GET_SETTINGS from `values`, returning only the keys the message
+ * asked for -- background/settings-routes.js behaves the same way, and this is
+ * what keeps the module's own mode GET distinct from feature-toggle's master GET.
+ */
+function respondFrom(values) {
+    sendMessage.mockImplementation((message, callback) => {
+        const picked = {};
+        (message.keys || []).forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(values, key)) picked[key] = values[key];
+        });
+        const response = { ok: true, values: picked };
+        if (typeof callback === "function") callback(response);
+        return Promise.resolve(response);
+    });
+}
+
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = "local") {
+    onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: "test-extension-id" },
+        () => {},
+    );
+}
+
+/**
+ * Load a fresh WebSearchToggle (plus a fresh feature-toggle and a fresh
+ * onMessage stub, so no earlier instance can observe this test's broadcasts)
+ * whose auto-start sees `values` as its settings snapshot.
+ *
+ * Under fake timers the settling tick must run on the fake clock, hence
+ * `isFakeTimers` -- awaiting a real setTimeout there would deadlock.
+ */
+async function loadWebSearch(values = {}, { isFakeTimers = false } = {}) {
+    onMessage = createOnMessageStub();
+    chrome.runtime.onMessage = onMessage;
+    respondFrom(values);
+    vi.resetModules();
+    await import("../../content/feature-toggle.js");
+    WebSearchToggle = (await import("../../content/websearch-toggle.js")).default;
+    if (isFakeTimers) {
+        await vi.advanceTimersByTimeAsync(0);
+    } else {
+        await flush();
+    }
+    return WebSearchToggle;
+}
+
 describe("WebSearchToggle", () => {
-    beforeEach(() => {
-        resetStorageOnChangedListeners();
-        WebSearchToggle.disable();
-        WebSearchToggle.enabled = false;
-        WebSearchToggle.mode = "on";
-        WebSearchToggle._masterEnabled = false;
-        WebSearchToggle._isSpent = false;
+    beforeEach(async () => {
         document.body.innerHTML = "";
+        sendMessage = vi.fn();
+        chrome.runtime.sendMessage = sendMessage;
+        // Master off: this baseline instance neither clicks, observes nor arms a
+        // deadline, so tests that only exercise pure lookup/apply logic are quiet.
+        await loadWebSearch({ [MASTER_KEY]: false, [MODE_KEY]: "on" });
     });
 
     afterEach(() => {
-        if (WebSearchToggle._observer) {
-            WebSearchToggle._observer.disconnect();
-            WebSearchToggle._observer = null;
-        }
+        if (WebSearchToggle) WebSearchToggle.disable();
         document.body.innerHTML = "";
         vi.restoreAllMocks();
     });
@@ -262,15 +348,10 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
     // Only a give-up DEADLINE elapsing with the button still unlocated warns,
     // exactly once per armed deadline. A success before the deadline cancels it.
     const advance = (ms = 0) => vi.advanceTimersByTimeAsync(ms);
-    // chrome.storage.local.set() resolves via a real setTimeout(0) internally
-    // (test/fixtures/chrome-storage-mock.js); with fake timers active, awaiting
-    // it directly would deadlock. Fire it, advance the fake timer to let its
-    // internal setTimeout run, then await the now-resolvable promise.
-    const setStorage = async (data) => {
-        const p = chrome.storage.local.set(data);
-        await advance(0);
-        await p;
-    };
+    // The instance under test is loaded INSIDE the fake-timer window (see the
+    // isFakeTimers option) so that the deadline it arms lives on the fake clock
+    // and advance() can actually reach it.
+    const startWebSearch = (values) => loadWebSearch(values, { isFakeTimers: true });
     // Confirmed by direct experiment (see agent memory note): under fake
     // timers, a MutationObserver callback's delivery can be silently DROPPED
     // (not merely delayed) when another timer -- here, the give-up deadline --
@@ -302,18 +383,12 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
     });
 
     it("start(): a failed initial locate attempt never warns on its own", async () => {
-        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        const startPromise = WebSearchToggle.start();
-        await advance(0);
-        await startPromise;
+        await startWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         expect(console.warn).not.toHaveBeenCalled();
     });
 
     it("MutationObserver: a failed retry attempt on an unrelated mutation never warns on its own", async () => {
-        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        const startPromise = WebSearchToggle.start();
-        await advance(0);
-        await startPromise;
+        await startWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         expect(console.warn).not.toHaveBeenCalled();
         document.body.appendChild(document.createElement("div"));
         await advance(0);
@@ -321,23 +396,17 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
     });
 
     it("_rearm(): a failed re-arm attempt never warns immediately -- it re-arms the deadline instead", async () => {
-        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        const startPromise = WebSearchToggle.start();
-        await advance(0);
-        await startPromise;
-        await setStorage({ [MODE_KEY]: "off" });
+        await startWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        broadcast(change(MODE_KEY, "off", "on"));
         expect(console.warn).not.toHaveBeenCalled();
     });
 
     it("give-up: still not located when the deadline elapses -- exactly ONE warning, never more than one per armed deadline", async () => {
-        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        const startPromise = WebSearchToggle.start();
-        await advance(0);
-        await startPromise;
+        await startWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         await advance(WebSearchToggle.LOCATE_GIVE_UP_MS);
         expect(console.warn).toHaveBeenCalledTimes(1);
         expect(console.warn).toHaveBeenCalledWith(
-            "[ds-studio] websearch-toggle: failed to locate the web-search button"
+            "[DSS] websearch-toggle: failed to locate the web-search button"
         );
         expect(WebSearchToggle._isSpent).toBe(false);
         await advance(WebSearchToggle.LOCATE_GIVE_UP_MS);
@@ -345,11 +414,8 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
     });
 
     it("CORE (live sequence): start() fails, an unrelated mutation fails, then the button appears and applies -- ZERO warnings ever, even after advancing past the deadline", async () => {
-        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         // Attempt 1: start(), no button yet.
-        const startPromise = WebSearchToggle.start();
-        await advance(0);
-        await startPromise;
+        await startWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         // Attempt 2: an unrelated mutation fires the observer, button still absent.
         document.body.appendChild(document.createElement("div"));
         await advance(0);
@@ -364,18 +430,15 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
     });
 
     it("_rearm(): a stale deadline from a previous arm does not fire a spurious warning after a successful re-arm locates the button", async () => {
-        await setStorage({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        const startPromise = WebSearchToggle.start();
-        await advance(0);
-        await startPromise;
+        await startWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         // Button still absent -- start() has armed a deadline (and an observer).
-        // Insert the button, then immediately trigger the mode change in the SAME
+        // Insert the button, then immediately deliver the mode change in the SAME
         // synchronous tick: _rearm()'s own synchronous locate-and-apply finds and
         // applies it right there (deterministic), before any stale MutationObserver
         // callback from the pre-rearm observer could ever be delivered as a microtask.
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
-        await setStorage({ [MODE_KEY]: "off" }); // mismatched for the new target -- applies synchronously inside _rearm()
+        broadcast(change(MODE_KEY, "off", "on")); // mismatched for the new target -- applies synchronously inside _rearm()
         expect(btn.click).toHaveBeenCalledOnce();
         expect(WebSearchToggle._isSpent).toBe(true);
         // Advance well past where the ORIGINAL (pre-rearm) deadline would have fired.
@@ -386,20 +449,16 @@ describe("give-up deadline: single warning after a sustained locate failure", ()
 
 describe("one-shot page-entry default", () => {
     it("master switch off: applies nothing and clicks nothing", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: false, [MODE_KEY]: "off" });
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: false, [MODE_KEY]: "off" });
         expect(btn.click).not.toHaveBeenCalled();
     });
 
     it("CORE: user manually flips the already-applied button -- no click-back", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         expect(btn.click).toHaveBeenCalledOnce();
         btn.click.mockClear();
         btn.setAttribute("aria-pressed", "false");
@@ -408,27 +467,21 @@ describe("one-shot page-entry default", () => {
     });
 
     it("unset mode key defaults to target on", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true });
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
     it("legacy stored value default is treated as target on", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "default" });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "default" });
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
     it("applies once when the button appears later via a DOM mutation, then disconnects", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "off" });
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "off" });
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
         await flush();
@@ -439,54 +492,46 @@ describe("one-shot page-entry default", () => {
         expect(secondBtn.click).not.toHaveBeenCalled();
     });
 
-    it("storage.onChanged after the one-shot is spent re-arms and triggers exactly one re-apply (REPLACES obsolete no-re-apply expectation)", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+    it("a mode change broadcast after the one-shot is spent re-arms and triggers exactly one re-apply", async () => {
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         expect(btn.click).toHaveBeenCalledOnce();
         btn.click.mockClear();
         // Simulate the DOM effect of the real click the stub cannot perform:
         // after start() clicked once, the button is now genuinely pressed (on).
         btn.setAttribute("aria-pressed", "true");
-        await chrome.storage.local.set({ [MODE_KEY]: "off" });
+        broadcast(change(MODE_KEY, "off", "on"));
         await flush();
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
-    it("turning the master switch off then back on after the one-shot is spent re-applies exactly once on the on-transition (REPLACES obsolete no-re-click expectation)", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+    it("turning the master switch off then back on after the one-shot is spent re-applies exactly once on the on-transition", async () => {
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         expect(btn.click).toHaveBeenCalledOnce();
         btn.click.mockClear();
-        await chrome.storage.local.set({ [MASTER_KEY]: false });
+        broadcast(change(MASTER_KEY, false, true));
         await flush();
-        await chrome.storage.local.set({ [MASTER_KEY]: true });
+        broadcast(change(MASTER_KEY, true, false));
         await flush();
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
     it("master switch turned on later uses the current mode for the still-pending application", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: false, [MODE_KEY]: "on" });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: false, [MODE_KEY]: "on" });
         expect(btn.click).not.toHaveBeenCalled();
-        await chrome.storage.local.set({ [MASTER_KEY]: true });
+        broadcast(change(MASTER_KEY, true, false));
         await flush();
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
     it("mode change before the button is found is honored by the pending single application", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        await WebSearchToggle.start();
-        await flush();
-        await chrome.storage.local.set({ [MODE_KEY]: "off" });
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        broadcast(change(MODE_KEY, "off", "on"));
         await flush();
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
@@ -495,10 +540,8 @@ describe("one-shot page-entry default", () => {
     });
 
     it("turning the master switch off while an application is still pending cancels it", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        await WebSearchToggle.start();
-        await flush();
-        await chrome.storage.local.set({ [MASTER_KEY]: false });
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        broadcast(change(MASTER_KEY, false, true));
         await flush();
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
@@ -506,51 +549,43 @@ describe("one-shot page-entry default", () => {
         expect(btn.click).not.toHaveBeenCalled();
     });
 
-describe("post one-shot activation events (storage.onChanged widened scope)", () => {
-    it("1: mismatched mode change via onChanged clicks exactly once", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+describe("post one-shot activation events (SETTINGS_CHANGED widened scope)", () => {
+    it("1: mismatched mode change via broadcast clicks exactly once", async () => {
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         btn.click.mockClear();
-        await chrome.storage.local.set({ [MODE_KEY]: "off" });
+        broadcast(change(MODE_KEY, "off", "on"));
         await flush();
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
     it("2: mismatched mode change the other direction clicks exactly once", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "off" });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "off" });
         btn.click.mockClear();
-        await chrome.storage.local.set({ [MODE_KEY]: "on" });
+        broadcast(change(MODE_KEY, "on", "off"));
         await flush();
         expect(btn.click).toHaveBeenCalledOnce();
     });
 
     it("3: mode change that already matches current aria-pressed does not click", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "off" });
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "off" });
         btn.click.mockClear();
-        await chrome.storage.local.set({ [MODE_KEY]: "on" });
+        broadcast(change(MODE_KEY, "on", "off"));
         await flush();
         expect(btn.click).not.toHaveBeenCalled();
     });
 
-    it("4: release-again -- a subsequent DOM mutation after a storage-driven re-apply does not cause a second click", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+    it("4: release-again -- a subsequent DOM mutation after a broadcast-driven re-apply does not cause a second click", async () => {
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         btn.click.mockClear();
-        await chrome.storage.local.set({ [MODE_KEY]: "off" });
+        broadcast(change(MODE_KEY, "off", "on"));
         await flush();
         expect(btn.click).toHaveBeenCalledOnce();
         btn.click.mockClear();
@@ -559,36 +594,30 @@ describe("post one-shot activation events (storage.onChanged widened scope)", ()
         expect(btn.click).not.toHaveBeenCalled();
     });
 
-    it("5: master off -- a mode change via onChanged is ignored entirely", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: false, [MODE_KEY]: "on" });
+    it("5: master off -- a mode change via broadcast is ignored entirely", async () => {
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
-        await chrome.storage.local.set({ [MODE_KEY]: "off" });
+        await loadWebSearch({ [MASTER_KEY]: false, [MODE_KEY]: "on" });
+        broadcast(change(MODE_KEY, "off", "on"));
         await flush();
         expect(btn.click).not.toHaveBeenCalled();
     });
 
     it("7: master switch transition to off never clicks", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         btn.click.mockClear();
-        await chrome.storage.local.set({ [MASTER_KEY]: false });
+        broadcast(change(MASTER_KEY, false, true));
         await flush();
         expect(btn.click).not.toHaveBeenCalled();
     });
 
     it("8: no leaked observer after master-off -- pending mode-driven wait is cancelled by a master-off event, so a later-appearing button is not clicked", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
-        await WebSearchToggle.start();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
+        broadcast(change(MODE_KEY, "off", "on"));
         await flush();
-        await chrome.storage.local.set({ [MODE_KEY]: "off" });
-        await flush();
-        await chrome.storage.local.set({ [MASTER_KEY]: false });
+        broadcast(change(MASTER_KEY, false, true));
         await flush();
         const btn = labelledButton("true", "智能搜索");
         document.body.appendChild(btn);
@@ -597,13 +626,11 @@ describe("post one-shot activation events (storage.onChanged widened scope)", ()
     });
 
     it("10: a change arriving in a non-local storage namespace is ignored entirely", async () => {
-        await chrome.storage.local.set({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         const btn = labelledButton("false", "智能搜索");
         document.body.appendChild(btn);
-        await WebSearchToggle.start();
-        await flush();
+        await loadWebSearch({ [MASTER_KEY]: true, [MODE_KEY]: "on" });
         btn.click.mockClear();
-        await chrome.storage.sync.set({ [MODE_KEY]: "off" });
+        broadcast(change(MODE_KEY, "off", "on"), "sync");
         await flush();
         expect(btn.click).not.toHaveBeenCalled();
     });

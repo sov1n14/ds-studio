@@ -10,6 +10,9 @@
     const __DSSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
+    const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
+    // 原生 go-top 按鈕的雜湊 class（單一來源定義於 content/ds-selectors.js）
+    const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
 
     const bundle = {
         // ─────────────────────────────
@@ -122,15 +125,15 @@
             // 降級鏈：依穩定 ds-* class 組合依序嘗試
             const result = this._querySelectorWithFallback([
                 this.NATIVE_BTN_SELECTOR,
-                '.aaff8b8f .ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                '.aaff8b8f [role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                '.aaff8b8f [role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)',
+                FLOATING_BAR + ' .ds-button--floating.ds-button--circle:not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)',
             ]);
             if (!result) return null;
 
             // 後驗證：若匹配來自降級選擇器（非 _0706cde），
             // 確認元素確實為 floating 按鈕，而非 primary/filled/disabled 按鈕
-            if (!result.classList.contains('_0706cde')) {
+            if (!result.classList.contains(GO_TOP_NATIVE_BUTTON_CLASS)) {
                 if (!result.classList.contains('ds-button--floating') ||
                     result.classList.contains('ds-button--primary') ||
                     result.classList.contains('ds-button--filled') ||

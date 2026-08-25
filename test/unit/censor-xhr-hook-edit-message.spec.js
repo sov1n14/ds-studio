@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import fs from 'fs';
-import path from 'path';
-import vm from 'vm';
-import { fileURLToPath } from 'url';
+import { loadClassicScript } from '../helpers/load-classic-script.js';
 
 /**
  * Unit tests for censor-xhr-hook.js — edit_message endpoint support (v2.9+)
@@ -14,17 +11,10 @@ import { fileURLToPath } from 'url';
  *   D. Obsolescence guard: both endpoints must be intercepted
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
-
 // ── Helpers to load IIFEs ────────────────────────────────────────────────────
 
 function loadSseParser() {
-    const src = fs.readFileSync(path.join(ROOT, 'content', 'sse-parser.js'), 'utf-8');
-    const sandbox = {};
-    vm.createContext(sandbox);
-    vm.runInContext(src, sandbox);
-    return sandbox.SseParser;
+    return loadClassicScript('content/sse-parser.js').SseParser;
 }
 
 /**
@@ -56,15 +46,11 @@ function loadXhrHook(SseParser) {
     MockXMLHttpRequest.prototype.open = originalOpen;
     MockXMLHttpRequest.prototype.send = originalSend;
 
-    const sandbox = {
+    const sandbox = loadClassicScript('content/censor-xhr-hook.js', {
         XMLHttpRequest: MockXMLHttpRequest,
         SseParser,
         window: { postMessage: vi.fn((data) => postedMessages.push(data)) },
-    };
-    vm.createContext(sandbox);
-
-    const hookSrc = fs.readFileSync(path.join(ROOT, 'content', 'censor-xhr-hook.js'), 'utf-8');
-    vm.runInContext(hookSrc, sandbox);
+    });
 
     return {
         MockXMLHttpRequest,

@@ -132,14 +132,4 @@ export class InMemoryStorageMock {
     }
 }
 
-/**
- * Create a pair of sync/local storage mocks with shared listener infrastructure.
- */
-export function createStorageMocks() {
-    return {
-        local: new InMemoryStorageMock('local'),
-        sync: new InMemoryStorageMock('sync'),
-    };
-}
-
 export default InMemoryStorageMock;

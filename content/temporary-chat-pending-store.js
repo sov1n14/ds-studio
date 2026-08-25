@@ -3,14 +3,14 @@
  * 職責：管理 chrome.storage.sync 的跨裝置待刪佇列，以及 chrome.storage.local 的
  * 本機開啟中 UUID 集合與最近有效 bearer token 快取。
  * 此模組須同時相容 content-script 與 service-worker（classic script／importScripts）
- * 兩種載入情境，因此不 ESM import 常數檔，改在此處自行宣告同值常數。
+ * 兩種載入情境，因此不 ESM import 常數檔，改由 globalThis 解析常數並保留同值字面量作為 fallback。
  */
 
-// 同 content/temporary-chat-constants.js
-const DSS_PENDING_STORE_SYNC_KEY = 'dss-pending-deletes-sync';
-const DSS_PENDING_STORE_TOKEN_KEY = 'dss-last-auth-token';
+// 同 utils/temporary-chat-constants.js
+const DSS_PENDING_STORE_SYNC_KEY = globalThis.DSS_PENDING_DELETES_SYNC_KEY ?? 'dss-pending-deletes-sync';
+const DSS_PENDING_STORE_TOKEN_KEY = globalThis.DSS_LAST_AUTH_TOKEN_KEY ?? 'dss-last-auth-token';
 // 舊版共用陣列 key —— 僅允許讀取（相容升級中裝置尚未轉移的資料），永不再寫入
-const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = 'dss-open-temp-uuids';
+const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = globalThis.DSS_OPEN_TEMP_UUIDS_KEY ?? 'dss-open-temp-uuids';
 // 新版：每個 uuid 各自一把獨立 key，任何呼叫端都不會讀改寫到其他 uuid 擁有的資料，
 // 因此不再需要跨 context 鎖 —— 沒有共用結構就沒有讀改寫競態可言。
 const DSS_OPEN_UUID_KEY_PREFIX = 'dss-open-temp-uuid:';
@@ -21,7 +21,7 @@ function logWriteFailure(context, error) {
         globalThis.__DS_Logger.warn('pending-store:write-fail', context, error);
         return;
     }
-    console.warn('pending-store:write-fail', context, error);
+    console.warn('[DSS]', 'pending-store:write-fail', context, error);
 }
 
 const TemporaryChatPendingStore = (() => {

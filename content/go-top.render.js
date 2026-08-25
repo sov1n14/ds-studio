@@ -6,6 +6,12 @@
 (function (root) {
     'use strict';
 
+    // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const __DSSelectorsRender = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+    // 原生 go-top 按鈕的雜湊 class（單一來源定義於 content/ds-selectors.js）
+    const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectorsRender.GO_TOP_NATIVE_BUTTON_CLASS;
+
     const bundle = {
         // ─────────────────────────────
         //  Private: Rendering & injection
@@ -58,7 +64,7 @@
             if (nativeBtn) {
                 // 主路徑：clone 原生按鈕，移除定位雜湊 class，保留所有 ds-* class
                 btn = nativeBtn.cloneNode(true);
-                btn.classList.remove('_0706cde');
+                btn.classList.remove(GO_TOP_NATIVE_BUTTON_CLASS);
             } else {
                 // 降級路徑：手工建構與原生相同結構的按鈕元素
                 btn = document.createElement(this.NATIVE_BTN_TAG);

@@ -2,6 +2,7 @@
  * Load this script BEFORE all other scripts that use dsI18n.t()
  * For content scripts, add to manifest.json content_scripts js list
  * For popup/editor, use <script src="../utils/i18n.js"></script>
+ * 載入本檔完全無副作用：呼叫端必須明確 await dsI18n.init()。
  */
 
 (function () {
@@ -21,27 +22,90 @@
   var zh_TW = __DSI18NLocales.zh_TW;
   var en = __DSI18NLocales.en;
 
+  /** 單一語系資料查表：未知語系一律回退來源語言。 */
+  function _dataFor(locale) {
+    return locale === 'en' ? en : zh_TW;
+  }
+
+  function _isKnownLocale(locale) {
+    return Boolean(locale) && Object.prototype.hasOwnProperty.call(LOCALE_NAMES, locale);
+  }
+
+  function _readCachedLocale() {
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch (_) {
+      return null; // localStorage 不可用
+    }
+  }
+
+  function _writeCachedLocale(locale) {
+    try { localStorage.setItem(STORAGE_KEY, locale); } catch (_) { /* ignore */ }
+  }
+
   // ============================================================
   //  i18n API
   // ============================================================
   const i18n = {
     _data: null,
     _locale: DEFAULT_LOCALE,
+    _hasListener: false,
+    _subscribers: [],
 
-    /** Initialize — read saved locale from chrome.storage.sync.
-     *  Safe to call multiple times; re-reads from storage each time. */
+    /** 語系切換訂閱：切換完成（_locale 與 _data 都已更新）後才通知。 */
+    onLocaleChanged(callback) {
+      if (typeof callback !== 'function') return;
+      this._subscribers.push(callback);
+    },
+
+    _notify(locale) {
+      this._subscribers.slice().forEach(function (callback) {
+        try {
+          callback(locale);
+        } catch (err) {
+          // 訂閱者是無人可攔截的邊界，錯誤只能就地回報，且不得中斷其他訂閱者
+          console.error('[DSS] i18n onLocaleChanged subscriber failed:', err);
+        }
+      });
+    },
+
+    /** chrome.storage 變更 → 即時語系切換；保持具名函式以便 _reset() 卸載。 */
+    _handleStorageChanged(changes, area) {
+      if (area !== 'sync' || !changes || !changes[STORAGE_KEY]) return;
+      const newLocale = changes[STORAGE_KEY].newValue;
+      if (!_isKnownLocale(newLocale) || newLocale === i18n._locale) return;
+      i18n._locale = newLocale;
+      i18n._data = _dataFor(newLocale);
+      _writeCachedLocale(newLocale);
+      i18n._notify(newLocale);
+    },
+
+    /** 明確初始化：解析語系並安裝即時切換監聽器。重複呼叫只會有一個監聽器。 */
     async init() {
+      const cached = _readCachedLocale();
+      if (_isKnownLocale(cached)) {
+        this._locale = cached;
+        this._data = _dataFor(cached);
+      }
+
       try {
         const result = await chrome.storage.sync.get(STORAGE_KEY);
-        if (result[STORAGE_KEY] && LOCALE_NAMES[result[STORAGE_KEY]]) {
-          this._locale = result[STORAGE_KEY];
-          this._data = result[STORAGE_KEY] === 'en' ? en : zh_TW;
-          try { localStorage.setItem(STORAGE_KEY, this._locale); } catch (_) { /* ignore */ }
+        const stored = result[STORAGE_KEY];
+        if (_isKnownLocale(stored)) {
+          this._locale = stored;
+          this._data = _dataFor(stored);
+          _writeCachedLocale(stored); // 雲端值回寫本地快取，下次載入可同步取得
         }
       } catch (_e) { /* storage unavailable */ }
-      // Ensure _data is populated even when storage is empty/unavailable
+
       if (this._data === null) {
-        this._data = this._locale === 'en' ? en : zh_TW;
+        this._data = _dataFor(this._locale);
+      }
+
+      if (!this._hasListener &&
+          typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener(this._handleStorageChanged);
+        this._hasListener = true;
       }
     },
 
@@ -50,10 +114,16 @@
       return this._locale;
     },
 
-    /** For testing only — reset internal state so init() re-reads storage */
+    /** For testing only — reset internal state so init() re-runs from scratch */
     _reset() {
       this._locale = DEFAULT_LOCALE;
       this._data = null;
+      this._subscribers = [];
+      if (this._hasListener &&
+          typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+        try { chrome.storage.onChanged.removeListener(this._handleStorageChanged); } catch (_) { /* ignore */ }
+      }
+      this._hasListener = false;
     },
 
     /**
@@ -61,10 +131,10 @@
      * chrome.storage.sync (async), then reload to refresh all strings.
      */
     async setLocale(locale) {
-      if (!LOCALE_NAMES[locale]) return false;
+      if (!_isKnownLocale(locale)) return false;
       this._locale = locale;
-      this._data = locale === 'en' ? en : zh_TW;
-      try { localStorage.setItem(STORAGE_KEY, locale); } catch (_) { /* ignore */ }
+      this._data = _dataFor(locale);
+      _writeCachedLocale(locale);
       try { await chrome.storage.sync.set({ [STORAGE_KEY]: locale }); } catch (_) { /* ignore */ }
       return true;
     },
@@ -82,81 +152,12 @@
       if (str === undefined) return key;
       if (replacements) {
         for (const [k, v] of Object.entries(replacements)) {
-          str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+          str = str.replace(new RegExp(`\{${k}\}`, 'g'), String(v));
         }
       }
       return str;
     },
-
-    /**
-     * Apply i18n to all DOM elements with [data-i18n] attributes.
-     * @param {HTMLElement} [root=document] — Scope to scan
-     */
-    apply(root) {
-      root = root || document;
-      const elements = root.querySelectorAll('[data-i18n]');
-      for (const el of elements) {
-        const key = el.getAttribute('data-i18n');
-        const attr = el.getAttribute('data-i18n-attr') || 'textContent';
-        if (!key) continue;
-        const translation = this.t(key);
-        if (attr === 'textContent') {
-          el.textContent = translation;
-        } else {
-          el.setAttribute(attr, translation);
-        }
-      }
-    },
   };
-
-  // ============================================================
-  //  Auto-Init (runs once when the script loads)
-  // ============================================================
-  (function autoInit() {
-    // 1. Synchronous init from localStorage (instant — no await)
-    try {
-      const cached = localStorage.getItem(STORAGE_KEY);
-      if (cached && LOCALE_NAMES[cached]) {
-        i18n._locale = cached;
-        i18n._data = cached === 'en' ? en : zh_TW;
-      }
-    } catch (_) { /* localStorage unavailable */ }
-
-    // 2. Async init from chrome.storage.sync (may update cached value)
-    i18n.init().then(function () {
-      // 3. Auto-apply when DOM is ready (only in browser context)
-      if (typeof document !== 'undefined') {
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function onReady() {
-            document.removeEventListener('DOMContentLoaded', onReady);
-            i18n.apply();
-          });
-        } else {
-          i18n.apply();
-        }
-      }
-    });
-
-    // 4. Live locale switch — listen for storage changes from popup
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
-      chrome.storage.onChanged.addListener(function (changes, area) {
-        if (area === 'sync' && changes[STORAGE_KEY]) {
-          var newVal = changes[STORAGE_KEY].newValue;
-          if (newVal && LOCALE_NAMES[newVal] && newVal !== i18n._locale) {
-            i18n._locale = newVal;
-            i18n._data = newVal === 'en' ? en : zh_TW;
-            try { localStorage.setItem(STORAGE_KEY, newVal); } catch (_) { /* ignore */ }
-            // Re-apply i18n to DOM elements (static data-i18n attributes)
-            i18n.apply();
-            // Dispatch custom event so content-script modules can react
-            if (typeof document !== 'undefined') {
-              try { document.dispatchEvent(new CustomEvent('dsI18n-locale-changed', { detail: { locale: newVal } })); } catch (_) { /* ignore */ }
-            }
-          }
-        }
-      });
-    }
-  })();
 
   // ============================================================
   //  Export to global scope

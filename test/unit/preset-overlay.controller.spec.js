@@ -137,11 +137,13 @@ describe('onSelectChange — reposition regression', () => {
  * are processed in the same drain loop — exactly like the browser's async
  * frame queue but without the async overhead or the recursion.
  *
- * RAF_FLUSH_CAP (200) is large enough to let the settle loop reach
- * stableK=120 (converge) on a real DOM, yet small enough to terminate
- * immediately when measure() always returns null (null-metric path).
- * The test assertions only require that reposition was called at least
- * once with 'settle:frame-0', which is satisfied on the very first flush.
+ * RAF_FLUSH_CAP (200) is deliberately larger than the production
+ * settle-loop ceiling (maxFrames=60, stableK=4), so the loop always hits
+ * its OWN bound before this stub's bound. That is what makes the
+ * frame-ceiling assertion below meaningful: if maxFrames regressed to a
+ * huge value (the old 7200), the drain loop would be cut off by
+ * RAF_FLUSH_CAP instead and reposition() would be called ~200 times,
+ * well past 60, failing the test.
  *
  * Returns a restore function.
  */
@@ -196,7 +198,7 @@ describe('settle loop integration', () => {
         if (restoreRaf) restoreRaf();
     });
 
-    it('mountTo triggers settle loop that calls reposition with settle:frame-N reasons', () => {
+    it('mountTo triggers the settle loop, which repositions the overlay', () => {
         target = document.createElement('div');
         document.body.appendChild(target);
 
@@ -204,12 +206,31 @@ describe('settle loop integration', () => {
 
         // The settle loop runs synchronously (rAF stubbed).
         // With no button element inside the target, resolveNewChatButtonEl
-        // returns null, so measure() returns null every frame.  Since
-        // prevMetric stays null (it's only set when measure returns non-null),
-        // the loop keeps waiting and increments frame each time until
-        // maxFrames=30 is reached: 30 calls to apply -> reposition.
+        // returns null, so measure() returns null every frame, the metric
+        // never stabilises, and the loop runs until it hits its frame
+        // ceiling (maxFrames=60), calling reposition() once per frame.
         expect(overlay.reposition).toHaveBeenCalled();
-        expect(overlay.reposition).toHaveBeenNthCalledWith(1, 'settle:frame-0');
+    });
+
+    it('bounds settle frames to the 60-frame ceiling (no unbounded loop)', () => {
+        target = document.createElement('div');
+        document.body.appendChild(target);
+
+        overlay.mountTo(target);
+
+        const repositionCalls = overlay.reposition.mock.calls.length;
+
+        // Sanity: the loop actually ran, otherwise the bound below is vacuous.
+        expect(repositionCalls).toBeGreaterThan(0);
+        // The ceiling. reposition is spied BEFORE mountTo, and mountTo's own
+        // render path never calls it: mountTo goes straight to
+        // _applyPlacementSync(), and the ResizeObserver / window-resize
+        // handlers it installs never fire during this test. So every call
+        // counted here is one settle frame and maxFrames=60 is the exact
+        // allowance — no slack. RAF_FLUSH_CAP (200) exceeds 60, so a
+        // regression to an unbounded/huge maxFrames would drain up to the
+        // flush cap (~200 calls) and fail here.
+        expect(repositionCalls).toBeLessThanOrEqual(60);
     });
 
     it('unmount does not crash after settle loop', () => {
@@ -296,5 +317,61 @@ describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(getRenderedSelectedValue()).toBe(PINNED_PRESET.id);
+    });
+});
+
+// ── Group D: scheduleFindAndMount debounce ───────────────────────────────────
+// The controller owns no body observer: content-script.js's single body observer
+// fans DOM mutations out to scheduleFindAndMount(), which must collapse a burst
+// of mutations into ONE findAndMount() 150ms after the last one, and must not
+// fire at all once the overlay has been unmounted.
+
+describe('scheduleFindAndMount — 150ms debounce', () => {
+    let overlay, ctx;
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        spyStorageManager();
+        ctx     = makeCtx();
+        overlay = createPresetOverlay(ctx);
+        // Observe the remount decision itself; the real findAndMount would need a
+        // live DeepSeek header in the DOM, which is not what this debounce owns.
+        overlay.findAndMount = vi.fn();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        restoreStorageManager();
+    });
+
+    it('does not remount before 150ms have elapsed, and remounts exactly once at 150ms', () => {
+        overlay.scheduleFindAndMount();
+
+        vi.advanceTimersByTime(149);
+        expect(overlay.findAndMount).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(1);
+        expect(overlay.findAndMount).toHaveBeenCalledTimes(1);
+    });
+
+    it('collapses a burst of body mutations into a single remount', () => {
+        overlay.scheduleFindAndMount();
+        vi.advanceTimersByTime(50);
+        overlay.scheduleFindAndMount();
+        vi.advanceTimersByTime(50);
+        overlay.scheduleFindAndMount();
+
+        // 100ms of the burst has already passed: a non-debounced timer would have
+        // fired more than once by the end of this window.
+        vi.advanceTimersByTime(150);
+        expect(overlay.findAndMount).toHaveBeenCalledTimes(1);
+    });
+
+    it('unmount cancels a pending remount', () => {
+        overlay.scheduleFindAndMount();
+        overlay.unmount();
+
+        vi.advanceTimersByTime(150);
+        expect(overlay.findAndMount).not.toHaveBeenCalled();
     });
 });

@@ -8,8 +8,8 @@
  *   - discriminates correctly between two different active presets (headline criterion),
  *   - takes effect on the next injected message when the active preset is switched via
  *     the in-page overlay, with no page reload,
- *   - takes effect when the change arrives via chrome.storage.onChanged (cross-device
- *     sync / another context), with no page reload,
+ *   - takes effect when the change arrives as a background DSS_SETTINGS_CHANGED
+ *     broadcast (cross-device sync / another context), with no page reload,
  *   - still yields to the isEnabled master switch,
  *   - defaults to enabled when a preset object omits the field entirely,
  *   - does not affect whether the preset's own content prefix is injected,
@@ -24,12 +24,14 @@
  * Deliberately uses REAL chrome.storage (via the in-memory mock) and REAL StorageManager /
  * PresetOverlay code paths rather than mocking StorageManager.getSettings, so that the
  * assertions exercise actual end-to-end behavior (the injected textarea string) instead of
- * an internal call sequence.
+ * an internal call sequence. Storage is seeded directly, then the DSS_SETTINGS_CHANGED
+ * broadcast that background/settings-routes.js would send is delivered by the test,
+ * since no background page runs here.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
-import { getStorageOnChangedListenerCount } from '../setup/vitest.setup.js';
 
 function makeTextarea(value) {
     const ta = document.createElement('textarea');
@@ -43,28 +45,40 @@ async function flush(times = 10) {
     }
 }
 
-// Deterministic replacement for a fixed tick-count guess. content-script.js runs
-// an un-awaited initSettings() at module-import time whose LAST statement is
-// chrome.storage.onChanged.addListener(...) (see content/content-script.js:74).
-// Until that listener is registered, any chrome.storage mutation the test makes
-// (cross-device / remote change simulation) is dispatched to nobody and lost
-// forever -- the in-memory mock does not replay past events to late listeners.
-// Waiting for the listener count to become non-zero is therefore an exact
-// signal that the entire bootstrap chain (including the isEnabled /
-// globalDefaultPrompt / isGlobalPromptEnabled assignments that precede it) has
-// settled, removing the race instead of merely outlasting it with a bigger
-// magic number.
+// Deterministic replacement for a fixed tick-count guess. content-script.js
+// registers TWO chrome.runtime.onMessage listeners: the popup message router,
+// synchronously at module load, and the DSS_SETTINGS_CHANGED broadcast receiver
+// as the LAST statement of the un-awaited initSettings() bootstrap started at
+// module-import time. Until that second listener exists, any broadcast the test
+// delivers (cross-device / remote change simulation) reaches nobody and is lost
+// forever -- the mock does not replay past messages to late listeners.
+// Waiting for the count to reach 2 is therefore an exact signal that the entire
+// bootstrap chain (including the isEnabled / globalDefaultPrompt /
+// isGlobalPromptEnabled assignments that precede it) has settled, removing the
+// race instead of merely outlasting it with a bigger magic number.
 async function waitForContentScriptBootstrap() {
     const maxTicks = 500;
     for (let i = 0; i < maxTicks; i++) {
-        if (getStorageOnChangedListenerCount() >= 1) return;
+        if (chrome.runtime.onMessage.listenerCount() >= 2) return;
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    throw new Error('Timed out waiting for content-script.js to register its chrome.storage.onChanged listener (bootstrap never completed).');
+    throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener (bootstrap never completed).');
+}
+
+// Delivers the broadcast background/settings-routes.js would send after a
+// storage write. No background page runs in this suite, so the test plays that
+// role: seed chrome.storage first (the content script re-reads it), then hand
+// the content script the changed-keys notification.
+function broadcastSettingsChanged(changes, area = 'local') {
+    chrome.runtime.onMessage.callListeners(
+        { type: 'DSS_SETTINGS_CHANGED', area, changes },
+        {},
+        () => {}
+    );
 }
 
 // Deterministic replacement for flush() at points where the test must observe
-// an async chrome.storage.onChanged -> refreshGlobalPromptEnabled() round trip
+// an async DSS_SETTINGS_CHANGED -> refreshGlobalPromptEnabled() round trip
 // completing, rather than guessing how many ticks that chain needs.
 async function waitUntilState(predicate, description) {
     const maxTicks = 500;
@@ -82,10 +96,11 @@ async function waitUntilGlobalPromptEnabledIs(expected) {
     );
 }
 
-// Drains BOTH fire-and-forget async chains a chrome.storage.onChanged /
+// Drains BOTH fire-and-forget async chains a DSS_SETTINGS_CHANGED broadcast /
 // onSelectChange event can trigger (refreshGlobalPromptEnabled() AND
-// updatePromptPrefixFromBinding(), see content/content-script.js:106-131 and
-// content/preset-overlay.controller.js:186-206) before the test proceeds --
+// updatePromptPrefixFromBinding(), see applySettingsChanged() in
+// content/content-script.js and onSelectChange() in
+// content/preset-overlay.controller.js) before the test proceeds --
 // otherwise whichever chain resolves slower keeps running in the background
 // and can land during a LATER test, clobbering that later test own-content-
 // prefix or global-prompt-enabled state (observed: a dangling promise from an
@@ -131,7 +146,8 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         const flippedPreset = { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 2, globalPromptEnabled: false };
         await chrome.storage.sync.set({ 'dsPreset_preset-A': flippedPreset });
         await chrome.storage.local.set({ 'dsPreset_preset-A': flippedPreset });
-        // Deterministically wait for the onChanged -> refreshGlobalPromptEnabled()
+        broadcastSettingsChanged({ 'dsPreset_preset-A': { newValue: flippedPreset } });
+        // Deterministically wait for the broadcast -> refreshGlobalPromptEnabled()
         // round trip to actually settle, rather than guessing a tick count.
         await waitUntilGlobalPromptEnabledIs(false);
 
@@ -156,7 +172,8 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         await flush();
 
         contentScript.PresetOverlay.onSelectChange('preset-A');
-        // Wait for both onChanged-triggered chains (own-prefix resolution AND
+        broadcastSettingsChanged({ activePresetId: { newValue: 'preset-A' } });
+        // Wait for both broadcast-triggered chains (own-prefix resolution AND
         // global-prompt-enabled resolution) to fully settle before asserting or
         // moving on, so neither survives as a dangling promise into a later test.
         await waitUntilPresetSwitchSettled(true, 'Prefix A');
@@ -167,7 +184,8 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         expect(ta1.value).toContain('Prefix A');
 
         contentScript.PresetOverlay.onSelectChange('preset-B');
-        // Wait for both onChanged-triggered chains to fully settle (see above).
+        broadcastSettingsChanged({ activePresetId: { newValue: 'preset-B' } });
+        // Wait for both broadcast-triggered chains to fully settle (see above).
         await waitUntilPresetSwitchSettled(false, 'Prefix B');
 
         const ta2 = makeTextarea('message two');
@@ -222,16 +240,12 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     // Root cause under test: resolveGlobalPromptEnabledFromSettings() keys off
     // settings.activePresetId only, but handleChatChange() does NOT always keep
     // activePresetId in sync with the actual bound preset for the destination chat
-    // (content-script.js:231, :252-255, :209-213), and refreshGlobalPromptEnabled()
-    // only runs from the chrome.storage.onChanged listener (content-script.js:130-131),
-    // never from direct SPA navigation. These tests drive the real handleChatChange()
+    // (see handleChatChange() in content/chat-binding-controller.js), and
+    // refreshGlobalPromptEnabled() only runs from applySettingsChanged(), i.e. only from
+    // a DSS_SETTINGS_CHANGED broadcast, never from direct SPA navigation. These tests drive the real handleChatChange()
     // export the same way setupNavigationDetection() does (URL change -> handleChatChange()),
     // via window.history.replaceState + calling handleChatChange() directly, exactly as
     // content-script.binding.spec.js already does for this module.
-
-    function setPathname(path) {
-        window.history.replaceState({}, '', path);
-    }
 
     async function seedBinding(uuid, presetId) {
         await StorageManager.mutateChatPresetMap(map => {

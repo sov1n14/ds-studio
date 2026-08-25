@@ -1,21 +1,11 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
 
 beforeAll(() => {
     // popup.preset-manager.js references the global dsI18n.t(...), so i18n
     // must be loaded and initialized first.
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
-
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.preset-manager.js'), 'utf-8');
-    eval(code);
+    loadI18nOnce();
+    evalPopupScript('popup/popup.preset-manager.js');
 });
 
 beforeEach(async () => {

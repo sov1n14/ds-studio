@@ -1,39 +1,82 @@
+/**
+ * content/mobile-homepage-cleanup.js — homepage cleanup lifecycle behavior.
+ *
+ * The module obtains its master-switch state through the shared toggle pipeline
+ * (content/feature-toggle.js -> DSS_GET_SETTINGS / DSS_SETTINGS_CHANGED), and
+ * delegates mobile detection to content/mobile-device.js. This spec therefore
+ * drives it exclusively through those two seams: the GET_SETTINGS response the
+ * background is stubbed to return, and SETTINGS_CHANGED broadcasts.
+ *
+ * Everything is asserted through DOM state (are the target elements gone?)
+ * rather than through internal call sequences. The mobile-detection truth table
+ * lives in test/unit/mobile-device.spec.js; only the one behavioral consequence
+ * for this feature (a desktop navigator keeps the feature dormant) is asserted
+ * here.
+ */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/settings-message-constants.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Hoisted: stub a desktop navigator before the module is imported.
-//  mobile-homepage-cleanup.js does not call start() at the top level, so this
-//  is only needed to keep _isMobileDevice() returning a predictable value
-//  during the module evaluation phase.
-// ─────────────────────────────────────────────────────────────────────────────
-vi.hoisted(() => {
-    vi.stubGlobal('navigator', { maxTouchPoints: 0, userAgent: 'Chrome Desktop' });
-});
+const MASTER_KEY = 'isEnabled';
+const UNRELATED_KEY = 'isHideThinkingEnabled';
+const TARGET_CLASS = '_9579690';
+const TARGET_SELECTOR = '._9579690';
 
-// Side-effect import: sets window.StorageManager before module is evaluated
-import '../../utils/storage-manager.js';
-import MobileHomepageCleanup from '../../content/mobile-homepage-cleanup.js';
-import StorageManager from '../../utils/storage-manager.js';
+/**
+ * Fresh chrome.runtime.onMessage stub (same shape as the shared mock) plus a
+ * listener count, so "the listener is gone after destroy" is checkable.
+ */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Navigator helpers
-// ─────────────────────────────────────────────────────────────────────────────
+let onMessage;
+let sendMessage;
+let cleanup;
+
+/** Queue the values every GET_SETTINGS round trip resolves with. */
+function respondWith(values) {
+    sendMessage.mockImplementation((_message, callback) => {
+        const response = { ok: true, values };
+        if (typeof callback === 'function') callback(response);
+        return Promise.resolve(response);
+    });
+}
+
+/** Let the pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
+// ── Navigator / location helpers ────────────────────────────────────────────
 
 function stubMobileTouch() {
     vi.stubGlobal('navigator', { maxTouchPoints: 2, userAgent: 'Chrome Desktop' });
 }
 
-function stubMobileUA(ua = 'Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36') {
-    vi.stubGlobal('navigator', { maxTouchPoints: 0, userAgent: ua });
-}
-
 function stubDesktop() {
     vi.stubGlobal('navigator', { maxTouchPoints: 0, userAgent: 'Mozilla/5.0 Chrome Desktop' });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Location helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function stubHomepage() {
     vi.stubGlobal('location', { pathname: '/' });
@@ -43,83 +86,88 @@ function stubNonHomepage(path = '/a/chat/s/some-uuid') {
     vi.stubGlobal('location', { pathname: path });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  DOM helper: add elements with the target class
-// ─────────────────────────────────────────────────────────────────────────────
+// ── DOM helpers ─────────────────────────────────────────────────────────────
 
 function addTargetElements(count = 1) {
     const els = [];
     for (let i = 0; i < count; i++) {
         const el = document.createElement('div');
-        el.className = '_9579690';
+        el.className = TARGET_CLASS;
         document.body.appendChild(el);
         els.push(el);
     }
     return els;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Reset module state
-// ─────────────────────────────────────────────────────────────────────────────
+const targetCount = () => document.querySelectorAll(TARGET_SELECTOR).length;
 
-beforeEach(() => {
-    // Forcibly disable without going through the enable/disable guards
-    if (MobileHomepageCleanup._observer) {
-        MobileHomepageCleanup._observer.disconnect();
-        MobileHomepageCleanup._observer = null;
-    }
-    MobileHomepageCleanup.enabled = false;
-    MobileHomepageCleanup._masterEnabled = false;
+/** MutationObserver records are delivered asynchronously; give them a tick. */
+function settleObserver() {
+    return new Promise((resolve) => setTimeout(resolve, 20));
+}
+
+/**
+ * (Re)load the module under test against the currently stubbed navigator,
+ * location and GET_SETTINGS response. The module auto-starts on load, so the
+ * arrangement must be in place BEFORE calling this.
+ */
+async function load() {
+    if (cleanup) cleanup.destroy();
+
+    // Fresh feature-toggle instance per load: its shared onMessage listener and
+    // its registry are module state, and must attach to this test own stub.
+    vi.resetModules();
+    await import('../../content/mobile-device.js');
+    await import('../../content/feature-toggle.js');
+    const mod = await import('../../content/mobile-homepage-cleanup.js');
+    cleanup = mod.default ?? mod;
+    await flush();
+    return cleanup;
+}
+
+beforeEach(async () => {
     document.body.innerHTML = '';
-    stubDesktop();
+    onMessage = createOnMessageStub();
+    sendMessage = vi.fn();
+    chrome.runtime.onMessage = onMessage;
+    chrome.runtime.sendMessage = sendMessage;
+
+    stubMobileTouch();
     stubHomepage();
+    cleanup = null;
+    // Default arrangement: registered but dormant (master switch off).
+    respondWith({ [MASTER_KEY]: false });
+    await load();
 });
 
 afterEach(() => {
+    if (cleanup) cleanup.destroy();
+    cleanup = null;
+    document.body.innerHTML = '';
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    document.body.innerHTML = '';
-    if (MobileHomepageCleanup._observer) {
-        MobileHomepageCleanup._observer.disconnect();
-        MobileHomepageCleanup._observer = null;
-    }
-    MobileHomepageCleanup.enabled = false;
-    MobileHomepageCleanup._masterEnabled = false;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  1. _isMobileDevice()
+//  1. Device gating (one behavioral case; the detection truth table lives in
+//     test/unit/mobile-device.spec.js)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('_isMobileDevice()', () => {
-    it('returns true when navigator.maxTouchPoints > 0', () => {
-        stubMobileTouch();
-        expect(MobileHomepageCleanup._isMobileDevice()).toBe(true);
-    });
-
-    it('returns true when UA contains "Mobi"', () => {
-        stubMobileUA('Mozilla/5.0 (Linux; Android 10; Mobi) AppleWebKit');
-        expect(MobileHomepageCleanup._isMobileDevice()).toBe(true);
-    });
-
-    it('returns true when UA contains "Android"', () => {
-        stubMobileUA('Mozilla/5.0 (Linux; Android 12; Pixel 6)');
-        expect(MobileHomepageCleanup._isMobileDevice()).toBe(true);
-    });
-
-    it('returns true when UA contains "iPhone"', () => {
-        stubMobileUA('Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)');
-        expect(MobileHomepageCleanup._isMobileDevice()).toBe(true);
-    });
-
-    it('returns true when UA contains "iPad"', () => {
-        stubMobileUA('Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X)');
-        expect(MobileHomepageCleanup._isMobileDevice()).toBe(true);
-    });
-
-    it('returns false when maxTouchPoints is 0 and UA has no mobile keyword', () => {
+describe('device gating', () => {
+    it('a desktop navigator keeps the feature dormant: no cleanup, and a master-on broadcast changes nothing', async () => {
         stubDesktop();
-        expect(MobileHomepageCleanup._isMobileDevice()).toBe(false);
+        respondWith({ [MASTER_KEY]: true });
+        addTargetElements(3);
+
+        await load();
+
+        expect(targetCount()).toBe(3);
+
+        broadcast(change(MASTER_KEY, true));
+        await settleObserver();
+
+        expect(targetCount()).toBe(3);
+        expect(cleanup.enabled).toBe(false);
     });
 });
 
@@ -130,17 +178,17 @@ describe('_isMobileDevice()', () => {
 describe('_isHomepage()', () => {
     it('returns true when pathname is "/"', () => {
         stubHomepage();
-        expect(MobileHomepageCleanup._isHomepage()).toBe(true);
+        expect(cleanup._isHomepage()).toBe(true);
     });
 
     it('returns false for a chat pathname', () => {
         stubNonHomepage('/a/chat/s/some-uuid');
-        expect(MobileHomepageCleanup._isHomepage()).toBe(false);
+        expect(cleanup._isHomepage()).toBe(false);
     });
 
     it('returns false for any non-root pathname', () => {
         stubNonHomepage('/settings');
-        expect(MobileHomepageCleanup._isHomepage()).toBe(false);
+        expect(cleanup._isHomepage()).toBe(false);
     });
 });
 
@@ -151,14 +199,14 @@ describe('_isHomepage()', () => {
 describe('_removeTargetElements()', () => {
     it('removes all elements with class _9579690 from the DOM', () => {
         addTargetElements(3);
-        expect(document.querySelectorAll('._9579690').length).toBe(3);
-        MobileHomepageCleanup._removeTargetElements();
-        expect(document.querySelectorAll('._9579690').length).toBe(0);
+        expect(targetCount()).toBe(3);
+        cleanup._removeTargetElements();
+        expect(targetCount()).toBe(0);
     });
 
     it('does nothing if no target elements exist', () => {
-        expect(() => MobileHomepageCleanup._removeTargetElements()).not.toThrow();
-        expect(document.querySelectorAll('._9579690').length).toBe(0);
+        expect(() => cleanup._removeTargetElements()).not.toThrow();
+        expect(targetCount()).toBe(0);
     });
 });
 
@@ -169,48 +217,52 @@ describe('_removeTargetElements()', () => {
 describe('enable()', () => {
     it('does nothing if not a mobile device', () => {
         stubDesktop();
-        MobileHomepageCleanup.enable();
-        expect(MobileHomepageCleanup.enabled).toBe(false);
-        expect(MobileHomepageCleanup._observer).toBeNull();
+        cleanup.enable();
+        expect(cleanup.enabled).toBe(false);
+        expect(cleanup._observer).toBeNull();
     });
 
-    it('is idempotent — does nothing if already enabled', () => {
-        stubMobileTouch();
-        MobileHomepageCleanup.enable(); // first call
-        const observer = MobileHomepageCleanup._observer;
-        const removeSpy = vi.spyOn(MobileHomepageCleanup, '_removeTargetElements');
-        MobileHomepageCleanup.enable(); // second call — should be a no-op
-        expect(removeSpy).not.toHaveBeenCalled();
-        expect(MobileHomepageCleanup._observer).toBe(observer);
+    it('is idempotent — the second call keeps the same observer', () => {
+        cleanup.enable();
+        const observer = cleanup._observer;
+
+        cleanup.enable();
+
+        expect(cleanup._observer).toBe(observer);
+        expect(cleanup.enabled).toBe(true);
     });
 
     it('sets enabled = true', () => {
-        stubMobileTouch();
-        MobileHomepageCleanup.enable();
-        expect(MobileHomepageCleanup.enabled).toBe(true);
+        cleanup.enable();
+        expect(cleanup.enabled).toBe(true);
     });
 
-    it('calls _removeTargetElements() when on the homepage', () => {
-        stubMobileTouch();
+    it('removes existing target elements when on the homepage', () => {
         stubHomepage();
-        const removeSpy = vi.spyOn(MobileHomepageCleanup, '_removeTargetElements');
-        MobileHomepageCleanup.enable();
-        expect(removeSpy).toHaveBeenCalledOnce();
+        addTargetElements(3);
+
+        cleanup.enable();
+
+        expect(targetCount()).toBe(0);
     });
 
-    it('does NOT call _removeTargetElements() when not on the homepage', () => {
-        stubMobileTouch();
+    it('does NOT remove target elements when not on the homepage', () => {
         stubNonHomepage();
-        const removeSpy = vi.spyOn(MobileHomepageCleanup, '_removeTargetElements');
-        MobileHomepageCleanup.enable();
-        expect(removeSpy).not.toHaveBeenCalled();
+        addTargetElements(3);
+
+        cleanup.enable();
+
+        expect(targetCount()).toBe(3);
     });
 
-    it('calls _startObserver()', () => {
-        stubMobileTouch();
-        const startSpy = vi.spyOn(MobileHomepageCleanup, '_startObserver');
-        MobileHomepageCleanup.enable();
-        expect(startSpy).toHaveBeenCalledOnce();
+    it('starts an observer that clears target elements inserted later', async () => {
+        stubHomepage();
+        cleanup.enable();
+
+        addTargetElements(2);
+        await settleObserver();
+
+        expect(targetCount()).toBe(0);
     });
 });
 
@@ -220,189 +272,141 @@ describe('enable()', () => {
 
 describe('disable()', () => {
     it('is idempotent — does nothing if not enabled', () => {
-        const stopSpy = vi.spyOn(MobileHomepageCleanup, '_stopObserver');
-        MobileHomepageCleanup.disable();
-        expect(stopSpy).not.toHaveBeenCalled();
-        expect(MobileHomepageCleanup.enabled).toBe(false);
+        expect(cleanup.enabled).toBe(false);
+        expect(() => cleanup.disable()).not.toThrow();
+        expect(cleanup.enabled).toBe(false);
+        expect(cleanup._observer).toBeNull();
     });
 
     it('sets enabled = false', () => {
-        stubMobileTouch();
-        MobileHomepageCleanup.enable();
-        expect(MobileHomepageCleanup.enabled).toBe(true);
-        MobileHomepageCleanup.disable();
-        expect(MobileHomepageCleanup.enabled).toBe(false);
+        cleanup.enable();
+        expect(cleanup.enabled).toBe(true);
+        cleanup.disable();
+        expect(cleanup.enabled).toBe(false);
     });
 
-    it('calls _stopObserver()', () => {
-        stubMobileTouch();
-        MobileHomepageCleanup.enable();
-        const stopSpy = vi.spyOn(MobileHomepageCleanup, '_stopObserver');
-        MobileHomepageCleanup.disable();
-        expect(stopSpy).toHaveBeenCalledOnce();
+    it('stops the observer: elements inserted afterwards survive', async () => {
+        stubHomepage();
+        cleanup.enable();
+        cleanup.disable();
+
+        addTargetElements(2);
+        await settleObserver();
+
+        expect(cleanup._observer).toBeNull();
+        expect(targetCount()).toBe(2);
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  7. _startObserver()
+//  6. _startObserver() / _stopObserver()
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('_startObserver()', () => {
     it('creates a MutationObserver when none exists', () => {
-        MobileHomepageCleanup._startObserver();
-        expect(MobileHomepageCleanup._observer).not.toBeNull();
+        cleanup._startObserver();
+        expect(cleanup._observer).not.toBeNull();
     });
 
     it('is idempotent — does not replace an existing observer on second call', () => {
-        MobileHomepageCleanup._startObserver();
-        const first = MobileHomepageCleanup._observer;
-        MobileHomepageCleanup._startObserver();
-        expect(MobileHomepageCleanup._observer).toBe(first);
+        cleanup._startObserver();
+        const first = cleanup._observer;
+        cleanup._startObserver();
+        expect(cleanup._observer).toBe(first);
     });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  8. _stopObserver()
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('_stopObserver()', () => {
     it('disconnects and nullifies the observer', () => {
-        MobileHomepageCleanup._startObserver();
-        const obs = MobileHomepageCleanup._observer;
+        cleanup._startObserver();
+        const obs = cleanup._observer;
         const disconnectSpy = vi.spyOn(obs, 'disconnect');
-        MobileHomepageCleanup._stopObserver();
+        cleanup._stopObserver();
         expect(disconnectSpy).toHaveBeenCalledOnce();
-        expect(MobileHomepageCleanup._observer).toBeNull();
+        expect(cleanup._observer).toBeNull();
     });
 
     it('is idempotent — safe to call when no observer exists', () => {
-        expect(MobileHomepageCleanup._observer).toBeNull();
-        expect(() => MobileHomepageCleanup._stopObserver()).not.toThrow();
+        expect(cleanup._observer).toBeNull();
+        expect(() => cleanup._stopObserver()).not.toThrow();
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  9. start()
+//  7. start() — initial settings read through the toggle pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('start()', () => {
-    it('returns early without touching storage if not a mobile device', async () => {
-        stubDesktop();
-        const getSpy = vi.spyOn(chrome.storage.local, 'get');
-        await MobileHomepageCleanup.start();
-        expect(getSpy).not.toHaveBeenCalled();
-        expect(MobileHomepageCleanup.enabled).toBe(false);
+describe('start() — initial settings', () => {
+    it('removes the homepage target elements when the master switch reads as on', async () => {
+        stubMobileTouch();
+        stubHomepage();
+        respondWith({ [MASTER_KEY]: true });
+        addTargetElements(3);
+
+        await load();
+
+        expect(targetCount()).toBe(0);
     });
 
-    it('reads StorageManager.KEYS.IS_ENABLED from chrome.storage.local', async () => {
+    it('leaves the target elements alone when the master switch reads as off', async () => {
         stubMobileTouch();
-        const getSpy = vi.spyOn(chrome.storage.local, 'get');
-        await MobileHomepageCleanup.start();
-        expect(getSpy).toHaveBeenCalledWith(
-            [StorageManager.KEYS.IS_ENABLED],
-            expect.any(Function)
-        );
-    });
+        stubHomepage();
+        respondWith({ [MASTER_KEY]: false });
+        addTargetElements(3);
 
-    it('sets _masterEnabled = true when storage returns true', async () => {
-        stubMobileTouch();
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await MobileHomepageCleanup.start();
-        expect(MobileHomepageCleanup._masterEnabled).toBe(true);
-    });
+        await load();
 
-    it('sets _masterEnabled = false when storage returns false', async () => {
-        stubMobileTouch();
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        await MobileHomepageCleanup.start();
-        expect(MobileHomepageCleanup._masterEnabled).toBe(false);
-    });
-
-    it('defaults _masterEnabled to false when key is absent', async () => {
-        stubMobileTouch();
-        // storage is cleared in beforeEach — key is absent
-        await MobileHomepageCleanup.start();
-        expect(MobileHomepageCleanup._masterEnabled).toBe(false);
-    });
-
-    it('calls _setupStorageListener()', async () => {
-        stubMobileTouch();
-        const listenerSpy = vi.spyOn(MobileHomepageCleanup, '_setupStorageListener');
-        await MobileHomepageCleanup.start();
-        expect(listenerSpy).toHaveBeenCalledOnce();
-    });
-
-    it('calls enable() when _masterEnabled is true', async () => {
-        stubMobileTouch();
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        const enableSpy = vi.spyOn(MobileHomepageCleanup, 'enable');
-        await MobileHomepageCleanup.start();
-        expect(enableSpy).toHaveBeenCalledOnce();
-    });
-
-    it('does NOT call enable() when _masterEnabled is false', async () => {
-        stubMobileTouch();
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        const enableSpy = vi.spyOn(MobileHomepageCleanup, 'enable');
-        await MobileHomepageCleanup.start();
-        expect(enableSpy).not.toHaveBeenCalled();
+        expect(targetCount()).toBe(3);
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  10. _setupStorageListener() — storage change simulation
+//  8. SETTINGS_CHANGED broadcasts
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('_setupStorageListener()', () => {
-    beforeEach(() => {
-        // Register the listener fresh for each test in this group
-        MobileHomepageCleanup._setupStorageListener();
+describe('SETTINGS_CHANGED broadcasts', () => {
+    it('master switch turning on resumes cleanup', () => {
+        addTargetElements(3);
+        expect(targetCount()).toBe(3);
+
+        broadcast(change(MASTER_KEY, true));
+
+        expect(targetCount()).toBe(0);
     });
 
-    it('calls enable() when IS_ENABLED changes to true', async () => {
-        stubMobileTouch();
-        const enableSpy = vi.spyOn(MobileHomepageCleanup, 'enable');
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await new Promise(resolve => setTimeout(resolve, 10));
-        expect(enableSpy).toHaveBeenCalled();
+    it('master switch turning off stops cleanup: later insertions survive', async () => {
+        broadcast(change(MASTER_KEY, true));
+        addTargetElements(1);
+        await settleObserver();
+        expect(targetCount()).toBe(0);
+
+        broadcast(change(MASTER_KEY, false));
+
+        addTargetElements(2);
+        await settleObserver();
+        expect(targetCount()).toBe(2);
     });
 
-    it('calls disable() when IS_ENABLED changes to false', async () => {
-        stubMobileTouch();
-        // Pre-enable so disable() actually executes
-        MobileHomepageCleanup.enable();
-        const disableSpy = vi.spyOn(MobileHomepageCleanup, 'disable');
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        await new Promise(resolve => setTimeout(resolve, 10));
-        expect(disableSpy).toHaveBeenCalled();
+    it('an unrelated key changes nothing', async () => {
+        addTargetElements(3);
+
+        broadcast(change(UNRELATED_KEY, true));
+        await settleObserver();
+
+        expect(targetCount()).toBe(3);
+        expect(cleanup.enabled).toBe(false);
     });
 
-    it('ignores changes to other keys', async () => {
-        stubMobileTouch();
-        const enableSpy = vi.spyOn(MobileHomepageCleanup, 'enable');
-        const disableSpy = vi.spyOn(MobileHomepageCleanup, 'disable');
-        // Write a key that is not IS_ENABLED
-        await chrome.storage.local.set({ someOtherKey: true });
-        await new Promise(resolve => setTimeout(resolve, 10));
-        expect(enableSpy).not.toHaveBeenCalled();
-        expect(disableSpy).not.toHaveBeenCalled();
-    });
+    it('a master-switch-off change reported for the sync area is ignored', async () => {
+        broadcast(change(MASTER_KEY, true));
+        expect(cleanup.enabled).toBe(true);
 
-    it('ignores changes in non-local namespaces', async () => {
-        stubMobileTouch();
-        const enableSpy = vi.spyOn(MobileHomepageCleanup, 'enable');
-        const disableSpy = vi.spyOn(MobileHomepageCleanup, 'disable');
-        // Retrieve registered listeners from the InMemoryStorageMock instance and
-        // invoke the most recently added one with the 'sync' namespace directly.
-        // chrome.storage.local IS the InMemoryStorageMock instance, so _listeners
-        // is accessible as chrome.storage.local._listeners.
-        const storedListeners = chrome.storage.local._listeners ?? [];
-        const lastListener = [...storedListeners].pop();
-        if (lastListener) {
-            lastListener({ [StorageManager.KEYS.IS_ENABLED]: { newValue: true } }, 'sync');
-        }
-        await new Promise(resolve => setTimeout(resolve, 10));
-        expect(enableSpy).not.toHaveBeenCalled();
-        expect(disableSpy).not.toHaveBeenCalled();
+        broadcast(change(MASTER_KEY, false), 'sync');
+
+        // Still active: elements inserted after the ignored broadcast are cleared.
+        addTargetElements(2);
+        await settleObserver();
+        expect(targetCount()).toBe(0);
+        expect(cleanup.enabled).toBe(true);
     });
 });

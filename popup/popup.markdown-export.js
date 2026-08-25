@@ -16,23 +16,24 @@ function createMarkdownExportManager(ctx) {
     function bindExportButton(exportMdBtn, includeThinkingToggle, includeReferencesToggle) {
         if (!exportMdBtn) return;
         exportMdBtn.addEventListener('click', async () => {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs[0] && tabs[0].url && tabs[0].url.includes('chat.deepseek.com')) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: "EXPORT_MARKDOWN",
-                    includeThinking:   includeThinkingToggle   ? includeThinkingToggle.checked   : true,
-                    includeReferences: includeReferencesToggle ? includeReferencesToggle.checked : true
-                }).catch(() => {
-                    ctx.Toast.show(dsI18n.t('exportFailedRefreshToast'));
-                });
-            } else {
+            const activeTab = await DSSTabControl.queryActiveDeepseekTab();
+            if (!activeTab) {
                 await ctx.Modal.confirm({
                     title: dsI18n.t('notOnDeepseekTitle'),
                     message: dsI18n.t('notOnDeepseekMessage'),
                     confirmText: dsI18n.t('confirmButton'),
                     cancelText: null
                 });
+                return;
             }
+
+            // 內容腳本收到匯出指令後會同步回覆 ack；沒有 ack 代表分頁尚未注入內容腳本
+            const ack = await DSSTabControl.sendToTab(activeTab.id, {
+                action: "EXPORT_MARKDOWN",
+                includeThinking:   includeThinkingToggle   ? includeThinkingToggle.checked   : true,
+                includeReferences: includeReferencesToggle ? includeReferencesToggle.checked : true
+            });
+            if (!ack) ctx.Toast.show(dsI18n.t('exportFailedRefreshToast'));
         });
     }
 

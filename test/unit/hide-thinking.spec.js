@@ -1,7 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+/**
+ * content/hide-thinking.js — collapse behavior plus toggle gating.
+ *
+ * Settings surface: the module reads no storage. Master switch + its own key
+ * (dsHideThinking) are gated by content/feature-toggle.js, which fetches the
+ * initial values with DSS_GET_SETTINGS and reacts to DSS_SETTINGS_CHANGED
+ * broadcasts from background. Tests drive both through chrome.runtime stubs.
+ *
+ * feature-toggle holds its registry and shared onMessage listener in module
+ * scope, so each test loads a fresh module graph (vi.resetModules + dynamic
+ * import) bound to that test's stubs -- same pattern as width-feature.spec.js.
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/settings-message-constants.js';
+import '../../content/ds-selectors.js';
 import '../../utils/storage-manager.js';
-import HideThinking from '../../content/hide-thinking.js';
 import StorageManager from '../../utils/storage-manager.js';
+
+const MASTER_KEY = 'isEnabled';
+const OWN_KEY = StorageManager.KEYS.HIDE_THINKING;
 
 function createExpandedContainer() {
     const container = document.createElement('div');
@@ -31,12 +47,74 @@ function createCollapsedContainer() {
     return container;
 }
 
+/** Fresh chrome.runtime.onMessage stub with a fireable listener set. */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
+
+let onMessage;
+let sendMessage;
+let HideThinking;
+
+/** Queue the values every GET_SETTINGS round trip resolves with. */
+function respondWith(values) {
+    sendMessage.mockImplementation((_message, callback) => {
+        const response = { ok: true, values };
+        if (typeof callback === 'function') callback(response);
+        return Promise.resolve(response);
+    });
+}
+
+/** Let the pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
+/** Load a fresh HideThinking whose auto-start sees `values` as its settings. */
+async function loadHideThinking(values = { [MASTER_KEY]: false, [OWN_KEY]: false }) {
+    respondWith(values);
+    vi.resetModules();
+    await import('../../content/feature-toggle.js');
+    HideThinking = (await import('../../content/hide-thinking.js')).default;
+    await flush();
+    return HideThinking;
+}
+
 describe('HideThinking', () => {
-    beforeEach(() => {
-        HideThinking.disable();
-        HideThinking.enabled = false;
-        HideThinking._masterEnabled = false;
+    beforeEach(async () => {
         document.body.innerHTML = '';
+        onMessage = createOnMessageStub();
+        sendMessage = vi.fn();
+        chrome.runtime.onMessage = onMessage;
+        chrome.runtime.sendMessage = sendMessage;
+        await loadHideThinking();
+    });
+
+    afterEach(() => {
+        if (HideThinking) HideThinking.disable();
+        document.body.innerHTML = '';
+        vi.restoreAllMocks();
     });
 
     describe('tryCollapseButton()', () => {
@@ -190,32 +268,31 @@ describe('HideThinking', () => {
         });
     });
 
-    describe('storage listener', () => {
+    describe('settings broadcasts', () => {
         it('enables when dsHideThinking turns on while master is enabled', async () => {
-            HideThinking._masterEnabled = true;
-            HideThinking.enabled = false;
-            await chrome.storage.local.set({
-                [StorageManager.KEYS.IS_ENABLED]: true,
-                [HideThinking.STORAGE_KEY]: false,
-            });
-            await chrome.storage.local.set({ [HideThinking.STORAGE_KEY]: true });
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            await loadHideThinking({ [MASTER_KEY]: true, [OWN_KEY]: false });
+            expect(HideThinking.enabled).toBe(false);
+
+            broadcast(change(OWN_KEY, true, false));
+
             expect(HideThinking.enabled).toBe(true);
         });
 
         it('disables when dsHideThinking turns off', async () => {
-            HideThinking._masterEnabled = true;
-            HideThinking.enable();
-            await chrome.storage.local.set({ [HideThinking.STORAGE_KEY]: false });
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            await loadHideThinking({ [MASTER_KEY]: true, [OWN_KEY]: true });
+            expect(HideThinking.enabled).toBe(true);
+
+            broadcast(change(OWN_KEY, false, true));
+
             expect(HideThinking.enabled).toBe(false);
         });
 
-        it('disables when master switch turns off', async () => {
-            HideThinking._masterEnabled = true;
-            HideThinking.enable();
-            await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-            await new Promise((resolve) => setTimeout(resolve, 10));
+        it('disables when the master switch turns off', async () => {
+            await loadHideThinking({ [MASTER_KEY]: true, [OWN_KEY]: true });
+            expect(HideThinking.enabled).toBe(true);
+
+            broadcast(change(MASTER_KEY, false, true));
+
             expect(HideThinking.enabled).toBe(false);
         });
     });

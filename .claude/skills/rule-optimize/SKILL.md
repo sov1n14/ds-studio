@@ -1,6 +1,6 @@
 ---
 name: rule-optimize
-description: Audit and rewrite AI rule files for clarity and best practices. Use when optimizing system prompts, cleaning Claude rules, or resolving rule conflicts.
+description: Use when editing or auditing instruction files aimed at an AI — CLAUDE.md, a system prompt, agent frontmatter, a SKILL.md rule body — or when the user says "優化規則", asks why two rules conflict, or wants a bloated prompt trimmed. Covers diagnosis (signal-to-noise, altitude, conflicts, priority marking) and the rewrite itself. Not for optimizing code or user-facing docs.
 ---
 
 # META-RULE: Rule Optimization Protocol

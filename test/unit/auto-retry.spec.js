@@ -1,9 +1,21 @@
+/**
+ * content/auto-retry.js — retry-button detection, polling and master-switch gating.
+ *
+ * Settings surface: the module owns no storage access. It hands master-switch
+ * gating to content/feature-toggle.js, which asks background for the initial
+ * value (DSS_GET_SETTINGS) and reacts to DSS_SETTINGS_CHANGED broadcasts.
+ * Tests therefore drive it through chrome.runtime: a stubbed sendMessage for
+ * the initial GET, and onMessage.callListeners() for later changes.
+ *
+ * feature-toggle keeps its registry and its shared onMessage listener in module
+ * scope, so every test loads a fresh copy (vi.resetModules + dynamic import)
+ * bound to that test's chrome stubs.
+ */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/settings-message-constants.js';
 
-// Side-effect import: sets window.StorageManager before module is evaluated
-import '../../utils/storage-manager.js';
-import AutoRetry from '../../content/auto-retry.js';
-import StorageManager from '../../utils/storage-manager.js';
+const MASTER_KEY = 'isEnabled';
+const UNRELATED_KEY = 'dsHideThinking';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  DOM helpers
@@ -27,29 +39,88 @@ function addFallbackOnlyButton() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Reset module state
+//  Messaging harness (same shape as width-feature.spec.js)
 // ─────────────────────────────────────────────────────────────────────────────
 
-beforeEach(() => {
-    if (AutoRetry._timer) {
+/** Fresh chrome.runtime.onMessage stub with a fireable listener set. */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
+
+let onMessage;
+let sendMessage;
+let AutoRetry;
+
+/** Queue the values every GET_SETTINGS round trip resolves with. */
+function respondWith(values) {
+    sendMessage.mockImplementation((_message, callback) => {
+        const response = { ok: true, values };
+        if (typeof callback === 'function') callback(response);
+        return Promise.resolve(response);
+    });
+}
+
+/** Let the pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Storage-change payload shape: { key: { oldValue, newValue } }. */
+function change(key, newValue, oldValue) {
+    return { [key]: { oldValue, newValue } };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    onMessage.callListeners(
+        { type: globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
+/**
+ * Load a fresh AutoRetry (and a fresh feature-toggle) whose module-load
+ * auto-start sees `values` as the answer to its initial GET_SETTINGS.
+ */
+async function loadAutoRetry(values = { [MASTER_KEY]: false }) {
+    respondWith(values);
+    vi.resetModules();
+    await import('../../content/feature-toggle.js');
+    AutoRetry = (await import('../../content/auto-retry.js')).default;
+    await flush();
+    return AutoRetry;
+}
+
+function stopTimer() {
+    if (AutoRetry && AutoRetry._timer) {
         clearInterval(AutoRetry._timer);
         AutoRetry._timer = null;
     }
-    AutoRetry.enabled = false;
-    AutoRetry._masterEnabled = false;
+    if (AutoRetry) AutoRetry.enabled = false;
+}
+
+beforeEach(async () => {
     document.body.innerHTML = '';
+    onMessage = createOnMessageStub();
+    sendMessage = vi.fn();
+    chrome.runtime.onMessage = onMessage;
+    chrome.runtime.sendMessage = sendMessage;
+    await loadAutoRetry();
 });
 
 afterEach(() => {
+    stopTimer();
     vi.restoreAllMocks();
     vi.useRealTimers();
     document.body.innerHTML = '';
-    if (AutoRetry._timer) {
-        clearInterval(AutoRetry._timer);
-        AutoRetry._timer = null;
-    }
-    AutoRetry.enabled = false;
-    AutoRetry._masterEnabled = false;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,64 +254,58 @@ describe('timer behaviour', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  5. start() — master-switch integration
+//  5. start() — master-switch integration over the messaging pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('start()', () => {
-    it('reads StorageManager.KEYS.IS_ENABLED from chrome.storage.local', async () => {
-        const getSpy = vi.spyOn(chrome.storage.local, 'get');
-        await AutoRetry.start();
-        expect(getSpy).toHaveBeenCalledWith(
-            [StorageManager.KEYS.IS_ENABLED],
-            expect.any(Function)
-        );
+    it('asks background for the master key and nothing else', async () => {
+        sendMessage.mockClear();
+
+        AutoRetry.start();
+        await flush();
+
+        expect(sendMessage).toHaveBeenCalledWith({
+            type: globalThis.DSS_SETTINGS_MSG.GET_SETTINGS,
+            keys: [MASTER_KEY],
+        });
     });
 
-    it('enables when storage returns isEnabled: true', async () => {
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await AutoRetry.start();
-        expect(AutoRetry._masterEnabled).toBe(true);
+    it('enables when background reports isEnabled: true', async () => {
+        await loadAutoRetry({ [MASTER_KEY]: true });
+
         expect(AutoRetry.enabled).toBe(true);
     });
 
-    it('stays disabled when storage returns isEnabled: false', async () => {
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        await AutoRetry.start();
-        expect(AutoRetry._masterEnabled).toBe(false);
-        expect(AutoRetry.enabled).toBe(false);
-    });
+    it('stays disabled when background reports isEnabled: false', async () => {
+        await loadAutoRetry({ [MASTER_KEY]: false });
 
-    it('calls _setupStorageListener()', async () => {
-        const listenerSpy = vi.spyOn(AutoRetry, '_setupStorageListener');
-        await AutoRetry.start();
-        expect(listenerSpy).toHaveBeenCalledOnce();
+        expect(AutoRetry.enabled).toBe(false);
     });
 });
 
-describe('_setupStorageListener() — storage change simulation', () => {
-    beforeEach(() => {
-        AutoRetry._setupStorageListener();
-    });
+describe('SETTINGS_CHANGED broadcasts', () => {
+    it('enables when the master key changes to true', async () => {
+        await loadAutoRetry({ [MASTER_KEY]: false });
 
-    it('enables when IS_ENABLED changes to true', async () => {
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: true });
-        await new Promise(resolve => setTimeout(resolve, 10));
+        broadcast(change(MASTER_KEY, true, false));
+
         expect(AutoRetry.enabled).toBe(true);
     });
 
-    it('disables when IS_ENABLED changes to false', async () => {
-        AutoRetry.enable();
-        await chrome.storage.local.set({ [StorageManager.KEYS.IS_ENABLED]: false });
-        await new Promise(resolve => setTimeout(resolve, 10));
+    it('disables when the master key changes to false', async () => {
+        await loadAutoRetry({ [MASTER_KEY]: true });
+        expect(AutoRetry.enabled).toBe(true);
+
+        broadcast(change(MASTER_KEY, false, true));
+
         expect(AutoRetry.enabled).toBe(false);
     });
 
-    it('ignores changes to other keys', async () => {
-        const enableSpy = vi.spyOn(AutoRetry, 'enable');
-        const disableSpy = vi.spyOn(AutoRetry, 'disable');
-        await chrome.storage.local.set({ someOtherKey: true });
-        await new Promise(resolve => setTimeout(resolve, 10));
-        expect(enableSpy).not.toHaveBeenCalled();
-        expect(disableSpy).not.toHaveBeenCalled();
+    it('ignores a change naming only other keys', async () => {
+        await loadAutoRetry({ [MASTER_KEY]: false });
+
+        broadcast(change(UNRELATED_KEY, true, false));
+
+        expect(AutoRetry.enabled).toBe(false);
     });
 });

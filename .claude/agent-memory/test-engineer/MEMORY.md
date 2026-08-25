@@ -1,1 +1,1 @@
-- [Vitest fake-timers pitfalls](vitest-fake-timers-pitfalls.md) — chrome.storage mock deadlock, MO flakiness across disable/enable churn, MO delivery silently dropped when another timer pending
+- [Vitest dynamic import red-phase quirk](vitest_dynamic_import_red.md) — missing-module import() fails whole suite at collection, not per-test; still valid red.

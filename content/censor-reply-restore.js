@@ -3,26 +3,56 @@
  * 攔截 XHR SSE 回應、偵測 DOM 審查，並將原始模型回覆重新注入頁面。
  *
  * 載入順序（manifest.json 中 bundle 必須先於 entry）：
- *   1. censor-reply-restore.markdown.js    → globalThis.__DS_CensorReplyRestore_markdown
- *   2. censor-reply-restore.dom.js         → globalThis.__DS_CensorReplyRestore_dom
- *   3. censor-reply-restore.thinkblock.js  → globalThis.__DS_CensorReplyRestore_thinkblock
- *   4. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
- *   5. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
+ *   1. censor-reply-restore.keymap.js      → globalThis.__DS_CensorKeyToMessageIdMap
+ *   2. censor-reply-restore.markdown.js    → globalThis.__DS_CensorReplyRestore_markdown
+ *   3. censor-reply-restore.dom.js         → globalThis.__DS_CensorReplyRestore_dom
+ *   4. censor-reply-restore.thinkblock.js  → globalThis.__DS_CensorReplyRestore_thinkblock
+ *   5. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
+ *   6. censor-reply-restore.js             （本檔，Object.assign 合入以上四個 bundle）
  */
+// Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
+var __DS_CensorChatSessionId = (typeof globalThis !== 'undefined' ? globalThis : window).DSSChatSessionId ||
+    (typeof require !== 'undefined' ? require('./chat-session-id.js') : {});
+
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+var __DS_CensorSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
+// key <-> messageId 雙向對應表（瀏覽器：censor-reply-restore.keymap.js 在前載入；Node.js 測試：直接 require）
+var __DS_CensorKeyToMessageIdMap = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_CensorKeyToMessageIdMap ||
+    (typeof require !== 'undefined' ? require('./censor-reply-restore.keymap.js') : null);
+
 const CensorReplyRestore = {
-    RESTORED_MESSAGES_KEY: 'restored_messages',
     STORAGE_MAX_ENTRIES: 200,
 
     enabled: false,
     _observer: null,
-    _xhrHooked: false,
+    _isFragmentListenerStarted: false,
     _pendingQueue: [],
-    _keyToMessageId: new Map(),
+    // 實際儲存體；外部一律透過下方存取子讀寫 _keyToMessageId。
+    __keyToMessageIdStore: new __DS_CensorKeyToMessageIdMap(),
+    // 整份重新指派（切換聊天、測試 fixture）時自動包成 KeyToMessageIdMap，確保反向索引永遠與當下這張表一致。
+    get _keyToMessageId() {
+        return this.__keyToMessageIdStore;
+    },
+    set _keyToMessageId(map) {
+        this.__keyToMessageIdStore = map instanceof __DS_CensorKeyToMessageIdMap ? map : new __DS_CensorKeyToMessageIdMap(map);
+    },
     _restoredMessages: {},
     // 記錄儲存記錄是否已全域套用過一次（避免每次 MutationObserver 觸發都做完整掃描）
     _storedRecordsApplied: false,
     // 追蹤目前已知的 session ID，用於 SPA 切換聊天時清除過期執行期狀態
     _currentSessionId: null,
+
+    /**
+     * 反查目前對應到該 messageId 的 virtual-list-item key。純查詢函式，不修改任何狀態。
+     * @param {string|number} messageId
+     * @returns {string|null}
+     */
+    _findKeyForMessageId(messageId) {
+        if (messageId === null || messageId === undefined) return null;
+        return this._keyToMessageId.findKey(messageId);
+    },
 
     // ── Normalize ───────────────────────────
 
@@ -47,9 +77,7 @@ const CensorReplyRestore = {
     //   - non-null → different non-null：切換到另一個聊天，清除所有執行期狀態
     //   - non-null → null：離開聊天頁面（如聊天列表），清除所有執行期狀態
     _checkSessionChange() {
-        var newSessionId = null;
-        var urlMatch = window.location.pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-        if (urlMatch) newSessionId = urlMatch[1];
+        var newSessionId = __DS_CensorChatSessionId.extractChatSessionId();
 
         if (newSessionId === this._currentSessionId) return;
 
@@ -67,13 +95,13 @@ const CensorReplyRestore = {
     },
 
     _getPrecedingUserPromptKey(assistantMsgEl) {
-        const virtualItem = assistantMsgEl.closest('[data-virtual-list-item-key]');
+        const virtualItem = assistantMsgEl.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR);
         if (!virtualItem) return null;
         let prev = virtualItem.previousElementSibling;
         while (prev) {
-            const msgEl = prev.querySelector('.ds-message');
+            const msgEl = prev.querySelector(__DS_CensorSelectors.MESSAGE_SELECTOR);
             if (msgEl) {
-                const userMsg = msgEl.querySelector('.fbb737a4');
+                const userMsg = msgEl.querySelector(__DS_CensorSelectors.USER_CONTENT_SELECTOR);
                 if (userMsg) {
                     return this._normalizePrompt(msgEl.textContent);
                 }
@@ -90,30 +118,30 @@ const CensorReplyRestore = {
     _isCensored(toolbarGroupEl) {
         if (!toolbarGroupEl || !toolbarGroupEl.querySelectorAll) return false;
         // 舊設計系統：.ds-icon-button；新設計系統：.ds-button.ds-button--icon
-        let buttons = toolbarGroupEl.querySelectorAll('.ds-icon-button');
+        let buttons = toolbarGroupEl.querySelectorAll(__DS_CensorSelectors.ICON_BUTTON_SELECTOR);
         if (buttons.length === 0) {
-            buttons = toolbarGroupEl.querySelectorAll('[role="button"].ds-button.ds-button--icon');
+            buttons = toolbarGroupEl.querySelectorAll(__DS_CensorSelectors.ICON_BUTTON_ROLE_SELECTOR);
         }
         if (buttons.length < 5) return false;
         const isDisabled = (btn) =>
             // 舊版：同時需要 class 與 aria 屬性
-            (btn.classList.contains('ds-icon-button--disabled') && btn.getAttribute('aria-disabled') === 'true') ||
+            (btn.classList.contains(__DS_CensorSelectors.ICON_BUTTON_DISABLED_CLASS) && btn.getAttribute('aria-disabled') === 'true') ||
             // 新版：僅需 ds-button--disabled class（部分停用按鈕不帶 aria-disabled 屬性）
-            btn.classList.contains('ds-button--disabled');
+            btn.classList.contains(__DS_CensorSelectors.BUTTON_DISABLED_CLASS);
         return isDisabled(buttons[1]) && isDisabled(buttons[4]);
     },
 
     _getToolbarGroup(messageEl) {
         // 工具欄是 messageEl 的兄弟元素 — 在虛擬列表項目容器中搜尋
-        const container = messageEl.closest('[data-virtual-list-item-key]') || messageEl.parentElement;
+        const container = messageEl.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR) || messageEl.parentElement;
         if (container) {
-            const toolbar = container.querySelector('.ds-flex._965abe9');
+            const toolbar = container.querySelector(__DS_CensorSelectors.MESSAGE_TOOLBAR_SELECTOR);
             if (toolbar) return toolbar;
 
             // 後備方案：尋找容器中任何有 5 個以上 icon buttons 的 .ds-flex
-            const allFlex = container.querySelectorAll('.ds-flex');
+            const allFlex = container.querySelectorAll(__DS_CensorSelectors.FLEX_ROW_SELECTOR);
             for (let i = 0; i < allFlex.length; i++) {
-                if (allFlex[i].querySelectorAll('.ds-icon-button, [role="button"].ds-button.ds-button--icon').length >= 5) return allFlex[i];
+                if (allFlex[i].querySelectorAll(__DS_CensorSelectors.ICON_BUTTON_ANY_SELECTOR).length >= 5) return allFlex[i];
             }
         }
 
@@ -156,49 +184,21 @@ const CensorReplyRestore = {
 
         // MutationObserver 可能已經在 postMessage 傳遞之前就觸發了。
         // 現在 pendingQueue 中有了 messageId，再手動掃描一遍。
-        var msgs = document.querySelectorAll('.ds-message._63c77b1');
+        var msgs = document.querySelectorAll(__DS_CensorSelectors.ASSISTANT_MESSAGE_SELECTOR);
         for (var mi = 0; mi < msgs.length; mi++) {
             this._tryRestoreMessage(msgs[mi]);
         }
     },
 
     // ────────────────────────────────────────────
-    // Subsystem A: XHR hook (main-world injection)
+    // Subsystem A: 接收 MAIN world 送回的片段
+    // （MAIN world 腳本由 content/main-world-injector.js 於啟動時統一注入）
     // ────────────────────────────────────────────
 
-    _installXhrHook() {
-        if (this._xhrHooked) return;
-        this._xhrHooked = true;
-
-        if (typeof document === 'undefined' || !document.documentElement) {
-            return;
-        }
-
-        try {
-            // Inject sse-parser.js first (dependency of censor-xhr-hook.js)
-            var sseParserScript = document.createElement('script');
-            sseParserScript.src = chrome.runtime.getURL('content/sse-parser.js');
-            document.documentElement.appendChild(sseParserScript);
-            sseParserScript.remove();
-
-            var script = document.createElement('script');
-            script.src = chrome.runtime.getURL('content/censor-xhr-hook.js');
-            document.documentElement.appendChild(script);
-            script.remove();
-
-            // 注入 history navigation hook，補強 Navigation API 不穩定的 SPA 導航偵測
-            var historyHookScript = document.createElement('script');
-            historyHookScript.src = chrome.runtime.getURL('content/temporary-chat-history-hook.js');
-            document.documentElement.appendChild(historyHookScript);
-            historyHookScript.remove();
-
-            var fiberScript = document.createElement('script');
-            fiberScript.src = chrome.runtime.getURL('content/temporary-chat-fiber-delete.js');
-            document.documentElement.appendChild(fiberScript);
-            fiberScript.remove();
-        } catch (e) {
-            return;
-        }
+    _startFragmentListener() {
+        if (this._isFragmentListenerStarted) return;
+        if (typeof window === 'undefined') return;
+        this._isFragmentListenerStarted = true;
 
         window.addEventListener('message', (e) => {
             if (e.source !== window) return;
@@ -235,13 +235,13 @@ const CensorReplyRestore = {
 
     _scanNode(node) {
         const messages = node.querySelectorAll
-            ? node.querySelectorAll('.ds-message')
+            ? node.querySelectorAll(__DS_CensorSelectors.MESSAGE_SELECTOR)
             : [];
         for (const msgEl of messages) {
             this._tryRestoreMessage(msgEl);
         }
 
-        if (node.classList && node.classList.contains('ds-message')) {
+        if (node.classList && node.classList.contains(__DS_CensorSelectors.MESSAGE_CLASS)) {
             this._tryRestoreMessage(node);
             return;
         }
@@ -249,9 +249,9 @@ const CensorReplyRestore = {
         // Node 既不是 .ds-message 也不包含任何 .ds-message — 檢查它是否被添加到一個
         // 已經有兄弟 .ds-message 的虛擬列表項目內（例如，工具欄在消息之後添加）
         if (node.closest && messages.length === 0) {
-            const virtualItem = node.closest('[data-virtual-list-item-key]');
+            const virtualItem = node.closest(__DS_CensorSelectors.VIRTUAL_ITEM_KEY_SELECTOR);
             if (virtualItem) {
-                const siblingMsg = virtualItem.querySelector('.ds-message');
+                const siblingMsg = virtualItem.querySelector(__DS_CensorSelectors.MESSAGE_SELECTOR);
                 if (siblingMsg) {
                     this._tryRestoreMessage(siblingMsg);
                 }
@@ -260,7 +260,7 @@ const CensorReplyRestore = {
     },
 
     applyToExisting() {
-        const messages = document.querySelectorAll('.ds-message._63c77b1');
+        const messages = document.querySelectorAll(__DS_CensorSelectors.ASSISTANT_MESSAGE_SELECTOR);
         messages.forEach((el) => this._tryRestoreMessage(el));
         this._tryRestoreFromStoredRecords();
     },
@@ -272,7 +272,7 @@ const CensorReplyRestore = {
     async clearAllRestoredMessages() {
         this._restoredMessages = {};
         this._keyToMessageId.clear();
-        await StorageManager.saveRestoredMessages({});
+        await StorageManager.clearRestoredMessages();
     },
 
     enable() {
@@ -280,7 +280,7 @@ const CensorReplyRestore = {
             return;
         }
         this.enabled = true;
-        this._installXhrHook();
+        this._startFragmentListener();
         this.applyToExisting();
         this._startObserver();
     },

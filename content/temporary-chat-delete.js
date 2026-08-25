@@ -1,16 +1,23 @@
 /**
- * DS studio — Temporary Chat Delete
- * 單一職責：管理臨時對話的刪除邏輯。
+ * DS studio — Temporary Chat Delete（入口檔）
+ * 單一職責：組合各部件、擁有監聽器生命週期與初始化流程。
  * 臨時對話的定義：切換開啟時，由 create + completion API 共同觸發標記的對話。
  * 歷史對話（直接導航至已存在對話）永遠不會被刪除。
- * 常數由 temporary-chat-constants.js 在前載入提供。
- * 刪除 API 由 temporary-chat-delete-api.js 提供（TemporaryChatDeleteApi）。
+ *
+ * 載入順序（manifest.json 必須依此順序）：
+ *   1. temporary-chat-constants.js   （常數）
+ *   2. temporary-chat-enabled-flag.js（啟用旗標，經 background 設定路由；需 utils/settings-message-constants.js 先行載入）
+ *   3. temporary-chat-pending-store.js / temporary-chat-delete-api.js
+ *   4. temporary-chat-delete.tracking.js
+ *   5. temporary-chat-delete.coordinator.js
+ *   6. temporary-chat-delete.handlers.js
+ *   7. temporary-chat-delete.js      （本檔）
  */
 
 const TemporaryChatDelete = (() => {
     'use strict';
 
-    // ── 常數參照（由 temporary-chat-constants.js 在前載入） ──────────────────
+    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
     const _getConst = (name, fallback) =>
         (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
             ? globalThis[name]
@@ -18,453 +25,135 @@ const TemporaryChatDelete = (() => {
                 ? window[name]
                 : fallback;
 
-    // ── 私有模組狀態 ─────────────────────────────────────────────────────────
-    let _capturedAuthToken = null;
-
-    // 追蹤中的臨時對話 UUID（null 表示無追蹤；同步至 sessionStorage 以跨刷新保存）
-    let _trackedTemporaryUuid = null;
-
-    // Gap 1：啟用旗標快取（由 chrome.storage.session 同步，取代 sessionStorage 讀取）
-    let _enabledFlagCache = false;
-
-    // Gap 2：co-occurrence 視窗信號旗標
-    let _createDetected = false;     // 偵測到 create API 請求
-    let _completionDetected = false; // 偵測到 completion API 請求
-
-    // 當 create + completion 在 1000ms 內同時出現時設為 true，觸發 UUID 標記
-    let _isPendingCreate = false;
-
-    // co-occurrence 超時計時器 handle
-    let _coOccurrenceTimer = null;
-
-    // Navigation API navigate 事件中設定，阻止 beforeunload 重複刪除同一次離開
-    let _suppressNextUnloadDelete = false;
-
-    // 鍵盤補充刷新旗標（F5 / Ctrl+R / Cmd+R）
-    let _isKeyboardRefresh = false;
-
-    // 監聽器是否已掛載（避免重複 add/remove）
-    let _isListening = false;
-
-    // ── sessionStorage 工具（UUID 追蹤用，跨刷新保存） ───────────────────────
+    const _root = (typeof globalThis !== 'undefined') ? globalThis : window;
 
     /**
-     * 從 sessionStorage 讀取追蹤中的臨時對話 UUID。
-     * @returns {string|null}
+     * 取得部件 bundle，缺少時以載入順序錯誤明確失敗。
+     * @param {string} globalName
      */
-    function loadTrackedUuid() {
-        try {
-            const key = _getConst('DSS_TEMP_CHAT_UUID_KEY', 'dss-temporary-chat-uuid');
-            const restoredValue = sessionStorage.getItem(key) || null;
-            return restoredValue;
-        } catch {
-            return null;
+    function _requirePart(globalName) {
+        const part = _root[globalName];
+        if (!part) {
+            throw new Error(`[DSS] temporary-chat-delete: ${globalName} is missing — load the temporary-chat-delete.* part files before this entry file`);
         }
+        return part;
     }
 
     /**
-     * 將追蹤中的臨時對話 UUID 持久化至 sessionStorage。
-     * @param {string|null} uuid
+     * 取得共享啟用旗標模組（temporary-chat-enabled-flag.js）。
      */
-    function saveTrackedUuid(uuid) {
-        try {
-            const key = _getConst('DSS_TEMP_CHAT_UUID_KEY', 'dss-temporary-chat-uuid');
-            if (uuid) {
-                sessionStorage.setItem(key, uuid);
-            } else {
-                sessionStorage.removeItem(key);
-            }
-        } catch {
-            // 靜默忽略（隱私模式或儲存空間不足）
+    function _flag() {
+        const flag = _root.TemporaryChatEnabledFlag;
+        if (!flag) {
+            throw new Error('[DSS] temporary-chat-delete: TemporaryChatEnabledFlag is missing — load content/temporary-chat-enabled-flag.js before this entry file');
         }
+        return flag;
     }
 
-    // ── Gap 1：chrome.storage.session 啟用旗標 ──────────────────────────────
+    /** 讀取啟用旗標（同步，來源為共享旗標模組的快取）。 */
+    const readEnabledFlag = () => _flag().isEnabled();
 
-    /**
-     * 讀取啟用旗標快取（由 initEnabledFlagFromStorage 與 onChanged 維護）。
-     * @returns {boolean}
-     */
-    function readEnabledFlag() {
-        return _enabledFlagCache;
-    }
+    /** 僅更新啟用旗標快取，不經 background 設定路由寫入。 */
+    const setEnabledFlagCache = (isEnabled) => _flag().__setCache(isEnabled);
 
-    /**
-     * 從 chrome.storage.session 讀取啟用旗標並更新快取。
-     * 在 init() 中 await，確保監聽器掛載前狀態已就緒。
-     * @returns {Promise<void>}
-     */
-    async function initEnabledFlagFromStorage() {
-        const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
-        try {
-            const result = await chrome.storage.local.get([key]);
-            _enabledFlagCache = result[key] === true;
-        } catch {
-            _enabledFlagCache = false;
-        }
-    }
+    /** 以 DSS_GET_SETTINGS 向 background 索取啟用旗標並更新快取。 */
+    const initEnabledFlagFromStorage = () => _flag().initFromStorage();
 
-    // chrome.storage.onChanged：跨分頁即時同步啟用旗標
-    chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== 'local') return;
-        const key = _getConst('DSS_TEMP_CHAT_STORAGE_KEY', 'dss-temporary-chat-enabled');
-        if (!(key in changes)) return;
-        const isNowEnabled = changes[key].newValue === true;
-        _enabledFlagCache = isNowEnabled;
-        if (!isNowEnabled && !_trackedTemporaryUuid) {
-            detachListeners();
-        } else if (isNowEnabled) {
-            attachListeners();
-        }
+    // ── 部件組合（單一共享狀態物件，以參照傳遞給所有部件） ──────────────────
+    const _trackingPart = _requirePart('__DSS_TempChatDelete_tracking');
+    const _coordinatorPart = _requirePart('__DSS_TempChatDelete_coordinator');
+    const _handlersPart = _requirePart('__DSS_TempChatDelete_handlers');
+
+    const state = _trackingPart.createState();
+    const tracking = _trackingPart.create(state);
+    const coordinator = _coordinatorPart.create(state, {
+        tracking,
+        readEnabledFlag,
+        detachListeners: () => detachListeners(),
+    });
+    const handlers = _handlersPart.create(state, {
+        tracking,
+        deleteTrackedAndClear: coordinator.deleteTrackedAndClear,
+        readEnabledFlag,
+        setEnabledFlagCache,
+        attachListeners: () => attachListeners(),
+        detachListeners: () => detachListeners(),
     });
 
-    // ── 純工具函式 ───────────────────────────────────────────────────────────
-
-    /**
-     * 從 URL（可為完整 href 或僅 pathname）擷取聊天 UUID（格式：/a/chat/s/<uuid>）。
-     * 正規表達式本身即會在 query string（?）或 hash（#）處停止比對，
-     * 故傳入完整 href 或僅 pathname 皆可正確擷取，無需額外剝離。
-     * @param {string} [urlOrPath] - 預設使用 window.location.pathname
-     * @returns {string|null}
-     */
-    function extractUuidFromUrl(urlOrPath) {
-        const target = urlOrPath !== undefined ? urlOrPath : window.location.pathname;
-        const match = target.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-        return match ? match[1] : null;
-    }
-
-    // ── Gap 2：co-occurrence 視窗（1000ms 內 create + completion 同時出現） ──
-
-    /**
-     * 檢查兩個信號是否在視窗內同時出現。
-     * 若已同時出現：清除計時器並設定 _isPendingCreate。
-     * 若只有單一信號：啟動 1000ms 超時計時器，逾時後重置兩個旗標。
-     */
-    function checkCoOccurrence() {
-        if (_createDetected && _completionDetected) {
-            clearTimeout(_coOccurrenceTimer);
-            _coOccurrenceTimer = null;
-            _createDetected = false;
-            _completionDetected = false;
-            _isPendingCreate = true;
-
-            // Race-condition fix: if SPA already navigated to the new
-            // conversation before co-occurrence completed, track immediately.
-            const currentUuid = extractUuidFromUrl();
-            if (currentUuid) {
-                _trackedTemporaryUuid = currentUuid;
-                saveTrackedUuid(currentUuid);
-                TemporaryChatPendingStore.trackForDeletion(currentUuid);
-                _isPendingCreate = false;
-            }
-            return;
-        }
-        if (_coOccurrenceTimer === null) {
-            _coOccurrenceTimer = setTimeout(() => {
-                _createDetected = false;
-                _completionDetected = false;
-                _coOccurrenceTimer = null;
-            }, 1000);
-        }
-    }
-
-    // ── 刪除協調 ─────────────────────────────────────────────────────────────
-
-    /**
-     * 刪除已追蹤的臨時對話並清除追蹤狀態。
-     * Guard clause：無追蹤 UUID 或無 token 時立即返回。
-     * keepalive=true → 路由至 Service Worker（分頁關閉情境）。
-     * keepalive=false → 在 content script 以重試機制執行（導航情境）。
-     * @param {{ keepalive?: boolean }} [options]
-     */
-    function deleteTrackedAndClear({ keepalive = false } = {}) {
-        if (!_trackedTemporaryUuid) return;
-        if (!_capturedAuthToken) return;
-
-        const uuidToDelete = _trackedTemporaryUuid;
-        const tokenSnapshot = _capturedAuthToken;
-        _trackedTemporaryUuid = null;
-        saveTrackedUuid(null);
-
-        // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
-        // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
-        TemporaryChatPendingStore.removeOpenUuid(uuidToDelete);
-
-        if (keepalive) {
-            // 分頁/瀏覽器關閉：直接以 keepalive fetch 執行刪除，確認成功後才移除待刪佇列項目
-            TemporaryChatDeleteApi.deleteChatSession(uuidToDelete, tokenSnapshot, { keepalive: true })
-                .then((isOk) => { if (isOk) TemporaryChatPendingStore.removePendingDelete(uuidToDelete); })
-                .catch(() => {});
-            // teardown 期間 .then 可能不執行 → 項目留在 sync 佇列，交由 onStartup 補救（confirmed-deletion invariant）
-        } else {
-            // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
-            const FIBER_REQ = _getConst('DSS_FIBER_DELETE_MESSAGE_TYPE', 'DSS_FIBER_DELETE_SESSION');
-            const FIBER_RES = _getConst('DSS_FIBER_DELETE_RESULT_TYPE', 'DSS_FIBER_DELETE_RESULT');
-
-            let fallbackTriggered = false;
-            let timeoutId = null;
-
-            const fallbackToApi = async () => {
-                if (fallbackTriggered) return;
-                fallbackTriggered = true;
-                window.removeEventListener('message', resultListener);
-                if (timeoutId) clearTimeout(timeoutId);
-                const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
-                if (isOk) {
-                    TemporaryChatPendingStore.removePendingDelete(uuidToDelete);
-                } else {
-                    // 情境存活但重試耗盡 → 保留佇列項目，請 SW 排程 alarm 重試
-                    chrome.runtime.sendMessage({
-                        type: _getConst('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE', 'DSS_SCHEDULE_DELETE_RETRY'),
-                        chatUuid: uuidToDelete,
-                    });
-                }
-            };
-
-            const resultListener = (e) => {
-                if (e.source !== window) return;
-                if (e.data?.type !== FIBER_RES) return;
-                if (e.data?.sessionId !== uuidToDelete) return;
-
-                if (e.data.success) {
-                    if (timeoutId) clearTimeout(timeoutId);
-                    window.removeEventListener('message', resultListener);
-                    TemporaryChatPendingStore.removePendingDelete(uuidToDelete);
-                } else {
-                    fallbackToApi();
-                }
-            };
-
-            window.addEventListener('message', resultListener);
-            timeoutId = setTimeout(fallbackToApi, 3000);
-
-            window.postMessage({
-                type: FIBER_REQ,
-                sessionId: uuidToDelete
-            }, '*');
-        }
-
-        if (!readEnabledFlag()) {
-            detachListeners();
-        }
-    }
-
-    // ── 事件處理器 ───────────────────────────────────────────────────────────
-
-    /**
-     * 處理來自 MAIN world XHR hook 的授權 token 訊息（DSS_AUTH_CAPTURED）。
-     * 無論切換狀態如何皆保存 token（離開時刪除可能在切換關閉後才發生）。
-     * @param {MessageEvent} e
-     */
-    function handleAuthMessage(e) {
-        if (e.source !== window) return;
-        if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
-        _capturedAuthToken = e.data.authorization || null;
-        if (e.data.authorization) TemporaryChatPendingStore.setLastAuthToken(e.data.authorization);
-    }
-
-    /**
-     * 處理來自 MAIN world 的新對話建立偵測訊息（DSS_CHAT_CREATE_DETECTED）。
-     * 設定 _createDetected 並進入 co-occurrence 視窗檢查。
-     * @param {MessageEvent} e
-     */
-    function handleCreateMessage(e) {
-        if (e.source !== window) return;
-        if (e.data?.type !== _getConst('DSS_CHAT_CREATE_MESSAGE_TYPE', 'DSS_CHAT_CREATE_DETECTED')) return;
-        if (!readEnabledFlag()) return;
-        _createDetected = true;
-        checkCoOccurrence();
-    }
-
-    /**
-     * 處理來自 MAIN world 的 completion API 偵測訊息（DSS_CHAT_COMPLETION_DETECTED）。
-     * 設定 _completionDetected 並進入 co-occurrence 視窗檢查。
-     * @param {MessageEvent} e
-     */
-    function handleCompletionMessage(e) {
-        if (e.source !== window) return;
-        if (e.data?.type !== _getConst('DSS_CHAT_COMPLETION_MESSAGE_TYPE', 'DSS_CHAT_COMPLETION_DETECTED')) return;
-        if (!readEnabledFlag()) return;
-        _completionDetected = true;
-        checkCoOccurrence();
-    }
-
-    /**
-     * 處理來自 MAIN world history hook 的 SPA 導航訊息（DSS_HISTORY_NAV）。
-     * 建構合成的 NavigateEvent 物件並委派給 handleNavigationEvent。
-     * @param {MessageEvent} e
-     */
-    function handleHistoryNavMessage(e) {
-        if (e.source !== window) return;
-        if (e.data?.type !== 'DSS_HISTORY_NAV') return;
-        // 建構合成事件，使 handleNavigationEvent 可直接重用
-        const syntheticEvent = {
-            destination: { url: e.data.url },
-            navigationType: 'push',
-        };
-        handleNavigationEvent(syntheticEvent);
-    }
-
-    /**
-     * 統一處理所有 postMessage（根據 type 路由至對應處理器）。
-     * @param {MessageEvent} e
-     */
-    function handleWindowMessage(e) {
-        handleAuthMessage(e);
-        handleCreateMessage(e);
-        handleCompletionMessage(e);
-        handleHistoryNavMessage(e);
-    }
-
-    /**
-     * Navigation API navigate 事件處理器：
-     * 1. 若離開的是追蹤中的臨時對話（且非刷新/同 URL），執行刪除。
-     * 2. 若有待定建立旗標且導航目的地是對話頁面，標記該 UUID 為臨時對話。
-     * @param {NavigateEvent} event
-     */
-    function handleNavigationEvent(event) {
-        const destinationUrl = event.destination?.url || '';
-        const isReload = (event.navigationType === 'reload');
-        const isSameUrl = (destinationUrl === window.location.href);
-        const isReloadOrSameUrl = isReload || isSameUrl;
-
-        // 鍵盤補充旗標整合
-        const isRefresh = isReloadOrSameUrl || _isKeyboardRefresh;
-
-        // beforeunload 抑制旗標只應由「真正的整頁刷新」武裝（含鍵盤刷新）。
-        // 同 URL 的 SPA push（例如建立臨時對話時的第二次導航）不會卸載頁面，
-        // 若也武裝此旗標，會在真正離開至外部網站時卡住不消耗，導致刪除被錯誤跳過。
-        _suppressNextUnloadDelete = isReload || _isKeyboardRefresh;
-        _isKeyboardRefresh = false;
-
-        const fromUuid = extractUuidFromUrl();
-
-        // 目的地 UUID：即使目的地 URL 與目前 URL 僅差異於 query/hash，
-        // 只要對話 UUID 相同即視為「同一對話」的再導航，不應觸發刪除。
-        const destUuid = extractUuidFromUrl(destinationUrl);
-        const isSameConversation = !!destUuid && destUuid === _trackedTemporaryUuid;
-
-        // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
-        if (!isRefresh && !isSameConversation && fromUuid && fromUuid === _trackedTemporaryUuid && _capturedAuthToken) {
-            deleteTrackedAndClear({ keepalive: false });
-        }
-
-        // 標記新建立的臨時對話：有待定旗標且目的地是對話頁面
-        if (_isPendingCreate && readEnabledFlag()) {
-            const destinationUuid = extractUuidFromUrl(new URL(destinationUrl).pathname);
-            if (destinationUuid) {
-                _trackedTemporaryUuid = destinationUuid;
-                saveTrackedUuid(destinationUuid);
-                TemporaryChatPendingStore.trackForDeletion(destinationUuid);
-                _isPendingCreate = false;
-            }
-        }
-    }
-
-    /**
-     * 鍵盤事件補充偵測（F5 / Ctrl+R / Cmd+R），與 Navigation API 並行。
-     * @param {KeyboardEvent} e
-     */
-    function handleRefreshKeydown(e) {
-        if (e.key === 'F5' ||
-            (e.ctrlKey && e.key.toLowerCase() === 'r') ||
-            (e.metaKey && e.key.toLowerCase() === 'r')) {
-            _isKeyboardRefresh = true;
-        }
-    }
-
-    /**
-     * beforeunload 處理器：涵蓋分頁關閉與 Navigation API 未處理的完整頁面導航。
-     * keepalive=true 路由至 Service Worker 以確保關閉時請求仍能發出。
-     */
-    function handleBeforeUnload() {
-        if (_suppressNextUnloadDelete) return;
-        if (_isKeyboardRefresh) return;
-
-        const currentUuid = extractUuidFromUrl();
-        if (!currentUuid) return;
-        if (currentUuid !== _trackedTemporaryUuid) return;
-        if (!_capturedAuthToken) return;
-
-        // keepalive: true → 直接發送 keepalive fetch，確保分頁關閉後請求仍送出
-        deleteTrackedAndClear({ keepalive: true });
-    }
-
-    /**
-     * 處理 dss-temporary-chat-changed CustomEvent，根據新狀態調整監聽器。
-     * 切換關閉時：若仍有追蹤對話則保留監聽器以等待刪除機會；否則卸載。
-     * @param {CustomEvent} e
-     */
-    function handleToggleChanged(e) {
-        const isEnabled = e.detail?.isEnabled === true;
-        _enabledFlagCache = isEnabled;          // 立即同步快取，確保後續 readEnabledFlag() 回傳正確值
-        if (isEnabled) {
-            attachListeners();
-        } else {
-            // 切換關閉：若有追蹤對話需保留監聽器（用於後續離開時刪除）
-            if (!_trackedTemporaryUuid) {
-                detachListeners();
-            }
-        }
-    }
-
-    // ── 監聽器生命週期 ───────────────────────────────────────────────────────
+    // ── 監聽器生命週期（留在入口檔，切斷部件間的循環依賴） ──────────────────
 
     /**
      * 掛載所有事件監聽器（冪等：已掛載時直接返回）。
+     * 必須使用 handlers 上的同一份函式參照，否則卸載會靜默失效。
      */
     function attachListeners() {
-        if (_isListening) return;
-        _isListening = true;
+        if (state.isListening) return;
+        state.isListening = true;
 
-        window.addEventListener('message', handleWindowMessage);
-        window.addEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener('message', handlers.handleWindowMessage);
+        window.addEventListener('beforeunload', handlers.handleBeforeUnload);
 
         if (typeof window.navigation !== 'undefined') {
-            window.navigation.addEventListener('navigate', handleNavigationEvent);
+            window.navigation.addEventListener('navigate', handlers.handleNavigationEvent);
         }
-        document.addEventListener('keydown', handleRefreshKeydown, true);
+        document.addEventListener('keydown', handlers.handleRefreshKeydown, true);
     }
 
     /**
      * 卸載所有事件監聽器（冪等：未掛載時直接返回）。
      */
     function detachListeners() {
-        if (!_isListening) return;
-        _isListening = false;
+        if (!state.isListening) return;
+        state.isListening = false;
 
-        window.removeEventListener('message', handleWindowMessage);
-        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('message', handlers.handleWindowMessage);
+        window.removeEventListener('beforeunload', handlers.handleBeforeUnload);
 
         if (typeof window.navigation !== 'undefined') {
-            window.navigation.removeEventListener('navigate', handleNavigationEvent);
+            window.navigation.removeEventListener('navigate', handlers.handleNavigationEvent);
         }
-        document.removeEventListener('keydown', handleRefreshKeydown, true);
+        document.removeEventListener('keydown', handlers.handleRefreshKeydown, true);
+    }
+
+    /**
+     * 啟用旗標跨情境變更時的反應（由旗標模組的 subscribe 呼叫）。
+     * @param {boolean} isNowEnabled
+     */
+    function handleEnabledFlagChanged(isNowEnabled) {
+        if (!isNowEnabled && !state.trackedTemporaryUuid) {
+            detachListeners();
+        } else if (isNowEnabled) {
+            attachListeners();
+        }
     }
 
     // ── 初始化 ───────────────────────────────────────────────────────────────
 
     /**
-     * 初始化模組：從 chrome.storage.session 讀取啟用旗標，
-     * 從 sessionStorage 恢復追蹤 UUID，並決定是否掛載監聽器。
+     * 初始化模組：訂閱啟用旗標變更、從 sessionStorage 恢復追蹤 UUID、
+     * 經 background 設定路由讀取啟用旗標，並決定是否掛載監聽器。
      * @returns {Promise<void>}
      */
     async function init() {
         const CHANGED_EVENT = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
-        window.addEventListener(CHANGED_EVENT, handleToggleChanged);
+        window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
+
+        const flag = _flag();
+        flag.startSync();
+        flag.subscribe(handleEnabledFlagChanged);
 
         // 先恢復追蹤 UUID，再掛載監聽器，確保 handleWindowMessage（含 auth token 擷取）
         // 在 await 之前即已就緒，避免 DSS_AUTH_CAPTURED 訊息在等待儲存時遺失
-        _trackedTemporaryUuid = loadTrackedUuid();
+        state.trackedTemporaryUuid = tracking.loadTrackedUuid();
 
-        if (_trackedTemporaryUuid) {
+        if (state.trackedTemporaryUuid) {
             attachListeners();
         }
 
-        await initEnabledFlagFromStorage();
+        await flag.initFromStorage();
 
         // await 返回後，若啟用旗標為 true 且監聽器尚未掛載，補充掛載
-        if (_enabledFlagCache && !_isListening) {
+        if (flag.isEnabled() && !state.isListening) {
             attachListeners();
         }
     }
@@ -472,64 +161,56 @@ const TemporaryChatDelete = (() => {
     return {
         init,
         // 供單元測試使用的函式與狀態存取器匯出
-        extractUuidFromUrl,
+        extractUuidFromUrl: tracking.extractUuidFromUrl,
         readEnabledFlag,
         initEnabledFlagFromStorage,
-        loadTrackedUuid,
-        saveTrackedUuid,
-        handleAuthMessage,
-        handleCreateMessage,
-        handleCompletionMessage,
-        handleHistoryNavMessage,
-        handleWindowMessage,
-        handleBeforeUnload,
-        handleNavigationEvent,
-        handleRefreshKeydown,
-        handleToggleChanged,
-        deleteTrackedAndClear,
-        checkCoOccurrence,
+        loadTrackedUuid: tracking.loadTrackedUuid,
+        saveTrackedUuid: tracking.saveTrackedUuid,
+        checkCoOccurrence: tracking.checkCoOccurrence,
+        deleteTrackedAndClear: coordinator.deleteTrackedAndClear,
+        handleAuthMessage: handlers.handleAuthMessage,
+        handleCreateMessage: handlers.handleCreateMessage,
+        handleCompletionMessage: handlers.handleCompletionMessage,
+        handleHistoryNavMessage: handlers.handleHistoryNavMessage,
+        handleWindowMessage: handlers.handleWindowMessage,
+        handleBeforeUnload: handlers.handleBeforeUnload,
+        handleNavigationEvent: handlers.handleNavigationEvent,
+        handleRefreshKeydown: handlers.handleRefreshKeydown,
+        handleToggleChanged: handlers.handleToggleChanged,
         attachListeners,
         detachListeners,
         __getState: () => ({
-            capturedAuthToken: _capturedAuthToken,
-            trackedTemporaryUuid: _trackedTemporaryUuid,
-            enabledFlagCache: _enabledFlagCache,
-            createDetected: _createDetected,
-            completionDetected: _completionDetected,
-            isPendingCreate: _isPendingCreate,
-            coOccurrenceTimer: _coOccurrenceTimer,
-            suppressNextUnloadDelete: _suppressNextUnloadDelete,
-            isKeyboardRefresh: _isKeyboardRefresh,
-            isListening: _isListening,
+            capturedAuthToken: state.capturedAuthToken,
+            trackedTemporaryUuid: state.trackedTemporaryUuid,
+            enabledFlagCache: readEnabledFlag(),
+            createDetected: state.createDetected,
+            completionDetected: state.completionDetected,
+            isPendingCreate: state.isPendingCreate,
+            coOccurrenceTimer: state.coOccurrenceTimer,
+            suppressNextUnloadDelete: state.suppressNextUnloadDelete,
+            isKeyboardRefresh: state.isKeyboardRefresh,
+            isListening: state.isListening,
         }),
         __setState: (s) => {
-            if ('capturedAuthToken' in s) _capturedAuthToken = s.capturedAuthToken;
-            if ('trackedTemporaryUuid' in s) _trackedTemporaryUuid = s.trackedTemporaryUuid;
-            if ('enabledFlagCache' in s) _enabledFlagCache = s.enabledFlagCache;
-            if ('createDetected' in s) _createDetected = s.createDetected;
-            if ('completionDetected' in s) _completionDetected = s.completionDetected;
-            if ('isPendingCreate' in s) _isPendingCreate = s.isPendingCreate;
-            if ('coOccurrenceTimer' in s) _coOccurrenceTimer = s.coOccurrenceTimer;
-            if ('suppressNextUnloadDelete' in s) _suppressNextUnloadDelete = s.suppressNextUnloadDelete;
-            if ('isKeyboardRefresh' in s) _isKeyboardRefresh = s.isKeyboardRefresh;
-            if ('isListening' in s) _isListening = s.isListening;
+            if ('capturedAuthToken' in s) state.capturedAuthToken = s.capturedAuthToken;
+            if ('trackedTemporaryUuid' in s) state.trackedTemporaryUuid = s.trackedTemporaryUuid;
+            if ('enabledFlagCache' in s) setEnabledFlagCache(s.enabledFlagCache);
+            if ('createDetected' in s) state.createDetected = s.createDetected;
+            if ('completionDetected' in s) state.completionDetected = s.completionDetected;
+            if ('isPendingCreate' in s) state.isPendingCreate = s.isPendingCreate;
+            if ('coOccurrenceTimer' in s) state.coOccurrenceTimer = s.coOccurrenceTimer;
+            if ('suppressNextUnloadDelete' in s) state.suppressNextUnloadDelete = s.suppressNextUnloadDelete;
+            if ('isKeyboardRefresh' in s) state.isKeyboardRefresh = s.isKeyboardRefresh;
+            if ('isListening' in s) state.isListening = s.isListening;
         },
         __resetState: () => {
-            _capturedAuthToken = null;
-            _trackedTemporaryUuid = null;
-            _enabledFlagCache = false;
-            _createDetected = false;
-            _completionDetected = false;
-            _isPendingCreate = false;
-            _coOccurrenceTimer = null;
-            _suppressNextUnloadDelete = false;
-            _isKeyboardRefresh = false;
-            _isListening = false;
+            Object.assign(state, _trackingPart.createState());
+            setEnabledFlagCache(false);
         },
     };
 })();
 
-// Auto-start
+// Auto-start：入口檔的刻意啟動點（各部件本身無載入期副作用）
 TemporaryChatDelete.init();
 
 // Test export（瀏覽器中為 no-op）

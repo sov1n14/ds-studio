@@ -30,6 +30,7 @@ function flushMicrotasks() {
 
 let storageManagerStub;
 let pendingStoreStub;
+let settingsRoutesStub;
 
 beforeAll(async () => {
     globalThis.importScripts = vi.fn();
@@ -52,6 +53,10 @@ beforeAll(async () => {
     };
     globalThis.TemporaryChatPendingStore = pendingStoreStub;
 
+    settingsRoutesStub = { install: vi.fn() };
+    globalThis.DSSSettingsRoutes = settingsRoutesStub;
+    globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
+
     // Import once; top-level chrome.runtime.onStartup / onInstalled / alarms.onAlarm
     // registrations happen here.
     await import('../../background/service-worker.js');
@@ -66,6 +71,12 @@ beforeEach(() => {
     pendingStoreStub.clearOpenUuids.mockReset().mockResolvedValue(undefined);
     pendingStoreStub.getLastAuthToken.mockReset().mockResolvedValue(null);
     chrome.alarms.create.mockClear?.();
+});
+
+describe('module load — settings routes wiring', () => {
+    it('installs DSSSettingsRoutes exactly once at load', () => {
+        expect(settingsRoutesStub.install).toHaveBeenCalledTimes(1);
+    });
 });
 
 describe('chrome.runtime.onStartup — retryParkedSync on startup', () => {

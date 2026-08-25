@@ -7,17 +7,19 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
  * to guarantee clean module-level state (_metaCache, _chunkIndexCache,
  * _chatPresetMapChainTail).
  *
- * Tests that use fake timers (cases 5, 6, 7) perform storage setup BEFORE
- * calling vi.useFakeTimers() so that the InMemoryStorageMock's setTimeout-
- * based callbacks complete under real timers during setup.
+ * The lock is exercised exclusively through the public wrapper
+ * _withChatPresetMapLock(fn): the callback observes the lock state while it is
+ * held, and storage is inspected after the wrapper settles to observe release
+ * behaviour.
+ *
+ * Case 7 performs storage setup BEFORE calling vi.useFakeTimers() so that the
+ * InMemoryStorageMock's setTimeout-based callbacks complete under real timers
+ * during setup.
  */
 
 const LOCK_KEY = 'chatPresetMapLock';
 const LOCK_ACQUIRE_TIMEOUT_MS = 5000;
 
-// ---------------------------------------------------------------------------
-// 1. Acquire on free lock
-// ---------------------------------------------------------------------------
 describe('StorageManager advisory lock (Method C)', () => {
     let SM;
 
@@ -33,75 +35,89 @@ describe('StorageManager advisory lock (Method C)', () => {
         await chrome.storage.local.remove(LOCK_KEY);
     });
 
-    it('1. Acquire on free lock— returns a token and persists { owner, expiresAt }', async () => {
-        const token = await SM._acquireChatPresetMapLock();
+    // -------------------------------------------------------------------------
+    // 1. Lock held on a free lock
+    // -------------------------------------------------------------------------
+    it('1. Free lock — { owner, expiresAt } is persisted while fn runs, and fn result is returned', async () => {
+        const before = Date.now();
+        let heldDuringFn;
 
-        expect(token).toBeDefined();
-        expect(typeof token).toBe('string');
+        const result = await SM._withChatPresetMapLock(async () => {
+            heldDuringFn = (await chrome.storage.local.get(LOCK_KEY))[LOCK_KEY];
+            return 'fn-result';
+        });
 
-        const lock = await chrome.storage.local.get(LOCK_KEY);
-        expect(lock[LOCK_KEY]).toBeDefined();
-        expect(lock[LOCK_KEY].owner).toBe(token);
-        expect(lock[LOCK_KEY].expiresAt).toBeGreaterThan(Date.now());
+        expect(result).toBe('fn-result');
+        expect(heldDuringFn).toBeDefined();
+        expect(typeof heldDuringFn.owner).toBe('string');
+        expect(heldDuringFn.owner.length).toBeGreaterThan(0);
+        expect(heldDuringFn.expiresAt).toBeGreaterThan(before);
     });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 2. Release with matching owner
-    // ---------------------------------------------------------------------------
-    it('2. Release with matching owner — key removed from local storage', async () => {
-        const token = await SM._acquireChatPresetMapLock();
-        await SM._releaseChatPresetMapLock(token);
+    // -------------------------------------------------------------------------
+    it('2. Successful completion — the lock the wrapper acquired is removed from local storage', async () => {
+        let ownerDuringFn;
+        await SM._withChatPresetMapLock(async () => {
+            ownerDuringFn = (await chrome.storage.local.get(LOCK_KEY))[LOCK_KEY].owner;
+        });
 
+        expect(ownerDuringFn).toBeDefined();
         const lock = await chrome.storage.local.get(LOCK_KEY);
         expect(lock[LOCK_KEY]).toBeUndefined();
     });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 3. Release with mismatched owner
-    // ---------------------------------------------------------------------------
-    it('3. Release with mismatched owner — key untouched, console.warn called', async () => {
+    // -------------------------------------------------------------------------
+    it('3. Mismatched owner at release time — foreign lock left untouched, console.warn called', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-        // Pre-seed lock with a different owner (simulates TTL takeover)
-        await chrome.storage.local.set({
-            [LOCK_KEY]: { owner: 'real-owner', expiresAt: Date.now() + 10000 },
+        // While the wrapper holds the lock, a TTL takeover by another context is
+        // simulated by replacing the record with a different owner. The
+        // wrapper's release must not remove a lock it no longer owns.
+        await SM._withChatPresetMapLock(async () => {
+            await chrome.storage.local.set({
+                [LOCK_KEY]: { owner: 'real-owner', expiresAt: Date.now() + 10000 },
+            });
         });
 
-        await SM._releaseChatPresetMapLock('wrong-token');
-
-        // Key NOT removed
         const lock = await chrome.storage.local.get(LOCK_KEY);
         expect(lock[LOCK_KEY]).toBeDefined();
         expect(lock[LOCK_KEY].owner).toBe('real-owner');
 
-        // Warning emitted
         expect(warnSpy).toHaveBeenCalled();
 
         warnSpy.mockRestore();
     });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 4. TTL expiry takeover
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     it('4. TTL expiry takeover — expired lock ({owner, expiresAt: now - 1}) is overwritten', async () => {
         await chrome.storage.local.set({
             [LOCK_KEY]: { owner: 'stale-owner', expiresAt: Date.now() - 1 },
         });
 
-        const token = await SM._acquireChatPresetMapLock();
+        const before = Date.now();
+        let heldDuringFn;
+        await SM._withChatPresetMapLock(async () => {
+            heldDuringFn = (await chrome.storage.local.get(LOCK_KEY))[LOCK_KEY];
+        });
 
-        expect(token).toBeDefined();
-        expect(token).not.toBe('stale-owner');
+        expect(heldDuringFn.owner).toBeDefined();
+        expect(heldDuringFn.owner).not.toBe('stale-owner');
+        expect(heldDuringFn.expiresAt).toBeGreaterThan(before);
 
         const lock = await chrome.storage.local.get(LOCK_KEY);
-        expect(lock[LOCK_KEY].owner).toBe(token);
-        expect(lock[LOCK_KEY].expiresAt).toBeGreaterThan(Date.now());
+        expect(lock[LOCK_KEY]).toBeUndefined();
     });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 5. Contention — second acquirer waits
-    // ---------------------------------------------------------------------------
-    it('5. Contention — second acquirer waits until lock expires (~200 ms)',
+    // -------------------------------------------------------------------------
+    it('5. Contention — fn does not run until the held lock expires (~200 ms)',
         { timeout: 10000 },
         async () => {
             await chrome.storage.local.set({
@@ -109,22 +125,24 @@ describe('StorageManager advisory lock (Method C)', () => {
             });
 
             const start = Date.now();
-            const token = await SM._acquireChatPresetMapLock();
-            const elapsed = Date.now() - start;
+            let elapsedWhenFnRan;
+            let ownerDuringFn;
 
-            // Must have waited at least until the lock expired
-            expect(elapsed).toBeGreaterThanOrEqual(180);
-            expect(token).toBeDefined();
-            expect(token).not.toBe('holder');
+            await SM._withChatPresetMapLock(async () => {
+                elapsedWhenFnRan = Date.now() - start;
+                ownerDuringFn = (await chrome.storage.local.get(LOCK_KEY))[LOCK_KEY].owner;
+            });
 
-            const lock = await chrome.storage.local.get(LOCK_KEY);
-            expect(lock[LOCK_KEY].owner).toBe(token);
+            // fn must not have run before the previous holder's lock expired.
+            expect(elapsedWhenFnRan).toBeGreaterThanOrEqual(180);
+            expect(ownerDuringFn).toBeDefined();
+            expect(ownerDuringFn).not.toBe('holder');
         });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 6. Acquire timeout
-    // ---------------------------------------------------------------------------
-    it('6. Acquire timeout — rejects with LockAcquireTimeoutError after ~5000 ms',
+    // -------------------------------------------------------------------------
+    it('6. Acquire timeout — rejects after ~5000 ms and fn never runs',
         { timeout: 15000 },
         async () => {
             await chrome.storage.local.set({
@@ -134,13 +152,19 @@ describe('StorageManager advisory lock (Method C)', () => {
                 },
             });
 
-            await expect(SM._acquireChatPresetMapLock()).rejects.toThrow();
+            const fn = vi.fn();
+            await expect(SM._withChatPresetMapLock(fn)).rejects.toThrow();
+            expect(fn).not.toHaveBeenCalled();
+
+            // The other context's lock must survive the failed attempt.
+            const lock = await chrome.storage.local.get(LOCK_KEY);
+            expect(lock[LOCK_KEY].owner).toBe('holder');
         });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 7. Post-write verification mismatch loops
-    // ---------------------------------------------------------------------------
-    it('7. Post-write verification mismatch — loops and retries until timeout', async () => {
+    // -------------------------------------------------------------------------
+    it('7. Post-write verification mismatch — loops and retries until timeout, fn never runs', async () => {
         vi.useFakeTimers();
 
         // Capture the original implementation before spying
@@ -168,13 +192,14 @@ describe('StorageManager advisory lock (Method C)', () => {
             };
         });
 
-        const acquirePromise = SM._acquireChatPresetMapLock();
+        const fn = vi.fn();
+        const lockedPromise = SM._withChatPresetMapLock(fn);
         // Attach a no-op catch handler BEFORE advancing timers, so Node.js
         // does not detect the rejection as unhandled during the microtask
         // that fires within advanceTimersByTimeAsync. Without this, vitest's
         // unhandled rejection detector fires before the try/catch below can
         // handle the rejection.
-        acquirePromise.catch(() => {});
+        lockedPromise.catch(() => {});
         await vi.advanceTimersByTimeAsync(LOCK_ACQUIRE_TIMEOUT_MS + 100);
 
         // Use try/catch instead of expect().rejects to avoid the race where
@@ -182,12 +207,13 @@ describe('StorageManager advisory lock (Method C)', () => {
         // expect().rejects attaching a handler (causes unhandled rejection warning).
         let rejectionError;
         try {
-            await acquirePromise;
+            await lockedPromise;
         } catch (e) {
             rejectionError = e;
         }
         expect(rejectionError).toBeDefined();
         expect(rejectionError.name).toBe('LockAcquireTimeoutError');
+        expect(fn).not.toHaveBeenCalled();
 
         // Confirm the acquirer looped (more than just the initial read + one verify)
         expect(lockReadCount).toBeGreaterThanOrEqual(5);
@@ -195,9 +221,9 @@ describe('StorageManager advisory lock (Method C)', () => {
         vi.useRealTimers();
     });
 
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // 8. _withChatPresetMapLock releases on thrown error
-    // ---------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     it('8. _withChatPresetMapLock releases lock on thrown error and re-propagates', async () => {
         const testError = new Error('fn exploded');
 
@@ -218,8 +244,8 @@ describe('StorageManager advisory lock (Method C)', () => {
 // / _withLock(lockKey, fn)
 //
 // Requirement under test: the lock mechanism must be generalized to protect
-// an arbitrary lockKey, while _acquireLock()/_acquireChatPresetMapLock() etc.
-// remain interchangeable when no key (or the default key) is used.
+// an arbitrary lockKey, while _acquireLock() with and without an explicit key
+// must target the same record when the default key is used.
 // =============================================================================
 describe('StorageManager generalized keyed lock (_acquireLock / _releaseLock / _withLock)', () => {
     let SM;
@@ -275,7 +301,7 @@ describe('StorageManager generalized keyed lock (_acquireLock / _releaseLock / _
             expect(lock[KEY_A].owner).toBe(token);
         });
 
-    it('default-key compatibility — _acquireLock() with no arg contends with _acquireChatPresetMapLock()',
+    it('default-key compatibility — _acquireLock() with no arg targets the chatPresetMap lock key',
         { timeout: 10000 },
         async () => {
             await chrome.storage.local.set({

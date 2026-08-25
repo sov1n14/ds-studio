@@ -30,12 +30,6 @@
 
     // ── 常數 ────────────────────────────────────────────────────────────────────
 
-    /** 空選項的預設顯示文字（getter — 確保使用當下語系） */
-    function DEFAULT_EMPTY_OPTION_TEXT() { return dsI18n.t('dropdownEmptyOption'); }
-
-    /** 預設佔位文字（getter — 確保使用當下語系） */
-    function DEFAULT_PLACEHOLDER_TEXT() { return dsI18n.t('dropdownPlaceholder'); }
-
     /** 下拉選單 id */
     const MENU_ID = 'dss-preset-menu';
 
@@ -44,9 +38,16 @@
             throw new Error('createPresetDropdown: options 為必填物件');
         }
 
+        // 依賴注入（P11）：i18n 由呼叫端提供，未提供時退回 manifest 載入順序建立的全域物件。
+        const i18n = options.i18n || dsI18n;
+
+        // 兩個預設文字皆為 getter — 確保取用當下語系
+        const defaultPlaceholderText = () => i18n.t('dropdownPlaceholder');
+        const defaultEmptyOptionText = () => i18n.t('dropdownEmptyOption');
+
         const onChange      = typeof options.onChange === 'function' ? options.onChange : null;
-        var placeholderText = options.placeholderText || DEFAULT_PLACEHOLDER_TEXT();
-        var emptyOptionText = options.emptyOptionText || DEFAULT_EMPTY_OPTION_TEXT();
+        var placeholderText = options.placeholderText || defaultPlaceholderText();
+        var emptyOptionText = options.emptyOptionText || defaultEmptyOptionText();
 
         let currentValue  = '';
         let activeIndex   = -1;
@@ -58,7 +59,7 @@
         el.setAttribute('role', 'combobox');
         el.setAttribute('aria-expanded', 'false');
         el.setAttribute('aria-haspopup', 'listbox');
-        el.setAttribute('aria-label', dsI18n.t('dropdownComboboxAriaLabel'));
+        el.setAttribute('aria-label', i18n.t('dropdownComboboxAriaLabel'));
 
         const trigger = document.createElement('button');
         trigger.className = 'dss-preset-trigger';
@@ -82,7 +83,7 @@
         menu.id = MENU_ID;
         menu.className = 'dss-preset-menu';
         menu.setAttribute('role', 'listbox');
-        menu.setAttribute('aria-label', dsI18n.t('dropdownListboxAriaLabel'));
+        menu.setAttribute('aria-label', i18n.t('dropdownListboxAriaLabel'));
         menu.hidden = true;
         document.body.appendChild(menu);
 
@@ -201,8 +202,8 @@
             destroy,
 
             updateLocale: function () {
-                placeholderText = DEFAULT_PLACEHOLDER_TEXT();
-                emptyOptionText = DEFAULT_EMPTY_OPTION_TEXT();
+                placeholderText = defaultPlaceholderText();
+                emptyOptionText = defaultEmptyOptionText();
                 widthMeasurer.invalidate();
                 if (currentValue === '') {
                     label.textContent = placeholderText;

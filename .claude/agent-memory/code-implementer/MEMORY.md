@@ -5,3 +5,5 @@
 ; string-anchor edits need 
  not bare 
 .
+- [Refactor backlog claims need verification](project_refactor_backlog_claims.md) — backlog "zero callers / no test depends" claims miss test/ coupling; grep before deleting.
+- [Edit tooling in this repo](project_edit_tooling.md) — no Edit tool sometimes, python blocked, mixed CRLF/LF needs EOL-aware replacement

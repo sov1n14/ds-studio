@@ -16,14 +16,14 @@
     //  選擇器
     // ─────────────────────────────────────────────────────────────────
 
-    /** 虛擬列表可見項目容器 */
-    const VISIBLE_ITEMS_SELECTOR = '.ds-virtual-list-visible-items';
+    /** 虛擬列表可見項目容器（單一來源定義於 content/ds-selectors.js） */
+    const VISIBLE_ITEMS_SELECTOR = _DSSelectors.VISIBLE_ITEMS_SELECTOR;
 
     /** 訊息元素 */
-    const MESSAGE_SELECTOR = '.ds-message';
+    const MESSAGE_SELECTOR = _DSSelectors.MESSAGE_SELECTOR;
 
     /** 虛擬列表項目包裝（攜帶 data-virtual-list-item-key） */
-    const ITEM_KEY_ATTR = 'data-virtual-list-item-key';
+    const ITEM_KEY_ATTR = _DSSelectors.VIRTUAL_ITEM_KEY_ATTR;
 
     /** 虛擬列表外容器（用於定位滾動容器；單一來源定義於 content/ds-selectors.js） */
     const VIRTUAL_LIST_SELECTOR = _DSSelectors.VIRTUAL_LIST_SELECTOR;

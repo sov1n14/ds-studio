@@ -1,6 +1,6 @@
 ---
 name: chrome-extension-debug
-description: Systematic debugging methodology for Chrome browser extensions. Use this skill whenever the user reports a bug, error, unexpected behavior, crash, or malfunction in current project — even if they don't explicitly ask for "debugging." Triggers on phrases like "it doesn't work," "something is broken," "this used to work," "I'm seeing an error," or any description of unexpected extension behavior.
+description: Use when the extension misbehaves on chat.deepseek.com — "it doesn't work", "壞了", "this used to work", a console error, crash, or wrong injection behavior — even when the user never says debug. Covers specifying targeted console.log placement for the user to reproduce, tracing the logs to root cause, and forbidding fixes made on a guess. Not for writing new features or tests.
 ---
 
 # Chrome Extension Debugging

@@ -1,16 +1,22 @@
 /**
  * DS studio — Hide Thinking Process
  * Auto-collapses expanded thinking blocks by clicking the header element.
+ *
+ * 設定不由本層直讀儲存區：總開關與自身開關的閘控交由 content/feature-toggle.js
+ * 向 background 索取並訂閱變更。
  */
+// 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+const __DS_HideThinkingSelectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
 const HideThinking = {
-    STORAGE_KEY: 'dsHideThinking',
+    STORAGE_KEY: StorageManager.KEYS.HIDE_THINKING,
     CONTAINER_CLASS: '_74c0879',
     HEADER_CLASS: '_245c867',
-    THINK_CONTENT_CLASS: 'ds-think-content',
+    THINK_CONTENT_CLASS: __DS_HideThinkingSelectors.THINK_CONTENT_CLASS,
     DATA_ATTR: 'data-ht-collapsed',
 
     enabled: false,
-    _masterEnabled: false,
     _observer: null,
 
     isExpanded(containerEl) {
@@ -75,32 +81,6 @@ const HideThinking = {
         }
     },
 
-    setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local') return;
-
-            if (changes[StorageManager.KEYS.IS_ENABLED]) {
-                this._masterEnabled = changes[StorageManager.KEYS.IS_ENABLED].newValue;
-                if (this._masterEnabled) {
-                    chrome.storage.local.get([this.STORAGE_KEY], (data) => {
-                        if (data[this.STORAGE_KEY]) this.enable();
-                    });
-                } else {
-                    this.disable();
-                }
-            }
-
-            if (changes[this.STORAGE_KEY]) {
-                if (!this._masterEnabled) return;
-                if (changes[this.STORAGE_KEY].newValue) {
-                    this.enable();
-                } else {
-                    this.disable();
-                }
-            }
-        });
-    },
-
     enable() {
         if (this.enabled) return;
         this.enabled = true;
@@ -115,22 +95,26 @@ const HideThinking = {
         this._stopObserver();
     },
 
-    async start() {
-        const data = await chrome.storage.local.get([
-            this.STORAGE_KEY,
-            StorageManager.KEYS.IS_ENABLED
-        ]);
-        const hideThinking = data[this.STORAGE_KEY] ?? false;
-        this._masterEnabled = data[StorageManager.KEYS.IS_ENABLED] ?? false;
-
-        this.setupStorageListener();
-
-        if (hideThinking && this._masterEnabled) {
-            this.enable();
+    /**
+     * 啟動：把「總開關 + 自身開關」的閘控交給共用 registerFeatureToggle，
+     * 初始值與後續變更皆由 background 透過訊息提供。
+     */
+    start() {
+        const featureToggle = globalThis.DSSFeatureToggle
+            || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
+        if (!featureToggle) {
+            throw new Error('content/hide-thinking.js 需要 content/feature-toggle.js 先行載入');
         }
+
+        featureToggle.registerFeatureToggle({
+            ownKey: this.STORAGE_KEY,
+            onEnable: () => this.enable(),
+            onDisable: () => this.disable(),
+        });
     }
 };
 
+// Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 HideThinking.start();
 
 if (typeof module !== 'undefined' && module.exports) {

@@ -149,14 +149,9 @@ describe('runSettle — settle behavior', function () {
 
         q.drainFrames(6);
 
-        // — apply was called for all 6 frames with correct reasons
+        // — apply was called once per frame, always with no arguments
         expect(apply).toHaveBeenCalledTimes(6);
-        expect(apply).toHaveBeenNthCalledWith(1, 'settle:frame-0');
-        expect(apply).toHaveBeenNthCalledWith(2, 'settle:frame-1');
-        expect(apply).toHaveBeenNthCalledWith(3, 'settle:frame-2');
-        expect(apply).toHaveBeenNthCalledWith(4, 'settle:frame-3');
-        expect(apply).toHaveBeenNthCalledWith(5, 'settle:frame-4');
-        expect(apply).toHaveBeenNthCalledWith(6, 'settle:frame-5');
+        expect(apply.mock.calls.map(function (args) { return args.length; })).toEqual([0, 0, 0, 0, 0, 0]);
 
         // — converged with correct stop metadata
         expect(onDone).toHaveBeenCalledOnce();

@@ -15,8 +15,7 @@
      * @param {Object} opts
      * @param {() => number|null} opts.measure         - 回傳當前 key metric（buttonRect.left）。
      *                                                   元素無法解析時回傳 null。
-     * @param {(reason: string) => void} opts.apply    - 每幀重新套用 reposition。
-     *                                                   接收 reason 字串（如 'settle:frame-3'）。
+     * @param {() => void} opts.apply                  - 每幀重新套用 reposition。
      * @param {(fn: () => void) => void} opts.schedule - 注入的幀排程器（rAF 或 sync）。
      *                                                   確保環境/測試一致性。
      * @param {number} opts.maxFrames                 - 硬上限幀數。安全閥，防止無限迴圈。
@@ -73,7 +72,7 @@
             if (_cancelled) return;
 
             // Step 1: 重新套用 reposition（先套用再量測，確保量到最新渲染狀態）
-            opts.apply('settle:frame-' + frame);
+            opts.apply();
 
             // Step 2: 量測當前 key metric
             var currentMetric = opts.measure();

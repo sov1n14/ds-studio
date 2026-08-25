@@ -1,32 +1,21 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
 
-// NOTE: this file used to import fuzzyMatch()/debounce() from
-// popup/popup-utils.js, a module with ZERO production consumers (verified
-// via repo-wide grep — the only importers were this file and
-// popup-preset-reorder.spec.js). The real, shipped logic lives in two
-// duplicated copies:
-//   - custom-select.js: private _fuzzyMatch() / _debounce(), reachable only
-//     through the search input's public filtering behavior.
-//   - editor.js: debounce(), exported publicly on window.__DSSEditor.debounce.
-// Retargeted below, following the loading patterns already established in
-// test/unit/popup-custom-select.spec.js (eval-load custom-select.js) and
-// test/unit/editor.spec.js (ESM import of editor.js).
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// NOTE: this file used to import fuzzyMatch() from popup/popup-utils.js, a
+// module with ZERO production consumers (verified via repo-wide grep — the only
+// importers were this file and popup-preset-reorder.spec.js). The real, shipped
+// logic lives in custom-select.js as a private _fuzzyMatch(), reachable only
+// through the search input's public filtering behavior. Retargeted below,
+// following the loading pattern already established in
+// test/unit/popup-custom-select.spec.js (eval-load custom-select.js).
 
 beforeAll(() => {
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
-    const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
-    eval(rendererCode);
-    const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
-    eval(code);
+    loadI18nOnce();
+    // custom-select.js does `const _debounce = DSSDebounce;` — the shared helper must be on globalThis first.
+    evalPopupScript('utils/debounce.js');
+    evalPopupScript('popup/preset-item-renderer.js');
+    evalPopupScript('popup/custom-select.drag.js');
+    evalPopupScript('popup/custom-select.js');
 });
 
 function makeDOM() {
@@ -139,72 +128,5 @@ describe('fuzzy match filtering (shipped custom-select.js _fuzzyMatch, via searc
         sel.open();
         search('abc');
         expect(visibleIds()).toEqual([]);
-    });
-});
-
-describe('debounce() — shipped editor.js copy, public via window.__DSSEditor.debounce', () => {
-    let debounce;
-
-    beforeAll(async () => {
-        // editor.js exports { debounce, ... } on window.__DSSEditor (and module.exports).
-        globalThis.window = globalThis.window ?? {};
-        const editor = await import('../../popup/editor/editor.js');
-        debounce = editor.debounce;
-    });
-
-    beforeEach(() => {
-        vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
-    it('在延遲時間後僅呼叫一次', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 100);
-
-        debounced('a');
-        expect(fn).not.toHaveBeenCalled();
-
-        vi.advanceTimersByTime(100);
-        expect(fn).toHaveBeenCalledOnce();
-        expect(fn).toHaveBeenCalledWith('a');
-    });
-
-    it('快速連續呼叫時重置計時器，只觸發最後一次', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 200);
-
-        debounced('first');
-        vi.advanceTimersByTime(100);
-        debounced('second');
-        vi.advanceTimersByTime(100);
-        debounced('third');
-        vi.advanceTimersByTime(200);
-
-        expect(fn).toHaveBeenCalledOnce();
-        expect(fn).toHaveBeenCalledWith('third');
-    });
-
-    it('延遲時間未到時不觸發', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 300);
-
-        debounced();
-        vi.advanceTimersByTime(299);
-        expect(fn).not.toHaveBeenCalled();
-    });
-
-    it('可多次獨立觸發', () => {
-        const fn = vi.fn();
-        const debounced = debounce(fn, 50);
-
-        debounced('x');
-        vi.advanceTimersByTime(50);
-        debounced('y');
-        vi.advanceTimersByTime(50);
-
-        expect(fn).toHaveBeenCalledTimes(2);
     });
 });

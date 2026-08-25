@@ -6,6 +6,11 @@ import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 // IIFE runs and populates window.dsI18n before any dependent module evaluates.
 import '../../utils/i18n.locales.js';
 import '../../utils/i18n.js';
+// init() is explicit since autoInit was removed. Placement is load-bearing: it MUST run
+// while globalThis.chrome is still undefined, so init() skips the storage read and
+// registers NO storage listener -- moving it below the chrome mock would inflate
+// getStorageOnChangedListenerCount() for background specs.
+await globalThis.dsI18n.init();
 
 // __DS_Logger is referenced by content/temporary-chat-pending-store.js and
 // other modules via globalThis.__DS_Logger?.warn(...). Preload it here (a
@@ -15,6 +20,12 @@ import '../../utils/i18n.js';
 // mask arg-forwarding bugs inside warn() itself. Smaller blast radius than
 // stubbing __DS_Logger per-spec since this file has no other side effects.
 import '../../utils/logger.js';
+
+// globalThis.DSS_SETTINGS_MSG is read at call time by content/feature-toggle.js
+// (message type strings for GET_SETTINGS / SETTINGS_CHANGED). Preload it so any
+// spec that loads a toggle-gated content module gets the real constants instead
+// of a TypeError inside the toggle's initial settings read.
+import '../../utils/settings-message-constants.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
@@ -27,6 +38,7 @@ import '../../utils/storage-manager.chatmap.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
 import '../../utils/storage-manager.setters.js';
+import '../../utils/storage-manager.settings-read.js';
 import '../../content/censor-reply-restore.markdown.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';
@@ -34,6 +46,19 @@ import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
+// temporary-chat-enabled-flag.js publishes globalThis.TemporaryChatEnabledFlag, the
+// shared enabled-flag cache that content/temporary-chat-toggle.js and the
+// temporary-chat-delete entry both resolve at load time (they throw a load-order
+// error when it is absent). Preloaded here rather than per-spec because static
+// imports are hoisted: a spec cannot reliably order it ahead of its own
+// module-under-test import.
+import '../../content/temporary-chat-enabled-flag.js';
+// temporary-chat-delete.* parts: each sets its own __DSS_TempChatDelete_* global as
+// a load side effect and MUST execute before the entry file (content/temporary-chat-delete.js),
+// which _requirePart()s all three. Same contract as the storage-manager.* parts above.
+import '../../content/temporary-chat-delete.tracking.js';
+import '../../content/temporary-chat-delete.coordinator.js';
+import '../../content/temporary-chat-delete.handlers.js';
 // harvest.policy.js is the pure decision-logic module for content/harvest.js's
 // scroll-harvest loop. It must load before harvest.js (loaded directly by
 // harvest.spec.js via import, not preloaded here) so window.DSstudio.HarvestPolicy
@@ -80,6 +105,10 @@ function createMockEvent() {
         removeListener: (fn) => listeners.delete(fn),
         hasListener: (fn) => listeners.has(fn),
         callListeners: (...args) => listeners.forEach((fn) => fn(...args)),
+        // Test helper: how many listeners are currently registered. Lets a spec
+        // await a module's load-time bootstrap by polling for the listener that
+        // the bootstrap registers as its last step, instead of guessing a tick budget.
+        listenerCount: () => listeners.size,
     };
 }
 
@@ -119,11 +148,11 @@ export function resetStorageOnChangedListeners() {
     [...onChangedListeners].forEach((listener) => storageOnChanged.removeListener(listener));
 }
 
-// Deterministic bootstrap-completion signal: content-script.js (and other modules)
-// register their chrome.storage.onChanged listener as the LAST statement of a
-// one-time, unawaited module-load bootstrap (see content-script.js initSettings()).
-// Polling this count lets a spec await the real completion of that bootstrap
-// instead of guessing a fixed tick budget that may race the background chain.
+// Registered-listener count for chrome.storage.onChanged, for a spec that needs to
+// know whether the module under test has installed its storage listener
+// (background/settings-routes.js and friends). Content scripts receive setting
+// changes as a chrome.runtime.onMessage broadcast instead -- for those, poll
+// chrome.runtime.onMessage.listenerCount().
 export function getStorageOnChangedListenerCount() {
     return onChangedListeners.length;
 }

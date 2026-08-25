@@ -45,8 +45,7 @@
 
         async _loadRestoredMessages() {
             try {
-                const data = await StorageManager.getRestoredMessages();
-                const raw = data[StorageManager.KEYS.RESTORED_MESSAGES] || {};
+                const raw = await StorageManager.getRestoredMessages();
 
                 // 清潔策略：移除沒有 censored === true 旗標的項目，同時遷移舊格式 key。
                 // 舊格式：key 為純 message_id 數字字串（不含 '::'）

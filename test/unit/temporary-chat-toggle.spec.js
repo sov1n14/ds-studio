@@ -1,57 +1,121 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
-// ── chrome.storage.local mock (must be set before module import) ──────────────
-const chromeStorageLocalMock = {
-    _store: {},
-    get(keys) {
-        const result = {};
-        keys.forEach(k => { if (k in this._store) result[k] = this._store[k]; });
-        return Promise.resolve(result);
-    },
-    set(items) {
-        Object.assign(this._store, items);
-        return Promise.resolve();
-    },
-    _reset() { this._store = {}; },
-};
-
-// NOTE: static `import` statements are hoisted above all other top-level code
-// in this module, so the module-under-test's own top-level
-// `chrome.storage.onChanged.addListener(...)` call (temporary-chat-toggle.js
-// line ~318) actually registers against whatever `global.chrome` the vitest
-// setupFile (test/setup/vitest.setup.js) already installed — NOT the local
-// stub assigned below (that assignment runs only after the hoisted import).
-// So we capture the setup file's onChanged reference first and drive the
-// listener through its `callListeners` test helper.
-const setupOnChanged = global.chrome?.storage?.onChanged;
-
-// Capture onChanged listeners so tests can invoke the module's top-level
-// chrome.storage.onChanged.addListener callback directly.
-const onChangedListeners = [];
-global.chrome = {
-    storage: {
-        local: chromeStorageLocalMock,
-        onChanged: { addListener: (l) => { onChangedListeners.push(l); } },
-    },
-};
-
-// Minimal StorageManager stub — only KEYS.IS_ENABLED is used by this module.
-global.StorageManager = { KEYS: { IS_ENABLED: 'isEnabled' } };
-
+// Loaded before the module under test: temporary-chat-toggle.js resolves
+// StorageManager.KEYS.IS_ENABLED at load time (init() runs on load) and inside its
+// top-level chrome.storage.onChanged listener. Real module, not a stub, so the key
+// name under test is the one production ships.
+import '../../utils/storage-manager.js';
+// chrome.* and TemporaryChatEnabledFlag both come from test/setup/vitest.setup.js
+// (shared in-memory chrome.storage mock + preloaded flag module). No local chrome
+// mock here: a spec-local `global.chrome = {...}` runs AFTER this hoisted import and
+// therefore produced two mock universes -- the module registered against the setup
+// mock while the tests drove a stub nobody listened to.
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
 const STORAGE_KEY = 'dss-temporary-chat-enabled';
 const CHANGED_EVENT = 'dss-temporary-chat-changed';
-const IS_ENABLED_KEY = 'isEnabled';
+const IS_ENABLED_KEY = StorageManager.KEYS.IS_ENABLED;
+const MSG = () => globalThis.DSS_SETTINGS_MSG;
 
-// Fires the module's real onChanged listener, registered (at import-hoist
-// time) against the setup file's chrome mock — see note above.
-function fireOnChanged(changes, area) {
-    if (setupOnChanged?.callListeners) {
-        setupOnChanged.callListeners(changes, area);
-    } else {
-        onChangedListeners.forEach((l) => l(changes, area));
+/** Backing store the fake settings route answers from; re-seeded per test. */
+let settingsStore = {};
+/** Fresh instances loaded by loadToggle(); disarmed after each test. */
+let loadedInstances = [];
+
+/**
+ * Answer GET_SETTINGS / SET_SETTINGS out of settingsStore the way background
+ * does. One implementation keyed on message.keys serves both readers: the
+ * feature-toggle pipeline asks for ['isEnabled'], the flag module asks for
+ * ['dss-temporary-chat-enabled'].
+ */
+function installSettingsRoute() {
+    chrome.runtime.sendMessage = vi.fn(async (message) => {
+        if (message?.type === MSG().GET_SETTINGS) {
+            const values = {};
+            (message.keys || []).forEach((key) => {
+                if (key in settingsStore) values[key] = settingsStore[key];
+            });
+            return { ok: true, values };
+        }
+        if (message?.type === MSG().SET_SETTINGS) {
+            Object.assign(settingsStore, message.values);
+            return { ok: true };
+        }
+        return { ok: true, values: {} };
+    });
+}
+
+/** Fresh chrome.runtime.onMessage stub (same shape as the shared mock). */
+function createOnMessageStub() {
+    const listeners = new Set();
+    return {
+        addListener: (fn) => listeners.add(fn),
+        removeListener: (fn) => listeners.delete(fn),
+        hasListener: (fn) => listeners.has(fn),
+        callListeners: (...args) => [...listeners].forEach((fn) => fn(...args)),
+        listenerCount: () => listeners.size,
+    };
+}
+
+/** Deliver a SETTINGS_CHANGED broadcast the way background/settings-routes.js does. */
+function broadcast(changes, area = 'local') {
+    chrome.runtime.onMessage.callListeners(
+        { type: MSG().SETTINGS_CHANGED, area, changes },
+        { id: 'test-extension-id' },
+        () => {},
+    );
+}
+
+/** Let pending sendMessage promise chains settle. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Load a pristine toggle instance whose master gating and enabled flag are both
+ * driven by the given settings values.
+ *
+ * Fresh per test because content/feature-toggle.js keeps its feature registry
+ * and its single shared onMessage listener in module scope: a stale instance
+ * would keep reacting to this test's broadcasts. The onMessage stub is replaced
+ * in the same step so orphaned listeners cannot see the new broadcasts.
+ */
+async function loadToggle(values = {}) {
+    settingsStore = { ...values };
+    chrome.runtime.onMessage = createOnMessageStub();
+    installSettingsRoute();
+    vi.resetModules();
+    await import('../../content/temporary-chat-enabled-flag.js');
+    await import('../../content/feature-toggle.js');
+    const mod = await import('../../content/temporary-chat-toggle.js');
+    const instance = mod.default ?? mod;
+    loadedInstances.push(instance);
+    await flush();
+    return instance;
+}
+
+beforeEach(() => {
+    settingsStore = {};
+    installSettingsRoute();
+});
+
+// Every loaded instance keeps a MutationObserver on document.body; disarming the
+// master switch is what stops it from re-injecting rows into later tests.
+afterEach(() => {
+    loadedInstances.forEach((instance) => instance.__setMasterEnabled(false));
+    loadedInstances = [];
+});
+
+/** Collect every dss-temporary-chat-changed detail dispatched while fn() runs. */
+function captureToggleEvents(fn) {
+    const received = [];
+    const handler = (e) => received.push(e.detail);
+    window.addEventListener(CHANGED_EVENT, handler);
+    try {
+        fn();
+    } finally {
+        window.removeEventListener(CHANGED_EVENT, handler);
     }
+    return received;
 }
 
 // ── Group A: initEnabledFlagFromStorage (via init) ───────────────────────────
@@ -59,7 +123,6 @@ function fireOnChanged(changes, area) {
 
 describe('A — initEnabledFlagFromStorage (via init())', () => {
     beforeEach(() => {
-        chromeStorageLocalMock._reset();
         document.body.innerHTML = '';
         window.history.replaceState({}, '', '/non-homepage');
     });
@@ -68,20 +131,20 @@ describe('A — initEnabledFlagFromStorage (via init())', () => {
         document.body.innerHTML = '';
     });
 
-    it('A1: after init(), readEnabledFlag() returns true when storage has true', async () => {
-        chromeStorageLocalMock._store[STORAGE_KEY] = true;
+    it('A1: after init(), readEnabledFlag() returns true when settings report true', async () => {
+        settingsStore[STORAGE_KEY] = true;
         await TemporaryChatToggle.init();
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
     });
 
-    it('A2: after init(), readEnabledFlag() returns false when storage key is absent', async () => {
-        // store is empty
+    it('A2: after init(), readEnabledFlag() returns false when the settings key is absent', async () => {
+        // settingsStore is empty
         await TemporaryChatToggle.init();
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('A3: after init(), readEnabledFlag() returns false when storage value is false', async () => {
-        chromeStorageLocalMock._store[STORAGE_KEY] = false;
+    it('A3: after init(), readEnabledFlag() returns false when settings report false', async () => {
+        settingsStore[STORAGE_KEY] = false;
         await TemporaryChatToggle.init();
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
@@ -91,7 +154,6 @@ describe('A — initEnabledFlagFromStorage (via init())', () => {
 
 describe('B — readEnabledFlag', () => {
     beforeEach(() => {
-        chromeStorageLocalMock._reset();
         // Use writeEnabledFlag to reset cache to false
         TemporaryChatToggle.writeEnabledFlag(false);
     });
@@ -101,12 +163,19 @@ describe('B — readEnabledFlag', () => {
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('B2: returns cached value without reading chrome.storage.local', async () => {
-        // Set cache to true via writeEnabledFlag
+    it('B2: returns the cached value without reading storage or asking background', () => {
         TemporaryChatToggle.writeEnabledFlag(true);
-        // Now mutate storage to false — cache must remain true
-        chromeStorageLocalMock._store[STORAGE_KEY] = false;
+        const getSpy = vi.spyOn(chrome.storage.local, 'get');
+        const syncGetSpy = vi.spyOn(chrome.storage.sync, 'get');
+        chrome.runtime.sendMessage.mockClear();
+
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+        expect(getSpy).not.toHaveBeenCalled();
+        expect(syncGetSpy).not.toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+
+        getSpy.mockRestore();
+        syncGetSpy.mockRestore();
     });
 });
 
@@ -114,7 +183,6 @@ describe('B — readEnabledFlag', () => {
 
 describe('C — writeEnabledFlag', () => {
     beforeEach(() => {
-        chromeStorageLocalMock._reset();
         TemporaryChatToggle.writeEnabledFlag(false);
     });
 
@@ -133,20 +201,28 @@ describe('C — writeEnabledFlag', () => {
         expect(TemporaryChatToggle.readEnabledFlag()).toBe(false);
     });
 
-    it('C3: calls chrome.storage.local.set with the correct key and value (true)', async () => {
-        const setSpy = vi.spyOn(chromeStorageLocalMock, 'set');
+    it('C3: asks background to persist the new value (true)', async () => {
+        chrome.runtime.sendMessage.mockClear();
         TemporaryChatToggle.writeEnabledFlag(true);
-        await Promise.resolve(); // flush microtask
-        expect(setSpy).toHaveBeenCalledWith({ [STORAGE_KEY]: true });
-        setSpy.mockRestore();
+        await vi.waitFor(() => {
+            expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+        });
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+            type: MSG().SET_SETTINGS,
+            values: { [STORAGE_KEY]: true },
+        });
     });
 
-    it('C4: calls chrome.storage.local.set with the correct key and value (false)', async () => {
-        const setSpy = vi.spyOn(chromeStorageLocalMock, 'set');
+    it('C4: asks background to persist the new value (false)', async () => {
+        chrome.runtime.sendMessage.mockClear();
         TemporaryChatToggle.writeEnabledFlag(false);
-        await Promise.resolve();
-        expect(setSpy).toHaveBeenCalledWith({ [STORAGE_KEY]: false });
-        setSpy.mockRestore();
+        await vi.waitFor(() => {
+            expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+        });
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+            type: MSG().SET_SETTINGS,
+            values: { [STORAGE_KEY]: false },
+        });
     });
 });
 
@@ -241,17 +317,17 @@ describe('F — homepage-only guard in init()', () => {
         document.body.innerHTML = '';
     });
 
-    it('F1: init() does nothing when pathname is not "/"', () => {
+    it('F1: init() injects nothing when pathname is not "/", even with the master switch on', async () => {
         window.history.replaceState({}, '', '/a/chat/s/some-uuid');
-        const tryInjectSpy = vi.spyOn(TemporaryChatToggle, 'injectToggleRow');
 
         const anchor = document.createElement('div');
         anchor.className = 'aaff8b8f';
         document.body.appendChild(anchor);
 
-        TemporaryChatToggle.init();
+        await loadToggle({ isEnabled: true });
+        await flush();
 
-        expect(tryInjectSpy).not.toHaveBeenCalled();
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 });
 
@@ -390,43 +466,39 @@ describe('I — toggle interaction writes storage and dispatches event', () => {
         document.body.removeChild(row);
     });
 
+    // Dispatch COUNT is deliberately not asserted: chrome.storage.onChanged fires in the
+    // writing context too, so the write echoes back through the flag module's cross-tab
+    // sync and dispatches a second, identical event. The requirement is that the event
+    // is dispatched and that every dispatch reports the new value.
     it('I3: toggling ON dispatches dss-temporary-chat-changed with isEnabled=true', () => {
         const row = TemporaryChatToggle.createToggleRow(false);
         document.body.appendChild(row);
-
-        const received = [];
-        const handler = (e) => received.push(e.detail);
-        window.addEventListener(CHANGED_EVENT, handler);
-
         const input = row.querySelector('.dss-temp-chat-switch__input');
-        input.checked = true;
-        input.dispatchEvent(new Event('change'));
 
-        window.removeEventListener(CHANGED_EVENT, handler);
+        const received = captureToggleEvents(() => {
+            input.checked = true;
+            input.dispatchEvent(new Event('change'));
+        });
+
         document.body.removeChild(row);
-
-        expect(received).toHaveLength(1);
-        expect(received[0].isEnabled).toBe(true);
+        expect(received.length).toBeGreaterThanOrEqual(1);
+        expect(received.every((detail) => detail.isEnabled === true)).toBe(true);
     });
 
     it('I4: toggling OFF dispatches dss-temporary-chat-changed with isEnabled=false', () => {
         TemporaryChatToggle.writeEnabledFlag(true);
         const row = TemporaryChatToggle.createToggleRow(true);
         document.body.appendChild(row);
-
-        const received = [];
-        const handler = (e) => received.push(e.detail);
-        window.addEventListener(CHANGED_EVENT, handler);
-
         const input = row.querySelector('.dss-temp-chat-switch__input');
-        input.checked = false;
-        input.dispatchEvent(new Event('change'));
 
-        window.removeEventListener(CHANGED_EVENT, handler);
+        const received = captureToggleEvents(() => {
+            input.checked = false;
+            input.dispatchEvent(new Event('change'));
+        });
+
         document.body.removeChild(row);
-
-        expect(received).toHaveLength(1);
-        expect(received[0].isEnabled).toBe(false);
+        expect(received.length).toBeGreaterThanOrEqual(1);
+        expect(received.every((detail) => detail.isEnabled === false)).toBe(true);
     });
 });
 
@@ -593,7 +665,6 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
     }
 
     beforeEach(() => {
-        chromeStorageLocalMock._reset();
         document.body.innerHTML = '';
         // Reset master switch + injected row to a known baseline before each test.
         TemporaryChatToggle.__setMasterEnabled(false);
@@ -606,23 +677,25 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
         document.body.innerHTML = '';
     });
 
-    it('L1: init() defaults _masterEnabled to false when IS_ENABLED is absent — no injection on homepage', async () => {
+    it('L1: master switch reported false keeps the row off the homepage', async () => {
         window.history.replaceState({}, '', '/');
         createAnchorInDOM();
 
-        await TemporaryChatToggle.init();
+        await loadToggle({ [IS_ENABLED_KEY]: false });
+        await flush();
 
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('L2: init() seeds _masterEnabled from storage true — injects on homepage', async () => {
+    it('L2: master switch reported true injects the row on the homepage', async () => {
         window.history.replaceState({}, '', '/');
-        chromeStorageLocalMock._store[IS_ENABLED_KEY] = true;
         createAnchorInDOM();
 
-        await TemporaryChatToggle.init();
+        await loadToggle({ [IS_ENABLED_KEY]: true });
 
-        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        await vi.waitFor(() => {
+            expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        });
     });
 
     it('L3: __setMasterEnabled(false) removes an existing injected row', () => {
@@ -655,32 +728,53 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('L6: onChanged IS_ENABLED (area=local) routes to __setMasterEnabled', () => {
-        const spy = vi.spyOn(TemporaryChatToggle, '__setMasterEnabled');
-
-        fireOnChanged({ [IS_ENABLED_KEY]: { newValue: true } }, 'local');
-
-        expect(spy).toHaveBeenCalledWith(true);
-    });
-
-    it('L7: onChanged feature-key branch still works alongside the IS_ENABLED branch', () => {
-        fireOnChanged({
-            [IS_ENABLED_KEY]: { newValue: true },
-            [STORAGE_KEY]: { newValue: true },
-        }, 'local');
-
-        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
-    });
-
-    it('L8: onChanged with area !== "local" is ignored (no master-switch effect)', () => {
+    it('L6: a local IS_ENABLED=true broadcast makes the toggle row appear on the homepage', async () => {
         window.history.replaceState({}, '', '/');
         createAnchorInDOM();
-        const spy = vi.spyOn(TemporaryChatToggle, '__setMasterEnabled');
-
-        fireOnChanged({ [IS_ENABLED_KEY]: { newValue: true } }, 'sync');
-
-        expect(spy).not.toHaveBeenCalled();
+        await loadToggle({ [IS_ENABLED_KEY]: false });
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+
+        broadcast({ [IS_ENABLED_KEY]: { newValue: true } });
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+    });
+
+    it('L6b: a local IS_ENABLED=false broadcast removes an injected toggle row', async () => {
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+        await loadToggle({ [IS_ENABLED_KEY]: true });
+        await vi.waitFor(() => {
+            expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        });
+
+        broadcast({ [IS_ENABLED_KEY]: { newValue: false } });
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+    });
+
+    it('L7: the enabled-flag branch of the broadcast still works alongside the IS_ENABLED branch', async () => {
+        const instance = await loadToggle({ [IS_ENABLED_KEY]: false });
+
+        broadcast({
+            [IS_ENABLED_KEY]: { newValue: true },
+            [STORAGE_KEY]: { newValue: true },
+        });
+
+        expect(instance.readEnabledFlag()).toBe(true);
+    });
+
+    it('L8: a broadcast with area !== "local" is ignored by both the master switch and the flag', async () => {
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+        const instance = await loadToggle({ [IS_ENABLED_KEY]: false });
+
+        broadcast({
+            [IS_ENABLED_KEY]: { newValue: true },
+            [STORAGE_KEY]: { newValue: true },
+        }, 'sync');
+
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+        expect(instance.readEnabledFlag()).toBe(false);
     });
 });
 
@@ -702,38 +796,41 @@ describe('M — injected checkbox opts out of browser form-state restoration', (
     });
 });
 
-// ── Group N: async storage-write failure is observed and reported ───────────
-// REQUIREMENT: when chrome.storage.local.set() rejects, the rejection must be
-// observed and reported via globalThis.__DS_Logger.warn rather than surfacing
-// as an unhandled promise rejection (previously fire-and-forget).
+// ── Group N: async settings-write failure is observed and reported ──────────
+// REQUIREMENT: when the DSS_SET_SETTINGS round trip fails -- either because the
+// message rejects or because background refuses the write -- the failure must be
+// reported on the error boundary rather than surfacing as an unhandled rejection.
 
-describe('N — writeEnabledFlag reports async storage-write failures', () => {
-    let originalSet;
-    let originalLogger;
-
-    beforeEach(() => {
-        chromeStorageLocalMock._reset();
-        originalSet = chromeStorageLocalMock.set;
-        originalLogger = globalThis.__DS_Logger;
-    });
-
+describe('N — writeEnabledFlag reports async settings-write failures', () => {
     afterEach(() => {
-        chromeStorageLocalMock.set = originalSet;
-        globalThis.__DS_Logger = originalLogger;
         vi.restoreAllMocks();
     });
 
-    it('N1: a rejected chrome.storage.local.set() is reported through __DS_Logger.warn, not left unhandled', async () => {
-        const writeError = new Error('storage quota exceeded');
-        chromeStorageLocalMock.set = vi.fn(() => Promise.reject(writeError));
-        const warnSpy = vi.fn();
-        globalThis.__DS_Logger = { warn: warnSpy };
+    it('N1: a rejected DSS_SET_SETTINGS round trip is reported on the error boundary, not left unhandled', async () => {
+        const writeError = new Error('message port closed');
+        chrome.runtime.sendMessage.mockRejectedValue(writeError);
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         TemporaryChatToggle.writeEnabledFlag(true);
-        // Flush the microtask queue so the rejection handler runs.
-        await Promise.resolve();
-        await Promise.resolve();
 
-        expect(warnSpy).toHaveBeenCalled();
+        await vi.waitFor(() => {
+            expect(errorSpy).toHaveBeenCalled();
+        });
+        expect(errorSpy.mock.calls[0][0]).toBe('[DSS] enabled-flag:write:');
+        expect(errorSpy.mock.calls[0]).toContain(writeError);
+    });
+
+    it('N1b: a refused write ({ok:false}) is reported on the same boundary, carrying the reason', async () => {
+        chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'quota' });
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        TemporaryChatToggle.writeEnabledFlag(true);
+
+        await vi.waitFor(() => {
+            expect(errorSpy).toHaveBeenCalled();
+        });
+        expect(errorSpy.mock.calls[0][0]).toBe('[DSS] enabled-flag:write:');
+        expect(errorSpy.mock.calls[0][1]).toBeInstanceOf(Error);
+        expect(errorSpy.mock.calls[0][1].message).toBe('quota');
     });
 });

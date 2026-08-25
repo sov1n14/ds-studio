@@ -2,7 +2,6 @@
 *.py
 *.zip
 .claude/screenshots/
-!.claude/settings.local.json
 .ignore/
 .venv/
 .vitest-cache/

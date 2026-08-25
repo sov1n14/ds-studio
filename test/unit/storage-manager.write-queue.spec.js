@@ -1,13 +1,29 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('StorageManager write queue (promise-chain serialization)', () => {
     /** @type {import('../../utils/storage-manager.js')} */
     let SM;
 
+    // The in-memory chrome.storage mock settles every read and write on its own
+    // setTimeout(0), and the write-lock queue chains one timer turn per link, so a
+    // long queue (test 1 fires 50) drained on real timers cost seconds of wall clock
+    // (~15ms per turn under happy-dom). drained() runs the whole pending timer chain
+    // in virtual time - identical drain, no real clock. The argument promise is
+    // created first (scheduling its timers) and then those timers are exhausted.
+    async function drained(promise) {
+        await vi.runAllTimersAsync();
+        return promise;
+    }
+
     beforeEach(async () => {
         vi.resetModules();
         const mod = await import('../../utils/storage-manager.js');
         SM = mod.default ?? mod;
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     describe('1. FIFO serialization', () => {
@@ -17,9 +33,9 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
             for (let i = 0; i < 50; i++) {
                 promises.push(SM.bindChatToPreset(`uuid-${i}`, `preset-${i}`));
             }
-            await Promise.all(promises);
+            await drained(Promise.all(promises));
 
-            const settings = await SM.getSettings();
+            const settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toBeDefined();
             const keys = Object.keys(settings.chatPresetMap);
             expect(keys).toHaveLength(50);
@@ -31,7 +47,7 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
 
     describe('2. Mutator transactional read', () => {
         it('mutator B observes counter written by mutator A', async () => {
-            const results = await Promise.all([
+            await drained(Promise.all([
                 SM.mutateChatPresetMap((map) => {
                     map.counter = 1;
                 }),
@@ -39,9 +55,9 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
                     // B should see what A wrote because the queue serializes
                     map.counter = (map.counter || 0) + 1;
                 }),
-            ]);
+            ]));
 
-            const settings = await SM.getSettings();
+            const settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap.counter).toBe(2);
         });
     });
@@ -62,9 +78,9 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
                 map.c = 'p3';
             });
 
-            await Promise.all([p1, p2, p3, p4]);
+            await drained(Promise.all([p1, p2, p3, p4]));
 
-            const settings = await SM.getSettings();
+            const settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toEqual({ b: 'p2', c: 'p3' });
         });
     });
@@ -81,16 +97,20 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
             const p3 = SM.bindChatToPreset('uuid-2', 'preset-b');
             const p4 = SM.bindChatToPreset('uuid-3', 'preset-c');
 
+            // Attach settlement expectations BEFORE draining so the rejection is
+            // handled the moment it occurs (no unhandled-rejection noise), then
+            // drain the queued write chain in virtual time.
             // (a) The thrower's promise rejects with the original error
-            await expect(p2).rejects.toThrow('intentional mutator failure');
-
+            const e2 = expect(p2).rejects.toThrow('intentional mutator failure');
             // (b) Successful operations resolve regardless
-            await expect(p1).resolves.toBeDefined();
-            await expect(p3).resolves.toBeDefined();
-            await expect(p4).resolves.toBeDefined();
+            const e1 = expect(p1).resolves.toBeDefined();
+            const e3 = expect(p3).resolves.toBeDefined();
+            const e4 = expect(p4).resolves.toBeDefined();
+            await vi.runAllTimersAsync();
+            await Promise.all([e1, e2, e3, e4]);
 
             // (c) Final state reflects all successful mutations; failed one is absent
-            const settings = await SM.getSettings();
+            const settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toEqual({
                 'uuid-1': 'preset-a',
                 'uuid-2': 'preset-b',
@@ -117,13 +137,13 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
                 return map;
             });
 
-            await Promise.all([p1, p2]);
+            await drained(Promise.all([p1, p2]));
 
             // p1's async mutation completed before p2 ran
             expect(stage).toBe(2);
 
             // Both mutations are present in the final state, proving correct ordering
-            const settings = await SM.getSettings();
+            const settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toEqual({
                 asyncKey: 'asyncVal',
                 secondKey: 'secondVal',
@@ -134,7 +154,7 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
     describe('6. restoreSettings merge with concurrent writes', () => {
         it('When restoreSettings runs concurrently with bindChatToPreset, the bind value is not lost and all imported entries are present', async () => {
             // Pre-populate a binding
-            await SM.bindChatToPreset('uuid-before', 'preset-before');
+            await drained(SM.bindChatToPreset('uuid-before', 'preset-before'));
 
             const importedSettings = {
                 chatPresetMap: { 'uuid-imported': 'preset-imported' },
@@ -145,9 +165,9 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
             const pBind = SM.bindChatToPreset('uuid-concurrent', 'preset-concurrent');
             const pRestore = SM.restoreSettings(importedSettings, true);
 
-            await Promise.all([pBind, pRestore]);
+            await drained(Promise.all([pBind, pRestore]));
 
-            const settings = await SM.getSettings();
+            const settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toEqual({
                 'uuid-before': 'preset-before',
                 'uuid-concurrent': 'preset-concurrent',
@@ -159,23 +179,23 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
     describe('7. Mutator return semantics', () => {
         it('mutator returning undefined writes the in-place-mutated map; mutator returning a new object writes that new object instead', async () => {
             // (a) Returning undefined (implicitly) — in-place mutation is persisted
-            await SM.mutateChatPresetMap((map) => {
+            await drained(SM.mutateChatPresetMap((map) => {
                 map.inPlaceKey = 'inPlaceVal';
                 // no explicit return → returns undefined
-            });
+            }));
 
-            let settings = await SM.getSettings();
+            let settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toEqual({ inPlaceKey: 'inPlaceVal' });
 
             // (b) Returning a new object — the new object is persisted, in-place changes ignored
-            await SM.mutateChatPresetMap((map) => {
+            await drained(SM.mutateChatPresetMap((map) => {
                 // This in-place change should be ignored
                 map.ignoredKey = 'ignored';
                 // Return a brand new object
                 return { newKey: 'newVal' };
-            });
+            }));
 
-            settings = await SM.getSettings();
+            settings = await drained(SM.getSettings());
             expect(settings.chatPresetMap).toEqual({ newKey: 'newVal' });
             expect(settings.chatPresetMap.ignoredKey).toBeUndefined();
         });

@@ -1,6 +1,6 @@
 ---
 name: version-bump
-description: Mandatory version bump standards for Chrome Extensions — MUST consult when any code change is committed. Triggers on version bumps, manifest.json version edits, release preparations, and PR/commit reviews. Does NOT apply to documentation-only changes or non-extension projects.
+description: Read before committing any code change and again before declaring that commit done — every behavior-affecting change needs a manifest.json version bump in the same commit, even when an earlier bump sits uncommitted. Triggers - editing the manifest.json version, preparing a release or PR, deciding patch/minor/major. Exempt (no bump) - docs-only edits, comments, CI config, file moves, _locales translations.
 ---
 
 # Version Management

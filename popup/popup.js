@@ -3,7 +3,9 @@
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
  *       popup.backup-manager.js（createBackupManager）、popup.live-sync.js（createLiveSyncListener）、
  *       popup.editor-window.js（createEditorWindowManager）、popup.width-sliders.js（createWidthSliderManager）、
- *       popup.markdown-export.js（createMarkdownExportManager）、popup.toggles.js（createToggleManager）
+ *       popup.markdown-export.js（createMarkdownExportManager）、popup.toggles.js（createToggleManager）、
+ *       popup.preset-domain.js（DSSPresetDomain）、popup.locale.js（bindLocaleSwitcher）、
+ *       popup.settings-view.js（applySettingsToDom）
  * 需在本檔案之前以 <script> 載入上述模組。
  */
 
@@ -46,6 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     Modal.init();
     Toast.init();
     await dsI18n.init();
+    window.__DS_PopupLocale.bindLocaleSwitcher();
 
     // --- 狀態 ---
     let presets        = [];
@@ -128,6 +131,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         setPinnedPresetId:   (v) => { pinnedPresetId = v; },
         getChatPresetMap:    () => chatPresetMap,
         setChatPresetMap:    (v) => { chatPresetMap = v; },
+        getCurrentTabUuid:   () => currentTabUuid,
+        setCurrentTabUuid:   (v) => { currentTabUuid = v; },
         getCustomSelect:     () => customSelect,
         refreshSyncStatus,
         showSaveStatus,
@@ -169,72 +174,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     pinnedPresetId = settings.pinnedPresetId ?? '';
     chatPresetMap  = settings.chatPresetMap;
 
-    // 清除已失效的 chatPresetMap 條目
-    const validIds = new Set(presets.map(p => p.id));
-    chatPresetMap = await StorageManager.mutateChatPresetMap(map => {
-        for (const [uuid, pid] of Object.entries(map)) {
-            if (pid && !validIds.has(pid)) {
-                delete map[uuid];
-            }
-        }
-    });
-
-    enableToggle.checked = settings.isEnabled;
+    // 十二組設定鍵對 DOM 的對應集中於 popup.settings-view.js
+    window.__DS_PopupSettingsView.applySettingsToDom({
+        enableToggle, includeThinkingToggle, includeReferencesToggle,
+        sidebarAutoHideToggle, hideThinkingToggle, showSystemTimeToggle,
+        preventAutoScrollToggle, websearchRadios,
+        chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
+        inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
+    }, settings);
     applyMasterSwitchUI(settings.isEnabled);
 
-    if (includeThinkingToggle)   includeThinkingToggle.checked   = settings.includeThinking;
-    if (includeReferencesToggle) includeReferencesToggle.checked = settings.includeReferences;
-    if (sidebarAutoHideToggle)   sidebarAutoHideToggle.checked   = settings.sidebarAutoHide;
-    if (hideThinkingToggle)      hideThinkingToggle.checked      = settings.hideThinking;
-    if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.showSystemTime;
-    if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
-    if (websearchRadios.length) {
-        websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle === 'default' ? 'on' : (settings.websearchToggle ?? 'on'))); });
-    }
-
-    if (chatWidthToggle && chatWidthSlider && chatWidthValue) {
-        chatWidthToggle.checked = settings.chatWidthEnabled;
-        chatWidthSlider.value   = settings.chatWidth;
-        chatWidthValue.textContent = settings.chatWidth + '%';
-        if (chatWidthSliderContainer) {
-            chatWidthSliderContainer.classList.toggle('collapsed', !settings.chatWidthEnabled);
-        }
-    }
-    if (inputWidthToggle && inputWidthSlider && inputWidthValue) {
-        inputWidthToggle.checked = settings.inputWidthEnabled;
-        inputWidthSlider.value   = settings.inputWidth;
-        inputWidthValue.textContent = settings.inputWidth + '%';
-        if (inputWidthSliderContainer) {
-            inputWidthSliderContainer.classList.toggle('collapsed', !settings.inputWidthEnabled);
-        }
-    }
-
-    // 判斷是否在 DeepSeek 分頁並調整活躍提示詞組
-    try {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tabs[0] && tabs[0].url && tabs[0].url.includes('chat.deepseek.com')) {
-            const uuid  = presetManager.extractUuidFromUrl(tabs[0].url);
-            const tabId = tabs[0].id;
-            currentTabUuid = uuid || null;
-
-            if (uuid && chatPresetMap[uuid]) {
-                // 已綁定對話：自動選擇對應提示詞組
-                activePresetId = chatPresetMap[uuid];
-                await StorageManager.saveActivePresetId(activePresetId);
-            } else {
-                // 未綁定對話：從內容腳本查詢 pending preset
-                const pending = await presetManager.getPendingPresetIdFromContentScript(tabId);
-                activePresetId = (pending && presets.some(p => p.id === pending)) ? pending : '';
-                await StorageManager.saveActivePresetId(activePresetId);
-            }
-        } else {
-            // 非 DeepSeek 頁面：預設空白選項
-            activePresetId = '';
-        }
-    } catch (err) {
-        // 查詢分頁失敗：安全回退為空白
-        activePresetId = '';
-    }
+    // 判斷是否在 DeepSeek 分頁並調整活躍提示詞組（委派至 popup.preset-manager.js）
+    await presetManager.syncActivePresetWithCurrentTab();
 
     customSelect = window.__DSSCustomSelect.createPresetCustomSelect({
         triggerEl:    document.getElementById('presetSelect'),
@@ -251,13 +202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         onSelect: async (id) => {
             Modal.dismissActive();
 
-            if (currentTabUuid && id !== '') {
-                await StorageManager.bindChatToPreset(currentTabUuid, id);
-                chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
-            } else if (currentTabUuid && id === '') {
-                await StorageManager.unbindChat(currentTabUuid);
-                chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
-            }
+            await presetManager.bindCurrentChat(id);
 
             activePresetId = id;
             await StorageManager.saveActivePresetId(activePresetId);
@@ -311,56 +256,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 按鈕 & 開關事件綁定
     // ────────────────────────────────────────────
 
-    // --- 新增提示詞組 ---
-    addPresetBtn.addEventListener('click', async () => {
-        const name = await Modal.prompt({
-            title: dsI18n.t('addPresetDialogTitle'),
-            placeholder: dsI18n.t('addPresetPlaceholder')
-        });
-
-        if (!name) return;
-
-        // 名稱重複檢查
-        if (presets.some(p => p.name === name)) {
-            await Modal.confirm({
-                title: dsI18n.t('duplicateNameTitle'),
-                message: dsI18n.t('duplicateNameMessage', { name }),
-                confirmText: dsI18n.t('confirmButton'),
-                cancelText: null
-            });
-            return;
-        }
-
-        const newPreset = {
-            id:        'preset-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-            name:      name,
-            content:   '',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            globalPromptEnabled: true
-        };
-
-        presets.push(newPreset);
-        activePresetId = newPreset.id;
-
-        await Promise.all([
-            StorageManager.savePromptPresets(presets),
-            StorageManager.saveActivePresetId(activePresetId)
-        ]);
-        await refreshSyncStatus();
-
-        // 若在對話頁面則自動綁定新提示詞組
-        if (currentTabUuid) {
-            await StorageManager.bindChatToPreset(currentTabUuid, activePresetId);
-            chatPresetMap = (await StorageManager.getSettings()).chatPresetMap;
-            await refreshSyncStatus();
-        }
-
-        customSelect.render();
-        updateEditPresetBtnState();
-        showSaveStatus();
-        sendActivePresetToContentScript();
-    });
+    // --- 新增提示詞組（委派至 popup.preset-manager.js） ---
+    addPresetBtn.addEventListener('click', () => presetManager.requestAddPreset());
 
     // --- 編輯器視窗（委派至 popup.editor-window.js） ---
     const editorWindowManager = window.__DS_PopupEditorWindow.createEditorWindowManager({

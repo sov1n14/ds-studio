@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
+import { resetStorageOnChangedListeners, getStorageOnChangedListenerCount } from '../setup/vitest.setup.js';
 
 /**
  * NOTE on module-level cache bleed:
@@ -155,5 +156,44 @@ describe('StorageManager legacy chatPresetMap migration', () => {
             const localData = await chrome.storage.local.get('chatPresetMap');
             expect(localData.chatPresetMap).toBeUndefined();
         });
+    });
+});
+
+/**
+ * U8 — initialize() is re-entrant (the popup, the content script and the service
+ * worker each call it, and the promptPresets migration branch re-enters it
+ * recursively), so the chunk-cache invalidator it installs must be registered
+ * exactly once per context no matter how many times initialize() runs.
+ * Otherwise every extra call leaves another live chrome.storage.onChanged
+ * listener behind, and each subsequent storage write fans out to all of them.
+ */
+describe('U8 — initialize() installs the chunk-cache invalidator exactly once', () => {
+    beforeEach(() => {
+        resetStorageOnChangedListeners();
+    });
+
+    it('registers exactly one chrome.storage.onChanged listener across 3 initialize() calls', async () => {
+        expect(getStorageOnChangedListenerCount()).toBe(0);
+
+        await StorageManager.initialize();
+        expect(getStorageOnChangedListenerCount()).toBe(1);
+
+        await StorageManager.initialize();
+        await StorageManager.initialize();
+
+        expect(getStorageOnChangedListenerCount()).toBe(1);
+    });
+
+    it('still invalidates the chunk caches after repeated initialize() calls', async () => {
+        await StorageManager.initialize();
+        await StorageManager.initialize();
+
+        StorageManager._chunkIndexCache = new Map();
+        StorageManager._metaCache = { version: 1, chunkCount: 0, chunkSizes: [] };
+
+        await chrome.storage.sync.set({ chatPresetMapMeta: { version: 2, chunkCount: 0, chunkSizes: [] } });
+
+        expect(StorageManager._chunkIndexCache).toBeNull();
+        expect(StorageManager._metaCache).toBeNull();
     });
 });

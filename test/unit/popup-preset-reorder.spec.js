@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import StorageManager from '../../utils/storage-manager.js';
+import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
 
 // NOTE: this file used to import reorderPresets() from popup/popup-utils.js,
 // a module with ZERO production consumers (it was never loaded by any real
@@ -14,20 +12,15 @@ import StorageManager from '../../utils/storage-manager.js';
 // the same reorder table the old tests asserted, exercised through the real
 // UI surface instead of a dead copy.
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 beforeAll(() => {
     // Mirrors the <script> load order declared in popup/popup.html, and the
     // same loading pattern used by test/unit/popup-custom-select.spec.js.
-    if (!globalThis.dsI18n) {
-        const i18nCode = readFileSync(resolve(__dirname, '../../utils/i18n.js'), 'utf-8');
-        eval('var chrome=globalThis.chrome,document=globalThis.document,window=globalThis;' + i18nCode);
-    }
-    const rendererCode = readFileSync(resolve(__dirname, '../../popup/preset-item-renderer.js'), 'utf-8');
-    eval(rendererCode);
-    const code = readFileSync(resolve(__dirname, '../../popup/custom-select.js'), 'utf-8');
-    eval(code);
+    loadI18nOnce();
+    // custom-select.js does `const _debounce = DSSDebounce;` — the shared helper must be on globalThis first.
+    evalPopupScript('utils/debounce.js');
+    evalPopupScript('popup/preset-item-renderer.js');
+    evalPopupScript('popup/custom-select.drag.js');
+    evalPopupScript('popup/custom-select.js');
 
     // happy-dom does not implement PointerEvent capture; the shipped code
     // calls handle.setPointerCapture(e.pointerId) unconditionally on drag start.

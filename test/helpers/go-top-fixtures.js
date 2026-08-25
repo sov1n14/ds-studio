@@ -84,6 +84,10 @@ export function createFullWrapperWithNativeButton() {
  */
 export function resetGoToTopState() {
     GoToTop.disable();
+    // disable() only tears down when the feature was enabled; a DOM-readiness
+    // poll armed by a direct _tryConnectDom() call in a test would otherwise
+    // survive into the next test and inject a button into its DOM.
+    GoToTop._stopConnectRetry();
     GoToTop.enabled = false;
     GoToTop._masterEnabled = false;
     GoToTop._locked = false;
@@ -94,15 +98,14 @@ export function resetGoToTopState() {
     GoToTop._scrollPromise = null;
     GoToTop._scrollReject = null;
     GoToTop._observer = null;
-    GoToTop._routeObserver = null;
     GoToTop._wrapperObserver = null;
     GoToTop._wrapperObserverTimer = null;
     GoToTop._scrollListener = null;
     GoToTop._popstateHandler = null;
     GoToTop._observerTimer = null;
-    GoToTop._enableRetryTimer = null;
-    GoToTop._enableRetryCount = 0;
     GoToTop._lastPath = '';
+    clearTimeout(GoToTop._routeChangeTimer);
+    GoToTop._routeChangeTimer = null;
     document.body.innerHTML = '';
     vi.restoreAllMocks();
 }

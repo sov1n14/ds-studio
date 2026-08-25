@@ -5,11 +5,15 @@
 (function (root) {
     'use strict';
 
+    // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
     const bundle = {
 
         _buildThinkBlock(thinkFragment, elapsedSecs) {
             const container = document.createElement('div');
-            container.className = '_74c0879';
+            container.className = selectors.THINK_BLOCK_CLASS;
             container.setAttribute('style',
                 '--collapsible-area-title-height: 38px;' +
                 '--group-title-sticky-base-top: 0px;' +
@@ -28,7 +32,7 @@
                     container.setAttribute('data-ht-collapsed', '1');
                 }
                 // 切換思考內容的顯示狀態
-                const thinkContent = container.querySelector('.ds-think-content');
+                const thinkContent = container.querySelector(selectors.THINK_CONTENT_SELECTOR);
                 if (thinkContent) {
                     thinkContent.style.display = isCollapsed ? 'block' : 'none';
                 }
@@ -64,7 +68,7 @@
             container.appendChild(spacer);
 
             const thinkContent = document.createElement('div');
-            thinkContent.className = 'e1675d8b ds-think-content _767406f';
+            thinkContent.className = 'e1675d8b ' + selectors.THINK_CONTENT_CLASS + ' _767406f';
 
             const loadingDots = document.createElement('div');
             loadingDots.className = 'ddd26891 _9b52f6c';
@@ -73,11 +77,11 @@
             thinkContent.appendChild(loadingDots);
 
             const sep = document.createElement('div');
-            sep.className = '_9ecc93a';
+            sep.className = selectors.THINK_SEPARATOR_CLASS;
             thinkContent.appendChild(sep);
 
             const md = document.createElement('div');
-            md.className = 'ds-markdown';
+            md.className = selectors.MARKDOWN_CLASS;
             md.setAttribute('style', '--ds-md-zoom: 1.143;');
             md.innerHTML = this._renderMarkdown(thinkFragment.content);
             thinkContent.appendChild(md);
@@ -87,7 +91,7 @@
             container.addEventListener('click', function (e) {
                 if (e.target !== container) return;
                 var isCollapsed = this.getAttribute('data-ht-collapsed') === '1';
-                var tc = this.querySelector('.ds-think-content');
+                var tc = this.querySelector(selectors.THINK_CONTENT_SELECTOR);
                 if (tc) {
                     tc.style.display = isCollapsed ? 'none' : 'block';
                 }
