@@ -28,6 +28,15 @@ const DSS_FIBER_DELETE_MESSAGE_TYPE = 'DSS_FIBER_DELETE_SESSION';
 // window.postMessage type：MAIN world 回報 Fiber 刪除結果給 ISOLATED world
 const DSS_FIBER_DELETE_RESULT_TYPE = 'DSS_FIBER_DELETE_RESULT';
 
+// window.postMessage type：MAIN world XHR hook 攔截到 authorization 標頭時回傳給 ISOLATED world
+const DSS_AUTH_CAPTURED_TYPE = 'DSS_AUTH_CAPTURED';
+
+// window.postMessage type：MAIN world history hook 偵測到 SPA 導航（pushState/replaceState）時通知 ISOLATED world
+const DSS_HISTORY_NAV_TYPE = 'DSS_HISTORY_NAV';
+
+// window.postMessage type：MAIN world XHR hook 完成一段 SSE 片段組裝後回傳給 ISOLATED world
+const DSS_FRAGMENT_COMPLETE_TYPE = 'DSS_FRAGMENT_COMPLETE';
+
 // chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt}>
 const DSS_PENDING_DELETES_SYNC_KEY = 'dss-pending-deletes-sync';
 // chrome.storage.local：本機最近有效 bearer token（絕不同步）
@@ -69,6 +78,9 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_CHAT_COMPLETION_MESSAGE_TYPE,
     DSS_FIBER_DELETE_MESSAGE_TYPE,
     DSS_FIBER_DELETE_RESULT_TYPE,
+    DSS_AUTH_CAPTURED_TYPE,
+    DSS_HISTORY_NAV_TYPE,
+    DSS_FRAGMENT_COMPLETE_TYPE,
     DSS_PENDING_DELETES_SYNC_KEY,
     DSS_LAST_AUTH_TOKEN_KEY,
     DSS_OPEN_TEMP_UUIDS_KEY,

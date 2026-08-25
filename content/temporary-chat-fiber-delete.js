@@ -30,6 +30,7 @@
      */
     function postResult(sessionId, success) {
         window.postMessage({
+            // 必須與 temporary-chat-constants.js 的 DSS_FIBER_DELETE_RESULT_TYPE 值一致（本檔於 MAIN world 執行，看不到 ISOLATED world 常數）
             type: 'DSS_FIBER_DELETE_RESULT',
             sessionId: sessionId,
             success: success

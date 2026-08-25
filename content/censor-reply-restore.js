@@ -202,7 +202,7 @@ const CensorReplyRestore = {
 
         window.addEventListener('message', (e) => {
             if (e.source !== window) return;
-            if (e.data?.type !== 'DSS_FRAGMENT_COMPLETE') return;
+            if (e.data?.type !== globalThis.DSS_FRAGMENT_COMPLETE_TYPE) return;
             this._onFragmentComplete(e.data);
         });
     },

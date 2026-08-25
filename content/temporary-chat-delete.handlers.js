@@ -36,7 +36,7 @@
          */
         function handleAuthMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
+            if (e.data?.type !== globalThis.DSS_AUTH_CAPTURED_TYPE) return;
             state.capturedAuthToken = e.data.authorization || null;
             if (!e.data.authorization) return;
             // 委派 SW 的待刪佇列路由；fire-and-forget，失敗僅記錄
@@ -79,7 +79,7 @@
          */
         function handleHistoryNavMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== 'DSS_HISTORY_NAV') return;
+            if (e.data?.type !== globalThis.DSS_HISTORY_NAV_TYPE) return;
             // 建構合成事件，使 handleNavigationEvent 可直接重用
             handleNavigationEvent({
                 destination: { url: e.data.url },
