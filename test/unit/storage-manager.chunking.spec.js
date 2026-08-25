@@ -563,7 +563,7 @@ describe('StorageManager chunked chatPresetMap', () => {
 
     describe('12. Hot-path lock-avoidance', () => {
         let SM;
-        const LOCK_KEY = 'chatPresetMapLock';
+        const LOCK_KEY = StorageManager.CHAT_PRESET_MAP_LOCK_KEY;
 
         beforeEach(async () => {
             vi.resetModules();

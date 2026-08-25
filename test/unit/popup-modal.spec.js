@@ -1,31 +1,15 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { evalPopupScript } from '../helpers/popup-script-loader.js';
 
 let Modal;
 
 beforeAll(() => {
-    const code = readFileSync(resolve(__dirname, '../../popup/popup.modal.js'), 'utf-8');
-    // Extract the Modal object definition from the top of popup.js (lines 1-149).
-    // Modal is a top-level const, not inside DOMContentLoaded.
-    const match = code.match(/const Modal = \{[\s\S]*?\n\};/);
-    if (!match) {
-        throw new Error('Could not extract Modal object from popup.js');
-    }
-    // Indirect eval runs in global scope. 'var' creates a globalThis property;
-    // 'const' would only create a global lexical binding that is not accessible
-    // via globalThis, so we transform the declaration.
-    const globalEval = eval;
-    globalEval(match[0].replace('const Modal', 'var Modal'));
-    if (typeof globalThis.Modal !== 'object') {
-        throw new Error('Extracted code did not define Modal as an object');
-    }
-    Modal = globalThis.Modal;
+    // popup.modal.js is a classic script that publishes window.__DS_PopupModal.Modal.
+    // It has no load-time side effect: all DOM lookups run inside Modal.init(),
+    // listener binding inside _setup()/_buildButton(); its only external dependency
+    // is the bare global dsI18n, initialized for every spec by vitest.setup.js.
+    evalPopupScript('popup/popup.modal.js');
+    Modal = window.__DS_PopupModal.Modal;
 });
 
 function setupModalDOM() {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { evalPopupScript, loadI18nOnce, readProjectFile } from '../helpers/popup-script-loader.js';
+import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
 
 let Modal;
 
@@ -15,18 +15,9 @@ beforeAll(() => {
     evalPopupScript('popup/custom-select.drag.js');
     evalPopupScript('popup/custom-select.js');
 
-    // Extract Modal object from popup.js for modal-integration tests
-    const popupCode = readProjectFile('popup/popup.modal.js');
-    const match = popupCode.match(/const Modal = \{[\s\S]*?\n\};/);
-    if (!match) {
-        throw new Error('Could not extract Modal object from popup.js');
-    }
-    const globalEval = eval;
-    globalEval(match[0].replace('const Modal', 'var Modal'));
-    if (typeof globalThis.Modal !== 'object') {
-        throw new Error('Extracted code did not define Modal as an object');
-    }
-    Modal = globalThis.Modal;
+    // popup.modal.js publishes window.__DS_PopupModal.Modal for modal-integration tests.
+    evalPopupScript('popup/popup.modal.js');
+    Modal = window.__DS_PopupModal.Modal;
 });
 
 function makeDOM() {
