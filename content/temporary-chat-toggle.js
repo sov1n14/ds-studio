@@ -194,7 +194,7 @@ const TemporaryChatToggle = (() => {
     function tryInject() {
         if (!_masterEnabled) return;
 
-        const anchor = document.querySelector('div' + _selectors.FLOATING_BUTTON_BAR_SELECTOR);
+        const anchor = document.querySelector(_selectors.FLOATING_BUTTON_BAR_DIV_SELECTOR);
 
         if (!anchor) return;
         injectToggleRow(anchor);

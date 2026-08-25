@@ -123,7 +123,7 @@
          */
         function redispatchClick(button, capturedTextarea, isEditSendButton) {
             requestAnimationFrame(() => {
-                const ta = isEditSendButton ? capturedTextarea : document.querySelector('textarea');
+                const ta = isEditSendButton ? capturedTextarea : document.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
                 if (!ta || ta.value.trim() === '') return;
                 ctx.setIsInjecting(true);
                 button.click();

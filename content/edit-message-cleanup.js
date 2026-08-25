@@ -255,7 +255,7 @@ function waitForNewTextarea(preExisting, onFound) {
      * @returns {HTMLTextAreaElement|null}
      */
     function findNewTextarea() {
-        const allTextareas = document.querySelectorAll('textarea');
+        const allTextareas = document.querySelectorAll(__DS_EditCleanupSelectors.INPUT_TEXTAREA_SELECTOR);
         for (const ta of allTextareas) {
             if (!preExisting.has(ta)) return ta;
         }
@@ -347,7 +347,7 @@ function handleEditButtonClick(e) {
     if (!editButton) return;
 
     // 快照點擊當下已存在的所有 textarea，用於後續辨識「新出現的」編輯 textarea
-    const preExisting = new Set(document.querySelectorAll('textarea'));
+    const preExisting = new Set(document.querySelectorAll(__DS_EditCleanupSelectors.INPUT_TEXTAREA_SELECTOR));
 
     // 等候新出現的編輯 textarea（DeepSeek 在點擊後非同步渲染）
     waitForNewTextarea(preExisting, (editTextarea) => {

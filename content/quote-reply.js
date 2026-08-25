@@ -90,7 +90,7 @@ const QuoteReply = {
             });
 
             btn.addEventListener('click', () => {
-                const textarea = document.querySelector('textarea');
+                const textarea = document.querySelector(__DS_QuoteReplySelectors.INPUT_TEXTAREA_SELECTOR);
                 if (textarea) {
                     QuoteReply.injectQuote(textarea, QuoteReply.selectedText);
                 }

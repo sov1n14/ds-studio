@@ -60,7 +60,7 @@
         var wrapper = container.querySelector(HEADER_WRAPPER_HASH);
         if (!wrapper) return { el: null, path: 'none' };
 
-        var roleButtons = wrapper.querySelectorAll('div[role="button"]');
+        var roleButtons = wrapper.querySelectorAll(selectors.ROLE_BUTTON_DIV_SELECTOR);
 
         // 語意主路徑：帶 inline min-width: 44px 的按鈕為 new-chat 按鈕
         for (var j = 0; j < roleButtons.length; j++) {

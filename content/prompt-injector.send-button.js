@@ -90,7 +90,7 @@
         let firstEmptyTextarea = null;
 
         while (el && el !== document.body) {
-            const ta = el.querySelector('textarea');
+            const ta = el.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
             if (ta) {
                 if (ta.value.trim() !== '') return ta;
                 if (!firstEmptyTextarea) firstEmptyTextarea = ta;
@@ -98,7 +98,7 @@
             el = el.parentElement;
         }
 
-        const globalFallbackTextarea = document.querySelector('textarea');
+        const globalFallbackTextarea = document.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
         const isGlobalFallbackNonEmpty = !!globalFallbackTextarea && globalFallbackTextarea.value.trim() !== '';
         if (isGlobalFallbackNonEmpty) return globalFallbackTextarea;
         return firstEmptyTextarea || globalFallbackTextarea;
@@ -113,7 +113,7 @@
      * @returns {HTMLTextAreaElement|null}
      */
     function resolveTextareaForButton(button, isEditSendButton) {
-        if (!isEditSendButton) return document.querySelector('textarea');
+        if (!isEditSendButton) return document.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
         if (document.activeElement?.tagName === 'TEXTAREA') return document.activeElement;
         return findTextareaNearButton(button);
     }
