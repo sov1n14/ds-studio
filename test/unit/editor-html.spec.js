@@ -28,7 +28,7 @@ describe('editor.html script tag structure', () => {
         ['storage-manager.setters.js ninth', 8, '../../utils/storage-manager.setters.js'],
         ['storage-manager.settings-read.js tenth (immediately before storage-manager.js)', 9, '../../utils/storage-manager.settings-read.js'],
         ['storage-manager.js eleventh', 10, '../../utils/storage-manager.js'],
-        ['messaging.js twelfth', 11, '../../utils/messaging.js'],
+        ['tab-control.js twelfth', 11, '../../utils/tab-control.js'],
         ['i18n.locales.js thirteenth (immediately before i18n.js)', 12, '../../utils/i18n.locales.js'],
         ['i18n.js fourteenth (between i18n.locales.js and editor.js)', 13, '../../utils/i18n.js'],
         ['popup.i18n-apply.js fifteenth (after i18n.js)', 14, '../popup.i18n-apply.js'],
@@ -45,11 +45,12 @@ describe('editor.html script tag structure', () => {
         expect(loggerIdx).toBeLessThan(smFirstIdx);
     });
 
-    it('ensures i18n.js appears after messaging.js and before editor.js (positional invariant)', () => {
-        const msgIdx = scriptSrcs.indexOf('../../utils/messaging.js');
+    it('ensures i18n.js appears after tab-control.js and before editor.js (positional invariant)', () => {
+        const tabCtrlIdx = scriptSrcs.indexOf('../../utils/tab-control.js');
         const i18nIdx = scriptSrcs.indexOf('../../utils/i18n.js');
         const edIdx = scriptSrcs.indexOf('editor.js');
-        expect(i18nIdx).toBeGreaterThan(msgIdx);
+        expect(tabCtrlIdx).toBeGreaterThanOrEqual(0);
+        expect(i18nIdx).toBeGreaterThan(tabCtrlIdx);
         expect(i18nIdx).toBeLessThan(edIdx);
     });
 });

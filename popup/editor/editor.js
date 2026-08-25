@@ -134,8 +134,8 @@ async function saveContent(target, value, name) {
         preset.updatedAt = Date.now();
         await StorageManager.saveOnePromptPreset(preset);
 
-        // 廣播給活躍的 DeepSeek 頁籤（選用鏈以免 messaging.js 載入失敗時中斷儲存）
-        window.DSVMessaging?.broadcastActivePreset(target.id, value)
+        // 廣播給活躍的 DeepSeek 頁籤（選用鏈以免 tab-control.js 載入失敗時中斷儲存）
+        window.DSSTabControl?.broadcastActivePreset(target.id, value)
             ?.catch(() => {});
         return;
     }

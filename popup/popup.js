@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function sendActivePresetToContentScript() {
         const preset  = presets.find(p => p.id === activePresetId);
         const content = preset?.content ?? '';
-        window.DSVMessaging?.broadcastActivePreset(activePresetId, content);
+        window.DSSTabControl?.broadcastActivePreset(activePresetId, content);
     }
 
     // --- 建立 pin manager（釘選預設提示詞組） ---
