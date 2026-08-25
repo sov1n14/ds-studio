@@ -20,10 +20,11 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { evalPopupScript } from '../helpers/popup-script-loader.js';
+import '../../utils/editor-window-constants.js';
 
 const BASE_URL = 'chrome-extension://EXTID/popup/editor/editor.html';
-const GLOBAL_KEY = 'dss-editor-window-id-global';
-const PRESET_KEY = 'dss-editor-window-id-preset';
+const GLOBAL_KEY = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.global;
+const PRESET_KEY = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.preset;
 
 beforeAll(() => {
     // popup.editor-window.js reads globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS behind a

@@ -10,6 +10,7 @@
  *   - Normal merge when restored_messages is absent
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/temporary-chat-constants.js';
 import StorageManager from '../../utils/storage-manager.js';
 
 const K = StorageManager.KEYS;
@@ -290,7 +291,7 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
     // never be written back by reconciliation, in either direction.
     // ----------------------------------------------------------------
     describe('Foreign-key exclusion — keys outside StorageManager.KEYS must not be reconciled', () => {
-        const FOREIGN_KEY = 'dss-temporary-chat-enabled';
+        const FOREIGN_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
 
         it('does not write the foreign key to sync or local when local=false, sync=true', async () => {
             await populateDefaults();

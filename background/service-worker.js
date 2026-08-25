@@ -18,6 +18,7 @@ importScripts(
     '../content/temporary-chat-pending-store.js',
     '../utils/settings-message-constants.js',
     '../utils/editor-window-constants.js',
+    'service-worker-constants.js',
     'settings-routes.js',
     'pending-store-routes.js',
     'editor-window-routes.js'
@@ -32,8 +33,6 @@ DSSPendingStoreRoutes.install();
 // 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSEditorWindowRoutes.install();
 
-// 重試 alarm 名稱
-const RETRY_ALARM_NAME = 'dss-delete-retry';
 // 最大嘗試次數（含首次）
 const MAX_ATTEMPTS = 3;
 // 重試間隔（分鐘），0.5 = 30 秒
@@ -42,8 +41,6 @@ const RETRY_DELAY_MINUTES = 0.5;
 // SW 終止時本旗標歸零；補救流程幂等，代價僅為最多多跑一次結果相同的補救
 let _remediationInFlight = false;
 
-// 雲端同步重試 alarm 名稱
-const SYNC_RETRY_ALARM_NAME = 'dss-sync-retry';
 // 雲端同步重試週期（分鐘）
 const SYNC_RETRY_PERIOD_MINUTES = 5;
 

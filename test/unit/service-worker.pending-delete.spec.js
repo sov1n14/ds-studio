@@ -16,11 +16,12 @@
  */
 import '../../utils/deepseek-api.js';
 import '../../utils/temporary-chat-constants.js';
+import '../../background/service-worker-constants.js';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
-const RETRY_ALARM_NAME = 'dss-delete-retry';
+const RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
 const SCHEDULE_DELETE_RETRY = 'DSS_SCHEDULE_DELETE_RETRY';
-const LEASE_TTL_MS = 600000;
+const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
 const EXPIRED = 0; // lastActiveAt far in the past → lease expired
 const fresh = () => Date.now(); // lease refreshed now → not expired
 
@@ -207,7 +208,7 @@ describe('onChanged (sync, dss-pending-deletes-sync) — lease gating + loop gua
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: true });
 
-        chrome.storage.onChanged.callListeners({ 'dss-pending-deletes-sync': { newValue: [] } }, 'sync');
+        chrome.storage.onChanged.callListeners({ [globalThis.DSS_PENDING_DELETES_SYNC_KEY]: { newValue: [] } }, 'sync');
         await flushAll();
 
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
@@ -224,7 +225,7 @@ describe('onChanged (sync, dss-pending-deletes-sync) — lease gating + loop gua
         pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'uFresh', attemptCount: 0, lastActiveAt: fresh() }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
 
-        chrome.storage.onChanged.callListeners({ 'dss-pending-deletes-sync': { newValue: [] } }, 'sync');
+        chrome.storage.onChanged.callListeners({ [globalThis.DSS_PENDING_DELETES_SYNC_KEY]: { newValue: [] } }, 'sync');
         await flushAll();
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -234,7 +235,7 @@ describe('onChanged (sync, dss-pending-deletes-sync) — lease gating + loop gua
     it('area filter: area "local" is ignored', async () => {
         pendingStoreStub.getPendingDeletes.mockClear();
 
-        chrome.storage.onChanged.callListeners({ 'dss-pending-deletes-sync': { newValue: [] } }, 'local');
+        chrome.storage.onChanged.callListeners({ [globalThis.DSS_PENDING_DELETES_SYNC_KEY]: { newValue: [] } }, 'local');
         await flushMicrotasks();
 
         expect(pendingStoreStub.getPendingDeletes).not.toHaveBeenCalled();

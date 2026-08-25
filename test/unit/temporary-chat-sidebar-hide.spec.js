@@ -5,7 +5,72 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/temporary-chat-constants.js';
 import '../../content/ds-selectors.js';
 import '../../content/temporary-chat-sidebar-hide.js';
-import { makeDateGroup, makeChatAnchor, mountSidebar } from '../helpers/sidebar-fixtures.js';
+
+// --- Sidebar DOM fixtures (inlined; sole consumer) ---
+// Markup shape transcribed from the captured snapshot to-do/samples/side-chat.html,
+// NOT derived from content/ds-selectors.js: a fixture built from the selector it
+// exercises would prove nothing.
+const CHAT_PATH_PREFIX = '/a/chat/s/';
+const ABSOLUTE_ORIGIN = 'https://chat.deepseek.com';
+
+function makeChatAnchor(uuid, { absolute = false } = {}) {
+    const a = document.createElement('a');
+    a.className = '_546d736 b64fb9ae';
+    a.setAttribute('tabindex', '0');
+    const base = absolute ? ABSOLUTE_ORIGIN : '';
+    a.setAttribute('href', `${base}${CHAT_PATH_PREFIX}${uuid}`);
+
+    const ring = document.createElement('div');
+    ring.className = 'ds-focus-ring';
+
+    const title = document.createElement('div');
+    title.className = 'c08e6e93';
+    title.textContent = 'chat title';
+
+    const actions = document.createElement('div');
+    actions.className = '_254829d';
+    const actionBtn = document.createElement('div');
+    actionBtn.setAttribute('role', 'button');
+    actionBtn.className = 'ds-button _2090548';
+    actionBtn.setAttribute('tabindex', '0');
+    actions.appendChild(actionBtn);
+
+    a.appendChild(ring);
+    a.appendChild(title);
+    a.appendChild(actions);
+    return a;
+}
+
+function makeDateGroup({ uuids = [], label = '今天', groupClass = '_3098d02', absolute = false } = {}) {
+    const group = document.createElement('div');
+    group.className = groupClass;
+
+    const dateLabel = document.createElement('div');
+    dateLabel.className = 'f3d18f6a';
+    dateLabel.textContent = label;
+    group.appendChild(dateLabel);
+
+    const byUuid = new Map();
+    const anchors = uuids.map((uuid) => {
+        const a = makeChatAnchor(uuid, { absolute });
+        group.appendChild(a);
+        byUuid.set(uuid, a);
+        return a;
+    });
+
+    return { group, dateLabel, anchors, byUuid };
+}
+
+function mountSidebar(...groups) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dc04ec1d';
+    const inner = document.createElement('div');
+    inner.className = 'b8812f16 a2f3d50e';
+    wrapper.appendChild(inner);
+    groups.forEach((g) => inner.appendChild(g));
+    document.body.appendChild(wrapper);
+    return { wrapper, inner };
+}
 
 // Derived from the CONTRACT, not from reading the module source.
 const HIDDEN_CLASS = 'ds-temp-chat-hidden';

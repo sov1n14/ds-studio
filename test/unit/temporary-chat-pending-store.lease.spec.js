@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const constantsExport = require('../../utils/temporary-chat-constants.js');
 
 const SYNC_KEY = 'dss-pending-deletes-sync';
-const LEASE_TTL_MS = 600000;
+const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
 
 // fake-timer storage helpers. The in-memory chrome.storage mock resolves
 // get/set via setTimeout(0). Under vi.useFakeTimers() those macrotasks never

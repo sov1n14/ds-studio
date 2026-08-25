@@ -141,13 +141,13 @@ describe('background/editor-window-routes', () => {
     });
 
     it('unknown message type: listener returns false, no windows.remove call, stored key survives untouched', async () => {
-        sessionData['dss-editor-window-id-global'] = 999;
+        sessionData[globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.global] = 999;
 
         const { result, sendResponse } = await send({ type: 'DSS_SOME_OTHER_TYPE' });
 
         expect(result).toBe(false);
         expect(chrome.windows.remove).not.toHaveBeenCalled();
-        expect(sessionData).toHaveProperty('dss-editor-window-id-global', 999);
+        expect(sessionData).toHaveProperty(globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.global, 999);
         expect(sendResponse).not.toHaveBeenCalled();
     });
 });
