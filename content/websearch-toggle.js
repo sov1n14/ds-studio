@@ -149,8 +149,7 @@ const WebSearchToggle = {
     /** 於呼叫時解析相依模組，同時支援瀏覽器全域與單元測試的 require。 */
     _resolveDeps() {
         return {
-            messageTypes: globalThis.DSS_SETTINGS_MSG
-                || (typeof require !== 'undefined' ? require('../utils/settings-message-constants.js') : null),
+            messageTypes: globalThis.getSettingsMessageTypes(),
             featureToggle: globalThis.DSSFeatureToggle
                 || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null),
         };

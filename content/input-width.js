@@ -45,7 +45,7 @@ const InputWidth = INPUT_WIDTH_FACTORY.create({
     },
 
     getCSS(percent) {
-        const vw = Math.min(Math.max(percent, this.MIN), this.MAX);
+        const vw = this.clampPercent(percent);
         const column = __DS_InputWidthSelectors.CONTENT_COLUMN_SELECTOR;
         const bar = __DS_InputWidthSelectors.FLOATING_BUTTON_BAR_SELECTOR;
         return `

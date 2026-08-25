@@ -30,11 +30,7 @@
     }
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
-    function resolveMessageTypes() {
-        const types = globalThis.DSS_SETTINGS_MSG;
-        if (!types) throw new Error('[DSS] settings-routes 需要 utils/settings-message-constants.js 先行載入');
-        return types;
-    }
+    const resolveMessageTypes = () => globalThis.getSettingsMessageTypes();
 
     /** 判斷變更鍵是否受監看：前綴不分區；完整鍵僅 local 區。 */
     function isWatchedKey(key, area) {

@@ -20,7 +20,7 @@ const ChatWidth = CHAT_WIDTH_FACTORY.create({
     ENABLED_KEY: StorageManager.KEYS.CHAT_WIDTH_ENABLED,
 
     getCSS(percent) {
-        const vw = Math.min(Math.max(percent, this.MIN), this.MAX);
+        const vw = this.clampPercent(percent);
         return `
 ${__DS_ChatWidthSelectors.VIRTUAL_LIST_SELECTOR} {
   --message-list-max-width: ${vw}vw !important;

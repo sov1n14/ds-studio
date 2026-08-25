@@ -36,13 +36,7 @@ const TemporaryChatEnabledFlag = (() => {
     }
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
-    function _messageTypes() {
-        const types = globalThis.DSS_SETTINGS_MSG;
-        if (!types) {
-            throw new Error('[DSS] temporary-chat-enabled-flag 需要 utils/settings-message-constants.js 先行載入');
-        }
-        return types;
-    }
+    const _messageTypes = () => globalThis.getSettingsMessageTypes();
 
     function isEnabled() {
         return _isEnabledCache;
@@ -98,7 +92,7 @@ const TemporaryChatEnabledFlag = (() => {
      * @param {{type?: string, area?: string, changes?: Object}} message
      */
     function _handleSettingsChanged(message) {
-        if (!message || message.type !== globalThis.DSS_SETTINGS_MSG?.SETTINGS_CHANGED) return;
+        if (!message || message.type !== globalThis.getSettingsMessageTypes().SETTINGS_CHANGED) return;
         if (message.area !== 'local') return;
 
         const changes = message.changes;

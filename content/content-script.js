@@ -65,13 +65,6 @@ const PresetOverlay = __overlayFactory.createPresetOverlay({
 var injectOverlayStyles = __overlayFactory.injectOverlayStyles;
 var removeOverlayStyles = __overlayFactory.removeOverlayStyles;
 
-/** 設定訊息型別常數（由 utils/settings-message-constants.js 在前載入）。 */
-function resolveSettingsMessageTypes() {
-    const types = __root.DSS_SETTINGS_MSG;
-    if (!types) throw new Error('content/content-script.js 需要 utils/settings-message-constants.js 先行載入');
-    return types;
-}
-
 // 唯一的 body 子樹觀察器：SPA 導覽偵測（DOM 變動通常伴隨路徑變更）。
 // 新增的 body 層級偵測需求一律掛在此處扇出，不得再開第二個 body 觀察器。
 function startBodyObserver(onBodyMutation) {
@@ -121,7 +114,7 @@ async function initSettings() {
  * area 沿用遷移前的範圍：local 與 sync 兩區的變更皆需反映。
  */
 function handleSettingsChangedMessage(message) {
-    if (!message || message.type !== resolveSettingsMessageTypes().SETTINGS_CHANGED) return;
+    if (!message || message.type !== globalThis.getSettingsMessageTypes().SETTINGS_CHANGED) return;
     if (message.area !== 'local' && message.area !== 'sync') return;
     if (!message.changes) return;
     if (!isExtensionContextValid()) return;

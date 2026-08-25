@@ -50,7 +50,7 @@
         const keys = feature.ownKey ? [MASTER_KEY, feature.ownKey] : [MASTER_KEY];
         try {
             const response = await chrome.runtime.sendMessage({
-                type: globalThis.DSS_SETTINGS_MSG.GET_SETTINGS,
+                type: globalThis.getSettingsMessageTypes().GET_SETTINGS,
                 keys,
             });
             if (!response || response.ok !== true) {
@@ -72,7 +72,7 @@
     }
 
     function _handleMessage(message) {
-        if (!message || message.type !== globalThis.DSS_SETTINGS_MSG.SETTINGS_CHANGED) return;
+        if (!message || message.type !== globalThis.getSettingsMessageTypes().SETTINGS_CHANGED) return;
         if (message.area !== 'local') return;
 
         const changes = message.changes;
