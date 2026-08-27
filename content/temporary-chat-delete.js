@@ -176,34 +176,6 @@ const TemporaryChatDelete = (() => {
         handleToggleChanged: handlers.handleToggleChanged,
         attachListeners,
         detachListeners,
-        __getState: () => ({
-            capturedAuthToken: state.capturedAuthToken,
-            trackedTemporaryUuid: state.trackedTemporaryUuid,
-            enabledFlagCache: readEnabledFlag(),
-            createDetected: state.createDetected,
-            completionDetected: state.completionDetected,
-            isPendingCreate: state.isPendingCreate,
-            coOccurrenceTimer: state.coOccurrenceTimer,
-            suppressNextUnloadDelete: state.suppressNextUnloadDelete,
-            isKeyboardRefresh: state.isKeyboardRefresh,
-            isListening: state.isListening,
-        }),
-        __setState: (s) => {
-            if ('capturedAuthToken' in s) state.capturedAuthToken = s.capturedAuthToken;
-            if ('trackedTemporaryUuid' in s) state.trackedTemporaryUuid = s.trackedTemporaryUuid;
-            if ('enabledFlagCache' in s) setEnabledFlagCache(s.enabledFlagCache);
-            if ('createDetected' in s) state.createDetected = s.createDetected;
-            if ('completionDetected' in s) state.completionDetected = s.completionDetected;
-            if ('isPendingCreate' in s) state.isPendingCreate = s.isPendingCreate;
-            if ('coOccurrenceTimer' in s) state.coOccurrenceTimer = s.coOccurrenceTimer;
-            if ('suppressNextUnloadDelete' in s) state.suppressNextUnloadDelete = s.suppressNextUnloadDelete;
-            if ('isKeyboardRefresh' in s) state.isKeyboardRefresh = s.isKeyboardRefresh;
-            if ('isListening' in s) state.isListening = s.isListening;
-        },
-        __resetState: () => {
-            Object.assign(state, _trackingPart.createState());
-            setEnabledFlagCache(false);
-        },
     };
 })();
 

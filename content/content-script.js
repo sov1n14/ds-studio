@@ -248,8 +248,5 @@ if (typeof module !== 'undefined' && module.exports) {
         formatSystemTime,
         formatTimezoneOffset,
         PresetOverlay,
-        __resetState: ChatBinding.__resetState,
-        __setState: ChatBinding.__setState,
-        __getState: ChatBinding.__getState,
     };
 }

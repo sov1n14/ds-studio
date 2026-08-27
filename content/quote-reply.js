@@ -276,19 +276,5 @@ if (typeof module !== 'undefined' && module.exports) {
         getButtonEl: QuoteReply.getButtonEl,
         enable: QuoteReply.enable,
         disable: QuoteReply.disable,
-        __resetState: () => {
-            QuoteReply.btnEl = null;
-            QuoteReply.selectedText = '';
-            QuoteReply.isScrollAttached = false;
-            clearTimeout(QuoteReply.debounceTimer);
-            QuoteReply.debounceTimer = null;
-        },
-        __setState: (s) => {
-            if ('selectedText' in s) QuoteReply.selectedText = s.selectedText;
-        },
-        __getState: () => ({
-            selectedText: QuoteReply.selectedText,
-            attachedScroll: QuoteReply.isScrollAttached,
-        }),
     };
 }

@@ -23,20 +23,8 @@
     // 新對話送出訊息後，允許 auto-bind 的等待時間（毫秒）
     const NEW_CHAT_UUID_WAIT_MS = 5000;
 
-    // 測試鏡像（__getState/__setState）開放的欄位；內部旗標（isInjecting、計時器）不外露
-    const OBSERVABLE_STATE_KEYS = [
-        'isEnabled',
-        'promptPrefix',
-        'globalDefaultPrompt',
-        'isGlobalPromptEnabled',
-        'showSystemTime',
-        'currentChatUuid',
-        'chatPresetMap',
-        'pendingPresetId',
-        'awaitingNewChatUuid',
-    ];
 
-    /** 建立一份全新的初始狀態；同時作為 __resetState 的唯一真實來源。 */
+    /** 建立一份全新的初始狀態。 */
     function createInitialBindingState() {
         return {
             isEnabled: false,
@@ -268,24 +256,7 @@
             markChatCreationAttempt,
             updatePromptPrefixFromBinding,
             handleChatChange,
-            setupNavigationDetection,
-
-            // === 測試鏡像（瀏覽器情境不使用） ===
-            __resetState: () => {
-                clearTimeout(state.awaitingNewChatUuidTimer);
-                Object.assign(state, createInitialBindingState());
-            },
-            __setState: (patch) => {
-                if (!patch) return;
-                OBSERVABLE_STATE_KEYS.forEach((key) => {
-                    if (key in patch) state[key] = patch[key];
-                });
-            },
-            __getState: () => {
-                const snapshot = {};
-                OBSERVABLE_STATE_KEYS.forEach((key) => { snapshot[key] = state[key]; });
-                return snapshot;
-            },
+            setupNavigationDetection
         };
     }
 
