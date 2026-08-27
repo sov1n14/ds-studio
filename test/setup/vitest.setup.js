@@ -38,7 +38,9 @@ import '../../utils/settings-message-constants.js';
 // temporary-chat-delete.* parts read DSS_* constants at call time. Placed at the top of
 // the preload block so it precedes all of them.
 import '../../utils/temporary-chat-constants.js';
+import '../../utils/storage-manager.keys.js';
 import '../../utils/storage-manager.chunk-lock.js';
+import '../../utils/storage-manager.rw.js';
 import '../../utils/storage-manager.sync.js';
 import '../../utils/storage-manager.presets.js';
 import '../../utils/storage-manager.chatmap.js';

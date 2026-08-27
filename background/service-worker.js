@@ -4,7 +4,9 @@
 // 注意：service worker 不載入 utils/i18n.js，背景層不輸出任何在地化字串
 importScripts(
     '../utils/logger.js',
+    '../utils/storage-manager.keys.js',
     '../utils/storage-manager.chunk-lock.js',
+    '../utils/storage-manager.rw.js',
     '../utils/storage-manager.sync.js',
     '../utils/storage-manager.presets.js',
     '../utils/storage-manager.chatmap.js',
