@@ -37,8 +37,9 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
     let cleanup;
 
     beforeEach(() => {
-        contentScript.__resetState();
-        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'sys' });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
 
         textarea = document.createElement('textarea');
         textarea.value = 'hello world';

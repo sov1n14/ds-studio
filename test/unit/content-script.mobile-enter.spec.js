@@ -85,8 +85,9 @@ describe('isMobileDevice Enter key guard', () => {
     let preventDefaultSpy;
 
     beforeEach(() => {
-        contentScript.__resetState();
-        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'sys' });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
 
         // Create and focus a textarea so document.activeElement is set
         textarea = document.createElement('textarea');

@@ -264,6 +264,7 @@ if (typeof window !== 'undefined' && !window.__DSS_QR_INITIALIZED__) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        state: QuoteReply,
         handleSelectionChange: QuoteReply.handleSelectionChange,
         injectQuote: QuoteReply.injectQuote,
         unionClientRects: QuoteReply.unionClientRects,

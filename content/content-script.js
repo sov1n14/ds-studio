@@ -234,6 +234,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Test export（瀏覽器中為 no-op）
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        state: bindingState,
         extractUuidFromUrl: (...a) => ChatBinding.extractUuidFromUrl(...a),
         buildInjectionPrefix,
         parseHtmlToMarkdown,

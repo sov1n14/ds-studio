@@ -156,6 +156,7 @@ const TemporaryChatDelete = (() => {
 
     return {
         init,
+        state,
         // 供單元測試使用的函式與狀態存取器匯出
         extractUuidFromUrl: tracking.extractUuidFromUrl,
         readEnabledFlag,
