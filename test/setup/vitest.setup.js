@@ -4,6 +4,8 @@ import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 // ── Globals preload (i18n) ──────────────────────────────────────────────────
 // dsI18n is referenced by many modules at load time. Load it first so the
 // IIFE runs and populates window.dsI18n before any dependent module evaluates.
+import '../../utils/i18n.locales.zhTW.js';
+import '../../utils/i18n.locales.en.js';
 import '../../utils/i18n.locales.js';
 import '../../utils/i18n.js';
 // init() is explicit since autoInit was removed. Placement is load-bearing: it MUST run
@@ -50,10 +52,17 @@ import '../../utils/storage-manager.init.js';
 import '../../utils/storage-manager.setters.js';
 import '../../utils/storage-manager.settings-read.js';
 import '../../content/censor-reply-restore.markdown.js';
+import '../../content/censor-reply-restore.dom.extract.js';
+import '../../content/censor-reply-restore.dom.resolve.js';
+import '../../content/censor-reply-restore.dom.inject.js';
+import '../../content/censor-reply-restore.dom.scan.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';
 import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
+import '../../content/go-top.render.button.js';
+import '../../content/go-top.render.inject.js';
+import '../../content/go-top.render.observer.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
 import '../../content/go-top.observers.js';
@@ -89,6 +98,11 @@ import '../../content/content-script.export.time.js';
 import '../../content/content-script.export.markdown.js';
 import '../../content/content-script.export.js';
 import '../../content/edit-message-cleanup.pure.js';
+import '../../content/mobile-sidebar-swipe.button.js';
+import '../../content/mobile-sidebar-swipe.gesture.js';
+import '../../content/mobile-sidebar-swipe.bind.js';
+import '../../content/mobile-sidebar-swipe.lifecycle.js';
+import '../../content/mobile-sidebar-swipe.js';
 
 // ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
 // The controller feature-detects it (typeof ResizeObserver === 'undefined') and
