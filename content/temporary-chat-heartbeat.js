@@ -23,6 +23,12 @@
         }
     }
 
+    /** 立即發送一次心跳（若有進行中的 session）；供外部或解凍事件直接呼叫。 */
+    function sendNow() {
+        if (!currentUuid) return;
+        sendHeartbeat(currentUuid);
+    }
+
     /**
      * 開始為指定 UUID 定期續約 lease。
      * 已對同一 UUID 執行中則不重複疊加計時器；換成不同 UUID 則取代現有計時器。
@@ -50,7 +56,13 @@
         currentUuid = null;
     }
 
-    root.TemporaryChatHeartbeat = { start, stop };
+    // 分頁解凍時立即補發心跳，避免 lease 在 setInterval 恢復前過期
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') sendNow();
+    });
+    document.addEventListener('pageshow', () => sendNow());
+
+    root.TemporaryChatHeartbeat = { start, stop, sendNow };
 
     // Test export（瀏覽器中為 no-op）
     if (typeof module !== 'undefined' && module.exports) module.exports = root.TemporaryChatHeartbeat;

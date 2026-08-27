@@ -18,5 +18,6 @@ export function makePendingStoreMock() {
         getLastAuthToken: vi.fn().mockResolvedValue(null),
         setLastAuthToken: vi.fn().mockResolvedValue(undefined),
         trackForDeletion: vi.fn().mockResolvedValue(undefined),
+        recordLeaseObservation: vi.fn().mockResolvedValue(undefined),
     };
 }

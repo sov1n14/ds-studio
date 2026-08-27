@@ -49,8 +49,9 @@ beforeAll(async () => {
         getOpenUuids: vi.fn().mockResolvedValue([]),
         clearOpenUuids: vi.fn().mockResolvedValue(undefined),
         getLastAuthToken: vi.fn().mockResolvedValue(null),
-        isLeaseExpired: (entry, now) =>
-            !Number.isFinite(entry?.lastActiveAt) || now - entry.lastActiveAt > LEASE_TTL_MS,
+        recordLeaseObservation: vi.fn(async (_uuid, lastActiveAt) => lastActiveAt),
+        isLeaseExpired: (entry, now, lastSeenChange) =>
+            !Number.isFinite(lastSeenChange) || now - lastSeenChange > LEASE_TTL_MS,
         refreshLease: vi.fn(),
         releaseLease: vi.fn(async (uuid) => {
             const queue = await pendingStoreStub.getPendingDeletes();
@@ -73,6 +74,7 @@ beforeEach(() => {
     pendingStoreStub.getOpenUuids.mockReset().mockResolvedValue([]);
     pendingStoreStub.clearOpenUuids.mockReset().mockResolvedValue(undefined);
     pendingStoreStub.getLastAuthToken.mockReset().mockResolvedValue(null);
+    pendingStoreStub.recordLeaseObservation.mockReset().mockImplementation(async (_uuid, lastActiveAt) => lastActiveAt);
     pendingStoreStub.refreshLease.mockReset();
     pendingStoreStub.releaseLease.mockClear();
     globalThis.StorageManager.isSyncedWithCloud.mockReset().mockResolvedValue(true);
@@ -121,11 +123,11 @@ describe('onStartup — remediation', () => {
         chrome.runtime.onStartup.callListeners();
         await flushAll();
 
-        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([{ chatUuid: 'u1', attemptCount: 1 }]);
-        expect(chrome.alarms.create).toHaveBeenCalledWith(RETRY_ALARM_NAME, { delayInMinutes: 0.5 });
+        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([{ chatUuid: 'u1', attemptCount: 1, lastActiveAt: 0 }]);
+        expect(chrome.alarms.create).toHaveBeenCalledWith(RETRY_ALARM_NAME, { periodInMinutes: 1 });
     });
 
-    it('attemptCount cap: expired entry {attemptCount:2} + not-ok → dropped (saved [])', async () => {
+    it('never-drop: expired entry {attemptCount:2} + not-ok → re-queued with attemptCount 3', async () => {
         pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 2, lastActiveAt: EXPIRED }]);
         pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
         globalThis.fetch.mockResolvedValue({ ok: false });
@@ -133,7 +135,7 @@ describe('onStartup — remediation', () => {
         chrome.runtime.onStartup.callListeners();
         await flushAll();
 
-        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([]);
+        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([{ chatUuid: 'u1', attemptCount: 3, lastActiveAt: 0 }]);
     });
 
     it('[idempotency] idempotent re-delete: fetch ok for already-deleted expired uuid → removed', async () => {
@@ -149,11 +151,12 @@ describe('onStartup — remediation', () => {
 });
 
 describe('onMessage — DSS_SCHEDULE_DELETE_RETRY', () => {
-    it('creates the dss-delete-retry alarm with delayInMinutes 0.5', async () => {
+    it('creates the dss-delete-retry periodic alarm based on pending items backoff', async () => {
+        pendingStoreStub.getPendingDeletes.mockResolvedValue([{ chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED }]);
         chrome.runtime.onMessage.callListeners({ type: SCHEDULE_DELETE_RETRY, chatUuid: 'u1' }, {}, () => {});
-        await flushMicrotasks();
+        await flushAll();
 
-        expect(chrome.alarms.create).toHaveBeenCalledWith(RETRY_ALARM_NAME, { delayInMinutes: 0.5 });
+        expect(chrome.alarms.create).toHaveBeenCalledWith(RETRY_ALARM_NAME, { periodInMinutes: 0.5 });
     });
 
     it('ignores an unrelated message type', async () => {

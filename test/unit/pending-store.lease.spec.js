@@ -76,7 +76,7 @@ describe('TemporaryChatPendingStore lease support', () => {
             await flushOp(TemporaryChatPendingStore.addPendingDelete('a'));
             await flushOp(TemporaryChatPendingStore.addPendingDelete('b'));
 
-            const T1 = T0 + 5000;
+            const T1 = T0 + 60001;
             vi.setSystemTime(T1);
             await flushOp(TemporaryChatPendingStore.refreshLease('a'));
 
@@ -141,15 +141,15 @@ describe('TemporaryChatPendingStore lease support', () => {
         const BASE = 1000;
 
         it('L-exp-1: now-lastActiveAt == TTL-1 -> false (not expired)', () => {
-            expect(TemporaryChatPendingStore.isLeaseExpired({ lastActiveAt: BASE }, BASE + LEASE_TTL_MS - 1)).toBe(false);
+            expect(TemporaryChatPendingStore.isLeaseExpired({ lastActiveAt: BASE }, BASE + LEASE_TTL_MS - 1, BASE)).toBe(false);
         });
 
         it('L-exp-2: now-lastActiveAt == TTL exactly -> false (not expired)', () => {
-            expect(TemporaryChatPendingStore.isLeaseExpired({ lastActiveAt: BASE }, BASE + LEASE_TTL_MS)).toBe(false);
+            expect(TemporaryChatPendingStore.isLeaseExpired({ lastActiveAt: BASE }, BASE + LEASE_TTL_MS, BASE)).toBe(false);
         });
 
         it('L-exp-3: now-lastActiveAt == TTL+1 -> true (expired)', () => {
-            expect(TemporaryChatPendingStore.isLeaseExpired({ lastActiveAt: BASE }, BASE + LEASE_TTL_MS + 1)).toBe(true);
+            expect(TemporaryChatPendingStore.isLeaseExpired({ lastActiveAt: BASE }, BASE + LEASE_TTL_MS + 1, BASE)).toBe(true);
         });
 
         it('L-exp-4: missing/undefined/null/non-number lastActiveAt -> true (expired)', () => {
@@ -192,7 +192,10 @@ describe('TemporaryChatPendingStore lease support', () => {
         });
 
         it('L-race-2: concurrent addPendingDelete("a") + refreshLease("pre") new entry exists AND lease landed', async () => {
+            const oldNow = Date.now() - 120000;
+            const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(oldNow);
             await TemporaryChatPendingStore.addPendingDelete('pre');
+            nowSpy.mockRestore();
             await new Promise((r) => setTimeout(r, 5));
             const tBeforeRefresh = Date.now();
 

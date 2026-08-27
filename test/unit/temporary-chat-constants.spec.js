@@ -22,9 +22,9 @@ describe('temporary-chat-constants', () => {
     });
 
 
-    it('exports exactly twenty-four constants', () => {
+    it('exports exactly twenty-five constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(24);
+        expect(keys).toHaveLength(25);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
         expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
@@ -49,6 +49,7 @@ describe('temporary-chat-constants', () => {
         expect(keys).toContain('DSS_AUTH_CAPTURED_TYPE');
         expect(keys).toContain('DSS_HISTORY_NAV_TYPE');
         expect(keys).toContain('DSS_FRAGMENT_COMPLETE_TYPE');
+        expect(keys).toContain('DSS_LAST_SEEN_CHANGE_KEY_PREFIX');
         expect(keys).not.toContain('DSS_SW_DELETE_MESSAGE_TYPE');
     });
 
