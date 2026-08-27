@@ -94,6 +94,7 @@ const StorageManager = {
         root.__DS_StorageManager_chunklock || {},
         root.__DS_StorageManager_sync      || {},
         root.__DS_StorageManager_presets   || {},
+        root.__DS_StorageManager_chatmap_diff || {},
         root.__DS_StorageManager_chatmap   || {},
         root.__DS_StorageManager_local     || {},
         root.__DS_StorageManager_init      || {},

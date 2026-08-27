@@ -43,6 +43,7 @@ import '../../utils/storage-manager.chunk-lock.js';
 import '../../utils/storage-manager.rw.js';
 import '../../utils/storage-manager.sync.js';
 import '../../utils/storage-manager.presets.js';
+import '../../utils/storage-manager.chatmap.diff.js';
 import '../../utils/storage-manager.chatmap.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
@@ -82,7 +83,10 @@ import '../../content/preset-overlay.styles.js';
 import '../../content/preset-overlay.resolvers.js';
 import '../../content/preset-settle.scheduler.js';
 import '../../content/preset-overlay.controller.js';
+import '../../content/content-script.export.time.js';
+import '../../content/content-script.export.markdown.js';
 import '../../content/content-script.export.js';
+import '../../content/edit-message-cleanup.pure.js';
 
 // ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
 // The controller feature-detects it (typeof ResizeObserver === 'undefined') and

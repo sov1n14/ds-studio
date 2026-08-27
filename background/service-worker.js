@@ -9,6 +9,7 @@ importScripts(
     '../utils/storage-manager.rw.js',
     '../utils/storage-manager.sync.js',
     '../utils/storage-manager.presets.js',
+    '../utils/storage-manager.chatmap.diff.js',
     '../utils/storage-manager.chatmap.js',
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',

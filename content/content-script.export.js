@@ -1,245 +1,30 @@
 /**
  * DS studio — Content Script Export 模組
  * 負責 Markdown 匯出管線：解析 HTML、組裝標頭、觸發下載、格式化時間。
- * 以 IIFE 掛載於 globalThis.__DS_ContentExport，並相容 Node.js require()（供單元測試）。
+ * 時間格式化由 content-script.export.time.js、Markdown 解析由 content-script.export.markdown.js 提供。
  */
 (function (root) {
     'use strict';
 
+    // 合併子包
+    var timeBundle = root.__DS_ContentExport_time || {};
+    var markdownBundle = root.__DS_ContentExport_markdown || {};
+    var formatSystemTime = timeBundle.formatSystemTime;
+    var formatTimezoneOffset = timeBundle.formatTimezoneOffset;
+    var parseHtmlToMarkdown = markdownBundle.parseHtmlToMarkdown;
+
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const selectors = (globalThis).DSstudio?.Selectors ||
+    var selectors = (globalThis).DSstudio && (globalThis).DSstudio.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     /**
-     * 格式化系統時間為 yyyy/mm/dd hh:mm:ss（24小時制、零補位），並附加當地時區偏移 (UTC±hh:mm)。
-     * @param {Date} [date]
-     * @returns {string}
-     */
-    function formatSystemTime(date) {
-        // 預設使用當下時間
-        var d = date || new Date();
-        var year = d.getFullYear();
-        var month = String(d.getMonth() + 1).padStart(2, '0');
-        var day = String(d.getDate()).padStart(2, '0');
-        var hours = String(d.getHours()).padStart(2, '0');
-        var minutes = String(d.getMinutes()).padStart(2, '0');
-        var seconds = String(d.getSeconds()).padStart(2, '0');
-        return year + '/' + month + '/' + day + ' ' + hours + ':' + minutes + ':' + seconds + ' (' + formatTimezoneOffset(d) + ')';
-    }
-
-    /**
-     * 計算 Date 物件的當地時區偏移，回傳 (UTC±hh:mm) 格式字串。
-     * 使用 Date.getTimezoneOffset() 並取其相反數：
-     *   UTC-03:45  → getTimezoneOffset() 回傳 +225 → 格式化為 UTC-03:45
-     *   UTC+08:00  → getTimezoneOffset() 回傳 -480 → 格式化為 UTC+08:00
-     * @param {Date} [date]
-     * @returns {string}
-     */
-    function formatTimezoneOffset(date) {
-        var d = date || new Date();
-        var offsetMinutes = -d.getTimezoneOffset();
-        var sign = offsetMinutes >= 0 ? '+' : '-';
-        var absMinutes = Math.abs(offsetMinutes);
-        var hours = String(Math.floor(absMinutes / 60)).padStart(2, '0');
-        var minutes = String(absMinutes % 60).padStart(2, '0');
-        return 'UTC' + sign + hours + ':' + minutes;
-    }
-
-    /**
-     * 建立 Markdown 匯出的標頭字串。
+     * 建立 Markdown 匯出的標頭字串.
      * @returns {string}
      */
     function _buildMarkdownHeader() {
         var exportedAt = new Date().toLocaleString();
         return '# DeepSeek Chat Export\n\n> Exported at: ' + exportedAt + '\n\n---\n\n';
     }
-
-    /**
-     * 標籤處理器共用的解析情境。
-     * @typedef {Object} TagContext
-     * @property {string|null} parentTagName - 父層標籤名稱（供 CODE 判斷是否位於 PRE 內）
-     * @property {{forceReferences: boolean}} options - 解析選項
-     * @property {function(Element, string|null): string} parseChildren - 遞迴解析子節點
-     */
-
-    function _renderBold(n, ctx) {
-        var inner = ctx.parseChildren(n, n.tagName).trim();
-        return inner ? '**' + inner + '**' : '';
-    }
-
-    function _renderItalic(n, ctx) {
-        var inner = ctx.parseChildren(n, n.tagName).trim();
-        return inner ? '*' + inner + '*' : '';
-    }
-
-    /** <code>：位於 <pre> 內時輸出純文字，否則加上行內反引號。 */
-    function _renderCode(n, ctx) {
-        if (ctx.parentTagName === 'PRE') return n.textContent;
-        return '`' + n.textContent + '`';
-    }
-
-    /** <a>：一般連結直接輸出；引用標記（.ds-markdown-cite）僅在啟用引用時輸出。 */
-    function _renderAnchor(n, ctx) {
-        var citeSpan = n.querySelector(selectors.MARKDOWN_CITE_SELECTOR);
-        if (!citeSpan) {
-            return '[' + ctx.parseChildren(n, n.tagName) + '](' + n.href + ')';
-        }
-        // Guard: 未啟用引用連結時，引用標記一律略過
-        if (!ctx.options.forceReferences) return '';
-
-        var citeNumber = citeSpan.textContent.replace(/[^0-9]/g, '');
-        if (!citeNumber) {
-            // 編號被 absolute 定位的 span 承載時，改由該 span 取值
-            var numSpan = Array.from(citeSpan.querySelectorAll('span')).find(function (s) { return s.style.position === 'absolute'; });
-            if (numSpan) citeNumber = numSpan.textContent.trim();
-        }
-        return citeNumber ? ' [[link-' + citeNumber + ']](' + n.href + ')' : '';
-    }
-
-    function _renderBlockquote(n, ctx) {
-        var quoted = ctx.parseChildren(n, n.tagName).trim().split('\n').map(function (line) { return '> ' + line; }).join('\n');
-        return '\n\n' + quoted + '\n\n';
-    }
-
-    function _collectListItems(n) {
-        return Array.from(n.children).filter(function (child) { return child.tagName === 'LI'; });
-    }
-
-    function _renderUnorderedList(n, ctx) {
-        var text = '\n';
-        _collectListItems(n).forEach(function (li) {
-            text += '- ' + ctx.parseChildren(li, n.tagName).trim() + '\n';
-        });
-        return text + '\n';
-    }
-
-    function _renderOrderedList(n, ctx) {
-        var text = '\n';
-        _collectListItems(n).forEach(function (li, idx) {
-            text += (idx + 1) + '. ' + ctx.parseChildren(li, n.tagName).trim() + '\n';
-        });
-        return text + '\n';
-    }
-
-    function _readCodeLanguage(el) {
-        return (el.getAttribute('class') || '').replace('language-', '') || '';
-    }
-
-    function _renderPre(n) {
-        return '\n\n```' + _readCodeLanguage(n) + '\n' + n.textContent + '\n```\n\n';
-    }
-
-    function _renderHeading(n, ctx) {
-        var prefix = '#'.repeat(parseInt(n.tagName[1]));
-        var inner = ctx.parseChildren(n, n.tagName).trim();
-        return inner ? '\n\n' + prefix + ' ' + inner + '\n\n' : '';
-    }
-
-    /** <table>：首列後補上分隔列，儲存格內換行壓成空格。 */
-    function _renderTable(n, ctx) {
-        var rows = Array.from(n.querySelectorAll('tr'));
-        // Guard: 無列的表格不產生任何輸出
-        if (rows.length === 0) return '';
-
-        var text = '\n\n';
-        rows.forEach(function (row, rowIdx) {
-            var cells = Array.from(row.children).filter(function (c) { return c.tagName === 'TH' || c.tagName === 'TD'; });
-            var cellContents = cells.map(function (c) { return ctx.parseChildren(c, 'TABLE').trim().replace(/\n/g, ' '); });
-            text += '| ' + cellContents.join(' | ') + ' |\n';
-            if (rowIdx === 0) {
-                text += '|' + cells.map(function () { return '-'; }).join('|') + '|\n';
-            }
-        });
-        return text + '\n';
-    }
-
-    function _isCodeBlockContainer(n) {
-        return n.tagName === 'DIV' && n.classList && Array.from(n.classList).some(function (c) { return c.includes(selectors.CODE_BLOCK_CLASS); });
-    }
-
-    /** <p> / <div>：一般區塊；DeepSeek 程式碼區塊容器改以 span 拼接輸出圍欄式程式碼。 */
-    function _renderBlock(n, ctx) {
-        if (_isCodeBlockContainer(n)) {
-            var pre = n.querySelector('pre');
-            if (pre) {
-                var codeContent = Array.from(pre.querySelectorAll('span')).map(function (s) { return s.textContent; }).join('');
-                return '\n\n```' + _readCodeLanguage(pre) + '\n' + codeContent + '\n```\n\n';
-            }
-        }
-        var inner = ctx.parseChildren(n, n.tagName).trim();
-        return inner ? '\n' + inner + '\n' : '';
-    }
-
-    /**
-     * 標籤 → 處理器對照表。未列出的標籤一律遞迴解析子節點。
-     * @type {Object<string, function(Element, TagContext): string>}
-     */
-    var TAG_HANDLERS = {
-        BR: function () { return '\n'; },
-        STRONG: _renderBold,
-        B: _renderBold,
-        EM: _renderItalic,
-        I: _renderItalic,
-        CODE: _renderCode,
-        A: _renderAnchor,
-        BLOCKQUOTE: _renderBlockquote,
-        UL: _renderUnorderedList,
-        OL: _renderOrderedList,
-        PRE: _renderPre,
-        H1: _renderHeading,
-        H2: _renderHeading,
-        H3: _renderHeading,
-        H4: _renderHeading,
-        H5: _renderHeading,
-        H6: _renderHeading,
-        TABLE: _renderTable,
-        P: _renderBlock,
-        DIV: _renderBlock
-    };
-
-    /**
-     * Parses an HTML element recursively into a formatted Markdown string.
-     * @param {Element} node - The root element to parse
-     * @param {Object} options - Parsing options
-     * @param {boolean} options.forceReferences - Whether to extract citation reference links
-     * @returns {string} - The resulting markdown string
-     */
-    function parseHtmlToMarkdown(node, options) {
-        if (options === undefined) options = { forceReferences: true };
-
-        function walk(n, parentTagName) {
-            if (parentTagName === undefined) parentTagName = null;
-
-            if (n.nodeType === Node.TEXT_NODE) {
-                // 移除多餘空白，保留單一空格
-                var content = n.textContent.replace(/\s+/g, ' ');
-                return (content.trim() !== '' || content === ' ') ? content : '';
-            }
-            // Guard: 非元素節點（註解等）不產生輸出
-            if (n.nodeType !== Node.ELEMENT_NODE) return '';
-
-            var handler = TAG_HANDLERS[n.tagName];
-            // 未列於對照表的標籤：遞迴解析子節點
-            if (!handler) return parseChildren(n, n.tagName);
-
-            return handler(n, { parentTagName: parentTagName, options: options, parseChildren: parseChildren });
-        }
-
-        function parseChildren(parentNode, parentTagName) {
-            var childText = '';
-            for (var i = 0; i < parentNode.childNodes.length; i++) {
-                childText += walk(parentNode.childNodes[i], parentTagName);
-            }
-            return childText;
-        }
-
-        var result = parseChildren(node, null);
-
-        // 清理多餘換行
-        result = result.replace(/\n{3,}/g, '\n\n').trim();
-        return result;
-    }
-
 
     /**
      * 將單一訊息節點（.ds-message）轉換為 Markdown 字串。
