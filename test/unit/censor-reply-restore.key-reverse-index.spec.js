@@ -67,6 +67,7 @@ describe('CensorReplyRestore — _keyToMessageId reverse lookup (C13)', () => {
     it('_resolveMessageIdFromStorage honours release of a claimed id', () => {
         const SESSION = '33333333-0000-0000-0000-000000000001';
         vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/' + SESSION);
+        CensorReplyRestore._currentSessionId = SESSION;
         const msgEl = buildChatPair('asst-target', 'claimed prompt');
         CensorReplyRestore._restoredMessages = {
             '605': {
