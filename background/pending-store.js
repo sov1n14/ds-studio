@@ -15,6 +15,8 @@ const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = globalThis.DSS_OPEN_TEMP_UUIDS_KEY;
 // 因此不再需要跨 context 鎖 —— 沒有共用結構就沒有讀改寫競態可言。
 const DSS_OPEN_UUID_KEY_PREFIX = 'dss-open-temp-uuid:';
 const DSS_LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const DSS_HEARTBEAT_INTERVAL_MS = globalThis.HEARTBEAT_INTERVAL_MS;
+const DSS_SEEN_CHANGE_KEY_PREFIX = globalThis.DSS_LAST_SEEN_CHANGE_KEY_PREFIX;
 
 // 讀改寫互斥鏈：所有對同步佇列的讀改寫依序排隊，避免並行覆蓋彼此結果。
 // 單一 job 拒絕不污染後續 job（鏈以 catch 收斂），呼叫端仍取得原始結果 Promise。
@@ -26,13 +28,12 @@ function runExclusive(job) {
 }
 
 function logWriteFailure(context, error) {
-    // 儲存寫入失敗時僅記錄，絕不拋出以免中斷呼叫端流程
-    if (globalThis.__DS_Logger?.warn) {
-        globalThis.__DS_Logger.warn('pending-store:write-fail', context, error);
-        return;
-    }
-    console.warn('[DSS]', 'pending-store:write-fail', context, error);
+    // 儲存寫入失敗時以 error 等級記錄，絕不拋出以免中斷呼叫端流程
+    console.error('[DSS]', 'pending-store:write-fail', context, error);
 }
+
+// 記憶體快取：追蹤每個 uuid 上次觀察到的 lastActiveAt 值
+const _lastActiveAtCache = new Map();
 
 const TemporaryChatPendingStore = (() => {
     async function getPendingDeletes() {
@@ -71,17 +72,22 @@ const TemporaryChatPendingStore = (() => {
             const filtered = queue.filter((entry) => entry.chatUuid !== chatUuid);
             if (filtered.length === queue.length) return;
             await savePendingDeletes(filtered);
+            _lastActiveAtCache.delete(chatUuid);
+            await chrome.storage.local.remove(DSS_SEEN_CHANGE_KEY_PREFIX + chatUuid);
         });
     }
 
     // 續約：將目標 entry 的 lastActiveAt 更新為現在；未知 uuid 不寫入
+    // 髒檢查：lastActiveAt 距今未超過 HEARTBEAT_INTERVAL_MS 則跳過寫入，避免重複更新
     async function refreshLease(chatUuid) {
         if (!chatUuid) return;
         return runExclusive(async () => {
             const queue = await getPendingDeletes();
             const entry = queue.find((item) => item.chatUuid === chatUuid);
             if (!entry) return;
-            entry.lastActiveAt = Date.now();
+            const now = Date.now();
+            if (now - entry.lastActiveAt < DSS_HEARTBEAT_INTERVAL_MS) return;
+            entry.lastActiveAt = now;
             await savePendingDeletes(queue);
         });
     }
@@ -98,11 +104,24 @@ const TemporaryChatPendingStore = (() => {
         });
     }
 
-    // 純函式判定：lastActiveAt 非有限數，或 now 超過 lastActiveAt 逾 TTL 即過期（剛好等於 TTL 不算過期）
-    function isLeaseExpired(entry, now) {
-        const lastActiveAt = entry?.lastActiveAt;
-        if (typeof lastActiveAt !== 'number' || !Number.isFinite(lastActiveAt)) return true;
-        return now - lastActiveAt > DSS_LEASE_TTL_MS;
+    // 純函式判定：優先以 lastSeenChange 判斷過期；缺失或非有限數時一律視為過期
+    function isLeaseExpired(entry, now, lastSeenChange) {
+        if (lastSeenChange === undefined || lastSeenChange === null || !Number.isFinite(lastSeenChange)) return true;
+        return now - lastSeenChange > DSS_LEASE_TTL_MS;
+    }
+
+    // 觀察並記錄 lastActiveAt 變更時間點；回傳本機觀察到的最後變更時間戳
+    async function recordLeaseObservation(chatUuid, currentLastActiveAt) {
+        const storageKey = DSS_SEEN_CHANGE_KEY_PREFIX + chatUuid;
+        const cached = _lastActiveAtCache.get(chatUuid);
+        if (cached === currentLastActiveAt) {
+            const result = await chrome.storage.local.get(storageKey);
+            return result?.[storageKey] ?? undefined;
+        }
+        const observedAt = Date.now();
+        _lastActiveAtCache.set(chatUuid, currentLastActiveAt);
+        await chrome.storage.local.set({ [storageKey]: observedAt });
+        return observedAt;
     }
 
     // 讀取舊版共用陣列 key（唯讀，永不寫回）
@@ -204,6 +223,7 @@ const TemporaryChatPendingStore = (() => {
         getLastAuthToken,
         setLastAuthToken,
         trackForDeletion,
+        recordLeaseObservation,
     };
 })();
 

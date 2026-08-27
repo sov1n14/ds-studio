@@ -61,6 +61,9 @@ const DSS_MSG_GET_PENDING_UUIDS = 'DSS_GET_PENDING_UUIDS';
 // SW->content：待刪佇列變更後推送最新 uuid 快照，payload {uuids:string[]}
 const DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED';
 
+// chrome.storage.local key 前綴：本機觀察到 lastActiveAt 最後一次變更的時間戳
+const DSS_LAST_SEEN_CHANGE_KEY_PREFIX = 'dss-last-seen-change:';
+
 // 待刪佇列 lease 存活時間（毫秒）：now-lastActiveAt 超過此值即視為過期，可由其他裝置接手
 const LEASE_TTL_MS = 600000;
 // 待刪佇列 lease 心跳間隔（毫秒）：擁有裝置定期 refreshLease 續約的週期
@@ -89,6 +92,7 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_MSG_RELEASE_LEASE,
     DSS_MSG_GET_PENDING_UUIDS,
     DSS_MSG_PENDING_UUIDS_CHANGED,
+    DSS_LAST_SEEN_CHANGE_KEY_PREFIX,
     LEASE_TTL_MS,
     HEARTBEAT_INTERVAL_MS,
 };

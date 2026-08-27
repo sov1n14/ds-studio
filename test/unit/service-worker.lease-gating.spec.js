@@ -43,8 +43,8 @@ function savedQueue() {
     return calls.length ? calls[calls.length - 1][0] : undefined;
 }
 
-const realIsLeaseExpired = (entry, now) =>
-    !Number.isFinite(entry?.lastActiveAt) || now - entry.lastActiveAt > LEASE_TTL_MS;
+const realIsLeaseExpired = (entry, now, lastSeenChange) =>
+    !Number.isFinite(lastSeenChange) || now - lastSeenChange > LEASE_TTL_MS;
 
 let store;
 
@@ -65,6 +65,7 @@ beforeAll(async () => {
     store.isLeaseExpired = realIsLeaseExpired;
     store.refreshLease = vi.fn().mockResolvedValue(undefined);
     store.releaseLease = vi.fn().mockResolvedValue(undefined);
+    store.recordLeaseObservation = vi.fn(async (_uuid, lastActiveAt) => lastActiveAt);
     globalThis.TemporaryChatPendingStore = store;
     globalThis.DSSSettingsRoutes = { install: vi.fn() };
     globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
@@ -83,6 +84,7 @@ beforeEach(() => {
     store.getLastAuthToken.mockReset().mockResolvedValue('Bearer tok');
     store.refreshLease.mockReset().mockResolvedValue(undefined);
     store.releaseLease.mockReset().mockResolvedValue(undefined);
+    store.recordLeaseObservation.mockReset().mockImplementation(async (_uuid, lastActiveAt) => lastActiveAt);
     store.isLeaseExpired = realIsLeaseExpired;
     globalThis.StorageManager.isSyncedWithCloud.mockReset().mockResolvedValue(true);
     globalThis.StorageManager.retrySync.mockReset();
@@ -175,7 +177,7 @@ describe('device-local open set no longer gates the alarm and sync paths', () =>
 });
 
 describe('preserved remediation behaviour under lease gating', () => {
-    it('a failed delete increments attemptCount and the entry is dropped after 3 attempts', async () => {
+    it('a failed delete increments attemptCount and the entry is never dropped', async () => {
         store.getPendingDeletes.mockResolvedValue([expired('retry-uuid', { attemptCount: 0 })]);
         globalThis.fetch.mockResolvedValue({ ok: false });
 
@@ -190,6 +192,6 @@ describe('preserved remediation behaviour under lease gating', () => {
         chrome.runtime.onStartup.callListeners();
         await flushAll();
 
-        expect(savedQueue()).toEqual([]);
+        expect(savedQueue()).toEqual([expect.objectContaining({ chatUuid: 'retry-uuid', attemptCount: 3 })]);
     });
 });

@@ -40,10 +40,8 @@ DSSPendingStoreRoutes.install();
 // 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSEditorWindowRoutes.install();
 
-// 最大嘗試次數（含首次）
-const MAX_ATTEMPTS = 3;
-// 重試間隔（分鐘），0.5 = 30 秒
-const RETRY_DELAY_MINUTES = 0.5;
+// 指數退避上限（分鐘）
+const BACKOFF_CAP_MINUTES = 30;
 // onChanged 掃描重入防護（記憶體內）
 // SW 終止時本旗標歸零；補救流程幂等，代價僅為最多多跑一次結果相同的補救
 let isRemediationInFlight = false;
@@ -52,16 +50,32 @@ let isRemediationInFlight = false;
 const SYNC_RETRY_PERIOD_MINUTES = 5;
 
 /**
- * 建立（或重建）重試 alarm，確保同一時間只有一個 alarm 存在。
+ * 計算指數退避延遲（分鐘）：min(0.5 * 2^attemptCount, 30)
  */
-async function scheduleRetryAlarm() {
+function computeBackoffMinutes(attemptCount) {
+    return Math.min(0.5 * Math.pow(2, attemptCount), BACKOFF_CAP_MINUTES);
+}
+
+/**
+ * 建立週期性重試 alarm，週期為佇列中最短退避延遲。
+ * 佇列為空時清除 alarm。
+ */
+async function scheduleRetryAlarm(pendingItems) {
+    if (!pendingItems || pendingItems.length === 0) {
+        await chrome.alarms.clear(RETRY_ALARM_NAME);
+        return;
+    }
+    const shortestBackoff = Math.min(
+        ...pendingItems.map((item) => computeBackoffMinutes(item.attemptCount ?? 0))
+    );
     await chrome.alarms.clear(RETRY_ALARM_NAME);
-    chrome.alarms.create(RETRY_ALARM_NAME, { delayInMinutes: RETRY_DELAY_MINUTES });
+    chrome.alarms.create(RETRY_ALARM_NAME, { periodInMinutes: shortestBackoff });
 }
 
 /**
  * 補救待刪佇列：讀取 sync 佇列，以本機 token 逐筆刪除，僅確認成功才移除。
  * 租約未過期的項目（本機仍活躍的對話）一律跳過並原封保留於佇列。
+ * 失敗項目永不丟棄，僅累加 attemptCount 並保留原始 lastActiveAt。
  */
 async function remediatePendingDeletes() {
     const pending = await TemporaryChatPendingStore.getPendingDeletes();
@@ -70,29 +84,54 @@ async function remediatePendingDeletes() {
     const token = await TemporaryChatPendingStore.getLastAuthToken();
     if (!token) return; // 本機無 token → 保留佇列，交由具備 token 的裝置補救
 
+    // 查詢本機所有 DeepSeek 分頁，建立正在檢視中的 uuid 集合（fail-open：查詢失敗時不阻擋刪除）
+    let localTabUuids = new Set();
+    try {
+        const tabs = await chrome.tabs.query({ url: '*://chat.deepseek.com/*' });
+        for (const tab of tabs) {
+            const uuid = tab.url?.match(/\/a\/chat\/s\/([a-f0-9-]+)/)?.[1] ?? null;
+            if (uuid) localTabUuids.add(uuid);
+        }
+    } catch { /* fail-open：tabs.query 失敗時以空集合繼續 */ }
+
     const now = Date.now();
     const stillPending = [];
     let hasChanged = false;
+    let hasTabGuarded = false;
 
     for (const item of pending) {
+        // 觀察並記錄 lastActiveAt 變更時間點，取得本機觀察時間戳
+        const lastSeenChange = await TemporaryChatPendingStore.recordLeaseObservation(item.chatUuid, item.lastActiveAt);
         // 租約未過期 → 本機仍活躍，跳過並原封保留
-        if (!TemporaryChatPendingStore.isLeaseExpired(item, now)) {
+        if (!TemporaryChatPendingStore.isLeaseExpired(item, now, lastSeenChange)) {
             stillPending.push(item);
             continue;
         }
 
-        const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
-        if (isOk) { hasChanged = true; continue; }           // 確認成功 → 移除
-
-        const nextCount = (item.attemptCount ?? 0) + 1;
-        if (nextCount < MAX_ATTEMPTS) {
-            stillPending.push({ chatUuid: item.chatUuid, attemptCount: nextCount });
+        // 分頁防護：使用者正在檢視此對話 → 跳過刪除，代為續約，原封保留
+        if (localTabUuids.has(item.chatUuid)) {
+            await TemporaryChatPendingStore.refreshLease(item.chatUuid);
+            stillPending.push(item);
+            hasTabGuarded = true;
+            continue;
         }
-        hasChanged = true; // 失敗（累加或達上限丟棄）皆改變了佇列
+
+        const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
+        if (isOk) {
+            // 刪除成功 → 清除觀察紀錄 key
+            try { await chrome.storage.local.remove(DSS_LAST_SEEN_CHANGE_KEY_PREFIX + item.chatUuid); } catch {}
+            hasChanged = true;
+            continue;
+        }
+
+        // 失敗 → 累加嘗試次數，保留原始 lastActiveAt，永不丟棄
+        const nextCount = (item.attemptCount ?? 0) + 1;
+        stillPending.push({ ...item, attemptCount: nextCount });
+        hasChanged = true;
     }
 
-    if (hasChanged) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
-    if (stillPending.length > 0) await scheduleRetryAlarm();
+    if (hasChanged || hasTabGuarded) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
+    await scheduleRetryAlarm(stillPending);
 }
 
 /**
@@ -130,10 +169,11 @@ chrome.runtime.onInstalled.addListener(() => {
     retryParkedSync();
 });
 
-// 監聽來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除
+// 監聯來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除
 chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type !== DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
-    scheduleRetryAlarm();
+    // 讀取佇列以計算正確退避週期
+    TemporaryChatPendingStore.getPendingDeletes().then((items) => scheduleRetryAlarm(items));
     return false;
 });
 
