@@ -56,6 +56,8 @@ import '../../content/censor-reply-restore.storage.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
+import '../../content/go-top.observers.js';
+import '../../content/go-top.lifecycle.js';
 // temporary-chat-enabled-flag.js publishes globalThis.TemporaryChatEnabledFlag, the
 // shared enabled-flag cache that content/temporary-chat-toggle.js and the
 // temporary-chat-delete entry both resolve at load time (they throw a load-order
