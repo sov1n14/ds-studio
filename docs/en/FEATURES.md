@@ -97,7 +97,7 @@ In the popup menu's **UI Adjustments** section, you can adjust the following set
 |-|-|
 | **Auto-hide Sidebar** | Automatically collapses the sidebar to 60px width when the mouse leaves it, and expands on mouse hover, saving screen space |
 | **Collapse Thinking Process** | Automatically collapses DeepSeek's thinking blocks (reasoning process) when they appear; manually expanded blocks are unaffected. Located in the **Features** card |
-| **Auto Expand Messages** | Automatically clicks collapsed expand buttons so all messages are shown expanded by default. Already-expanded messages are not re-collapsed when disabled. Located in the **Features** card, off by default |
+| **Auto Expand Messages** | Automatically clicks collapsed expand buttons so all messages are shown expanded by default. When disabled, all expanded messages on screen are collapsed back. Located in the **Features** card, off by default |
 | **Prevent Auto-Scroll** | Suppresses the page's downward auto-scroll at all times, instead of only during back-to-top and Markdown export. **Trade-off**: the view no longer follows a streaming AI reply downward, so you scroll yourself; native wheel/trackpad scrolling is unaffected. Located in the **Features** card, off by default |
 | **Web Search** | Sets the starting state of the page's smart-search toggle: `On` starts it at `aria-pressed="true"`, `Off` starts it at `"false"`. Applied exactly once per activation event — entering the page, changing this setting in the popup, or turning the master switch back on. After each application the extension releases control, so your own manual toggling sticks until the next activation event. Clicks only on state mismatch, so it never toggles the state away. Controlled by the master switch |
 | **Conversation Area Width** | After enabling the toggle, use the slider to adjust the conversation message display width (30%–100% viewport width) |
@@ -175,7 +175,7 @@ When enabled, the current system time and local timezone offset are automaticall
 - **Format**: `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`
 - **Example**: `Current Time: 2026/06/14 20:19:32 (UTC+08:00)`
 - **Duplicate Prevention**: If the text input area already starts with the `Current Time:` prefix, injection is skipped.
-- **Settings Location**: Checkbox in the **Features & Export** card of the popup menu.
+- **Settings Location**: First item in the **Features** card of the popup menu.
 - **Master Switch Awareness**: This toggle is disabled when the master switch is turned off.
 
 ## Restoring Censored Replies

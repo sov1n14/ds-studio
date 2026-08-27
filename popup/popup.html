@@ -124,31 +124,15 @@
                 </div>
             </div>
 
-            <!-- 備份與還原卡片：從右欄移至左欄底部 -->
-            <div class="card">
-                <div class="card-title-row">
-                    <div class="card-title">Backup & Restore</div>
-                    <div class="card-title-actions">
-                        <button id="clearRestoredBtn" class="btn btn-outline btn-xs" data-i18n="clearRestoredRecordsButton">清除所有已還原紀錄</button>
-                    </div>
-                </div>
-                <div class="input-group input-group--row">
-                    <span class="io-label" data-i18n="exportLabel">匯出：</span>
-                    <button id="exportJsonBtn" class="btn btn--flex" data-i18n="exportJsonSettingsButton">JSON 設定</button>
-                    <button id="exportRestoredBtn" class="btn btn--flex" data-i18n="exportRestoredBackupButton">復原信息備份</button>
-                    <input type="file" id="importJsonInput" accept=".json" hidden>
-                </div>
-                <div class="input-group input-group--row">
-                    <span class="io-label" data-i18n="importLabel">匯入：</span>
-                    <button id="importJsonBtn" class="btn btn-outline btn--flex" data-i18n="importJsonSettingsButton">JSON 設定</button>
-                    <button id="importRestoredBtn" class="btn btn-outline btn--flex" data-i18n="importRestoredBackupButton">復原信息備份</button>
-                    <input type="file" id="importRestoredInput" accept=".json" hidden>
-                </div>
-            </div>
-
             <!-- 功能開關卡片 -->
             <div class="card">
                 <div class="card-title">Features</div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="showSystemTimeToggle">
+                        <label for="showSystemTimeToggle" data-i18n="showSystemTimeLabel">在訊息開頭注入目前系統時間</label>
+                    </div>
+                </div>
                 <div class="input-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="hideThinkingToggle">
@@ -211,13 +195,35 @@
                 <div class="input-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="includeThinkingToggle" checked>
-                        <label for="includeThinkingToggle" data-i18n="includeThinkingLabel">匯出包含思考過程 (Thinking Process)</label>
+                        <label for="includeThinkingToggle" data-i18n="includeThinkingLabel">匯出包含思考過程</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="includeReferencesToggle" checked>
-                        <label for="includeReferencesToggle" data-i18n="includeReferencesLabel">匯出包含參考連結 (Reference Links)</label>
+                        <label for="includeReferencesToggle" data-i18n="includeReferencesLabel">匯出包含參考連結</label>
                     </div>
                     <button id="exportMdBtn" class="btn" data-i18n="exportMarkdownButton">匯出當前頁面對話為 Markdown</button>
+                </div>
+            </div>
+
+            <!-- 備份與還原卡片：移至右欄，位於 Export 與 UI Adjustments 之間 -->
+            <div class="card">
+                <div class="card-title-row">
+                    <div class="card-title">Backup & Restore</div>
+                    <div class="card-title-actions">
+                        <button id="clearRestoredBtn" class="btn btn-outline btn-xs" data-i18n="clearRestoredRecordsButton">清除所有訊息復原記錄</button>
+                    </div>
+                </div>
+                <div class="input-group input-group--row">
+                    <span class="io-label" data-i18n="exportLabel">匯出：</span>
+                    <button id="exportJsonBtn" class="btn btn--flex" data-i18n="exportJsonSettingsButton">JSON 設定</button>
+                    <button id="exportRestoredBtn" class="btn btn--flex" data-i18n="exportRestoredBackupButton">復原信息備份</button>
+                    <input type="file" id="importJsonInput" accept=".json" hidden>
+                </div>
+                <div class="input-group input-group--row">
+                    <span class="io-label" data-i18n="importLabel">匯入：</span>
+                    <button id="importJsonBtn" class="btn btn-outline btn--flex" data-i18n="importJsonSettingsButton">JSON 設定</button>
+                    <button id="importRestoredBtn" class="btn btn-outline btn--flex" data-i18n="importRestoredBackupButton">復原信息備份</button>
+                    <input type="file" id="importRestoredInput" accept=".json" hidden>
                 </div>
             </div>
 
@@ -227,12 +233,6 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="sidebarAutoHideToggle">
                         <label for="sidebarAutoHideToggle" data-i18n="sidebarAutoHideLabel">側邊欄自動隱藏（保留 60px hover 展開）</label>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="showSystemTimeToggle">
-                        <label for="showSystemTimeToggle" data-i18n="showSystemTimeLabel">在訊息開頭注入目前系統時間</label>
                     </div>
                 </div>
                 <div class="input-group input-group--no-gap">

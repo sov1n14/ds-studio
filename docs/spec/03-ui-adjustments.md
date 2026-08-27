@@ -51,7 +51,7 @@
 - **行為**：啟用時，自動點擊頁面上處於收合狀態的「展開」按鈕，使所有訊息預設展開。收合狀態的判斷依據為展開按鈕圖示帶有 `rotate(180deg)` 的 `transform` 樣式。
 - **防止重複點擊**：已處理過的按鈕以 `data-dss-auto-expanded="1"` 標記，不再重複點擊。
 - **啟用行為**：呼叫 `enable()` 時，先以 `_scanExisting()` 掃描頁面上所有現存的展開按鈕並逐一處理，再啟動 `MutationObserver` 監聽後續新增節點。
-- **停用行為**：呼叫 `disable()` 時，斷開 `MutationObserver`。已展開的訊息不回收（不再收合回去）。
+- **停用行為**：呼叫 `disable()` 時，先一次性掃描頁面上所有展開按鈕容器，對其中處於展開狀態的按鈕逐一點擊以收合，接著移除所有 `data-dssAutoExpanded` 屬性，最後斷開 `MutationObserver`。
 - **安全防護**：點擊展開按鈕前檢查 `isConnected`，防止對已移除節點執行無效點擊。
 - **MutationObserver 策略**：監聽 `document.body`，`childList: true, subtree: true`，對新增節點逐一檢查是否為展開按鈕容器（`.EXPAND_BUTTON_CONTAINER_CLASS`）或其子孫中包含展開按鈕容器。
 - **選擇器**：展開按鈕容器 class 與圖示 class 定義於 `content/ds-selectors.js`（`EXPAND_BUTTON_CONTAINER_CLASS`、`EXPAND_BUTTON_ICON_CLASS`）。

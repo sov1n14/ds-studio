@@ -147,7 +147,7 @@ The system time injection feature prepends a timestamp before user messages to p
 
 ### Popup Toggle
 
-A checkbox in the Export card (`#showSystemTimeToggle`) controls the setting. It is part of the master-switch-aware sub-controls: when `isEnabled` is turned off, the toggle is disabled.
+A checkbox in the Features card (`#showSystemTimeToggle`) controls the setting. It is part of the master-switch-aware sub-controls: when `isEnabled` is turned off, the toggle is disabled.
 
 ### Content Script Integration
 

@@ -72,16 +72,29 @@
             }
         },
 
+
+        /** 收合所有已展開的訊息並清除標記 */
+        _collapseAll() {
+            const containers = document.querySelectorAll('.' + __DS_AutoExpandSelectors.EXPAND_BUTTON_CONTAINER_CLASS);
+            containers.forEach((el) => {
+                if (!this.isCollapsed(el)) {
+                    el.click();
+                }
+                delete el.dataset.dssAutoExpanded;
+            });
+        },
+
         enable() {
             this.enabled = true;
             this._scanExisting();
             this._startObserver();
         },
 
-        /** 停用功能，不回收已展開的訊息 */
+        /** 停用功能，收合所有已展開的訊息並清除標記 */
         disable() {
-            this.enabled = false;
+            this._collapseAll();
             this._stopObserver();
+            this.enabled = false;
         },
 
         /**
