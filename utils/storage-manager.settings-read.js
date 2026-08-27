@@ -21,7 +21,7 @@
         hideThinking: 'HIDE_THINKING',
         preventAutoScroll: 'PREVENT_AUTO_SCROLL',
         websearchToggle: 'WEBSEARCH_TOGGLE',
-        showSystemTime: 'SHOW_SYSTEM_TIME',
+        isShowSystemTime: 'SHOW_SYSTEM_TIME',
         chatWidth: 'CHAT_WIDTH',
         chatWidthEnabled: 'CHAT_WIDTH_ENABLED',
         inputWidth: 'INPUT_WIDTH',

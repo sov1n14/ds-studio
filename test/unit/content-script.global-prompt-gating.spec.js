@@ -8,7 +8,7 @@ import contentScript from '../../content/content-script.js';
 
 describe('buildInjectionPrefix — isGlobalPromptEnabled gating', () => {
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('(a) excludes globalDefaultPrompt when isGlobalPromptEnabled=false, but still includes preset prefix', () => {
@@ -60,7 +60,7 @@ describe('injectPrefix — master toggle priority over isGlobalPromptEnabled', (
     }
 
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('(c) injection does not happen when isEnabled=false, regardless of isGlobalPromptEnabled=true', () => {

@@ -28,7 +28,7 @@ describe('pinned default preset preselection (new-chat path only)', () => {
 
     beforeEach(async () => {
         await new Promise(r => setTimeout(r, 0));
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
 
         await chrome.storage.local.remove([
             'chatPresetMap', 'dsPresetIndex', 'activePresetId', 'pinnedPresetId',

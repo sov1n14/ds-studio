@@ -18,7 +18,7 @@ describe('CensorReplyRestore — message-id resolution', () => {
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._keyToMessageId = new Map();
             CensorReplyRestore._restoredMessages = {};
-            CensorReplyRestore._storedRecordsApplied = false;
+            CensorReplyRestore._hasStoredRecordsApplied = false;
             document.body.innerHTML = '';
             vi.restoreAllMocks();
         });
@@ -304,7 +304,7 @@ describe('CensorReplyRestore — message-id resolution', () => {
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._keyToMessageId = new Map();
             CensorReplyRestore._restoredMessages = {};
-            CensorReplyRestore._storedRecordsApplied = false;
+            CensorReplyRestore._hasStoredRecordsApplied = false;
             document.body.innerHTML = '';
             vi.restoreAllMocks();
         });

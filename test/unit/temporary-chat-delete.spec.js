@@ -80,7 +80,7 @@ function resetState() {
         capturedAuthToken: null,
         trackedTemporaryUuid: null,
         createDetected: false,
-        completionDetected: false,
+        isCompletionDetected: false,
         isPendingCreate: false,
         coOccurrenceTimer: null,
         suppressNextUnloadDelete: false,
@@ -330,10 +330,10 @@ describe('G — handleCompletionMessage', () => {
         globalThis.TemporaryChatEnabledFlag.__setCache(enabledFlagCache);
         const event = new MessageEvent('message', { data: { type }, source });
         TemporaryChatDelete.handleCompletionMessage(event);
-        expect(TemporaryChatDelete.state.completionDetected).toBe(false);
+        expect(TemporaryChatDelete.state.isCompletionDetected).toBe(false);
     });
 
-    it('G4: sets _completionDetected = true and triggers co-occurrence check (timer started)', () => {
+    it('G4: sets _isCompletionDetected = true and triggers co-occurrence check (timer started)', () => {
         vi.useFakeTimers();
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
         const event = new MessageEvent('message', {
@@ -342,8 +342,8 @@ describe('G — handleCompletionMessage', () => {
         });
         TemporaryChatDelete.handleCompletionMessage(event);
         const state = TemporaryChatDelete.state;
-        // completionDetected flag should be set and a timer started (only _completionDetected, not create)
-        expect(state.completionDetected).toBe(true);
+        // isCompletionDetected flag should be set and a timer started (only _isCompletionDetected, not create)
+        expect(state.isCompletionDetected).toBe(true);
         expect(state.coOccurrenceTimer).not.toBeNull();
         vi.useRealTimers();
     });
@@ -368,47 +368,47 @@ describe('H — checkCoOccurrence', () => {
 
     it.each([
         ['H1: when only _createDetected is true', true, false],
-        ['H2: when only _completionDetected is true', false, true],
-    ])('%s → does NOT set _isPendingCreate; starts a timer', (_label, createDetected, completionDetected) => {
-        Object.assign(TemporaryChatDelete.state, { createDetected, completionDetected });
+        ['H2: when only _isCompletionDetected is true', false, true],
+    ])('%s → does NOT set _isPendingCreate; starts a timer', (_label, createDetected, isCompletionDetected) => {
+        Object.assign(TemporaryChatDelete.state, { createDetected, isCompletionDetected });
         TemporaryChatDelete.checkCoOccurrence();
         expect(TemporaryChatDelete.state.isPendingCreate).toBe(false);
         expect(TemporaryChatDelete.state.coOccurrenceTimer).not.toBeNull();
     });
 
     it('H3: when both are true and on homepage → sets _isPendingCreate = true, clears both flags', () => {
-        Object.assign(TemporaryChatDelete.state, { createDetected: true, completionDetected: true });
+        Object.assign(TemporaryChatDelete.state, { createDetected: true, isCompletionDetected: true });
         TemporaryChatDelete.checkCoOccurrence();
         const state = TemporaryChatDelete.state;
         expect(state.isPendingCreate).toBe(true);
         expect(state.createDetected).toBe(false);
-        expect(state.completionDetected).toBe(false);
+        expect(state.isCompletionDetected).toBe(false);
         expect(state.trackedTemporaryUuid).toBeNull();
     });
 
     it('H4: timer expiry (1000ms) resets both flags, _isPendingCreate stays false', () => {
-        Object.assign(TemporaryChatDelete.state, { createDetected: true, completionDetected: false });
+        Object.assign(TemporaryChatDelete.state, { createDetected: true, isCompletionDetected: false });
         TemporaryChatDelete.checkCoOccurrence();
 
         vi.advanceTimersByTime(1000);
 
         const state = TemporaryChatDelete.state;
         expect(state.createDetected).toBe(false);
-        expect(state.completionDetected).toBe(false);
+        expect(state.isCompletionDetected).toBe(false);
         expect(state.isPendingCreate).toBe(false);
     });
 
     it('H5: when both are true and already on chat page → tracks UUID immediately and clears _isPendingCreate', () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         setPathname(`/a/chat/s/${uuid}`);
-        Object.assign(TemporaryChatDelete.state, { createDetected: true, completionDetected: true });
+        Object.assign(TemporaryChatDelete.state, { createDetected: true, isCompletionDetected: true });
         
         TemporaryChatDelete.checkCoOccurrence();
         
         const state = TemporaryChatDelete.state;
         expect(state.isPendingCreate).toBe(false);
         expect(state.createDetected).toBe(false);
-        expect(state.completionDetected).toBe(false);
+        expect(state.isCompletionDetected).toBe(false);
         expect(state.trackedTemporaryUuid).toBe(uuid);
         expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBe(uuid);
     });
@@ -416,7 +416,7 @@ describe('H — checkCoOccurrence', () => {
     it('H6: when both are true and already on chat page → sends DSS_TRACK_FOR_DELETION to background', () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee';
         setPathname(`/a/chat/s/${uuid}`);
-        Object.assign(TemporaryChatDelete.state, { createDetected: true, completionDetected: true });
+        Object.assign(TemporaryChatDelete.state, { createDetected: true, isCompletionDetected: true });
 
         TemporaryChatDelete.checkCoOccurrence();
 

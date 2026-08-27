@@ -33,7 +33,7 @@ function applySettingsToDom(dom, settings) {
     if (includeReferencesToggle) includeReferencesToggle.checked = settings.includeReferences;
     if (sidebarAutoHideToggle)   sidebarAutoHideToggle.checked   = settings.sidebarAutoHide;
     if (hideThinkingToggle)      hideThinkingToggle.checked      = settings.hideThinking;
-    if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.showSystemTime;
+    if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.isShowSystemTime;
     if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
 
     // 舊版 'default' 值由 StorageManager 的讀取路徑統一校正，此處僅處理尚未設定的情況

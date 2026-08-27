@@ -64,7 +64,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             CensorReplyRestore._currentSessionId = null;
             CensorReplyRestore._pendingQueue = [10, 20];
             CensorReplyRestore._keyToMessageId.set('k1', 10);
-            CensorReplyRestore._storedRecordsApplied = true;
+            CensorReplyRestore._hasStoredRecordsApplied = true;
 
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/' + NEW_SESSION);
             CensorReplyRestore._checkSessionChange();
@@ -73,19 +73,19 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             // Queue and map must be preserved (first message may already be in queue)
             expect(CensorReplyRestore._pendingQueue).toEqual([10, 20]);
             expect(CensorReplyRestore._keyToMessageId.size).toBe(1);
-            // _storedRecordsApplied is NOT reset on null→non-null
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(true);
+            // _hasStoredRecordsApplied is NOT reset on null→non-null
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(true);
 
             vi.restoreAllMocks();
         });
 
-        it('(b) non-null → different non-null: clears _pendingQueue, _keyToMessageId, and resets _storedRecordsApplied', () => {
+        it('(b) non-null → different non-null: clears _pendingQueue, _keyToMessageId, and resets _hasStoredRecordsApplied', () => {
             const OLD_SESSION = 'b0000001-0000-0000-0000-000000000001';
             const DIFF_SESSION = 'b0000002-0000-0000-0000-000000000002';
             CensorReplyRestore._currentSessionId = OLD_SESSION;
             CensorReplyRestore._pendingQueue = [5, 6];
             CensorReplyRestore._keyToMessageId.set('k2', 5);
-            CensorReplyRestore._storedRecordsApplied = true;
+            CensorReplyRestore._hasStoredRecordsApplied = true;
 
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/' + DIFF_SESSION);
             CensorReplyRestore._checkSessionChange();
@@ -93,7 +93,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             expect(CensorReplyRestore._currentSessionId).toBe(DIFF_SESSION);
             expect(CensorReplyRestore._pendingQueue).toHaveLength(0);
             expect(CensorReplyRestore._keyToMessageId.size).toBe(0);
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(false);
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(false);
 
             vi.restoreAllMocks();
         });
@@ -103,7 +103,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             CensorReplyRestore._currentSessionId = SOME_SESSION;
             CensorReplyRestore._pendingQueue = [7];
             CensorReplyRestore._keyToMessageId.set('k3', 7);
-            CensorReplyRestore._storedRecordsApplied = true;
+            CensorReplyRestore._hasStoredRecordsApplied = true;
 
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/some/other/page');
             CensorReplyRestore._checkSessionChange();
@@ -111,7 +111,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             expect(CensorReplyRestore._currentSessionId).toBeNull();
             expect(CensorReplyRestore._pendingQueue).toHaveLength(0);
             expect(CensorReplyRestore._keyToMessageId.size).toBe(0);
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(false);
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(false);
 
             vi.restoreAllMocks();
         });
@@ -121,7 +121,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             CensorReplyRestore._currentSessionId = STABLE_SESSION;
             CensorReplyRestore._pendingQueue = [1, 2, 3];
             CensorReplyRestore._keyToMessageId.set('k4', 1);
-            CensorReplyRestore._storedRecordsApplied = true;
+            CensorReplyRestore._hasStoredRecordsApplied = true;
 
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/' + STABLE_SESSION);
             CensorReplyRestore._checkSessionChange();
@@ -129,7 +129,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             expect(CensorReplyRestore._currentSessionId).toBe(STABLE_SESSION);
             expect(CensorReplyRestore._pendingQueue).toEqual([1, 2, 3]);
             expect(CensorReplyRestore._keyToMessageId.size).toBe(1);
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(true);
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(true);
 
             vi.restoreAllMocks();
         });
@@ -155,7 +155,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
                 prompt_key: 'chat A question',
                 restored_at: 100
             };
-            CensorReplyRestore._storedRecordsApplied = true;
+            CensorReplyRestore._hasStoredRecordsApplied = true;
 
             // Step 2: URL changes to chat B — simulate _checkSessionChange
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/' + SESSION_B);
@@ -164,7 +164,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
             // Verify runtime state was cleared
             expect(CensorReplyRestore._keyToMessageId.size).toBe(0);
             expect(CensorReplyRestore._pendingQueue).toHaveLength(0);
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(false);
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(false);
             expect(CensorReplyRestore._currentSessionId).toBe(SESSION_B);
 
             // Step 3: Build chat B DOM with same virtual-item-key "2" and a different prompt

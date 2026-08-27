@@ -68,7 +68,7 @@
             if (e.source !== window) return;
             if (e.data?.type !== globalThis.DSS_CHAT_COMPLETION_MESSAGE_TYPE) return;
             if (!readEnabledFlag()) return;
-            state.completionDetected = true;
+            state.isCompletionDetected = true;
             tracking.checkCoOccurrence();
         }
 

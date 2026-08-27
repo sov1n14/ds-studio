@@ -25,7 +25,7 @@ describe('GoToTop', () => {
             expect(GoToTop._button).toBeNull();
             expect(GoToTop._injectionMode).toBeNull();
             expect(GoToTop._scrollContainer).toBeNull();
-            expect(GoToTop._locked).toBe(false);
+            expect(GoToTop._isLocked).toBe(false);
             expect(GoToTop._hasSeenDom).toBe(false);
             expect(GoToTop._scrollPromise).toBeNull();
             expect(GoToTop._scrollReject).toBeNull();

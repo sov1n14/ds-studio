@@ -145,7 +145,7 @@ async function applySettingsChanged(changes) {
     }
 
     if (changes[KEYS.SHOW_SYSTEM_TIME]) {
-        bindingState.showSystemTime = changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false;
+        bindingState.isShowSystemTime = changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false;
     }
 
     const changedKeys = Object.keys(changes);
@@ -191,7 +191,7 @@ const PromptInjector = __injectorFactory.createPromptInjector({
     getPromptPrefix:          () => bindingState.promptPrefix,
     getGlobalDefaultPrompt:   () => bindingState.globalDefaultPrompt,
     getIsGlobalPromptEnabled: () => bindingState.isGlobalPromptEnabled,
-    getShowSystemTime:        () => bindingState.showSystemTime,
+    getIsShowSystemTime:        () => bindingState.isShowSystemTime,
     getIsInjecting:           () => bindingState.isInjecting,
     setIsInjecting:           (v) => { bindingState.isInjecting = v; },
     markChatCreationAttempt:  (...a) => ChatBinding.markChatCreationAttempt(...a),

@@ -5,7 +5,7 @@ import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-
 
 /**
  * _tryRestoreMessage and applyToExisting: post-refresh restore, idempotency,
- * cold start, and the _storedRecordsApplied guard.
+ * cold start, and the _hasStoredRecordsApplied guard.
  *
  * Split out of the original censor-reply-restore.spec.js monolith; every case
  * below is the unchanged original assertion set.
@@ -22,7 +22,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/33333333-0000-0000-0000-000000000001');
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._keyToMessageId = new Map();
-            CensorReplyRestore._storedRecordsApplied = false;
+            CensorReplyRestore._hasStoredRecordsApplied = false;
             document.body.innerHTML = '';
 
             // Use session-scoped key format (v2.8.11+): "{sessionId}::{messageId}"
@@ -54,7 +54,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/44444444-0000-0000-0000-000000000001');
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._keyToMessageId = new Map();
-            CensorReplyRestore._storedRecordsApplied = false;
+            CensorReplyRestore._hasStoredRecordsApplied = false;
             document.body.innerHTML = '';
 
             // Use session-scoped key format (v2.8.11+): "{sessionId}::{messageId}"
@@ -86,7 +86,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/55555555-0000-0000-0000-000000000001');
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._keyToMessageId = new Map();
-            CensorReplyRestore._storedRecordsApplied = false;
+            CensorReplyRestore._hasStoredRecordsApplied = false;
             document.body.innerHTML = '';
 
             CensorReplyRestore._restoredMessages = {
@@ -118,7 +118,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
         });
     });
 
-    describe('_storedRecordsApplied guard semantics', () => {
+    describe('_hasStoredRecordsApplied guard semantics', () => {
         afterEach(() => {
             vi.restoreAllMocks();
         });
@@ -129,7 +129,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/66666666-0000-0000-0000-000000000001');
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._keyToMessageId = new Map();
-            CensorReplyRestore._storedRecordsApplied = false;
+            CensorReplyRestore._hasStoredRecordsApplied = false;
             document.body.innerHTML = '';
 
             CensorReplyRestore._restoredMessages = {
@@ -193,12 +193,12 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
 
             CensorReplyRestore._tryRestoreMessage(msgEl);
 
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(true);
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(true);
         });
 
-        it('_onFragmentComplete resets _storedRecordsApplied to false after pushing to queue', () => {
+        it('_onFragmentComplete resets _hasStoredRecordsApplied to false after pushing to queue', () => {
             CensorReplyRestore.enabled = true;
-            CensorReplyRestore._storedRecordsApplied = true;
+            CensorReplyRestore._hasStoredRecordsApplied = true;
             CensorReplyRestore._pendingQueue = [];
             CensorReplyRestore._restoredMessages = {};
 
@@ -209,7 +209,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
                 censored: true
             });
 
-            expect(CensorReplyRestore._storedRecordsApplied).toBe(false);
+            expect(CensorReplyRestore._hasStoredRecordsApplied).toBe(false);
         });
     });
 });

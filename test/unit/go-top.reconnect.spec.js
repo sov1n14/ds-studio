@@ -282,7 +282,7 @@ describe('GoToTop', () => {
                 GoToTop._onRouteChange();
 
                 await expect(promise).rejects.toEqual({ success: false, reason: 'aborted' });
-                expect(GoToTop._locked).toBe(false);
+                expect(GoToTop._isLocked).toBe(false);
             } finally {
                 vi.useRealTimers();
             }

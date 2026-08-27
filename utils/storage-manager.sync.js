@@ -321,7 +321,7 @@
                 if (importedSettings.globalDefaultPrompt !== undefined) updates[this.KEYS.GLOBAL_DEFAULT_PROMPT] = importedSettings.globalDefaultPrompt;
                 if (importedSettings.sidebarAutoHide !== undefined) updates[this.KEYS.SIDEBAR_AUTO_HIDE] = importedSettings.sidebarAutoHide;
                 if (importedSettings.hideThinking !== undefined) updates[this.KEYS.HIDE_THINKING] = importedSettings.hideThinking;
-                if (importedSettings.showSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.showSystemTime;
+                if (importedSettings.isShowSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.isShowSystemTime;
                 if (importedSettings.chatWidth !== undefined) updates[this.KEYS.CHAT_WIDTH] = importedSettings.chatWidth;
                 if (importedSettings.chatWidthEnabled !== undefined) updates[this.KEYS.CHAT_WIDTH_ENABLED] = importedSettings.chatWidthEnabled;
                 if (importedSettings.inputWidth !== undefined) updates[this.KEYS.INPUT_WIDTH] = importedSettings.inputWidth;

@@ -261,14 +261,14 @@ describe('GoToTop', () => {
                     .mockReturnValue(makeAnchorAtTop({ top: -1000, bottom: -900, height: 100 }));
 
                 const firstPromise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
-                expect(GoToTop._locked).toBe(true);
+                expect(GoToTop._isLocked).toBe(true);
 
                 // Second call while locked: must abort first scroll
                 const secondResult = GoToTop.scrollToTopAndWait();
                 // Second call returns undefined (not a promise)
                 expect(secondResult).toBeUndefined();
-                // _locked resets to false after abort
-                expect(GoToTop._locked).toBe(false);
+                // _isLocked resets to false after abort
+                expect(GoToTop._isLocked).toBe(false);
                 // First promise rejects with stopped-by-user
                 await expect(firstPromise).rejects.toEqual({ success: false, reason: 'stopped-by-user' });
             } finally {
@@ -403,7 +403,7 @@ describe('GoToTop', () => {
                 GoToTop._onRouteChange();
 
                 await expect(promise).rejects.toEqual({ success: false, reason: 'aborted' });
-                expect(GoToTop._locked).toBe(false);
+                expect(GoToTop._isLocked).toBe(false);
             } finally {
                 vi.useRealTimers();
             }

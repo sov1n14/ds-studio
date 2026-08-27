@@ -77,7 +77,7 @@ describe('overlay selected preset after a DSS_SETTINGS_CHANGED broadcast', () =>
 
     beforeEach(async () => {
         await waitForContentScriptBootstrap();
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         target = document.createElement('div');
         document.body.appendChild(target);
         overlay.mountTo(target);

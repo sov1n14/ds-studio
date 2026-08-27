@@ -12,7 +12,7 @@ describe('handleRefreshKeydown — keyboard supplement', () => {
             capturedAuthToken: null,
             trackedTemporaryUuid: null,
             createDetected: false,
-            completionDetected: false,
+            isCompletionDetected: false,
             isPendingCreate: false,
             coOccurrenceTimer: null,
             suppressNextUnloadDelete: false,

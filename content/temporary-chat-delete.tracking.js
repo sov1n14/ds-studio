@@ -25,7 +25,7 @@
             trackedTemporaryUuid: null,
             // co-occurrence 視窗信號旗標
             createDetected: false,
-            completionDetected: false,
+            isCompletionDetected: false,
             // create + completion 於視窗內同時出現時為 true，觸發 UUID 標記
             isPendingCreate: false,
             coOccurrenceTimer: null,
@@ -111,11 +111,11 @@
          * 若只有單一信號：啟動超時計時器，逾時後重置兩個旗標。
          */
         function checkCoOccurrence() {
-            if (state.createDetected && state.completionDetected) {
+            if (state.createDetected && state.isCompletionDetected) {
                 clearTimeout(state.coOccurrenceTimer);
                 state.coOccurrenceTimer = null;
                 state.createDetected = false;
-                state.completionDetected = false;
+                state.isCompletionDetected = false;
                 state.isPendingCreate = true;
 
                 // 競態修正：若 SPA 在 co-occurrence 完成前已導航至新對話，立即標記
@@ -128,7 +128,7 @@
             if (state.coOccurrenceTimer === null) {
                 state.coOccurrenceTimer = setTimeout(() => {
                     state.createDetected = false;
-                    state.completionDetected = false;
+                    state.isCompletionDetected = false;
                     state.coOccurrenceTimer = null;
                 }, CO_OCCURRENCE_WINDOW_MS);
             }

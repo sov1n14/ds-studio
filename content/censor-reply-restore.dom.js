@@ -169,11 +169,11 @@
             if (!messageId) {
                 // _getMessageIdFromElement 已嘗試 _resolveMessageIdFromStorage；
                 // 若仍無結果且儲存掃描尚未成功套用過，觸發一次完整掃描（DOM 已渲染後的後備路徑）。
-                // _storedRecordsApplied 在成功後設為 true，避免每次 MutationObserver 觸發都重掃。
-                if (!this._storedRecordsApplied) {
+                // _hasStoredRecordsApplied 在成功後設為 true，避免每次 MutationObserver 觸發都重掃。
+                if (!this._hasStoredRecordsApplied) {
                     const didRestore = this._tryRestoreFromStoredRecords();
                     if (didRestore) {
-                        this._storedRecordsApplied = true;
+                        this._hasStoredRecordsApplied = true;
                         // 完整掃描已直接注入內容，本次呼叫無需繼續
                         return;
                     }

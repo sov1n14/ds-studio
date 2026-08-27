@@ -128,7 +128,7 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         // globalDefaultPrompt / isGlobalPromptEnabled assignments can land AFTER
         // state writes run in the test body and silently clobber it mid-test.
         await waitForContentScriptBootstrap();
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('[Req 1 and 4] a remote or cross-device change to the active preset globalPromptEnabled flag is reflected on the next injected message, without reload', async () => {

@@ -46,7 +46,7 @@ function resetState(over) {
         promptPrefix: '',
         globalDefaultPrompt: '',
         isGlobalPromptEnabled: false,
-        showSystemTime: false,
+        isShowSystemTime: false,
         isInjecting: false,
         setIsInjectingCalls: [],
         markCalls: 0,
@@ -59,7 +59,7 @@ const injector = createPromptInjector({
     getPromptPrefix:          () => state.promptPrefix,
     getGlobalDefaultPrompt:   () => state.globalDefaultPrompt,
     getIsGlobalPromptEnabled: () => state.isGlobalPromptEnabled,
-    getShowSystemTime:        () => state.showSystemTime,
+    getIsShowSystemTime:        () => state.isShowSystemTime,
     getIsInjecting:           () => state.isInjecting,
     setIsInjecting:           (v) => { state.isInjecting = v; state.setIsInjectingCalls.push(v); },
     markChatCreationAttempt:  () => { state.markCalls += 1; },
@@ -186,7 +186,7 @@ describe('injectPrefix success', () => {
     });
 
     it('prepends the formatted timestamp when the system-time option is on', () => {
-        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', showSystemTime: true });
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', isShowSystemTime: true });
         const ta = makeTextarea('hello');
 
         expect(injectPrefix(ta)).toBe(true);
@@ -206,7 +206,7 @@ describe('injectPrefix success', () => {
     });
 
     it('injects prefix-only content, with no <user-input> wrapper, for an empty sendable textarea', () => {
-        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', showSystemTime: true });
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', isShowSystemTime: true });
         const ta = makeTextarea('');
 
         expect(injectPrefix(ta, true)).toBe(true);

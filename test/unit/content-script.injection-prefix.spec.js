@@ -4,7 +4,7 @@ import contentScript from '../../content/content-script.js';
 
 describe('buildInjectionPrefix (1.1.x, 1.2.x, 1.3.x scenarios)', () => {
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('returns empty string when both globalDefaultPrompt and promptPrefix are empty', () => {
@@ -71,7 +71,7 @@ describe('injectPrefix edge cases (1.2.2, 1.3.x scenarios)', () => {
     }
 
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('1.3.1: returns false when textarea is empty', () => {
@@ -128,13 +128,13 @@ describe('injectPrefix isSendableWithoutText (send-with-attachment-only, new beh
     }
 
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('isSendableWithoutText=true with empty text proceeds, returns true, includes timestamp + prompt, no <user-input> wrapper', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'test';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('');
         expect(contentScript.injectPrefix(ta, true)).toBe(true);
         expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>\ntest\n<\/system-reminder>$/);
@@ -145,7 +145,7 @@ describe('injectPrefix isSendableWithoutText (send-with-attachment-only, new beh
     it('isSendableWithoutText=true with whitespace-only text proceeds the same as empty text', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'test';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('   \n  \t  ');
         expect(contentScript.injectPrefix(ta, true)).toBe(true);
         expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>\ntest\n<\/system-reminder>$/);
@@ -179,10 +179,10 @@ describe('injectPrefix isSendableWithoutText (send-with-attachment-only, new beh
         );
     });
 
-    it('with showSystemTime off and only promptPrefix configured, empty text yields the prefix alone with no wrapper tags', () => {
+    it('with isShowSystemTime off and only promptPrefix configured, empty text yields the prefix alone with no wrapper tags', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.promptPrefix = 'MyPrefix';
-        contentScript.state.showSystemTime = false;
+        contentScript.state.isShowSystemTime = false;
         const ta = makeTextarea('');
         expect(contentScript.injectPrefix(ta, true)).toBe(true);
         expect(ta.value).toBe('<system-reminder>\nMyPrefix\n</system-reminder>');
@@ -203,7 +203,7 @@ describe('injectPrefix isSendableWithoutText (send-with-attachment-only, new beh
     });
 });
 
-describe('showSystemTime feature (2.4.x scenario)', () => {
+describe('isShowSystemTime feature (2.4.x scenario)', () => {
     function makeTextarea(value) {
         const ta = document.createElement('textarea');
         ta.value = value;
@@ -211,32 +211,32 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
     }
 
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
-    it('prepends system time before <system-reminder> when showSystemTime enabled and prompt present', () => {
+    it('prepends system time before <system-reminder> when isShowSystemTime enabled and prompt present', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'You are helpful.';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<system-reminder>/);
     });
 
-    it('prepends system time before <user-input> when showSystemTime enabled and no prompt', () => {
+    it('prepends system time before <user-input> when isShowSystemTime enabled and no prompt', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = '';
         contentScript.state.promptPrefix = '';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n<user-input>/);
     });
 
-    it('does not prepend time when showSystemTime is false', () => {
+    it('does not prepend time when isShowSystemTime is false', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'You are helpful.';
-        contentScript.state.showSystemTime = false;
+        contentScript.state.isShowSystemTime = false;
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).not.toMatch(/^Current Time:/);
@@ -246,7 +246,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
     it('does not prepend time when isEnabled is false', () => {
         contentScript.state.isEnabled = false;
         contentScript.state.globalDefaultPrompt = 'You are helpful.';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('user message');
         expect(contentScript.injectPrefix(ta)).toBe(false);
         expect(ta.value).toBe('user message');
@@ -256,7 +256,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = '';
         contentScript.state.promptPrefix = '';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('hello');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toMatch(/^Current Time: \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \(UTC[+-]\d{2}:\d{2}\)\n\n/);
@@ -266,7 +266,7 @@ describe('showSystemTime feature (2.4.x scenario)', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'System instruction';
         contentScript.state.promptPrefix = 'Prefix instruction';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         const ta = makeTextarea('user input');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         const result = ta.value;
@@ -283,13 +283,13 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
     }
 
     beforeEach(() => {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('re-injects with fresh system prompt when textarea already has <user-input> wrapper', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.promptPrefix = 'MyPrompt';
-        contentScript.state.showSystemTime = false;
+        contentScript.state.isShowSystemTime = false;
         const ta = makeTextarea('<user-input>\noriginal message\n</user-input>');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toBe(
@@ -299,7 +299,7 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
 
     it('re-injects with fresh Current Time when textarea already has injected content with old time', () => {
         contentScript.state.isEnabled = true;
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
         contentScript.state.promptPrefix = '';
         contentScript.state.globalDefaultPrompt = '';
         const ta = makeTextarea('Current Time: 2000/01/01 00:00:00 (UTC+00:00)\n\n<user-input>\nhello\n</user-input>');
@@ -311,7 +311,7 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
     it('re-injects with updated prompt when textarea has old injection and prompt changed', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.promptPrefix = 'NewPrompt';
-        contentScript.state.showSystemTime = false;
+        contentScript.state.isShowSystemTime = false;
         const ta = makeTextarea(
             '<system-reminder>\nOldPrompt\n</system-reminder>\n\n<user-input>\nmy message\n</user-input>'
         );
@@ -324,7 +324,7 @@ describe('re-injection: extracts original message and re-injects (v2.8.0)', () =
     it('still returns false when extracted user message is empty', () => {
         contentScript.state.isEnabled = true;
         contentScript.state.promptPrefix = 'SomePrompt';
-        contentScript.state.showSystemTime = false;
+        contentScript.state.isShowSystemTime = false;
         const ta = makeTextarea('<user-input>\n   \n</user-input>');
         expect(contentScript.injectPrefix(ta)).toBe(false);
     });
@@ -353,7 +353,7 @@ describe('onSelectChange: promptPrefix updates synchronously (v2.8.1)', () => {
 
     beforeEach(async () => {
         await new Promise(r => setTimeout(r, 0));
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
 
         await chrome.storage.local.remove([
             'chatPresetMap', 'dsPresetIndex', 'activePresetId',
@@ -387,7 +387,7 @@ describe('onSelectChange: promptPrefix updates synchronously (v2.8.1)', () => {
                 { id: 'preset-A', name: 'Preset A', content: 'Content of preset A' },
                 { id: 'preset-B', name: 'Preset B', content: 'Content of preset B' },
             ],
-            isEnabled: true, globalDefaultPrompt: '', showSystemTime: false,
+            isEnabled: true, globalDefaultPrompt: '', isShowSystemTime: false,
             activePresetId: 'preset-A', chatPresetMap: {},
         });
 
@@ -486,7 +486,7 @@ describe('ACTIVE_PRESET_CHANGED message handler does not leak into an already-bo
 
     beforeEach(async () => {
         await new Promise(r => setTimeout(r, 0));
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
 
         await chrome.storage.local.remove([
             'chatPresetMap', 'dsPresetIndex', 'activePresetId',

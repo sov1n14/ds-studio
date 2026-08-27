@@ -66,7 +66,7 @@
 
             if (!hasUserText && !isSendableWithoutText) return false;
 
-            const systemTimePrefix = ctx.getShowSystemTime() ? `Current Time: ${ctx.formatSystemTime()}\n\n` : '';
+            const systemTimePrefix = ctx.getIsShowSystemTime() ? `Current Time: ${ctx.formatSystemTime()}\n\n` : '';
 
             let newVal;
             // 無文字但可送出（僅附件/圖片）：僅注入時間戳與提示前綴，不包裝 <user-input>

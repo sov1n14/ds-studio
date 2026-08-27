@@ -40,7 +40,7 @@ const CensorReplyRestore = {
     },
     _restoredMessages: {},
     // 記錄儲存記錄是否已全域套用過一次（避免每次 MutationObserver 觸發都做完整掃描）
-    _storedRecordsApplied: false,
+    _hasStoredRecordsApplied: false,
     // 追蹤目前已知的 session ID，用於 SPA 切換聊天時清除過期執行期狀態
     _currentSessionId: null,
 
@@ -90,7 +90,7 @@ const CensorReplyRestore = {
         // non-null → different non-null 或 non-null → null：清除所有執行期狀態
         this._keyToMessageId.clear();
         this._pendingQueue = [];
-        this._storedRecordsApplied = false;
+        this._hasStoredRecordsApplied = false;
         this._currentSessionId = newSessionId;
     },
 
@@ -172,7 +172,7 @@ const CensorReplyRestore = {
 
         this._pendingQueue.push(messageId);
         // 新的 live 訊息進入 — 重置掃描旗標，讓後續若有未復原舊訊息也能再次觸發完整掃描
-        this._storedRecordsApplied = false;
+        this._hasStoredRecordsApplied = false;
 
         this._saveFragment({
             message_id: messageId,

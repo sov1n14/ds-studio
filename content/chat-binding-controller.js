@@ -31,7 +31,7 @@
             promptPrefix: '',
             globalDefaultPrompt: '',
             isGlobalPromptEnabled: true,
-            showSystemTime: false,
+            isShowSystemTime: false,
             isInjecting: false,
             currentChatUuid: null,
             chatPresetMap: {},
@@ -95,7 +95,7 @@
             state.isEnabled = settings.isEnabled;
             state.globalDefaultPrompt = settings.globalDefaultPrompt ?? '';
             state.isGlobalPromptEnabled = resolveGlobalPromptEnabledFromSettings(settings);
-            state.showSystemTime = settings.showSystemTime ?? false;
+            state.isShowSystemTime = settings.isShowSystemTime ?? false;
             state.chatPresetMap = settings.chatPresetMap ?? {};
         }
 

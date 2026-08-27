@@ -106,10 +106,10 @@ describe('Send interception: attachment-only (empty textarea) via click', functi
     var cleanup;
 
     beforeEach(function () {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'sys';
-        contentScript.state.showSystemTime = true;
+        contentScript.state.isShowSystemTime = true;
     });
 
     afterEach(function () {
@@ -166,10 +166,10 @@ describe('Send interception: attachment-only (empty textarea) via Enter keydown'
     var cleanup;
 
     beforeEach(function () {
-        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, showSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'sys';
-        contentScript.state.showSystemTime = false;
+        contentScript.state.isShowSystemTime = false;
     });
 
     afterEach(function () {

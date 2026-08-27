@@ -403,7 +403,7 @@ describe('GoToTop', () => {
             vi.useFakeTimers();
             try {
                 const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
-                expect(GoToTop._locked).toBe(true);
+                expect(GoToTop._isLocked).toBe(true);
 
                 let settled = false;
                 promise.then(() => { settled = true; }, () => { settled = true; });
