@@ -181,9 +181,9 @@ if (typeof module !== 'undefined' && module.exports) {
         computeButtonPosition: QuoteReply.computeButtonPosition,
         isSelectionInScope: QuoteReply.isSelectionInScope,
         formatQuote: QuoteReply.formatQuote,
-        showButton: QuoteReply.showButton,
-        hideButton: QuoteReply.hideButton,
-        getButtonEl: QuoteReply.getButtonEl,
+        showButton: QuoteReply.showButton.bind(QuoteReply),
+        hideButton: QuoteReply.hideButton.bind(QuoteReply),
+        getButtonEl: QuoteReply.getButtonEl.bind(QuoteReply),
         enable: QuoteReply.enable,
         disable: QuoteReply.disable,
     };

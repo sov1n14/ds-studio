@@ -132,6 +132,12 @@ async function load() {
     await import('../../content/mobile-device.js');
     await import('../../content/retry-until.js');
     await import('../../content/feature-toggle.js');
+    // Re-import sub-modules so their closures capture the fresh DSSFeatureToggle/
+    // DSSMobileDevice/DSSRetryUntil set above, not the stale setup-time copies.
+    await import('../../content/mobile-sidebar-swipe.button.js');
+    await import('../../content/mobile-sidebar-swipe.gesture.js');
+    await import('../../content/mobile-sidebar-swipe.bind.js');
+    await import('../../content/mobile-sidebar-swipe.lifecycle.js');
     const mod = await import('../../content/mobile-sidebar-swipe.js');
     MobileSidebarSwipe = mod.default ?? mod;
     await flush();

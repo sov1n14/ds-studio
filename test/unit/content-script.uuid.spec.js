@@ -9,7 +9,7 @@ describe('extractUuidFromUrl (2.1.x, 2.8.x scenarios)', () => {
     const realPath = window.location.pathname;
 
     beforeEach(() => {
-        contentScript.__resetState();
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('returns UUID from valid /a/chat/s/<uuid> path', () => {

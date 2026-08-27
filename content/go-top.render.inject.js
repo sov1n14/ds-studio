@@ -6,7 +6,7 @@
     'use strict';
 
     const bundle = {
-         * 計算並套用 stacked 模式的 margin-bottom，使 GoTop 恰好位於原生按鈕上方 STACK_GAP_PX px。
+        /** 計算並套用 stacked 模式的 margin-bottom，使 GoTop 恰好位於原生按鈕上方 STACK_GAP_PX px。
          * 以原生按鈕的實際幾何（marginBottom + offsetHeight）動態計算，適應網站版面變化。
          * 同時鏡像原生按鈕的 right 值（若可解析），否則由 CSS 預設值 12px 生效。
          * @param {HTMLButtonElement} btn - 待定位的 GoTop 按鈕

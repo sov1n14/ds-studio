@@ -11,7 +11,7 @@
 
     const bundle = {
         getButtonEl() {
-            if (!QuoteReply.btnEl) {
+            if (!this.btnEl) {
                 const btn = document.createElement('div');
                 btn.className = 'dss-quote-btn';
                 btn.style.display = 'none';
@@ -24,42 +24,42 @@
                 btn.addEventListener('click', () => {
                     const textarea = document.querySelector(__DS_QRBtnSelectors.INPUT_TEXTAREA_SELECTOR);
                     if (textarea) {
-                        QuoteReply.injectQuote(textarea, QuoteReply.selectedText);
+                        this.injectQuote(textarea, this.selectedText);
                     }
-                    QuoteReply.hideButton();
+                    this.hideButton();
                 });
 
-                QuoteReply.btnEl = btn;
+                this.btnEl = btn;
                 document.body.appendChild(btn);
             }
 
-            return QuoteReply.btnEl;
+            return this.btnEl;
         },
 
         showButton(top, left) {
-            QuoteReply.btnEl.style.top = top + 'px';
-            QuoteReply.btnEl.style.left = left + 'px';
-            QuoteReply.btnEl.style.display = 'flex';
+            this.btnEl.style.top = top + 'px';
+            this.btnEl.style.left = left + 'px';
+            this.btnEl.style.display = 'flex';
 
-            if (!QuoteReply.isScrollAttached) {
-                window.addEventListener('scroll', QuoteReply.handleViewportChange, { capture: true, passive: true });
-                window.addEventListener('resize', QuoteReply.handleViewportChange);
-                QuoteReply.isScrollAttached = true;
+            if (!this.isScrollAttached) {
+                window.addEventListener('scroll', this.handleViewportChange, { capture: true, passive: true });
+                window.addEventListener('resize', this.handleViewportChange);
+                this.isScrollAttached = true;
             }
         },
 
         hideButton() {
-            if (QuoteReply.btnEl) {
-                QuoteReply.btnEl.style.display = 'none';
+            if (this.btnEl) {
+                this.btnEl.style.display = 'none';
             }
 
-            if (QuoteReply.isScrollAttached) {
-                window.removeEventListener('scroll', QuoteReply.handleViewportChange, { capture: true });
-                window.removeEventListener('resize', QuoteReply.handleViewportChange);
-                QuoteReply.isScrollAttached = false;
+            if (this.isScrollAttached) {
+                window.removeEventListener('scroll', this.handleViewportChange, { capture: true });
+                window.removeEventListener('resize', this.handleViewportChange);
+                this.isScrollAttached = false;
             }
 
-            QuoteReply.selectedText = '';
+            this.selectedText = '';
         },
     };
 
