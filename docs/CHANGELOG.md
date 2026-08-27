@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.32.0](changelog/v4.md#4320---2026-08-28) | 新增「Features」卡片（隱藏思考過程、防止自動回滾、連網搜索自 UI 調整卡片移入）、新增「自動展開訊息」功能（MutationObserver 自動點擊收合的展開按鈕，儲存鍵 `dsAutoExpandMessages`），原「功能與匯出」卡片更名為「Export」 |
 | [4.31.27](changelog/v4.md#43127---2026-08-27) | 最後四個布林識別字補上 is／has 前綴：`_storedRecordsApplied`→`_hasStoredRecordsApplied`、`_locked`→`_isLocked`、`completionDetected`→`isCompletionDetected`、`showSystemTime`→`isShowSystemTime`，涵蓋 13 個生產檔與 24 個測試檔共 98 處 |
 | [4.31.26](changelog/v4.md#43126---2026-08-27) | 拆分 go-top 與 sidebar-auto-hide 兩個超長檔案：go-top 新增 `go-top.observers.js`、`go-top.lifecycle.js`（425→73 行），sidebar-auto-hide 新增 `sidebar-auto-hide.styles.js`、`sidebar-auto-hide.observers.js`（416→211 行） |
 | [4.31.25](changelog/v4.md#43125---2026-08-27) | 移除四模組的 `__getState`／`__setState`／`__resetState` 測試鏡像，保留 state 直接存取 |

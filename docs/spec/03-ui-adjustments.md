@@ -44,9 +44,23 @@
 - **SPA 韌性**：相同的 `MutationObserver` 模式，200ms 防抖，監控 `._765a5cd` 的 `class` 屬性變化。
 - **獨立性**：對話區域寬度與輸入框寬度獨立運作——不同的儲存鍵、開關、滑桿與 CSS 目標。
 
+## 16. 自動展開訊息 (Auto Expand Messages) — v4.32.0
+
+- **開關位置**：彈出選單「Features」卡片中的 `#autoExpandMessagesToggle` 核取方塊。
+- **儲存鍵**：`dsAutoExpandMessages`（布林值，預設 `false`）。
+- **行為**：啟用時，自動點擊頁面上處於收合狀態的「展開」按鈕，使所有訊息預設展開。收合狀態的判斷依據為展開按鈕圖示帶有 `rotate(180deg)` 的 `transform` 樣式。
+- **防止重複點擊**：已處理過的按鈕以 `data-dss-auto-expanded="1"` 標記，不再重複點擊。
+- **啟用行為**：呼叫 `enable()` 時，先以 `_scanExisting()` 掃描頁面上所有現存的展開按鈕並逐一處理，再啟動 `MutationObserver` 監聽後續新增節點。
+- **停用行為**：呼叫 `disable()` 時，斷開 `MutationObserver`。已展開的訊息不回收（不再收合回去）。
+- **安全防護**：點擊展開按鈕前檢查 `isConnected`，防止對已移除節點執行無效點擊。
+- **MutationObserver 策略**：監聽 `document.body`，`childList: true, subtree: true`，對新增節點逐一檢查是否為展開按鈕容器（`.EXPAND_BUTTON_CONTAINER_CLASS`）或其子孫中包含展開按鈕容器。
+- **選擇器**：展開按鈕容器 class 與圖示 class 定義於 `content/ds-selectors.js`（`EXPAND_BUTTON_CONTAINER_CLASS`、`EXPAND_BUTTON_ICON_CLASS`）。
+- **主開關感知**：透過 `content/feature-toggle.js` 的 `registerFeatureToggle` 機制，總開關與自身開關的閘控由 background 訊息路由統一提供，不直接讀取 `chrome.storage`。
+- **實作位置**：`content/auto-expand-messages.js`。`start()` 於模組載入時自動呼叫。
+
 ## 17. 隱藏思考過程 (Hide Thinking Process)
 
-- **開關位置**：彈出選單「UI 調整」卡片中的 `#hideThinkingToggle` 核取方塊，用於啟用/停用此功能。
+- **開關位置**：彈出選單「Features」卡片中的 `#hideThinkingToggle` 核取方塊，用於啟用/停用此功能（v4.32.0 自「UI 調整」卡片移至此處）。
 - **儲存鍵**：`dsHideThinking`（布林值，預設 `false`）。
 - **觀察器設定**：`MutationObserver` 以 `{ childList: true, subtree: true }` 設定掛載於 `document.body`，僅監聽 DOM 節點新增事件。不監聽 `attributes`，因此使用者手動展開思考區塊（修改 CSS class）不會觸發回調，確保展開的區塊不受影響。
 - **兩層搜尋**：回調先在新增節點自身尋找思考區塊容器（`._74c0879`），若未找到則搜尋每個新增節點的子孫節點——處理容器為直接新增節點或深層嵌套兩種情況。
@@ -112,7 +126,7 @@
 ## 21. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
 
 - **目的**：讓原本僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為**常駐**。此開關不新增任何攔截機制，只改變既有 `PreventAutoScroll` 補丁的生效期間。
-- **開關位置**：彈出選單「UI 調整」卡片中的 `#preventAutoScrollToggle` 核取方塊。
+- **開關位置**：彈出選單「Features」卡片中的 `#preventAutoScrollToggle` 核取方塊（v4.32.0 自「UI 調整」卡片移至此處）。
 - **儲存鍵**：`dsPreventAutoScroll`（布林值，預設 `false`）。
 - **常駐狀態的存放位置**：與既有的 `enabled` 旗標並存於同一個隱藏 bridge 元素（`#dss-prevent-auto-scroll-bridge`）的 `dataset` 上，不使用模組層可變狀態。
 - **`disable()` 在常駐模式下為 no-op**：此守衛是必要的，而非防禦性冗餘。該旗標**沒有引用計數**，且 `harvest.js` 在 `finally` 中**無條件**呼叫 `disable()`；若不加守衛，使用者開啟常駐後只要匯出一次 Markdown，保護就會在匯出結束時被靜默關掉。`setPersistent(false)` 則刻意繞過此守衛直接寫入 `dataset`，否則關閉常駐將永遠無法解除保護。
@@ -130,7 +144,7 @@
 - **目的**：讓使用者指定 DeepSeek「智能搜索」切換按鈕的**起始狀態** —— `開啟`（起始為 `aria-pressed="true"`）、`關閉`（起始為 `"false"`）。此設定不新增任何頁面元素，只在每個啟動事件發生時校正既有按鈕一次。
 - **語意（v4.17.0 變更、v4.17.1 擴充）**：此設定是**預設值，不是強制狀態**。每個啟動事件套用一次後即完全放手；使用者之後手動點擊該按鈕的結果會保留下來，擴充功能不再回點，直到下一個啟動事件發生。
 - **啟動事件（v4.17.1 新增 B、C）**：三種事件各自觸發一次套用並重新武裝一次性旗標 —— (A) 內容腳本 `start()` 且主開關為開；(B) `chrome.storage.onChanged` 在 `local` 命名空間帶來 `dsWebSearchToggle` 新值且主開關為開；(C) 主開關由關轉開。這是 v4.17.1 修掉的缺陷：v4.17.0 只有 (A)，`_isSpent` 一旦用掉便永不重置，於是使用者在彈出選單改了設定，已開啟的頁面毫無反應，必須重整才生效。
-- **開關位置**：彈出選單「UI 調整」卡片中的單選群組（`input[name="websearchToggle"]`，兩選項 `開啟` / `關閉`，每個選項以 `.segmented-option` 包裹；圓形 radio 的外觀由 `popup.css` 中 `:is(.locale-option, .segmented-option) input[type="radio"]` 的共用規則提供，與語言切換面板同一份樣式）。`開啟` 為標記中預先勾選者。
+- **開關位置**：彈出選單「Features」卡片中的單選群組（v4.32.0 自「UI 調整」卡片移至此處）（`input[name="websearchToggle"]`，兩選項 `開啟` / `關閉`，每個選項以 `.segmented-option` 包裹；圓形 radio 的外觀由 `popup.css` 中 `:is(.locale-option, .segmented-option) input[type="radio"]` 的共用規則提供，與語言切換面板同一份樣式）。`開啟` 為標記中預先勾選者。
 - **儲存鍵**：`dsWebSearchToggle`（字串，`'on'` | `'off'`，預設 `'on'`）。舊版三態的 `'default'` 值已移除；讀取到殘留的 `'default'` 一律當作 `'on'`，不寫回儲存區。
 - **核心規則 —— 只在狀態不符時點擊**：`aria-pressed` 已等於目標狀態時絕不點擊，因為點擊是切換操作，相符時點擊反而把狀態切換走。狀態判定：`getAttribute('aria-pressed') === 'true'`。目標狀態由公開的 `mode` 屬性導出（`'on'` 對應 `true`）。
 - **一次性機制**：內部 `_isSpent` 旗標標記當前啟動事件的套用是否已用掉。找到按鈕並比對（不論是否需要點擊）後即設為已用掉並中止觀察器。已用掉之後，使用者手動翻轉與頁面重渲染掛上新按鈕都不再觸發點擊；只有新的啟動事件會透過 `_rearm()` 重置旗標，再套用一次，然後同樣放手。

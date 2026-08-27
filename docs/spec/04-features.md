@@ -59,7 +59,7 @@
 
 ## 19. 系統時間注入 (System Time Injection)
 
-- **開關位置**：彈出選單「功能與匯出」卡片中的 `#showSystemTimeToggle` 核取方塊，位於參考連結開關下方。
+- **開關位置**：彈出選單「Export」卡片中的 `#showSystemTimeToggle` 核取方塊，位於參考連結開關下方（v4.32.0 原「功能與匯出」卡片更名為「Export」）。
 - **儲存鍵**：`dsShowSystemTime`（布林值，預設 `false`）。
 - **注入格式**：啟用後，在每則訊息前端以 `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`（24 小時制、零補位，含當地時區偏移）格式插入目前系統時間，位於 `<system-reminder>` 區塊（若存在）或 `<user-input>` 區塊之前。範例：`Current Time: 2026/06/14 20:19:32 (UTC+08:00)`。
 - **重複注入處理**：注入邏輯每次皆重新產生時間戳並前置於訊息開頭（無重複防護檢查）。若文字輸入區已含有舊時間戳，將被新時間戳取代。

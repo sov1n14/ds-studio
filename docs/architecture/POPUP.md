@@ -278,7 +278,7 @@ The popup previously only read storage once at open time (via `StorageManager.sy
 
 The popup includes a built-in language switcher that toggles between Traditional Chinese (zh_TW) and English (en).
 
-**DOM Structure**: A globe-icon button (`#localeSwitcherBtn`) in the Features & Export card header, toggling a `#localePanel` with radio inputs for each locale.
+**DOM Structure**: A globe-icon button (`#localeSwitcherBtn`) in the Export card header, toggling a `#localePanel` with radio inputs for each locale.
 
 **Implementation**:
 - `utils/i18n.js` — Core i18n engine: defines a `dsI18n` object with `setLocale(locale)`, `t(key)` lookup, and `onLocaleChanged(callback)` subscription. It holds no DOM code; locale strings come from `utils/i18n.locales.js`. Persists the selected locale to `chrome.storage.local` as `dsLocale`.
