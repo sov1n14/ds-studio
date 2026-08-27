@@ -44,6 +44,23 @@ function messagesOfType(type) {
         .filter((message) => message && message.type === type);
 }
 
+
+/** Reset all state fields to initial values (replaces __resetState). */
+function resetState() {
+    Object.assign(TemporaryChatDelete.state, {
+        capturedAuthToken: null,
+        trackedTemporaryUuid: null,
+        createDetected: false,
+        completionDetected: false,
+        isPendingCreate: false,
+        coOccurrenceTimer: null,
+        suppressNextUnloadDelete: false,
+        isKeyboardRefresh: false,
+        isListening: false,
+    });
+    globalThis.TemporaryChatEnabledFlag.__setCache(false);
+}
+
 describe('release-lease constant', () => {
     it('L0: DSS_MSG_RELEASE_LEASE is exported from the constants module and equals DSS_RELEASE_LEASE', () => {
         expect(DSS_TEMP_CHAT_CONSTANTS).toHaveProperty('DSS_MSG_RELEASE_LEASE');
@@ -53,7 +70,7 @@ describe('release-lease constant', () => {
 
 describe('deleteTrackedAndClear — release lease on failed immediate delete', () => {
     beforeEach(() => {
-        TemporaryChatDelete.__resetState();
+        resetState();
         sessionStorage.clear();
         setPathname('/');
         // Fake ONLY setTimeout/clearTimeout so the coordinator fiber-result fallback
@@ -78,7 +95,7 @@ describe('deleteTrackedAndClear — release lease on failed immediate delete', (
     it('L1: fiber delete fails AND API fallback exhausts retries → sends exactly one release-lease message with the tracked uuid, alongside the retry-alarm schedule, and does NOT remove the pending entry', async () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeee0001';
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockResolvedValue(false);
-        TemporaryChatDelete.__setState({
+        Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
         });
@@ -103,7 +120,7 @@ describe('deleteTrackedAndClear — release lease on failed immediate delete', (
 
     it('L2: fiber delete SUCCEEDS → sends NO release-lease message and removes the pending entry instead', async () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeee0002';
-        TemporaryChatDelete.__setState({
+        Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
         });
@@ -120,7 +137,7 @@ describe('deleteTrackedAndClear — release lease on failed immediate delete', (
     it('L3: fiber delete fails but the API fallback SUCCEEDS → sends NO release-lease message', async () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeee0003';
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockResolvedValue(true);
-        TemporaryChatDelete.__setState({
+        Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
         });
@@ -135,7 +152,7 @@ describe('deleteTrackedAndClear — release lease on failed immediate delete', (
     it('L4: the release-lease message carries the uuid tracked when the leave flow began, even though deleteTrackedAndClear clears its tracked state immediately', async () => {
         const uuid = 'aaaa1111-bbbb-cccc-dddd-eeeeeeee0004';
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockResolvedValue(false);
-        TemporaryChatDelete.__setState({
+        Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
         });
@@ -143,7 +160,7 @@ describe('deleteTrackedAndClear — release lease on failed immediate delete', (
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
 
         // Tracked state is cleared synchronously at the start of the leave flow...
-        expect(TemporaryChatDelete.__getState().trackedTemporaryUuid).toBeNull();
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
 
         dispatchFiberResult(uuid, false);
         await flushMicrotasks();
