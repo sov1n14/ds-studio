@@ -148,35 +148,35 @@ describe('StorageManager CRUD (3.x scenarios)', () => {
         });
     });
 
-    describe('showSystemTime toggle storage', () => {
-        it('returns default value false when showSystemTime not set', async () => {
+    describe('isShowSystemTime toggle storage', () => {
+        it('returns default value false when isShowSystemTime not set', async () => {
             const settings = await StorageManager.getSettings();
-            expect(settings.showSystemTime).toBe(false);
+            expect(settings.isShowSystemTime).toBe(false);
         });
 
         it('saveShowSystemTime persists the enabled state', async () => {
             await StorageManager.saveShowSystemTime(true);
             const settings = await StorageManager.getSettings();
-            expect(settings.showSystemTime).toBe(true);
+            expect(settings.isShowSystemTime).toBe(true);
         });
 
         it('saveShowSystemTime can toggle from true to false', async () => {
             await StorageManager.saveShowSystemTime(true);
             let settings = await StorageManager.getSettings();
-            expect(settings.showSystemTime).toBe(true);
+            expect(settings.isShowSystemTime).toBe(true);
 
             await StorageManager.saveShowSystemTime(false);
             settings = await StorageManager.getSettings();
-            expect(settings.showSystemTime).toBe(false);
+            expect(settings.isShowSystemTime).toBe(false);
         });
 
-        it('showSystemTime survives round-trip: save and retrieve', async () => {
+        it('isShowSystemTime survives round-trip: save and retrieve', async () => {
             await StorageManager.saveShowSystemTime(true);
             const settings1 = await StorageManager.getSettings();
-            expect(settings1.showSystemTime).toBe(true);
+            expect(settings1.isShowSystemTime).toBe(true);
 
             const settings2 = await StorageManager.getSettings();
-            expect(settings2.showSystemTime).toBe(true);
+            expect(settings2.isShowSystemTime).toBe(true);
         });
     });
 

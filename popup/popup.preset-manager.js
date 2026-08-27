@@ -119,16 +119,6 @@ function createPresetManager(ctx) {
         return response?.pendingPresetId || null;
     }
 
-    // --- 從 URL 解析對話 UUID（純函式） ---
-    function extractUuidFromUrl(url) {
-        try {
-            const match = new URL(url).pathname.match(/\/a\/chat\/s\/([a-f0-9-]+)/);
-            return match ? match[1] : null;
-        } catch {
-            return null;
-        }
-    }
-
     /**
      * 將目前分頁的對話綁定至指定提示詞組（id 為空字串則解除綁定），
      * 並把最新的 chatPresetMap 讀回共享狀態。非對話分頁時不做事。
@@ -159,7 +149,7 @@ function createPresetManager(ctx) {
                 return;
             }
 
-            const uuid = extractUuidFromUrl(activeTab.url);
+            const uuid = DSSChatSessionId.extractChatSessionId(activeTab.url);
             ctx.setCurrentTabUuid(uuid || null);
 
             const boundPresetId = uuid ? ctx.getChatPresetMap()[uuid] : undefined;
@@ -230,7 +220,6 @@ function createPresetManager(ctx) {
         requestDeletePreset,
         requestDeleteAllPresets,
         getPendingPresetIdFromContentScript,
-        extractUuidFromUrl,
         bindCurrentChat,
         syncActivePresetWithCurrentTab,
     };

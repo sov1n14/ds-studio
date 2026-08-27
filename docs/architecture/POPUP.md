@@ -184,7 +184,6 @@ In `popup.html`, the script tags appear in this order:
 <script src="../utils/storage-manager.setters.js"></script>
 <script src="../utils/storage-manager.settings-read.js"></script>
 <script src="../utils/storage-manager.js"></script>
-<script src="../utils/messaging.js"></script>
 <script src="../utils/i18n.locales.js"></script>
 <script src="../utils/i18n.js"></script>
 <script src="popup.i18n-apply.js"></script>
@@ -235,7 +234,7 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `popup.locale.js` (v4.3.3) registers `window.__DS_PopupLocale` with `bindLocaleSwitcher()` — see the Language / Locale Switcher section below.
 - `popup.js` (entry) loads last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 
-The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, `../../utils/debounce.js`, the eight `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/messaging.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, `../popup.i18n-apply.js`, `../popup.preset-domain.js`, then `editor.js` — 17 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` takes its debounce from the shared `DSSDebounce` global rather than defining one.
+The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, `../../utils/debounce.js`, the eight `storage-manager.*.js` bundles, then `../../utils/storage-manager.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, `../popup.i18n-apply.js`, `../popup.preset-domain.js`, then `editor.js` — 17 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` takes its debounce from the shared `DSSDebounce` global rather than defining one.
 
 ### Data Flow Integration
 

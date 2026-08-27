@@ -15,6 +15,19 @@
         SETTINGS_CHANGED: 'DSS_SETTINGS_CHANGED',
     };
 
+    /**
+     * 取得設定訊息型別常數；缺失即拋出並指名修法。
+     * 六個呼叫點（content 與 service worker）共用此單一存取器，
+     * 統一「缺失即失敗」語意，取代原本各自沉默直讀或 require 退回的三種寫法。
+     */
+    globalThis.getSettingsMessageTypes = function getSettingsMessageTypes() {
+        const types = globalThis.DSS_SETTINGS_MSG;
+        if (!types) {
+            throw new Error("[DSS] getSettingsMessageTypes 需要 utils/settings-message-constants.js 先行載入");
+        }
+        return types;
+    };
+
     // === 測試匯出（瀏覽器情境為 no-op） ===
     if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DSS_SETTINGS_MSG;
 })();

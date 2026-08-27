@@ -218,14 +218,14 @@
                     continue;
                 }
 
-                let shouldPush = true;
+                let canPush = true;
                 let pushValue = localSnapshot[key];
 
                 if (key === this.KEYS.PRESET_INDEX) {
                     // 僅在本機排序至少與雲端同新時才推送
                     const localOrderTs = localOrderMeta.orderUpdatedAt || 0;
                     const syncOrderTs = syncOrderMeta.orderUpdatedAt || 0;
-                    shouldPush = localOrderTs >= syncOrderTs;
+                    canPush = localOrderTs >= syncOrderTs;
                 } else if (key.startsWith(this.PRESET_KEY_PREFIX)) {
                     // 使用與其他同步流程一致的「較新者優先」共用規則判斷是否推送
                     const localPreset = localSnapshot[key];
@@ -233,14 +233,14 @@
                     const winner = this._pickNewerPreset(localPreset, syncPreset);
                     if (syncPreset !== undefined && winner !== localPreset) {
                         // 雲端版本已勝出（較新或內容相同），不需推送，且視為已與雲端調和
-                        shouldPush = false;
+                        canPush = false;
                         reconciledPresetKeys.push(key);
                     }
                 } else if (key === this.KEYS.PRESET_ORDER_META) {
                     // 與 PRESET_INDEX 分支一致：僅在本機排序時間戳至少與雲端同新時才推送
                     const localOrderTs = (localSnapshot[key] || {}).orderUpdatedAt || 0;
                     const syncOrderTs = (syncSnapshot[key] || {}).orderUpdatedAt || 0;
-                    shouldPush = localOrderTs >= syncOrderTs;
+                    canPush = localOrderTs >= syncOrderTs;
                 } else if (key === this.KEYS.PRESET_TOMBSTONES) {
                     // 墓碑記錄需逐 id 聯集合併（重用既有 _mergeTombstones），
                     // 避免整包覆寫復活對方裝置已刪除的 preset
@@ -249,7 +249,7 @@
 
                 // 逐鍵寫入而非整批：chrome.storage.sync.set() 是全有全無的，
                 // 合批後任一鍵觸發配額失敗會讓整批一起退回本機授權佇列。
-                if (shouldPush) {
+                if (canPush) {
                     await this._set({ [key]: pushValue });
                 }
             }
@@ -321,7 +321,7 @@
                 if (importedSettings.globalDefaultPrompt !== undefined) updates[this.KEYS.GLOBAL_DEFAULT_PROMPT] = importedSettings.globalDefaultPrompt;
                 if (importedSettings.sidebarAutoHide !== undefined) updates[this.KEYS.SIDEBAR_AUTO_HIDE] = importedSettings.sidebarAutoHide;
                 if (importedSettings.hideThinking !== undefined) updates[this.KEYS.HIDE_THINKING] = importedSettings.hideThinking;
-                if (importedSettings.showSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.showSystemTime;
+                if (importedSettings.isShowSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.isShowSystemTime;
                 if (importedSettings.chatWidth !== undefined) updates[this.KEYS.CHAT_WIDTH] = importedSettings.chatWidth;
                 if (importedSettings.chatWidthEnabled !== undefined) updates[this.KEYS.CHAT_WIDTH_ENABLED] = importedSettings.chatWidthEnabled;
                 if (importedSettings.inputWidth !== undefined) updates[this.KEYS.INPUT_WIDTH] = importedSettings.inputWidth;
@@ -359,4 +359,4 @@
 
     root.__DS_StorageManager_sync = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

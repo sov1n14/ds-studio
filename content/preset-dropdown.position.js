@@ -157,4 +157,4 @@
         module.exports = { computePlacement, pickNaturalWidth };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

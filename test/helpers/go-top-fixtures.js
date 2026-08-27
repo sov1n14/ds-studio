@@ -90,7 +90,7 @@ export function resetGoToTopState() {
     GoToTop._stopConnectRetry();
     GoToTop.enabled = false;
     GoToTop._masterEnabled = false;
-    GoToTop._locked = false;
+    GoToTop._isLocked = false;
     GoToTop._hasSeenDom = false;
     GoToTop._button = null;
     GoToTop._injectionMode = null;

@@ -17,22 +17,22 @@
 (function (root) {
     'use strict';
 
-    var __stylesModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetOverlayStyles ||
+    var __stylesModule = (globalThis).__DS_PresetOverlayStyles ||
         (typeof require !== 'undefined' ? require('./preset-overlay.styles.js') : {});
 
-    var __positionModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetPosition ||
+    var __positionModule = (globalThis).__DS_PresetPosition ||
         (typeof require !== 'undefined' ? require('./preset-dropdown.position.js') : {});
 
-    var __dropdownModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetDropdown ||
+    var __dropdownModule = (globalThis).__DS_PresetDropdown ||
         (typeof require !== 'undefined' ? require('./preset-dropdown.component.js') : {});
 
-    var __resolversModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetOverlayResolvers ||
+    var __resolversModule = (globalThis).__DS_PresetOverlayResolvers ||
         (typeof require !== 'undefined' ? require('./preset-overlay.resolvers.js') : {});
 
-    var __viewportSyncModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetViewportSync ||
+    var __viewportSyncModule = (globalThis).__DS_PresetViewportSync ||
         (typeof require !== 'undefined' ? require('./preset-viewport-sync.js') : {});
 
-    var __presetIdResolverModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetIdResolver ||
+    var __presetIdResolverModule = (globalThis).__DS_PresetIdResolver ||
         (typeof require !== 'undefined' ? require('./preset-id.resolver.js') : {});
 
     var injectOverlayStyles  = __stylesModule.injectOverlayStyles;
@@ -47,7 +47,7 @@
     var resolveOverlayPresetId        = __presetIdResolverModule.resolveOverlayPresetId;
 
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const __selectorsModule = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const __selectorsModule = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     var TARGET_SELECTOR = __selectorsModule.CHAT_HEADER_SELECTOR;
@@ -290,8 +290,8 @@
                 this.render(presets, activeId);
                 if (enable !== undefined) this.setVisible(enable);
 
-                if (!this._localeListenerAttached) {
-                    this._localeListenerAttached = true;
+                if (!this._isLocaleListenerAttached) {
+                    this._isLocaleListenerAttached = true;
                     var self = this;
                     dsI18n.onLocaleChanged(function () {
                         if (self.dropdown && self.dropdown.updateLocale) {
@@ -311,4 +311,4 @@
         module.exports = { createPresetOverlay, injectOverlayStyles, removeOverlayStyles };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

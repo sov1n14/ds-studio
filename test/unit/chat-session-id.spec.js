@@ -1,5 +1,5 @@
 /**
- * content/chat-session-id.js — shared chat-session-id extraction contract.
+ * utils/chat-session-id.js — shared chat-session-id extraction contract.
  *
  * Contract source (the four duplicate implementations this helper replaces, all
  * using the same regex `/\/a\/chat\/s\/([a-f0-9-]+)/` and the same
@@ -18,7 +18,7 @@
  * effect.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import '../../content/chat-session-id.js';
+import '../../utils/chat-session-id.js';
 import { setPathname } from '../helpers/set-pathname.js';
 
 const SESSION_ID = '0e6c3f1a-8b2d-4e57-9a10-77cbe4d5f001';
@@ -30,7 +30,7 @@ beforeEach(() => {
     setPathname('/');
 });
 
-describe('content/chat-session-id.js — module surface', () => {
+describe('utils/chat-session-id.js — module surface', () => {
     it('publishes extractChatSessionId on globalThis.DSSChatSessionId', () => {
         expect(globalThis.DSSChatSessionId).toBeTypeOf('object');
         expect(globalThis.DSSChatSessionId.extractChatSessionId).toBeTypeOf('function');

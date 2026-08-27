@@ -1,0 +1,93 @@
+/* 表單元件：input group、checkbox、label */
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.input-group--row {
+    flex-direction: row;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.input-group--no-gap {
+    gap: 0;
+}
+
+/* 連網搜索列：讓標籤與分段控制項同排，右對齊、垂直置中 */
+.input-group:has(> .websearch-options) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-left,
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.checkbox-group input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    position: relative;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-sunken);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.checkbox-group input[type="checkbox"]:hover {
+    border-color: var(--primary-color);
+}
+.checkbox-group input[type="checkbox"]:checked {
+    background-color: var(--primary-soft);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.checkbox-group input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+.checkbox-group input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.checkbox-group input[type="checkbox"]:disabled {
+    border-color: var(--text-muted);
+    background-color: var(--surface-sunken);
+    cursor: not-allowed;
+}
+
+.checkbox-group label {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+input[type="checkbox"]:disabled + label,
+input[type="range"]:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+}

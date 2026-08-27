@@ -54,7 +54,17 @@ import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
 describe('beforeunload handler (TemporaryChatDelete)', () => {
     beforeEach(() => {
-        TemporaryChatDelete.__resetState();
+        Object.assign(TemporaryChatDelete.state, {
+            capturedAuthToken: null,
+            trackedTemporaryUuid: null,
+            createDetected: false,
+            isCompletionDetected: false,
+            isPendingCreate: false,
+            coOccurrenceTimer: null,
+            suppressNextUnloadDelete: false,
+            isKeyboardRefresh: false,
+            isListening: false,
+        });
         sessionStorage.clear();
         global.chrome.runtime.sendMessage.mockClear();
         global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
@@ -71,12 +81,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         const token = 'Bearer leave-token';
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
-        TemporaryChatDelete.__setState({
-            capturedAuthToken: token,
-            trackedTemporaryUuid: uuid,
-            suppressNextUnloadDelete: false,
-            isKeyboardRefresh: false,
-        });
+        TemporaryChatDelete.state.capturedAuthToken = token;
+        TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
+        TemporaryChatDelete.state.suppressNextUnloadDelete = false;
+        TemporaryChatDelete.state.isKeyboardRefresh = false;
 
         TemporaryChatDelete.handleBeforeUnload();
 
@@ -87,11 +95,9 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
     it('does NOT call sendMessage when suppressNextUnloadDelete is true', () => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
-        TemporaryChatDelete.__setState({
-            capturedAuthToken: 'Bearer token',
-            trackedTemporaryUuid: uuid,
-            suppressNextUnloadDelete: true,
-        });
+        TemporaryChatDelete.state.capturedAuthToken = 'Bearer token';
+        TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
+        TemporaryChatDelete.state.suppressNextUnloadDelete = true;
 
         TemporaryChatDelete.handleBeforeUnload();
 
@@ -102,12 +108,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
     it('does NOT call sendMessage when isKeyboardRefresh is true', () => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
-        TemporaryChatDelete.__setState({
-            capturedAuthToken: 'Bearer token',
-            trackedTemporaryUuid: uuid,
-            suppressNextUnloadDelete: false,
-            isKeyboardRefresh: true,
-        });
+        TemporaryChatDelete.state.capturedAuthToken = 'Bearer token';
+        TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
+        TemporaryChatDelete.state.suppressNextUnloadDelete = false;
+        TemporaryChatDelete.state.isKeyboardRefresh = true;
 
         TemporaryChatDelete.handleBeforeUnload();
 
@@ -118,12 +122,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
     it('does NOT call sendMessage when capturedAuthToken is null', () => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
-        TemporaryChatDelete.__setState({
-            capturedAuthToken: null,
-            trackedTemporaryUuid: uuid,
-            suppressNextUnloadDelete: false,
-            isKeyboardRefresh: false,
-        });
+        TemporaryChatDelete.state.capturedAuthToken = null;
+        TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
+        TemporaryChatDelete.state.suppressNextUnloadDelete = false;
+        TemporaryChatDelete.state.isKeyboardRefresh = false;
 
         TemporaryChatDelete.handleBeforeUnload();
 
@@ -133,12 +135,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
     it('does NOT call sendMessage when URL has no chat UUID', () => {
         setPathname('/');
-        TemporaryChatDelete.__setState({
-            capturedAuthToken: 'Bearer token',
-            trackedTemporaryUuid: 'face0007-f00d-dead-beef-0123456789ab',
-            suppressNextUnloadDelete: false,
-            isKeyboardRefresh: false,
-        });
+        TemporaryChatDelete.state.capturedAuthToken = 'Bearer token';
+        TemporaryChatDelete.state.trackedTemporaryUuid = 'face0007-f00d-dead-beef-0123456789ab';
+        TemporaryChatDelete.state.suppressNextUnloadDelete = false;
+        TemporaryChatDelete.state.isKeyboardRefresh = false;
 
         TemporaryChatDelete.handleBeforeUnload();
 
@@ -150,12 +150,10 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         const trackedUuid = 'tracked-aaaa';
         const currentUuid = 'current-bbbb';
         setPathname(`/a/chat/s/${currentUuid}`);
-        TemporaryChatDelete.__setState({
-            capturedAuthToken: 'Bearer token',
-            trackedTemporaryUuid: trackedUuid,
-            suppressNextUnloadDelete: false,
-            isKeyboardRefresh: false,
-        });
+        TemporaryChatDelete.state.capturedAuthToken = 'Bearer token';
+        TemporaryChatDelete.state.trackedTemporaryUuid = trackedUuid;
+        TemporaryChatDelete.state.suppressNextUnloadDelete = false;
+        TemporaryChatDelete.state.isKeyboardRefresh = false;
 
         TemporaryChatDelete.handleBeforeUnload();
 

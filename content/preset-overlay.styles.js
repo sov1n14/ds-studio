@@ -18,7 +18,7 @@
     'use strict';
 
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const selectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     /** 注入樣式的 <style> 元素 id */
@@ -69,4 +69,4 @@
         module.exports = { injectOverlayStyles, removeOverlayStyles };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

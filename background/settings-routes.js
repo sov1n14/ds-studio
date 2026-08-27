@@ -12,8 +12,6 @@
 (function () {
     'use strict';
 
-    // DeepSeek 分頁比對條件，與 manifest.json host_permissions 一致
-    const DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
     // 前綴型受監看鍵：預設集與 chatPresetMap 分塊，local 與 sync 兩區皆需廣播
     const WATCHED_KEY_PREFIXES = ['dsPreset_', 'chatPresetMap_'];
     // 不屬於 StorageManager.KEYS 但仍需廣播的 local 鍵（同 utils/temporary-chat-constants.js）
@@ -30,11 +28,7 @@
     }
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
-    function resolveMessageTypes() {
-        const types = globalThis.DSS_SETTINGS_MSG;
-        if (!types) throw new Error('[DSS] settings-routes 需要 utils/settings-message-constants.js 先行載入');
-        return types;
-    }
+    const resolveMessageTypes = () => globalThis.getSettingsMessageTypes();
 
     /** 判斷變更鍵是否受監看：前綴不分區；完整鍵僅 local 區。 */
     function isWatchedKey(key, area) {

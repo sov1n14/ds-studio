@@ -97,4 +97,4 @@
         module.exports = { createWidthMeasurer };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

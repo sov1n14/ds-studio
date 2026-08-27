@@ -37,7 +37,7 @@ const EXPECTED_SETTINGS_KEYS = [
     'hideThinking',
     'preventAutoScroll',
     'websearchToggle',
-    'showSystemTime',
+    'isShowSystemTime',
     'chatWidth',
     'chatWidthEnabled',
     'inputWidth',

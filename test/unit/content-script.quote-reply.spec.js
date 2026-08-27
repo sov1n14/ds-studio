@@ -62,7 +62,11 @@ function makeSelection({ text = 'hello', anchorNode, focusNode, rects = null } =
 
 beforeEach(() => {
     // Reset all module-level state (clears _btnEl, _selectedText, _attachedScroll)
-    quoteReply.__resetState();
+    quoteReply.state.btnEl = null;
+    quoteReply.state.selectedText = '';
+    quoteReply.state.isScrollAttached = false;
+    if (quoteReply.state.debounceTimer) clearTimeout(quoteReply.state.debounceTimer);
+    quoteReply.state.debounceTimer = null;
     // Clear DOM additions from previous tests
     document.body.innerHTML = '';
     // Restore all spies
@@ -386,7 +390,7 @@ describe('handleSelectionChange', () => {
         const btn = document.querySelector('.dss-quote-btn');
         const display = btn ? btn.style.display : 'none';
         expect(display).toBe('none');
-        expect(quoteReply.__getState().selectedText).toBe('');
+        expect(quoteReply.state.selectedText).toBe('');
     });
 
     it('whitespace-only selection → button is not visible', () => {
@@ -448,7 +452,7 @@ describe('handleSelectionChange', () => {
             focusNode: child,
         }));
 
-        expect(quoteReply.__getState().selectedText).toBe('some AI response text');
+        expect(quoteReply.state.selectedText).toBe('some AI response text');
     });
 
     it('valid selection → button element has .dss-quote-btn class', () => {
@@ -570,7 +574,7 @@ describe('handleSelectionChange', () => {
 
 describe('hideButton', () => {
     it('calling hideButton when button has not been initialized does not throw', () => {
-        // __resetState sets _btnEl = null; hideButton must guard against this
+        // state reset sets btnEl = null; hideButton must guard against this
         expect(() => quoteReply.hideButton()).not.toThrow();
     });
 
@@ -593,9 +597,9 @@ describe('hideButton', () => {
     });
 
     it('hideButton clears selectedText in state', () => {
-        quoteReply.__setState({ selectedText: 'some text' });
+        quoteReply.state.selectedText = 'some text';
         quoteReply.hideButton();
-        expect(quoteReply.__getState().selectedText).toBe('');
+        expect(quoteReply.state.selectedText).toBe('');
     });
 });
 
@@ -735,7 +739,7 @@ describe('master toggle', () => {
     });
 
     it('disable() before any button exists does not throw', () => {
-        // __resetState() in the global beforeEach leaves btnEl === null.
+        // The state reset in the global beforeEach leaves btnEl === null.
         expect(() => quoteReply.disable()).not.toThrow();
     });
 });

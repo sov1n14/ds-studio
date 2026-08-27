@@ -151,4 +151,4 @@
         module.exports = { runSettle };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

@@ -1,0 +1,95 @@
+/* 語言切換面板與 radio 樣式 */
+
+.locale-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-1) 0;
+    box-shadow: var(--shadow-raised);
+    min-width: 130px;
+}
+.locale-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+.locale-option:hover {
+    background: var(--surface-hover);
+}
+:is(.locale-option, .segmented-option) input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    position: relative;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background-color: var(--surface-sunken);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+:is(.locale-option, .segmented-option) input[type="radio"]:hover {
+    border-color: var(--primary-color);
+}
+:is(.locale-option, .segmented-option) input[type="radio"]:checked {
+    border-color: var(--primary-color);
+}
+:is(.locale-option, .segmented-option) input[type="radio"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    transform: translate(-50%, -50%);
+}
+:is(.locale-option, .segmented-option) input[type="radio"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+:is(.locale-option, .segmented-option) input[type="radio"]:disabled {
+    border-color: var(--text-muted);
+    cursor: not-allowed;
+}
+/* 連網搜索選項（緊湊分段控制項） */
+.websearch-options {
+    display: flex;
+    width: fit-content;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.segmented-option {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.segmented-option:not(:last-child) {
+    border-right: 1px solid var(--border-color);
+}
+
+.segmented-option:hover,
+.segmented-option:has(input:checked) {
+    color: var(--text-color);
+    background-color: var(--surface-hover);
+}

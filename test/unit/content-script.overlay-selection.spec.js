@@ -77,7 +77,7 @@ describe('overlay selected preset after a DSS_SETTINGS_CHANGED broadcast', () =>
 
     beforeEach(async () => {
         await waitForContentScriptBootstrap();
-        contentScript.__resetState();
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         target = document.createElement('div');
         document.body.appendChild(target);
         overlay.mountTo(target);
@@ -89,12 +89,10 @@ describe('overlay selected preset after a DSS_SETTINGS_CHANGED broadcast', () =>
     });
 
     it('[P3] stops showing a bound preset that has been deleted, rendering no selection instead of the dead id', async () => {
-        contentScript.__setState({
-            isEnabled: true,
-            currentChatUuid: CHAT_UUID,
-            chatPresetMap: { [CHAT_UUID]: DEAD_PRESET.id },
-            pendingPresetId: null,
-        });
+        contentScript.state.isEnabled = true;
+        contentScript.state.currentChatUuid = CHAT_UUID;
+        contentScript.state.chatPresetMap = { [CHAT_UUID]: DEAD_PRESET.id };
+        contentScript.state.pendingPresetId = null;
 
         await seedPresets([DEAD_PRESET, LIVE_PRESET]);
         broadcastSettingsChanged({ dsPresetIndex: { newValue: [DEAD_PRESET.id, LIVE_PRESET.id] } });
@@ -121,12 +119,10 @@ describe('overlay selected preset after a DSS_SETTINGS_CHANGED broadcast', () =>
     });
 
     it('[P3] shows the pinned preset on a brand-new conversation when pendingPresetId is null', async () => {
-        contentScript.__setState({
-            isEnabled: true,
-            currentChatUuid: null,
-            chatPresetMap: {},
-            pendingPresetId: null,
-        });
+        contentScript.state.isEnabled = true;
+        contentScript.state.currentChatUuid = null;
+        contentScript.state.chatPresetMap = {};
+        contentScript.state.pendingPresetId = null;
 
         await seedPresets([PINNED_PRESET, LIVE_PRESET]);
         await StorageManager.savePinnedPresetId(PINNED_PRESET.id);

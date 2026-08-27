@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 /**
  * Method C — Scoped Storage-Based Advisory Lock primitive tests.
@@ -17,8 +17,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
  * during setup.
  */
 
-const LOCK_KEY = 'chatPresetMapLock';
-const LOCK_ACQUIRE_TIMEOUT_MS = 5000;
+const _SM = (await import('../../utils/storage-manager.js')).default;
+const LOCK_KEY = _SM.CHAT_PRESET_MAP_LOCK_KEY;
+const LOCK_ACQUIRE_TIMEOUT_MS = _SM.LOCK_ACQUIRE_TIMEOUT_MS;
 
 describe('StorageManager advisory lock (Method C)', () => {
     let SM;

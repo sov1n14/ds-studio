@@ -16,14 +16,14 @@ import '../../utils/debounce.js';
 // editor.js calls DSSPresetDomain.validatePresetName — publish the preset-domain module too.
 import '../../popup/popup.preset-domain.js';
 
-// editor.js references `location.search` and `window.DSVMessaging`, and
+// editor.js references `location.search` and `window.DSSTabControl`, and
 // assigns to `window.__DSSEditor`. Set up mocks before importing.
 // We stub location.search via globalThis.location in happy-dom.
 
 // Provide StorageManager as a global so editor.js's classic-script path finds it
 globalThis.StorageManager = StorageManager;
 
-// Provide a stub DSVMessaging
+// Provide a stub DSSTabControl
 globalThis.window = globalThis.window ?? {};
 
 const editor = await import('../../popup/editor/editor.js');
@@ -175,27 +175,27 @@ describe('saveContent — routing with spied StorageManager', () => {
         expect(savedPreset.id).toBe('p1');
     });
 
-    it('preset save triggers DSVMessaging.broadcastActivePreset', async () => {
+    it('preset save triggers DSSTabControl.broadcastActivePreset', async () => {
         await StorageManager.savePromptPresets([
             { id: 'p1', name: 'P1', content: 'old', createdAt: 1000, updatedAt: 1000 },
         ]);
         vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
 
         const broadcastSpy = vi.fn().mockResolvedValue(undefined);
-        globalThis.window.DSVMessaging = { broadcastActivePreset: broadcastSpy };
+        globalThis.window.DSSTabControl = { broadcastActivePreset: broadcastSpy };
 
         await saveContent({ type: 'preset', id: 'p1' }, 'new content');
         expect(broadcastSpy).toHaveBeenCalledWith('p1', 'new content');
 
-        delete globalThis.window.DSVMessaging;
+        delete globalThis.window.DSSTabControl;
     });
 
-    it('preset save does not throw when DSVMessaging is absent', async () => {
+    it('preset save does not throw when DSSTabControl is absent', async () => {
         await StorageManager.savePromptPresets([
             { id: 'p2', name: 'P2', content: 'old', createdAt: 1000, updatedAt: 1000 },
         ]);
         vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
-        delete globalThis.window.DSVMessaging;
+        delete globalThis.window.DSSTabControl;
 
         await expect(saveContent({ type: 'preset', id: 'p2' }, 'new')).resolves.toBeUndefined();
     });

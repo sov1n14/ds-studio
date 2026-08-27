@@ -7,7 +7,7 @@
  * 載入順序（manifest.json 必須依此順序）：
  *   1. temporary-chat-constants.js   （常數）
  *   2. temporary-chat-enabled-flag.js（啟用旗標，經 background 設定路由；需 utils/settings-message-constants.js 先行載入）
- *   3. temporary-chat-pending-store.js / temporary-chat-delete-api.js
+ *   3. background/pending-store.js / temporary-chat-delete-api.js
  *   4. temporary-chat-delete.tracking.js
  *   5. temporary-chat-delete.coordinator.js
  *   6. temporary-chat-delete.handlers.js
@@ -17,15 +17,7 @@
 const TemporaryChatDelete = (() => {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
-    const _root = (typeof globalThis !== 'undefined') ? globalThis : window;
+    const _root = globalThis;
 
     /**
      * 取得部件 bundle，缺少時以載入順序錯誤明確失敗。
@@ -137,7 +129,7 @@ const TemporaryChatDelete = (() => {
      * @returns {Promise<void>}
      */
     async function init() {
-        const CHANGED_EVENT = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
+        const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
 
         const flag = _flag();
@@ -164,6 +156,7 @@ const TemporaryChatDelete = (() => {
 
     return {
         init,
+        state,
         // 供單元測試使用的函式與狀態存取器匯出
         extractUuidFromUrl: tracking.extractUuidFromUrl,
         readEnabledFlag,
@@ -183,34 +176,6 @@ const TemporaryChatDelete = (() => {
         handleToggleChanged: handlers.handleToggleChanged,
         attachListeners,
         detachListeners,
-        __getState: () => ({
-            capturedAuthToken: state.capturedAuthToken,
-            trackedTemporaryUuid: state.trackedTemporaryUuid,
-            enabledFlagCache: readEnabledFlag(),
-            createDetected: state.createDetected,
-            completionDetected: state.completionDetected,
-            isPendingCreate: state.isPendingCreate,
-            coOccurrenceTimer: state.coOccurrenceTimer,
-            suppressNextUnloadDelete: state.suppressNextUnloadDelete,
-            isKeyboardRefresh: state.isKeyboardRefresh,
-            isListening: state.isListening,
-        }),
-        __setState: (s) => {
-            if ('capturedAuthToken' in s) state.capturedAuthToken = s.capturedAuthToken;
-            if ('trackedTemporaryUuid' in s) state.trackedTemporaryUuid = s.trackedTemporaryUuid;
-            if ('enabledFlagCache' in s) setEnabledFlagCache(s.enabledFlagCache);
-            if ('createDetected' in s) state.createDetected = s.createDetected;
-            if ('completionDetected' in s) state.completionDetected = s.completionDetected;
-            if ('isPendingCreate' in s) state.isPendingCreate = s.isPendingCreate;
-            if ('coOccurrenceTimer' in s) state.coOccurrenceTimer = s.coOccurrenceTimer;
-            if ('suppressNextUnloadDelete' in s) state.suppressNextUnloadDelete = s.suppressNextUnloadDelete;
-            if ('isKeyboardRefresh' in s) state.isKeyboardRefresh = s.isKeyboardRefresh;
-            if ('isListening' in s) state.isListening = s.isListening;
-        },
-        __resetState: () => {
-            Object.assign(state, _trackingPart.createState());
-            setEnabledFlagCache(false);
-        },
     };
 })();
 

@@ -17,17 +17,8 @@
 const TemporaryChatToggle = (() => {
     'use strict';
 
-    // ── 常數參照（由 temporary-chat-constants.js 在前載入） ──────────────────
-    // 瀏覽器環境下已為全域變數；Node.js 測試環境下由外部注入
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const _selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const _selectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     // ── 私有狀態 ──────────────────────────────────────────────────────────────
@@ -44,7 +35,7 @@ const TemporaryChatToggle = (() => {
      * 取得共享啟用旗標模組（temporary-chat-enabled-flag.js 在前載入提供）。
      */
     function _flag() {
-        const flag = (typeof globalThis !== 'undefined' && globalThis.TemporaryChatEnabledFlag)
+        const flag = globalThis.TemporaryChatEnabledFlag
             || (typeof window !== 'undefined' && window.TemporaryChatEnabledFlag);
         if (!flag) {
             throw new Error('[DSS] temporary-chat-toggle: TemporaryChatEnabledFlag is missing — load content/temporary-chat-enabled-flag.js before this file');
@@ -154,7 +145,8 @@ const TemporaryChatToggle = (() => {
      * @param {boolean} isEnabled
      */
     function dispatchToggleEvent(isEnabled) {
-        const EVENT_NAME = _getConst('DSS_TEMP_CHAT_CHANGED_EVENT', 'dss-temporary-chat-changed');
+        // 常數由 temporary-chat-constants.js 在前載入時掛上 globalThis
+        const EVENT_NAME = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { isEnabled } }));
     }
 
@@ -194,7 +186,7 @@ const TemporaryChatToggle = (() => {
     function tryInject() {
         if (!_masterEnabled) return;
 
-        const anchor = document.querySelector('div' + _selectors.FLOATING_BUTTON_BAR_SELECTOR);
+        const anchor = document.querySelector(_selectors.FLOATING_BUTTON_BAR_DIV_SELECTOR);
 
         if (!anchor) return;
         injectToggleRow(anchor);
@@ -333,10 +325,6 @@ const TemporaryChatToggle = (() => {
         // New exports for unit tests (SPA-aware behavior)
         removeToggleRow,
         handleNavigation,
-        // 供跨分頁同步與單元測試使用：直接更新快取並同步 UI
-        __setCacheForCrossTabSync: setCacheForCrossTabSync,
-        // 供主開關管線與單元測試使用：更新主開關狀態並同步顯示／隱藏切換列
-        __setMasterEnabled: setMasterEnabled,
     };
 })();
 

@@ -24,7 +24,7 @@
     'use strict';
 
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-    const selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const selectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     // 重新注入的防抖間隔：React 重繪會連續觸發 observer
@@ -33,10 +33,9 @@
     const _hasKey = (object, key) =>
         Boolean(key) && Object.prototype.hasOwnProperty.call(object, key);
 
-    /** 於呼叫時解析相依模組，同時支援瀏覽器全域與單元測試的 require。 */
+    /** 委派共用存取器取得訊息型別常數（缺失即拋出並指名修法）。 */
     function _resolveSettingsMessageTypes() {
-        return globalThis.DSS_SETTINGS_MSG
-            || (typeof require !== 'undefined' ? require('../utils/settings-message-constants.js') : null);
+        return globalThis.getSettingsMessageTypes();
     }
 
     function _resolveFeatureToggle() {
@@ -62,6 +61,11 @@
         /** 預設無跨功能夾限，實際注入值即自身百分比。 */
         getEffectivePercent() {
             return this.percent;
+        },
+
+        /** 依實例 MIN/MAX 夾限百分比；兩個寬度功能的邊界不同，故一律從實例讀取。 */
+        clampPercent(percent) {
+            return Math.min(Math.max(percent, this.MIN), this.MAX);
         },
 
         injectStyles(percent) {

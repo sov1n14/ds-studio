@@ -7,8 +7,6 @@
  */
 
 /** DeepSeek 分頁的 URL 比對樣式（條件下推給 chrome.tabs.query，不在 JS 端過濾）。 */
-const DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
-
 /** 目前視窗中作用中的 DeepSeek 分頁查詢條件。 */
 const ACTIVE_DEEPSEEK_TAB_QUERY = {
     active: true,
@@ -59,9 +57,28 @@ async function sendToTab(tabId, message) {
     }
 }
 
-globalThis.DSSTabControl = { queryActiveDeepseekTab, queryDeepseekTabs, sendToTab };
+/**
+ * 將目前啟用的預設提示詞廣播至所有 DeepSeek 分頁的 content script。
+ * 併發送出（建立於 queryDeepseekTabs / sendToTab 之上）；無 id 的分頁跳過，
+ * 個別分頁失敗由 sendToTab 各自吞掉，不影響其他分頁與呼叫端。
+ *
+ * @param {string} presetId      - 目前啟用的預設 ID
+ * @param {string} presetContent - 預設提示詞內容
+ * @returns {Promise<void>}
+ */
+async function broadcastActivePreset(presetId, presetContent) {
+    const tabs = await queryDeepseekTabs();
+    const message = { action: 'ACTIVE_PRESET_CHANGED', presetId, presetContent };
+    await Promise.all(
+        tabs
+            .filter((tab) => tab?.id !== undefined)
+            .map((tab) => sendToTab(tab.id, message)),
+    );
+}
+
+globalThis.DSSTabControl = { queryActiveDeepseekTab, queryDeepseekTabs, sendToTab, broadcastActivePreset };
 
 // 匯出供 Node.js 單元測試環境使用
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { queryActiveDeepseekTab, queryDeepseekTabs, sendToTab };
+    module.exports = { queryActiveDeepseekTab, queryDeepseekTabs, sendToTab, broadcastActivePreset };
 }

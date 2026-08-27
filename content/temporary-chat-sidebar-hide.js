@@ -7,24 +7,16 @@
 (function (root) {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     // 共用 DOM 選擇器（瀏覽器：ds-selectors.js 於前載入設定 window.DSstudio；Node 測試：直接 require）
-    const _selectors = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.Selectors ||
+    const _selectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     const STYLE_ID = 'ds-temp-chat-sidebar-hide-style';
     const HIDDEN_CLASS = 'ds-temp-chat-hidden';
-    const MSG_GET = _getConst('DSS_MSG_GET_PENDING_UUIDS', 'DSS_GET_PENDING_UUIDS');
-    const MSG_CHANGED = _getConst('DSS_MSG_PENDING_UUIDS_CHANGED', 'DSS_PENDING_UUIDS_CHANGED');
-    const GROUP_SELECTOR = _selectors.SIDEBAR_DATE_GROUP_SELECTOR || 'div._3098d02';
-    const CHAT_LINK_SELECTOR = _selectors.SIDEBAR_CHAT_LINK_SELECTOR || 'a[href*="/a/chat/s/"]';
+    const MSG_GET = globalThis.DSS_MSG_GET_PENDING_UUIDS;
+    const MSG_CHANGED = globalThis.DSS_MSG_PENDING_UUIDS_CHANGED;
+    const GROUP_SELECTOR = _selectors.SIDEBAR_DATE_GROUP_SELECTOR;
+    const CHAT_LINK_SELECTOR = _selectors.SIDEBAR_CHAT_LINK_SELECTOR;
     const WRAPPER_SELECTOR = _selectors.SIDEBAR_WRAPPER_SELECTOR || 'div.dc04ec1d';
 
     // 執行期狀態（僅存活於本分頁生命期）
@@ -190,4 +182,4 @@
 
     // Test export（瀏覽器中為 no-op）
     if (typeof module !== 'undefined' && module.exports) module.exports = root.TemporaryChatSidebarHide;
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

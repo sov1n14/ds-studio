@@ -18,14 +18,14 @@
  */
 
 // 合併 Toast Bundle（瀏覽器：由 harvest.toast.js 在前載入設定 globalThis；Node.js 測試：直接 require）
-const __DSHarvestToast = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_Harvest_toast ||
+const __DSHarvestToast = (globalThis).__DS_Harvest_toast ||
     (typeof require !== 'undefined' ? require('./harvest.toast.js') : {});
 const showHarvestToastScrolling = __DSHarvestToast.showHarvestToastScrolling;
 const showHarvestToastCapturing = __DSHarvestToast.showHarvestToastCapturing;
 const hideHarvestToast = __DSHarvestToast.hideHarvestToast;
 
 // 合併 DOM 探測/量測 Bundle（瀏覽器：由 harvest.dom.js 在前載入設定 globalThis；Node.js 測試：直接 require）
-const __DSHarvestDom = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_Harvest_dom ||
+const __DSHarvestDom = (globalThis).__DS_Harvest_dom ||
     (typeof require !== 'undefined' ? require('./harvest.dom.js') : {});
 const VISIBLE_ITEMS_SELECTOR = __DSHarvestDom.VISIBLE_ITEMS_SELECTOR;
 const MESSAGE_SELECTOR = __DSHarvestDom.MESSAGE_SELECTOR;
@@ -36,7 +36,7 @@ const _isAtBottom = __DSHarvestDom._isAtBottom;
 const _measureMountedBottomOffset = __DSHarvestDom._measureMountedBottomOffset;
 
 // 合併決策模組（瀏覽器：由 content/harvest.policy.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
-const __DSHarvestPolicy = (typeof globalThis !== 'undefined' ? globalThis : window).DSstudio?.HarvestPolicy ||
+const __DSHarvestPolicy = (globalThis).DSstudio?.HarvestPolicy ||
     (typeof require !== 'undefined' ? require('./harvest.policy.js') : undefined);
 
 // ─────────────────────────────────────────────────────────────────

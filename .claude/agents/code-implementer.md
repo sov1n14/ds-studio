@@ -1,7 +1,7 @@
 ---
 name: "code-implementer"
 description: "Dispatch to write, change, refactor, or bug-fix production code — popup/, background/, content/, utils/, manifest.json version bumps, MutationObserver and selector wiring. For logic-layer work dispatch only after test-engineer reports an observed red failure, and pass the test file path. Treats everything under test/ as read-only and escalates instead of editing it. Not for authoring tests, running tests, docs, or review."
-model: claude-opus-4-8
+model: claude-opus-4-6
 effort: low
 color: blue
 memory: project

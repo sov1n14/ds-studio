@@ -116,4 +116,4 @@
         module.exports = { createOptionListManager, OPTION_ID_PREFIX };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

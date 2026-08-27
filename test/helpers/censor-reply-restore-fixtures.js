@@ -14,7 +14,7 @@ export function resetCensorReplyRestore() {
     CensorReplyRestore._pendingQueue = [];
     CensorReplyRestore._keyToMessageId = new Map();
     CensorReplyRestore._restoredMessages = {};
-    CensorReplyRestore._storedRecordsApplied = false;
+    CensorReplyRestore._hasStoredRecordsApplied = false;
     CensorReplyRestore._currentSessionId = null;
     document.body.innerHTML = '';
 }

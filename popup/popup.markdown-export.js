@@ -15,6 +15,17 @@ function createMarkdownExportManager(ctx) {
     // --- 綁定「匯出 Markdown」按鈕 ---
     function bindExportButton(exportMdBtn, includeThinkingToggle, includeReferencesToggle) {
         if (!exportMdBtn) return;
+
+        // ── Guard clauses：於綁定時（而非載入時）驗證相依全域是否已就緒 ──
+        // 點擊事件為 async listener，缺少全域只會拋出無人接住的 ReferenceError；
+        // 於此同步驗證，讓載入順序錯誤在開發者可見之處立即失敗。
+        if (typeof DSSTabControl === 'undefined') {
+            throw new Error('DSSTabControl is required but was not found — check that utils/tab-control.js loads before popup/popup.markdown-export.js in popup/popup.html');
+        }
+        if (typeof dsI18n === 'undefined') {
+            throw new Error('dsI18n is required but was not found — check that utils/i18n.js loads before popup/popup.markdown-export.js in popup/popup.html');
+        }
+
         exportMdBtn.addEventListener('click', async () => {
             const activeTab = await DSSTabControl.queryActiveDeepseekTab();
             if (!activeTab) {

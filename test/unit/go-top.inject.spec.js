@@ -67,10 +67,9 @@ describe('GoToTop', () => {
 
         it('starts wrapper observer', () => {
             createWrapperWithoutNativeButton();
-            const spy = vi.spyOn(GoToTop, '_startWrapperObserver');
             GoToTop._injectIntoWrapperDirect();
-            expect(spy).toHaveBeenCalledOnce();
-            spy.mockRestore();
+            // Observable result: a live MutationObserver now exists on the module.
+            expect(GoToTop._wrapperObserver).toBeInstanceOf(MutationObserver);
         });
 
         it('dedup: returns true without re-creating when .dsw-gotop already present', () => {
@@ -200,13 +199,11 @@ describe('GoToTop', () => {
         });
 
         it('starts wrapper observer on outerWrapper', () => {
-            const spy = vi.spyOn(GoToTop, '_startWrapperObserver');
             const { nativeBtn } = createFullWrapperWithNativeButton();
 
             GoToTop._injectIntoWrapper(nativeBtn);
-            expect(spy).toHaveBeenCalledOnce();
-
-            spy.mockRestore();
+            // Observable result: a live MutationObserver now exists on the module.
+            expect(GoToTop._wrapperObserver).toBeInstanceOf(MutationObserver);
         });
 
         it('returns false and does not create button when wrapper elements not found', () => {
@@ -285,11 +282,14 @@ describe('GoToTop', () => {
             GoToTop._button.className = 'dsw-gotop';
             document.body.appendChild(GoToTop._button);
             GoToTop._injectionMode = 'injected';
+            const existingBtn = GoToTop._button;
 
-            const createSpy = vi.spyOn(GoToTop, '_createButtonElement');
             GoToTop._injectButton();
-            expect(createSpy).not.toHaveBeenCalled();
-            createSpy.mockRestore();
+
+            // No-op is observable: the already-connected button is neither replaced
+            // by a freshly created element nor duplicated in the DOM.
+            expect(GoToTop._button).toBe(existingBtn);
+            expect(document.querySelectorAll('.dsw-gotop').length).toBe(1);
         });
 
         it('cleans up orphan (disconnected) button and re-injects to wrapper-solo when wrapper exists', () => {

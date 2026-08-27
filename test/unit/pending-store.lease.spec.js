@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'module';
-import TemporaryChatPendingStore from '../../content/temporary-chat-pending-store.js';
+import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 // Load the constants module as CommonJS so we can inspect its module.exports
 // object (requirement 1) AND trigger its Object.assign(globalThis, ...) that
@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const constantsExport = require('../../utils/temporary-chat-constants.js');
 
 const SYNC_KEY = 'dss-pending-deletes-sync';
-const LEASE_TTL_MS = 600000;
+const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
 
 // fake-timer storage helpers. The in-memory chrome.storage mock resolves
 // get/set via setTimeout(0). Under vi.useFakeTimers() those macrotasks never

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import TemporaryChatPendingStore from '../../content/temporary-chat-pending-store.js';
+import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 const SYNC_KEY = 'dss-pending-deletes-sync';
 const LOCAL_OPEN_KEY = 'dss-open-temp-uuids';

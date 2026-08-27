@@ -9,6 +9,12 @@
  *   1. input 事件設定 isDirty flag
  *   2. input 事件觸發防抖儲存（500ms）
  *   3. blur / visibilitychange(hidden) / pagehide 立即儲存
+ *
+ * 載入順序（editor.html 中 bundle 必須先於 entry）：
+ *   1. editor.parse.js    → globalThis.__DS_Editor_parse
+ *   2. editor.render.js   → globalThis.__DS_Editor_render
+ *   3. editor.storage.js  → globalThis.__DS_Editor_storage
+ *   4. editor.js          （本檔，合入以上三個 bundle）
  */
 
 'use strict';
@@ -16,171 +22,10 @@
 // 防抖工具來自 utils/debounce.js（由 editor.html 於本檔之前載入）
 const debounce = DSSDebounce;
 
-// ─────────────────────────────────────────────
-// 解析 Query String 目標
-// ─────────────────────────────────────────────
-
-/**
- * 解析 location.search 取得編輯目標。
- * 合法結果：{ type: 'global' } 或 { type: 'preset', id: string }
- * 非法結果：null（呼叫端應轉為停用狀態）
- * @returns {{ type: 'global' } | { type: 'preset', id: string } | null}
- */
-function parseTarget() {
-    const params = new URLSearchParams(location.search);
-    const type = params.get('target');
-
-    if (type === 'global') {
-        return { type: 'global' };
-    }
-
-    if (type === 'preset') {
-        const id = params.get('id');
-        // id 必須為非空字串
-        if (!id || !id.trim()) return null;
-        return { type: 'preset', id: id.trim() };
-    }
-
-    // 未知或缺少 target 參數
-    return null;
-}
-
-// ─────────────────────────────────────────────
-// 停用狀態渲染
-// ─────────────────────────────────────────────
-
-/**
- * 將編輯器渲染為停用狀態（錯誤或找不到提示詞）。
- * @param {HTMLElement} titleEl - 標題元素
- * @param {HTMLTextAreaElement} textareaEl - 文字輸入區元素
- * @param {string} message - 停用原因訊息（顯示為標題）
- */
-function renderDisabledState(titleEl, textareaEl, message) {
-    titleEl.textContent = message;
-    titleEl.classList.add('is-error');
-    textareaEl.disabled = true;
-    textareaEl.value = '';
-    document.title = message;
-}
-
-// ─────────────────────────────────────────────
-// 儲存狀態指示器
-// ─────────────────────────────────────────────
-
-/**
- * 更新儲存狀態指示器顯示。
- * @param {HTMLElement} statusEl - 狀態文字元素
- * @param {'saving' | 'saved' | 'error'} state - 目前儲存狀態
- */
-function updateSaveStatus(statusEl, state, message) {
-    if (!statusEl) return;
-
-    if (state === 'saving') {
-        statusEl.textContent = dsI18n.t('savingStatus');
-        statusEl.classList.remove('save-status--error');
-        statusEl.classList.remove('save-status--hidden');
-    } else if (state === 'error') {
-        // 錯誤狀態：顯示訊息、套用錯誤樣式，且不自動隱藏（等待下次儲存觸發）
-        statusEl.textContent = message ?? '';
-        statusEl.classList.add('save-status--error');
-        statusEl.classList.remove('save-status--hidden');
-    } else {
-        statusEl.textContent = dsI18n.t('savedStatus');
-        statusEl.classList.remove('save-status--error');
-        statusEl.classList.remove('save-status--hidden');
-        // 顯示 1 秒後淡出
-        setTimeout(() => {
-            statusEl.classList.add('save-status--hidden');
-        }, 1000);
-    }
-}
-
-// ─────────────────────────────────────────────
-// 儲存邏輯
-// ─────────────────────────────────────────────
-
-/**
- * 依據目標類型儲存內容。
- * @param {{ type: 'global' } | { type: 'preset', id: string }} target
- * @param {string} value - 要儲存的文字內容
- * @param {string} [name] - 提示詞組的新名稱（僅 preset 目標使用）
- * @returns {Promise<void>}
- */
-async function saveContent(target, value, name) {
-    if (!target) throw new Error('saveContent: target 不可為空');
-
-    if (target.type === 'global') {
-        await StorageManager.saveGlobalDefaultPrompt(value);
-        return;
-    }
-
-    if (target.type === 'preset') {
-        // 重新取得最新 preset 物件以避免覆寫其他欄位
-        const settings = await StorageManager.getSettings();
-        const preset = settings.promptPresets.find(p => p.id === target.id);
-        if (!preset) {
-            // 提示詞組已在儲存期間被刪除，靜默放棄
-            return;
-        }
-        const nextName = name ?? preset.name;
-        // 名稱規則由 popup.preset-domain.js 集中定義（editor.html 於本檔之前載入）
-        const validation = DSSPresetDomain.validatePresetName(nextName, settings.promptPresets, { selfId: target.id });
-        if (validation.reason === 'duplicate') {
-            // 名稱已被其他提示詞組使用：整次儲存取消，等待使用者修正
-            throw Object.assign(new Error('duplicate preset name'), { code: 'DUPLICATE_NAME' });
-        }
-        preset.content = value;
-        preset.name = nextName;
-        preset.updatedAt = Date.now();
-        await StorageManager.saveOnePromptPreset(preset);
-
-        // 廣播給活躍的 DeepSeek 頁籤（選用鏈以免 messaging.js 載入失敗時中斷儲存）
-        window.DSVMessaging?.broadcastActivePreset(target.id, value)
-            ?.catch(() => {});
-        return;
-    }
-
-    throw new Error('saveContent: 未知的 target.type');
-}
-
-// ─────────────────────────────────────────────
-// 載入內容
-// ─────────────────────────────────────────────
-
-/**
- * 依據目標從 StorageManager 載入初始內容。
- * 載入失敗或找不到提示詞時回傳 null，讓呼叫端轉為停用狀態。
- * @param {{ type: 'global' } | { type: 'preset', id: string }} target
- * @returns {Promise<{ content: string, title: string, name?: string } | null>}
- */
-async function loadContent(target) {
-    if (!target) return null;
-
-    await StorageManager.initialize();
-    const settings = await StorageManager.getSettings();
-
-    if (target.type === 'global') {
-        return {
-            content: settings.globalDefaultPrompt ?? '',
-            title: dsI18n.t('globalPresetTitle'),
-        };
-    }
-
-    if (target.type === 'preset') {
-        const preset = settings.promptPresets.find(p => p.id === target.id);
-        if (!preset) {
-            // 找不到提示詞組（可能已被刪除）
-            return null;
-        }
-        return {
-            content: preset.content ?? '',
-            title: preset.name,
-            name: preset.name,
-        };
-    }
-
-    return null;
-}
+// ── 合入三個 bundle ──
+const { parseTarget } = globalThis.__DS_Editor_parse || {};
+const { renderDisabledState, updateSaveStatus } = globalThis.__DS_Editor_render || {};
+const { saveContent, loadContent } = globalThis.__DS_Editor_storage || {};
 
 // ─────────────────────────────────────────────
 // 主程式進入點

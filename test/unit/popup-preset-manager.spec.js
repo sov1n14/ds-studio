@@ -5,6 +5,9 @@ beforeAll(() => {
     // popup.preset-manager.js references the global dsI18n.t(...), so i18n
     // must be loaded and initialized first.
     loadI18nOnce();
+    // popup.html loads utils/chat-session-id.js before popup.preset-manager.js,
+    // which now calls DSSChatSessionId.extractChatSessionId. Mirror that order.
+    evalPopupScript('utils/chat-session-id.js');
     evalPopupScript('popup/popup.preset-manager.js');
 });
 

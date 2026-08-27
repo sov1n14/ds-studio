@@ -13,7 +13,7 @@
 
     // ── 依賴解析（瀏覽器：全域命名空間；Node.js/Vitest：require） ────────────
 
-    var __settleModule = (typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : root)).__DS_PresetSettle ||
+    var __settleModule = (globalThis).__DS_PresetSettle ||
         (typeof require !== 'undefined' ? require('./preset-settle.scheduler.js') : {});
 
     var runSettle = __settleModule.runSettle;
@@ -36,7 +36,7 @@
         if (typeof scheduleFrame !== 'function') throw new Error('setupResizeObserver: scheduleFrame must be a function');
         if (typeof isExtensionContextValid !== 'function') throw new Error('setupResizeObserver: isExtensionContextValid must be a function');
 
-        var rafPending = false;
+        var isRafPending = false;
         var observer = new ResizeObserver(function () {
             // context 失效 → 停止觀察
             if (!isExtensionContextValid()) {
@@ -44,10 +44,10 @@
                 return;
             }
             // rAF 節流：多次 callback 合併為單次 onResize
-            if (rafPending) return;
-            rafPending = true;
+            if (isRafPending) return;
+            isRafPending = true;
             scheduleFrame(function () {
-                rafPending = false;
+                isRafPending = false;
                 onResize();
             });
         });
@@ -70,12 +70,12 @@
         if (typeof onResize !== 'function') throw new Error('setupWindowResizeListener: onResize must be a function');
         if (typeof scheduleFrame !== 'function') throw new Error('setupWindowResizeListener: scheduleFrame must be a function');
 
-        var rafPending = false;
+        var isRafPending = false;
         var handler = function () {
-            if (rafPending) return;
-            rafPending = true;
+            if (isRafPending) return;
+            isRafPending = true;
             scheduleFrame(function () {
-                rafPending = false;
+                isRafPending = false;
                 onResize();
             });
         };
@@ -121,4 +121,4 @@
         module.exports = { setupResizeObserver, setupWindowResizeListener, startSettle };
     }
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

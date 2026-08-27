@@ -20,10 +20,11 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { evalPopupScript } from '../helpers/popup-script-loader.js';
+import '../../utils/editor-window-constants.js';
 
 const BASE_URL = 'chrome-extension://EXTID/popup/editor/editor.html';
-const GLOBAL_KEY = 'dss-editor-window-id-global';
-const PRESET_KEY = 'dss-editor-window-id-preset';
+const GLOBAL_KEY = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.global;
+const PRESET_KEY = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.preset;
 
 beforeAll(() => {
     // popup.editor-window.js reads globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS behind a
@@ -43,7 +44,13 @@ beforeEach(() => {
     activePresetId = '';
     chrome.runtime.getURL = vi.fn(() => BASE_URL);
     openSingletonWindow = vi.fn().mockResolvedValue({ created: true });
-    globalThis.DSSWindowControl = { openSingletonWindow };
+    // getExtensionUrl mirrors the popup->utils boundary: popup/ must not call chrome.*
+    // directly, so it resolves resource URLs through utils/window-control.js. Delegating
+    // to the SAME stubbed chrome.runtime.getURL keeps BASE_URL flowing whether the module
+    // still calls chrome.runtime.getURL directly (current) or DSSWindowControl.getExtensionUrl
+    // (post-fix) — the asserted url is BASE_URL either way, so no assertion moves.
+    const getExtensionUrl = vi.fn((resourcePath) => chrome.runtime.getURL(resourcePath));
+    globalThis.DSSWindowControl = { openSingletonWindow, getExtensionUrl };
 });
 
 const buildManager = () =>

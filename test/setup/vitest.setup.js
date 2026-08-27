@@ -4,6 +4,8 @@ import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
 // ── Globals preload (i18n) ──────────────────────────────────────────────────
 // dsI18n is referenced by many modules at load time. Load it first so the
 // IIFE runs and populates window.dsI18n before any dependent module evaluates.
+import '../../utils/i18n.locales.zhTW.js';
+import '../../utils/i18n.locales.en.js';
 import '../../utils/i18n.locales.js';
 import '../../utils/i18n.js';
 // init() is explicit since autoInit was removed. Placement is load-bearing: it MUST run
@@ -12,7 +14,7 @@ import '../../utils/i18n.js';
 // getStorageOnChangedListenerCount() for background specs.
 await globalThis.dsI18n.init();
 
-// __DS_Logger is referenced by content/temporary-chat-pending-store.js and
+// __DS_Logger is referenced by background/pending-store.js and
 // other modules via globalThis.__DS_Logger?.warn(...). Preload it here (a
 // small, dependency-free util with no chrome.* usage at load time) so specs
 // exercise the REAL warn() implementation instead of silently falling through
@@ -26,26 +28,58 @@ import '../../utils/logger.js';
 // spec that loads a toggle-gated content module gets the real constants instead
 // of a TypeError inside the toggle's initial settings read.
 import '../../utils/settings-message-constants.js';
+// utils/url-constants.js mounts DEEPSEEK_TAB_URL onto globalThis. It MUST load
+// before utils/tab-control.js (preloaded indirectly by specs that import it) so
+// the tab query URL constant is available at call time.
+import '../../utils/url-constants.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the
 // entry's Object.assign finds the bundles already populated.
+// utils/temporary-chat-constants.js mounts every DSS_TEMP_CHAT_* constant onto
+// globalThis via Object.assign as a load side effect. It MUST load before any
+// preloaded module that resolves one of those constants -- content/temporary-chat-enabled-flag.js
+// reads DSS_TEMP_CHAT_STORAGE_KEY at load time (its module-level ENABLED_KEY), and the
+// temporary-chat-delete.* parts read DSS_* constants at call time. Placed at the top of
+// the preload block so it precedes all of them.
+import '../../utils/temporary-chat-constants.js';
+import '../../utils/storage-manager.keys.js';
 import '../../utils/storage-manager.chunk-lock.js';
+import '../../utils/storage-manager.rw.js';
 import '../../utils/storage-manager.sync.js';
+import '../../utils/storage-manager.tombstone.js';
+import '../../utils/storage-manager.preset-merge.js';
+import '../../utils/storage-manager.preset-recency.js';
 import '../../utils/storage-manager.presets.js';
+import '../../utils/storage-manager.chatmap.diff.js';
 import '../../utils/storage-manager.chatmap.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
 import '../../utils/storage-manager.setters.js';
 import '../../utils/storage-manager.settings-read.js';
 import '../../content/censor-reply-restore.markdown.js';
+import '../../content/censor-reply-restore.dom.extract.js';
+import '../../content/censor-reply-restore.dom.resolve.js';
+import '../../content/censor-reply-restore.dom.inject.js';
+import '../../content/censor-reply-restore.dom.scan.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';
 import '../../content/censor-reply-restore.storage.js';
+import '../../content/censor-reply-restore.detection.js';
+import '../../content/censor-reply-restore.observer.js';
+import '../../content/quote-reply.geometry.js';
+import '../../content/quote-reply.button.js';
+import '../../content/go-top.locate.scroll.js';
+import '../../content/go-top.locate.anchor.js';
 import '../../content/go-top.locate.js';
+import '../../content/go-top.render.button.js';
+import '../../content/go-top.render.inject.js';
+import '../../content/go-top.render.observer.js';
 import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
+import '../../content/go-top.observers.js';
+import '../../content/go-top.lifecycle.js';
 // temporary-chat-enabled-flag.js publishes globalThis.TemporaryChatEnabledFlag, the
 // shared enabled-flag cache that content/temporary-chat-toggle.js and the
 // temporary-chat-delete entry both resolve at load time (they throw a load-order
@@ -73,7 +107,18 @@ import '../../content/preset-overlay.styles.js';
 import '../../content/preset-overlay.resolvers.js';
 import '../../content/preset-settle.scheduler.js';
 import '../../content/preset-overlay.controller.js';
+import '../../content/content-script.export.time.js';
+import '../../content/content-script.export.markdown.js';
 import '../../content/content-script.export.js';
+import '../../content/edit-message-cleanup.pure.js';
+import '../../content/mobile-sidebar-swipe.button.js';
+import '../../content/mobile-sidebar-swipe.gesture.js';
+import '../../content/mobile-sidebar-swipe.bind.js';
+import '../../content/mobile-sidebar-swipe.lifecycle.js';
+import '../../content/mobile-sidebar-swipe.js';
+import '../../popup/editor/editor.parse.js';
+import '../../popup/editor/editor.render.js';
+import '../../popup/editor/editor.storage.js';
 
 // ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
 // The controller feature-detects it (typeof ResizeObserver === 'undefined') and

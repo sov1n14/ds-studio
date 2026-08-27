@@ -23,8 +23,34 @@
  *   all chunks from storage before applying mutations (nulls + reloads).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createDualContext, clearSharedStorage } from '../helpers/dual-context-storage.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import InMemoryStorageMock from '../fixtures/chrome-storage-mock.js';
+
+// --- Dual-context storage harness (inlined; sole consumer) ---
+// Two StorageManager instances share one in-memory chrome.storage backing store
+// but get isolated module-level state via vi.resetModules() between imports.
+let _sharedSync = null;
+let _sharedLocal = null;
+
+async function createDualContext() {
+    _sharedSync = new InMemoryStorageMock();
+    _sharedLocal = new InMemoryStorageMock();
+    globalThis.chrome.storage.sync = _sharedSync;
+    globalThis.chrome.storage.local = _sharedLocal;
+    globalThis.chrome.storage.onChanged = _sharedLocal.onChanged;
+
+    const modA = await import('../../utils/storage-manager.js');
+    const ctxA = modA.default ?? modA;
+    vi.resetModules();
+    const modB = await import('../../utils/storage-manager.js');
+    const ctxB = modB.default ?? modB;
+    return { ctxA, ctxB };
+}
+
+function clearSharedStorage() {
+    if (_sharedSync) _sharedSync.clear();
+    if (_sharedLocal) _sharedLocal.clear();
+}
 
 // Shared helper: write chunk data to BOTH sync and local, firing the
 // onChanged invalidator via the local write so caches are nulled.

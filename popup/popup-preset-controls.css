@@ -1,0 +1,68 @@
+/* Preset selector 控制項 */
+
+.preset-selector {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.preset-selector label {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: var(--text-color);
+}
+
+.preset-controls {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex: 1;
+    min-width: 0;
+}
+
+.preset-actions {
+    display: flex;
+    gap: var(--space-1);
+    flex-shrink: 0;
+}
+
+.icon-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    color: var(--text-color);
+    font-family: inherit;
+}
+
+.icon-btn:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.icon-btn:active {
+    background-color: var(--surface-active);
+}
+
+.icon-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.icon-btn:disabled {
+    color: var(--text-muted);
+    opacity: 0.6;
+    cursor: not-allowed;
+}

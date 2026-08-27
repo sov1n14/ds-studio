@@ -21,11 +21,12 @@
  *     caching means the file's top-level code runs only once for this test
  *     file. Each test resets the stubs' mock state instead of re-importing.
  */
+import '../../background/service-worker-constants.js';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
-const SYNC_RETRY_ALARM_NAME = 'dss-sync-retry';
-const DELETE_RETRY_ALARM_NAME = 'dss-delete-retry';
-const LEASE_TTL_MS = 600000;
+const SYNC_RETRY_ALARM_NAME = globalThis.SYNC_RETRY_ALARM_NAME;
+const DELETE_RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
+const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
 
 function flushMicrotasks() {
     return new Promise((resolve) => setTimeout(resolve, 0));

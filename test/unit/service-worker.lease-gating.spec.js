@@ -15,12 +15,13 @@
  */
 import '../../utils/deepseek-api.js';
 import '../../utils/temporary-chat-constants.js';
+import '../../background/service-worker-constants.js';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
 
-const RETRY_ALARM_NAME = 'dss-delete-retry';
-const PENDING_SYNC_KEY = 'dss-pending-deletes-sync';
-const LEASE_TTL_MS = 600000;
+const RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
+const PENDING_SYNC_KEY = globalThis.DSS_PENDING_DELETES_SYNC_KEY;
+const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
 const NOW = 1700000000000;
 
 function flushMicrotasks() {

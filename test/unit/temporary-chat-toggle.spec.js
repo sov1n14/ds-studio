@@ -9,10 +9,14 @@ import '../../utils/storage-manager.js';
 // mock here: a spec-local `global.chrome = {...}` runs AFTER this hoisted import and
 // therefore produced two mock universes -- the module registered against the setup
 // mock while the tests drove a stub nobody listened to.
+// Mounts DSS_TEMP_CHAT_* on globalThis before temporary-chat-toggle.js evaluates
+// (it reads DSS_TEMP_CHAT_STORAGE_KEY / DSS_TEMP_CHAT_CHANGED_EVENT at load time,
+// no hardcoded fallback). Same arrangement as temporary-chat-sidebar-hide.spec.js.
+import '../../utils/temporary-chat-constants.js';
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
-const STORAGE_KEY = 'dss-temporary-chat-enabled';
-const CHANGED_EVENT = 'dss-temporary-chat-changed';
+const STORAGE_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
+const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
 const IS_ENABLED_KEY = StorageManager.KEYS.IS_ENABLED;
 const MSG = () => globalThis.DSS_SETTINGS_MSG;
 
@@ -88,7 +92,7 @@ async function loadToggle(values = {}) {
     await import('../../content/feature-toggle.js');
     const mod = await import('../../content/temporary-chat-toggle.js');
     const instance = mod.default ?? mod;
-    loadedInstances.push(instance);
+    loadedInstances.push({ instance, onMessage: chrome.runtime.onMessage });
     await flush();
     return instance;
 }
@@ -98,10 +102,22 @@ beforeEach(() => {
     installSettingsRoute();
 });
 
-// Every loaded instance keeps a MutationObserver on document.body; disarming the
-// master switch is what stops it from re-injecting rows into later tests.
+// Every loaded instance keeps a MutationObserver on document.body. Delivering an
+// IS_ENABLED=false broadcast on the instance own onMessage stub drives the real
+// feature-toggle disable path (setMasterEnabled(false) via onDisable), which stops
+// re-injection into later tests: the same teardown effect without a test backdoor.
 afterEach(() => {
-    loadedInstances.forEach((instance) => instance.__setMasterEnabled(false));
+    loadedInstances.forEach(({ onMessage }) => {
+        onMessage.callListeners(
+            {
+                type: MSG().SETTINGS_CHANGED,
+                area: 'local',
+                changes: { [IS_ENABLED_KEY]: { newValue: false } },
+            },
+            { id: 'test-extension-id' },
+            () => {},
+        );
+    });
     loadedInstances = [];
 });
 
@@ -226,12 +242,26 @@ describe('C — writeEnabledFlag', () => {
     });
 });
 
-// ── Group D: __setCacheForCrossTabSync ────────────────────────────────────────
+// ── Group D: cross-tab enabled-flag sync (settings-changed broadcast) ─────────
+// The enabled flag cross-tab sync path is: background broadcasts SETTINGS_CHANGED
+// for the enabled key -> flag module updates its cache and notifies its subscriber
+// (the toggle module setCacheForCrossTabSync) -> the injected row visual state and
+// the toggle event follow. These tests drive that real broadcast entry point
+// rather than poking the cache setter directly.
 
-describe('D — __setCacheForCrossTabSync', () => {
+describe('D — cross-tab enabled-flag sync via settings-changed broadcast', () => {
+    function createAnchorInDOM() {
+        const parent = document.createElement('div');
+        const anchor = document.createElement('div');
+        anchor.className = 'aaff8b8f';
+        parent.appendChild(anchor);
+        document.body.appendChild(parent);
+        return anchor;
+    }
+
     beforeEach(() => {
-        TemporaryChatToggle.writeEnabledFlag(false);
         document.body.innerHTML = '';
+        window.history.replaceState({}, '', '/non-homepage');
     });
 
     afterEach(() => {
@@ -239,40 +269,46 @@ describe('D — __setCacheForCrossTabSync', () => {
         document.body.innerHTML = '';
     });
 
-    it('D1: updates cache to the new value', () => {
-        TemporaryChatToggle.__setCacheForCrossTabSync(true);
-        expect(TemporaryChatToggle.readEnabledFlag()).toBe(true);
+    it('D1: an enabled-key broadcast updates the cache to the new value', async () => {
+        const instance = await loadToggle({ [STORAGE_KEY]: false });
+        expect(instance.readEnabledFlag()).toBe(false);
+
+        broadcast({ [STORAGE_KEY]: { newValue: true } });
+
+        expect(instance.readEnabledFlag()).toBe(true);
     });
 
-    it('D2: dispatches the toggle event with the new value', () => {
-        const received = [];
-        const handler = (e) => received.push(e.detail);
-        window.addEventListener(CHANGED_EVENT, handler);
+    it('D2: an enabled-key broadcast dispatches the toggle event with the new value', async () => {
+        await loadToggle({ [STORAGE_KEY]: false });
 
-        TemporaryChatToggle.__setCacheForCrossTabSync(true);
+        const received = captureToggleEvents(() => {
+            broadcast({ [STORAGE_KEY]: { newValue: true } });
+        });
 
-        window.removeEventListener(CHANGED_EVENT, handler);
         expect(received).toHaveLength(1);
         expect(received[0].isEnabled).toBe(true);
     });
 
-    it('D3: calls applyVisualState on injected row when one exists', () => {
-        // Inject a row so _injectedRow is set
-        const parent = document.createElement('div');
-        const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
-        parent.appendChild(anchor);
-        document.body.appendChild(parent);
-        TemporaryChatToggle.injectToggleRow(anchor);
+    it('D3: an enabled-key broadcast updates the injected row visual state', async () => {
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+        // Master on so a row is injected; enabled flag starts false (checkbox off).
+        await loadToggle({ [IS_ENABLED_KEY]: true, [STORAGE_KEY]: false });
+        await vi.waitFor(() => {
+            expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        });
+        expect(document.querySelector('.dss-temp-chat-switch__input').checked).toBe(false);
 
-        TemporaryChatToggle.__setCacheForCrossTabSync(true);
+        broadcast({ [STORAGE_KEY]: { newValue: true } });
 
-        const input = document.querySelector('.dss-temp-chat-switch__input');
-        expect(input.checked).toBe(true);
+        expect(document.querySelector('.dss-temp-chat-switch__input').checked).toBe(true);
     });
 
-    it('D4: does NOT throw when no row is injected', () => {
-        expect(() => TemporaryChatToggle.__setCacheForCrossTabSync(false)).not.toThrow();
+    it('D4: an enabled-key broadcast does NOT throw when no row is injected', async () => {
+        await loadToggle({ [STORAGE_KEY]: true });
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
+
+        expect(() => broadcast({ [STORAGE_KEY]: { newValue: false } })).not.toThrow();
     });
 });
 
@@ -666,14 +702,10 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        // Reset master switch + injected row to a known baseline before each test.
-        TemporaryChatToggle.__setMasterEnabled(false);
-        document.body.innerHTML = '';
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
-        TemporaryChatToggle.__setMasterEnabled(false);
         document.body.innerHTML = '';
     });
 
@@ -698,32 +730,36 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
         });
     });
 
-    it('L3: __setMasterEnabled(false) removes an existing injected row', () => {
+    it('L3: an IS_ENABLED=false broadcast removes an existing injected row', async () => {
         window.history.replaceState({}, '', '/');
-        TemporaryChatToggle.__setMasterEnabled(true);
-        const anchor = createAnchorInDOM();
-        TemporaryChatToggle.injectToggleRow(anchor);
-        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        createAnchorInDOM();
+        await loadToggle({ [IS_ENABLED_KEY]: true });
+        await vi.waitFor(() => {
+            expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+        });
 
-        TemporaryChatToggle.__setMasterEnabled(false);
+        broadcast({ [IS_ENABLED_KEY]: { newValue: false } });
 
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });
 
-    it('L4: __setMasterEnabled(true) on homepage re-injects the row', () => {
+    it('L4: an IS_ENABLED=true broadcast on homepage injects the row', async () => {
         window.history.replaceState({}, '', '/');
         createAnchorInDOM();
+        await loadToggle({ [IS_ENABLED_KEY]: false });
+        expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
 
-        TemporaryChatToggle.__setMasterEnabled(true);
+        broadcast({ [IS_ENABLED_KEY]: { newValue: true } });
 
         expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
     });
 
-    it('L5: __setMasterEnabled(true) off-homepage does NOT inject', () => {
+    it('L5: an IS_ENABLED=true broadcast off-homepage does NOT inject', async () => {
         window.history.replaceState({}, '', '/a/chat/s/some-uuid');
         createAnchorInDOM();
+        await loadToggle({ [IS_ENABLED_KEY]: false });
 
-        TemporaryChatToggle.__setMasterEnabled(true);
+        broadcast({ [IS_ENABLED_KEY]: { newValue: true } });
 
         expect(document.getElementById('dss-temp-chat-toggle-row')).toBeNull();
     });

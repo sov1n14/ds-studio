@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import '../../content/sidebar-auto-hide.styles.js';
+import '../../content/sidebar-auto-hide.observers.js';
 import SidebarAutoHide from '../../content/sidebar-auto-hide.js';
 
 // ─────────────────────────────────────────────────────────────────────────────

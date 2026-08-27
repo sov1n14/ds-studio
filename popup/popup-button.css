@@ -1,0 +1,62 @@
+/* 按鈕樣式 */
+
+.btn {
+    width: 100%;
+    padding: 8px 16px;
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+    font-family: inherit;
+}
+
+.btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn:active {
+    background-color: var(--primary-active);
+    transform: scale(0.98);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.btn-outline {
+    background: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.btn-outline:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.btn-outline:active {
+    background: var(--surface-active);
+}
+
+.btn-xs {
+    font-size: 11px;
+    padding: 0px 16px;
+    line-height: 1.6;
+    width: auto;
+}
+
+.btn--flex {
+    flex: 1;
+    width: auto;
+}
+
+.io-label {
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--text-color);
+}

@@ -5,8 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DS studio</title>
     <link rel="stylesheet" href="popup-theme.css">
-    <link rel="stylesheet" href="popup.css">
-    <link rel="stylesheet" href="popup-controls.css">
+    <link rel="stylesheet" href="popup-layout.css">
+    <link rel="stylesheet" href="popup-locale.css">
+    <link rel="stylesheet" href="popup-card.css">
+    <link rel="stylesheet" href="popup-form.css">
+    <link rel="stylesheet" href="popup-status.css">
+    <link rel="stylesheet" href="popup-switch.css">
+    <link rel="stylesheet" href="popup-button.css">
+    <link rel="stylesheet" href="popup-preset-controls.css">
+    <link rel="stylesheet" href="popup-slider.css">
+    <link rel="stylesheet" href="popup-toast.css">
     <link rel="stylesheet" href="popup-select.css">
     <link rel="stylesheet" href="popup-modal.css">
 </head>
@@ -271,16 +279,23 @@
     <script src="../utils/tab-control.js"></script>
     <script src="../utils/window-control.js"></script>
     <script src="../utils/editor-window-constants.js"></script>
+    <script src="../utils/storage-manager.keys.js"></script>
     <script src="../utils/storage-manager.chunk-lock.js"></script>
+    <script src="../utils/storage-manager.rw.js"></script>
     <script src="../utils/storage-manager.sync.js"></script>
+    <script src="../utils/storage-manager.tombstone.js"></script>
+    <script src="../utils/storage-manager.preset-merge.js"></script>
+    <script src="../utils/storage-manager.preset-recency.js"></script>
     <script src="../utils/storage-manager.presets.js"></script>
+    <script src="../utils/storage-manager.chatmap.diff.js"></script>
     <script src="../utils/storage-manager.chatmap.js"></script>
     <script src="../utils/storage-manager.local.js"></script>
     <script src="../utils/storage-manager.init.js"></script>
     <script src="../utils/storage-manager.setters.js"></script>
     <script src="../utils/storage-manager.settings-read.js"></script>
     <script src="../utils/storage-manager.js"></script>
-    <script src="../utils/messaging.js"></script>
+    <script src="../utils/i18n.locales.zhTW.js"></script>
+    <script src="../utils/i18n.locales.en.js"></script>
     <script src="../utils/i18n.locales.js"></script>
     <script src="../utils/i18n.js"></script>
     <script src="popup.i18n-apply.js"></script>
@@ -290,6 +305,7 @@
     <script src="popup.modal.js"></script>
     <script src="popup.toast.js"></script>
     <script src="popup.preset-domain.js"></script>
+    <script src="../utils/chat-session-id.js"></script>
     <script src="popup.preset-manager.js"></script>
     <script src="popup.pin-manager.js"></script>
     <script src="popup.backup-manager.js"></script>

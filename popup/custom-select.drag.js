@@ -221,4 +221,4 @@
 
     root.__DSSCustomSelectDrag = { createDragReorder, reorderPresets };
 
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

@@ -12,11 +12,7 @@
         // ────────────────────────────────────────────
 
         _renderInline(text) {
-            let result = text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-            result = result
+            let result = this._escapeHtml(text)
                 .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer"><span>$1</span></a>')
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                 .replace(/\*\*([^*]+)\*\*/g, '<strong><span>$1</span></strong>')
@@ -195,4 +191,4 @@
     root.__DS_CensorReplyRestore_markdown = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

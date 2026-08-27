@@ -51,7 +51,7 @@
                 // 舊格式：key 為純 message_id 數字字串（不含 '::'）
                 // 新格式：key 為 "{sessionId}::{messageId}"
                 const cleanedData = {};
-                var didMigrate = false;
+                var hasMigrated = false;
                 for (const key in raw) {
                     const record = raw[key];
                     if (!record || record.censored !== true) continue;
@@ -60,7 +60,7 @@
                         // 舊版 key — 以記錄內嵌的 chat_session_id 重新編 key
                         const newKey = this._recordKey(record.chat_session_id, record.message_id);
                         cleanedData[newKey] = record;
-                        didMigrate = true;
+                        hasMigrated = true;
                     } else {
                         cleanedData[key] = record;
                     }
@@ -70,7 +70,7 @@
                 // 若有清除或遷移，寫回儲存
                 const rawCount = Object.keys(raw).length;
                 const cleanedCount = Object.keys(cleanedData).length;
-                if (didMigrate || cleanedCount !== rawCount) {
+                if (hasMigrated || cleanedCount !== rawCount) {
                     await StorageManager.saveRestoredMessages(cleanedData);
                 }
             } catch (e) {
@@ -82,4 +82,4 @@
     root.__DS_CensorReplyRestore_storage = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

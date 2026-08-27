@@ -62,4 +62,4 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = root.DSSMainWorldInjector;
     }
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

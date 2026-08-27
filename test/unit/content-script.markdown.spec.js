@@ -13,7 +13,7 @@ describe('parseHtmlToMarkdown (4.x export parser)', () => {
     const { parseHtmlToMarkdown } = contentScript;
 
     beforeEach(() => {
-        contentScript.__resetState();
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     function loadFixture(name) {

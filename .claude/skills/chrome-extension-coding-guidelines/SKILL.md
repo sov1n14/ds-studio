@@ -32,7 +32,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 
 **Layer access rules:**
 
-- `popup/` MUST reach every extension API through a `utils/` module: storage through `utils/storage-manager.js`, messaging through `utils/messaging.js`, and any window or tab control through a `utils/` wrapper named after that concern. Rationale: a popup with no `chrome.*` call is unit-testable without a `chrome` mock.
+- `popup/` MUST reach every extension API through a `utils/` module: storage through `utils/storage-manager.js`, tab/messaging coordination through `utils/tab-control.js`, and any window or tab control through a `utils/` wrapper named after that concern. Rationale: a popup with no `chrome.*` call is unit-testable without a `chrome` mock.
 - `content/` MUST obtain settings by messaging `background/`, which owns storage access on its behalf.
 - `utils/` MUST stay loadable by any layer, which means it MUST NOT assume a `document` exists.
 

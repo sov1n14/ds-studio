@@ -275,7 +275,7 @@ describe('exportConversationToMarkdown', () => {
 
     beforeEach(() => {
         document.body.innerHTML = '';
-        contentScript.__resetState();
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         vi.stubGlobal('URL', {
             createObjectURL: vi.fn().mockReturnValue('blob:fake'),
             revokeObjectURL: vi.fn(),

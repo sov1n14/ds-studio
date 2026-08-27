@@ -7,14 +7,6 @@
 (function (root) {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     /**
      * 綁定共享狀態與依賴，回傳事件處理器集合。
      * 回傳的函式參照必須被入口檔保存並重複使用，
@@ -44,12 +36,12 @@
          */
         function handleAuthMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== 'DSS_AUTH_CAPTURED') return;
+            if (e.data?.type !== globalThis.DSS_AUTH_CAPTURED_TYPE) return;
             state.capturedAuthToken = e.data.authorization || null;
             if (!e.data.authorization) return;
             // 委派 SW 的待刪佇列路由；fire-and-forget，失敗僅記錄
             Promise.resolve(chrome.runtime.sendMessage({
-                type: _getConst('DSS_MSG_SET_LAST_AUTH_TOKEN', 'DSS_SET_LAST_AUTH_TOKEN'),
+                type: globalThis.DSS_MSG_SET_LAST_AUTH_TOKEN,
                 token: e.data.authorization,
             }))
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })
@@ -62,7 +54,7 @@
          */
         function handleCreateMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== _getConst('DSS_CHAT_CREATE_MESSAGE_TYPE', 'DSS_CHAT_CREATE_DETECTED')) return;
+            if (e.data?.type !== globalThis.DSS_CHAT_CREATE_MESSAGE_TYPE) return;
             if (!readEnabledFlag()) return;
             state.createDetected = true;
             tracking.checkCoOccurrence();
@@ -74,9 +66,9 @@
          */
         function handleCompletionMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== _getConst('DSS_CHAT_COMPLETION_MESSAGE_TYPE', 'DSS_CHAT_COMPLETION_DETECTED')) return;
+            if (e.data?.type !== globalThis.DSS_CHAT_COMPLETION_MESSAGE_TYPE) return;
             if (!readEnabledFlag()) return;
-            state.completionDetected = true;
+            state.isCompletionDetected = true;
             tracking.checkCoOccurrence();
         }
 
@@ -87,7 +79,7 @@
          */
         function handleHistoryNavMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== 'DSS_HISTORY_NAV') return;
+            if (e.data?.type !== globalThis.DSS_HISTORY_NAV_TYPE) return;
             // 建構合成事件，使 handleNavigationEvent 可直接重用
             handleNavigationEvent({
                 destination: { url: e.data.url },
@@ -212,4 +204,4 @@
 
     // Test export（瀏覽器中為 no-op）
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

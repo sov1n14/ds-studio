@@ -24,12 +24,12 @@
          */
         scrollToTopAndWait(options = {}) {
             // 切換行為：若滾動進行中，中止目前滾動並直接返回（不重新啟動）
-            if (this._locked && this._scrollReject) {
+            if (this._isLocked && this._scrollReject) {
                 this._scrollReject({ success: false, reason: 'stopped-by-user' });
                 return;
             }
 
-            this._locked = true;
+            this._isLocked = true;
             // 按鈕在整個滾動過程中保持啟用狀態（aria-disabled 維持 false），
             // 使用者可隨時再次點擊以中止滾動
 
@@ -41,7 +41,7 @@
 
                 let consecutiveMisses = 0;
                 let mutationTimer = null;
-                let aborted = false;
+                let isAborted = false;
                 // 追蹤穩定狀態以應對虛擬列表動態增長
                 let _stableTopCount = 0;
                 let _lastScrollHeight = -1;
@@ -90,7 +90,7 @@
                         mutationTimer = null;
                     }
                     if (preventAutoScroll && !wasAlreadyEnabled) preventAutoScroll.disable();
-                    this._locked = false;
+                    this._isLocked = false;
                     this._scrollPromise = null;
                     this._scrollReject = null;
                     if (this._button) {
@@ -100,7 +100,7 @@
                 };
 
                 const step = () => {
-                    if (aborted) return;
+                    if (isAborted) return;
 
                     if (Date.now() - startTime > effectiveTimeout) {
                         cleanup();
@@ -158,7 +158,7 @@
                 };
 
                 const scheduleNext = () => {
-                    if (aborted) return;
+                    if (isAborted) return;
                     mutationTimer = setTimeout(() => {
                         mutationTimer = null;
                         step();
@@ -167,7 +167,7 @@
 
                 // 透過 reject 路徑暴露中止接口（供 _onRouteChange 使用）
                 this._scrollReject = (result) => {
-                    aborted = true;
+                    isAborted = true;
                     cleanup();
                     reject(result);
                 };
@@ -182,4 +182,4 @@
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
     root.__DS_GoToTop_scroll = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
-})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+})(globalThis);

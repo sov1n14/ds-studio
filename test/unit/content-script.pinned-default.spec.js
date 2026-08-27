@@ -3,7 +3,7 @@ import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 
-const s = () => contentScript.__getState();
+const s = () => contentScript.state;
 
 // Contract under test: a pinned "default" prompt group preselects a NEW
 // conversation, but must never override an EXISTING conversation's group
@@ -28,7 +28,7 @@ describe('pinned default preset preselection (new-chat path only)', () => {
 
     beforeEach(async () => {
         await new Promise(r => setTimeout(r, 0));
-        contentScript.__resetState();
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
 
         await chrome.storage.local.remove([
             'chatPresetMap', 'dsPresetIndex', 'activePresetId', 'pinnedPresetId',

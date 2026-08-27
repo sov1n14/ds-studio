@@ -21,18 +21,14 @@ describe('temporary-chat-constants', () => {
         expect(constants.DSS_CHAT_CREATE_MESSAGE_TYPE).toBe('DSS_CHAT_CREATE_DETECTED');
     });
 
-    it('DSS_CHAT_CREATE_ENDPOINT has the exact expected value', () => {
-        expect(constants.DSS_CHAT_CREATE_ENDPOINT).toBe('/api/v0/chat_session/create');
-    });
 
-    it('exports exactly twenty-two constants', () => {
+    it('exports exactly twenty-four constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(22);
+        expect(keys).toHaveLength(24);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
         expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
         expect(keys).toContain('DSS_CHAT_CREATE_MESSAGE_TYPE');
-        expect(keys).toContain('DSS_CHAT_CREATE_ENDPOINT');
         expect(keys).toContain('DSS_CHAT_COMPLETION_MESSAGE_TYPE');
         expect(keys).toContain('DSS_FIBER_DELETE_MESSAGE_TYPE');
         expect(keys).toContain('DSS_FIBER_DELETE_RESULT_TYPE');
@@ -50,6 +46,9 @@ describe('temporary-chat-constants', () => {
         expect(keys).toContain('DSS_MSG_RELEASE_LEASE');
         expect(keys).toContain('DSS_MSG_GET_PENDING_UUIDS');
         expect(keys).toContain('DSS_MSG_PENDING_UUIDS_CHANGED');
+        expect(keys).toContain('DSS_AUTH_CAPTURED_TYPE');
+        expect(keys).toContain('DSS_HISTORY_NAV_TYPE');
+        expect(keys).toContain('DSS_FRAGMENT_COMPLETE_TYPE');
         expect(keys).not.toContain('DSS_SW_DELETE_MESSAGE_TYPE');
     });
 
@@ -75,6 +74,18 @@ describe('temporary-chat-constants', () => {
 
     it('DSS_OPEN_TEMP_UUIDS_KEY has the exact expected value', () => {
         expect(constants.DSS_OPEN_TEMP_UUIDS_KEY).toBe('dss-open-temp-uuids');
+    });
+
+    it('DSS_AUTH_CAPTURED_TYPE has the exact expected value', () => {
+        expect(constants.DSS_AUTH_CAPTURED_TYPE).toBe('DSS_AUTH_CAPTURED');
+    });
+
+    it('DSS_HISTORY_NAV_TYPE has the exact expected value', () => {
+        expect(constants.DSS_HISTORY_NAV_TYPE).toBe('DSS_HISTORY_NAV');
+    });
+
+    it('DSS_FRAGMENT_COMPLETE_TYPE has the exact expected value', () => {
+        expect(constants.DSS_FRAGMENT_COMPLETE_TYPE).toBe('DSS_FRAGMENT_COMPLETE');
     });
 
     it.each([

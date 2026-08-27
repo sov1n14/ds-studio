@@ -17,7 +17,7 @@
   const LOCALE_NAMES = { zh_TW: '中文', en: 'English' };
 
   // 綁定 Locale 資料模組（瀏覽器：由 i18n.locales.js 在前載入；Node.js 測試：直接 require）
-  var __DSI18NLocales = (typeof globalThis !== 'undefined' ? globalThis : window).__DS_I18N_Locales ||
+  var __DSI18NLocales = (globalThis).__DS_I18N_Locales ||
       (typeof require !== 'undefined' ? require('./i18n.locales.js') : {});
   var zh_TW = __DSI18NLocales.zh_TW;
   var en = __DSI18NLocales.en;

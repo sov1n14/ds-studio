@@ -165,10 +165,9 @@ function createLiveSyncListener(ctx) {
     }
 
     function start() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace !== 'local' && namespace !== 'sync') return;
-            handleChanges(changes);
-        });
+        // 透過 StorageManager 訂閱設定變更，popup 層不直接觸碰 chrome.*；
+        // local / sync namespace 過濾由 StorageManager 內的 wrapper 負責。
+        StorageManager.subscribeToSettingChanges(handleChanges);
     }
 
     return { start };

@@ -8,21 +8,13 @@
 (function (root) {
     'use strict';
 
-    // 常數參照：classic script 的 top-level const 不會掛上 globalThis，故保留硬編碼 fallback
-    const _getConst = (name, fallback) =>
-        (typeof globalThis !== 'undefined' && globalThis[name] !== undefined)
-            ? globalThis[name]
-            : (typeof window !== 'undefined' && window[name] !== undefined)
-                ? window[name]
-                : fallback;
-
     // 執行期心跳狀態（僅存活於本分頁生命期，無需跨刷新保存）
     let intervalId = null;
     let currentUuid = null;
 
     /** 發送單次心跳；fire-and-forget，情境已卸載時吞掉錯誤僅記錄警告，絕不拋入計時器。 */
     function sendHeartbeat(chatUuid) {
-        const type = _getConst('DSS_MSG_HEARTBEAT', 'DSS_HEARTBEAT');
+        const type = globalThis.DSS_MSG_HEARTBEAT;
         try {
             Promise.resolve(chrome.runtime.sendMessage({ type, uuid: chatUuid }))
                 .catch((err) => console.warn('[DSS] temporary-chat-heartbeat send:', err));
@@ -45,7 +37,7 @@
         currentUuid = chatUuid;
         sendHeartbeat(chatUuid);
 
-        const intervalMs = _getConst('HEARTBEAT_INTERVAL_MS', 60000);
+        const intervalMs = globalThis.HEARTBEAT_INTERVAL_MS;
         intervalId = setInterval(() => sendHeartbeat(currentUuid), intervalMs);
     }
 
@@ -62,4 +54,4 @@
 
     // Test export（瀏覽器中為 no-op）
     if (typeof module !== 'undefined' && module.exports) module.exports = root.TemporaryChatHeartbeat;
-})(typeof globalThis !== 'undefined' ? globalThis : window);
+})(globalThis);

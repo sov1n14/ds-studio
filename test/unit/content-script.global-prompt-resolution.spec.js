@@ -17,7 +17,7 @@
  *
  * Companion specs, NOT modified, and NOT covering the resolution side:
  *   - content-script.global-prompt-gating.spec.js   (drives isGlobalPromptEnabled directly
- *     via __setState and asserts the gate itself, which this change does not alter)
+ *     via direct state writes and asserts the gate itself, which this change does not alter)
  *   - content-script.injection-prefix.spec.js        (general buildInjectionPrefix/injectPrefix
  *     behavior, unrelated to preset-based resolution)
  *
@@ -83,7 +83,7 @@ function broadcastSettingsChanged(changes, area = 'local') {
 async function waitUntilState(predicate, description) {
     const maxTicks = 500;
     for (let i = 0; i < maxTicks; i++) {
-        if (predicate(contentScript.__getState())) return;
+        if (predicate(contentScript.state)) return;
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
     throw new Error("Timed out waiting for: " + description);
@@ -126,13 +126,14 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         // Wait for the module-load-time initSettings() bootstrap to fully settle
         // before resetting state -- otherwise its delayed isEnabled /
         // globalDefaultPrompt / isGlobalPromptEnabled assignments can land AFTER
-        // __setState() runs in the test body and silently clobber it mid-test.
+        // state writes run in the test body and silently clobber it mid-test.
         await waitForContentScriptBootstrap();
-        contentScript.__resetState();
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     });
 
     it('[Req 1 and 4] a remote or cross-device change to the active preset globalPromptEnabled flag is reflected on the next injected message, without reload', async () => {
-        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'Global instruction' });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'Global instruction';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
@@ -157,13 +158,11 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     });
 
     it('[Req 2, 3, 8] switching the active preset via the overlay changes the global-prompt segment on the very next message, while the preset own content prefix is always included', async () => {
-        contentScript.__setState({
-            isEnabled: true,
-            currentChatUuid: null,
-            chatPresetMap: {},
-            pendingPresetId: null,
-            globalDefaultPrompt: 'Global system instruction',
-        });
+        contentScript.state.isEnabled = true;
+        contentScript.state.currentChatUuid = null;
+        contentScript.state.chatPresetMap = {};
+        contentScript.state.pendingPresetId = null;
+        contentScript.state.globalDefaultPrompt = 'Global system instruction';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: 'Prefix A', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
@@ -195,7 +194,8 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     });
 
     it('[Req 5] the isEnabled master switch still blocks all injection even when the resolved active preset has globalPromptEnabled true', async () => {
-        contentScript.__setState({ isEnabled: false, globalDefaultPrompt: 'Global instruction' });
+        contentScript.state.isEnabled = false;
+        contentScript.state.globalDefaultPrompt = 'Global instruction';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: 'Own prefix', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
@@ -208,7 +208,8 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     });
 
     it('[Req 6] a preset object with no globalPromptEnabled field at all is treated as enabled, even overriding a stale legacy device flag', async () => {
-        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: 'Global instruction' });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'Global instruction';
 
         // Stale legacy device-local flag says disabled; the active preset omits the field
         // entirely, so the resolver must default that preset to enabled and NOT fall back
@@ -226,7 +227,8 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     });
 
     it('[Req 7] an empty globalDefaultPrompt yields no global-prompt segment even when the resolved flag is true, existing behavior preserved', async () => {
-        contentScript.__setState({ isEnabled: true, globalDefaultPrompt: '' });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = '';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
@@ -255,13 +257,11 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     }
 
     it('[BUG regression] navigating from a chat bound to a preset with globalPromptEnabled:false to an UNBOUND chat must fall back to the legacy device flag (true), not the stale preset flag', async () => {
-        contentScript.__setState({
-            isEnabled: true,
-            globalDefaultPrompt: 'Global instruction',
-            currentChatUuid: null,
-            chatPresetMap: {},
-            pendingPresetId: null,
-        });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'Global instruction';
+        contentScript.state.currentChatUuid = null;
+        contentScript.state.chatPresetMap = {};
+        contentScript.state.pendingPresetId = null;
 
         // Legacy device-local flag is the OPPOSITE of preset A's own flag, so the two
         // cannot be confused for one another in the assertions below.
@@ -302,13 +302,11 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     });
 
     it('[BUG regression] navigating from a bound chat to a brand-new chat with no pinned preset also leaves the stale preset flag active', async () => {
-        contentScript.__setState({
-            isEnabled: true,
-            globalDefaultPrompt: 'Global instruction',
-            currentChatUuid: null,
-            chatPresetMap: {},
-            pendingPresetId: null,
-        });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'Global instruction';
+        contentScript.state.currentChatUuid = null;
+        contentScript.state.chatPresetMap = {};
+        contentScript.state.pendingPresetId = null;
 
         await chrome.storage.local.set({ globalPromptEnabled: true });
         await chrome.storage.sync.set({ globalPromptEnabled: true });
