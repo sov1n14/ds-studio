@@ -12,8 +12,6 @@
 (function () {
     'use strict';
 
-    // DeepSeek 分頁比對條件，與 manifest.json host_permissions 一致
-    const DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
     // 前綴型受監看鍵：預設集與 chatPresetMap 分塊，local 與 sync 兩區皆需廣播
     const WATCHED_KEY_PREFIXES = ['dsPreset_', 'chatPresetMap_'];
     // 不屬於 StorageManager.KEYS 但仍需廣播的 local 鍵（同 utils/temporary-chat-constants.js）

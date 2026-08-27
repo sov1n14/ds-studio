@@ -7,8 +7,6 @@
  */
 
 /** DeepSeek 分頁的 URL 比對樣式（條件下推給 chrome.tabs.query，不在 JS 端過濾）。 */
-const DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
-
 /** 目前視窗中作用中的 DeepSeek 分頁查詢條件。 */
 const ACTIVE_DEEPSEEK_TAB_QUERY = {
     active: true,

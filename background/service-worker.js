@@ -19,6 +19,7 @@ importScripts(
     '../utils/settings-message-constants.js',
     '../utils/editor-window-constants.js',
     'service-worker-constants.js',
+    '../utils/url-constants.js',
     'settings-routes.js',
     'pending-store-routes.js',
     'editor-window-routes.js'
