@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
@@ -42,6 +42,7 @@ describe('CensorReplyRestore — message-id resolution', () => {
 
         it('(2) storage match takes precedence over non-empty _pendingQueue — queue NOT consumed', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/aaaaaaaa-0000-0000-0000-000000000001');
+            CensorReplyRestore._currentSessionId = 'aaaaaaaa-0000-0000-0000-000000000001';
             const msgEl = buildChatPair('asst-key2', 'storage prompt');
             CensorReplyRestore._restoredMessages = {
                 '500': {
@@ -134,6 +135,7 @@ describe('CensorReplyRestore — message-id resolution', () => {
 
         it('(8) storage-path purge: when resolved id is absent from queue, queue is unchanged', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/eeeeeeee-2222-0000-0000-000000000001');
+            CensorReplyRestore._currentSessionId = 'eeeeeeee-2222-0000-0000-000000000001';
             const msgEl = buildChatPair('asst-purge4', 'storage purge absent');
             CensorReplyRestore._restoredMessages = {
                 '88': {
@@ -313,6 +315,7 @@ describe('CensorReplyRestore — message-id resolution', () => {
 
         it('match by session+prompt_key returns id and writes into _keyToMessageId', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/dddddddd-0000-0000-0000-000000000001');
+            CensorReplyRestore._currentSessionId = 'dddddddd-0000-0000-0000-000000000001';
             const msgEl = buildChatPair('asst-r1', 'What is AI?');
             CensorReplyRestore._restoredMessages = {
                 '600': {
@@ -405,6 +408,36 @@ describe('CensorReplyRestore — message-id resolution', () => {
             CensorReplyRestore._resolveMessageIdFromStorage(msgEl);
 
             expect(CensorReplyRestore._pendingQueue).toEqual([701, 702]);
+        });
+
+        it('uses _currentSessionId (not URL) as the session source for storage lookup', () => {
+            // _currentSessionId holds the canonical session; URL holds a DIFFERENT one.
+            // The method MUST use _currentSessionId. Current buggy code reads the URL,
+            // so this test will fail until the implementation is fixed.
+            const FIELD_SESSION = 'aaaaaaaa-field-field-field-000000000001';
+            const URL_SESSION   = 'bbbbbbbb-url00-url00-url00-000000000002';
+
+            vi.spyOn(window.location, 'pathname', 'get')
+                .mockReturnValue('/a/chat/s/' + URL_SESSION);
+            CensorReplyRestore._currentSessionId = FIELD_SESSION;
+
+            const msgEl = buildChatPair('asst-dual-source', 'dual source prompt');
+
+            // Record is keyed by _currentSessionId (the correct source)
+            CensorReplyRestore._restoredMessages = {
+                '900': {
+                    message_id: 900, censored: true,
+                    fragments: [{ type: 'RESPONSE', content: 'x' }],
+                    chat_session_id: FIELD_SESSION,
+                    prompt_key: 'dual source prompt',
+                    restored_at: 1000
+                }
+            };
+
+            const result = CensorReplyRestore._resolveMessageIdFromStorage(msgEl);
+
+            // Must resolve via _currentSessionId, not the URL
+            expect(result).toBe(900);
         });
     });
 });

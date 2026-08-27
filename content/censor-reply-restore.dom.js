@@ -108,8 +108,8 @@
          */
         _resolveMessageIdFromStorage(msgEl) {
             // 取得當前 session ID；明確要求非 falsy，避免 null !== null 意外通過
-            // 此處獨立於 _currentSessionId 自行讀取 URL：本函式為純查詢，不得呼叫會清除執行期狀態的 _checkSessionChange()
-            var currentSessionId = chatSessionId.extractChatSessionId();
+            // 純查詢：直接讀取已由 _checkSessionChange() 維護的 _currentSessionId，不重新解析 URL
+            var currentSessionId = this._currentSessionId;
 
             // 明確規則：任一端 session ID 為 falsy → 禁止比對
             if (!currentSessionId) return null;
