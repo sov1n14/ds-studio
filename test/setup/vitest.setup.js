@@ -44,6 +44,9 @@ import '../../utils/storage-manager.keys.js';
 import '../../utils/storage-manager.chunk-lock.js';
 import '../../utils/storage-manager.rw.js';
 import '../../utils/storage-manager.sync.js';
+import '../../utils/storage-manager.tombstone.js';
+import '../../utils/storage-manager.preset-merge.js';
+import '../../utils/storage-manager.preset-recency.js';
 import '../../utils/storage-manager.presets.js';
 import '../../utils/storage-manager.chatmap.diff.js';
 import '../../utils/storage-manager.chatmap.js';
@@ -59,6 +62,12 @@ import '../../content/censor-reply-restore.dom.scan.js';
 import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';
 import '../../content/censor-reply-restore.storage.js';
+import '../../content/censor-reply-restore.detection.js';
+import '../../content/censor-reply-restore.observer.js';
+import '../../content/quote-reply.geometry.js';
+import '../../content/quote-reply.button.js';
+import '../../content/go-top.locate.scroll.js';
+import '../../content/go-top.locate.anchor.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.button.js';
 import '../../content/go-top.render.inject.js';
@@ -103,6 +112,9 @@ import '../../content/mobile-sidebar-swipe.gesture.js';
 import '../../content/mobile-sidebar-swipe.bind.js';
 import '../../content/mobile-sidebar-swipe.lifecycle.js';
 import '../../content/mobile-sidebar-swipe.js';
+import '../../popup/editor/editor.parse.js';
+import '../../popup/editor/editor.render.js';
+import '../../popup/editor/editor.storage.js';
 
 // ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
 // The controller feature-detects it (typeof ResizeObserver === 'undefined') and

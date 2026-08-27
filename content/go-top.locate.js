@@ -1,18 +1,18 @@
 /**
- * DS studio — Go To Top Locate Bundle
- * DOM 查詢輔助、捲動容器定位、錨點偵測、包裝容器定位與可見性評估。
- * 透過 Object.assign 合併至 GoToTop 物件，所有方法以 this.* 存取共享狀態。
+ * DS studio — Go To Top Locate Bundle (Entry)
+ * DOM 查詢輔助、包裝容器定位與可見性評估。
+ *
+ * 載入順序（manifest.json 中 bundle 必須先於 entry）：
+ *   1. go-top.locate.scroll.js → globalThis.__DS_GoToTop_locate_scroll
+ *   2. go-top.locate.anchor.js → globalThis.__DS_GoToTop_locate_anchor
+ *   3. go-top.locate.js        （本檔，Object.assign 合入以上兩個 bundle）
  */
 (function (root) {
     'use strict';
 
-    // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    // 合併共用選擇器常數
     const __DSSelectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
-    const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
-    const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
-    // 原生 go-top 按鈕的雜湊 class（單一來源定義於 content/ds-selectors.js）
-    const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
 
     const bundle = {
         // ─────────────────────────────
@@ -38,131 +38,23 @@
             return null;
         },
 
-        /**
-         * Walk up from anchor to find the scrollable container.
-         * 以三段策略定位訊息列表的滾動容器，避免抓到側邊欄的 .ds-scroll-area。
-         *
-         * confirmed in full-page.html line 239: ._765a5cd.ds-scroll-area 包含 line 323 的虛擬列表。
-         *
-         * @param {Element} anchor - Starting DOM node
-         * @returns {Element}
-         */
-        _findScrollContainer(anchor) {
-            // 策略 1：從 anchor 向上走，找到最近的 .ds-scroll-area 且具備可滾動高度
-            if (anchor) {
-                let el = anchor.parentElement;
-                while (el && el !== document.body) {
-                    if (el.classList.contains(SCROLL_AREA_CLASS) &&
-                        el.scrollHeight > el.clientHeight) {
-                        this._scrollContainer = el;
-                        return el;
-                    }
-                    el = el.parentElement;
-                }
-            }
-
-            // 策略 2：從虛擬列表容器向上找
-            const virtualList = document.querySelector(this.VIRTUAL_LIST_SELECTOR) ||
-                                document.querySelector(this.VIRTUAL_LIST_FALLBACK);
-            if (virtualList) {
-                let el = virtualList.parentElement;
-                while (el && el !== document.body) {
-                    if (el.classList.contains(SCROLL_AREA_CLASS) &&
-                        el.scrollHeight > el.clientHeight) {
-                        this._scrollContainer = el;
-                        return el;
-                    }
-                    el = el.parentElement;
-                }
-            }
-
-            // 策略 3：從 anchor 向上探測具有 overflow:auto/scroll 的元素
-            if (anchor && anchor.parentElement) {
-                let el = anchor.parentElement;
-                while (el && el !== document.body) {
-                    const style = getComputedStyle(el);
-                    const overflowY = style.overflowY;
-                    if ((overflowY === 'auto' || overflowY === 'scroll') &&
-                        el.scrollHeight > el.clientHeight) {
-                        this._scrollContainer = el;
-                        return el;
-                    }
-                    el = el.parentElement;
-                }
-            }
-
-            // 策略 4：最後回退到 document.scrollingElement
-            return document.scrollingElement || document.documentElement;
-        },
-
-        /**
-         * @returns {Element|null} The conversation-start anchor node.
-         */
-        _getAnchor() {
-            return this._querySelectorWithFallback([
-                this.ANCHOR_SELECTOR,
-                this.ANCHOR_SELECTOR_FALLBACK1,
-                this.ANCHOR_SELECTOR_FALLBACK2,
-                this.FIRST_MSG_SELECTOR,
-            ]);
-        },
-
-        /**
-         * @returns {Element|null} The first message element in DOM.
-         */
-        _getFirstMessage() {
-            return this._querySelectorWithFallback([
-                this.FIRST_MSG_SELECTOR,
-                '[class*="ds-message"]',
-            ]);
-        },
-
-        /**
-         * @returns {Element|null} The native go-bottom button if it exists.
-         */
-        _getNativeButton() {
-            // 主選擇器：以雜湊 class _0706cde 精確匹配，排除自身注入的按鈕
-            // 降級鏈：依穩定 ds-* class 組合依序嘗試
-            const result = this._querySelectorWithFallback([
-                this.NATIVE_BTN_SELECTOR,
-                FLOATING_BAR + ' .ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                FLOATING_BAR + ' [role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                FLOATING_BAR + ' [role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)',
-            ]);
-            if (!result) return null;
-
-            // 後驗證：若匹配來自降級選擇器（非 _0706cde），
-            // 確認元素確實為 floating 按鈕，而非 primary/filled/disabled 按鈕
-            if (!result.classList.contains(GO_TOP_NATIVE_BUTTON_CLASS)) {
-                if (!result.classList.contains('ds-button--floating') ||
-                    result.classList.contains('ds-button--primary') ||
-                    result.classList.contains('ds-button--filled') ||
-                    result.classList.contains('ds-button--disabled')) {
-                    return null;
-                }
-            }
-
-            return result;
-        },
+        // ─────────────────────────────
+        //  Private: Wrapper locators
+        // ─────────────────────────────
 
         /**
          * 從原生按鈕結構上找到注入用的直接父層容器。
-         * 結構定位策略（不依賴雜湊 class）：
-         *   nativeBtn.parentElement → aaff8b8f（直接父層，full-page.html line 1015）
-         * 若 parentElement 不存在，回傳 null。
          * @param {Element} nativeBtn
          * @returns {{ injectParent: Element, outerWrapper: Element }|null}
          */
         _locateWrapperElements(nativeBtn) {
             if (!nativeBtn) return null;
 
-            // 直接父層即為注入點（aaff8b8f，full-page.html line 1015）
             const injectParent = nativeBtn.parentElement;
             if (!injectParent) {
                 return null;
             }
 
-            // 外層包裝（_871cbca，full-page.html line 1013）供 wrapperObserver 監控
             const outerWrapper = injectParent.parentElement || injectParent;
 
             return { injectParent, outerWrapper };
@@ -190,33 +82,18 @@
 
         /**
          * 判斷是否可驗證地到達對話最頂部。
-         *
-         * 嚴格策略（避免虛擬列表在中間某條訊息掛載時誤判為到頂）：
-         *   1. scrollTop === 0（或 ≤ 1px epsilon）→ 確認到頂，直接回傳 true。
-         *   2. 錨點檢查僅在錨點「可驗證為第一則訊息」時有效——
-         *      即錨點同時符合 ANCHOR_SELECTOR_FALLBACK2（data-virtual-list-item-key="1"）。
-         *      若無可驗證錨點，答案為「尚未到頂」（除非 scrollTop === 0）。
-         *
-         * 此函式也被 _evaluateVisibility 的隱藏條件使用；
-         * 更嚴格的判斷表示「只有真正到頂才隱藏按鈕」，符合期望行為。
-         *
          * @returns {boolean}
          */
         _isAtTop() {
-            // 條件 1：滾動容器已確實滾至最頂（允許 1px 誤差以防瀏覽器次像素捨入）
             const container = this._scrollContainer;
             if (container && container.scrollTop <= 1) {
                 return true;
             }
 
-            // 條件 2：可驗證的第一則訊息錨點已進入視窗
-            // 僅信任帶有 data-virtual-list-item-key="1" 的元素，
-            // 排除「第一個已掛載訊息」這類模糊選擇器，避免虛擬列表半途掛載時誤判
             const verifiableAnchor = document.querySelector(this.ANCHOR_SELECTOR_FALLBACK2);
             if (verifiableAnchor) {
                 const rect = verifiableAnchor.getBoundingClientRect();
                 const vpHeight = window.innerHeight;
-                // 長訊息回退：錨點高度超過視窗時，僅檢查頂部進入視窗即可
                 if (rect.height > vpHeight) {
                     if (rect.top >= 0) return true;
                 } else if (rect.top >= 0 && rect.bottom <= vpHeight) {
@@ -233,7 +110,6 @@
 
         /**
          * Evaluate whether the go-top button should be visible.
-         * Applies hysteresis to avoid flickering.
          */
         _evaluateVisibility() {
             if (!this.enabled || !this._masterEnabled) {
@@ -254,6 +130,12 @@
             }
         },
     };
+
+    // 合入兩個 sub-bundle
+    Object.assign(bundle,
+        root.__DS_GoToTop_locate_scroll || {},
+        root.__DS_GoToTop_locate_anchor || {}
+    );
 
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
     root.__DS_GoToTop_locate = bundle;
