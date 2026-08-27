@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.31.27](changelog/v4.md#43127---2026-08-27) | 最後四個布林識別字補上 is／has 前綴：`_storedRecordsApplied`→`_hasStoredRecordsApplied`、`_locked`→`_isLocked`、`completionDetected`→`isCompletionDetected`、`showSystemTime`→`isShowSystemTime`，涵蓋 13 個生產檔與 24 個測試檔共 98 處 |
+| [4.31.26](changelog/v4.md#43126---2026-08-27) | 拆分 go-top 與 sidebar-auto-hide 兩個超長檔案：go-top 新增 `go-top.observers.js`、`go-top.lifecycle.js`（425→73 行），sidebar-auto-hide 新增 `sidebar-auto-hide.styles.js`、`sidebar-auto-hide.observers.js`（416→211 行） |
+| [4.31.25](changelog/v4.md#43125---2026-08-27) | 移除四模組的 `__getState`／`__setState`／`__resetState` 測試鏡像，保留 state 直接存取 |
+| [4.31.24](changelog/v4.md#43124---2026-08-27) | 測試鏡像遷移第一階段：11 個 spec 共 86 處 `__getState`／`__setState`／`__resetState` 呼叫改為直接屬性讀寫，生產端暴露 state 物件供測試存取 |
+| [4.31.23](changelog/v4.md#43123---2026-08-27) | 拆分 chatmap、export、edit-message-cleanup 三個超長檔案：chatmap 441→331、export 433→218、edit 407→221，各自新增部件檔 |
+| [4.31.22](changelog/v4.md#43122---2026-08-27) | 拆分 `storage-manager.js` 為 keys 與 rw 兩個部件檔（461→113 行），常數宣告與低階讀寫操作各自獨立 |
+| [4.31.21](changelog/v4.md#43121---2026-08-27) | `DEEPSEEK_TAB_URL` 抽為共用常數檔 `utils/url-constants.js`，消除 settings-routes 與 tab-control 的重複定義 |
+| [4.31.20](changelog/v4.md#43120---2026-08-27) | 移除無 production 消費者的 `DSS_CHAT_CREATE_ENDPOINT` 常數 |
+| [4.31.19](changelog/v4.md#43119---2026-08-27) | 消除 censor-reply-restore 的 session ID 雙來源：`_resolveMessageIdFromStorage` 改讀 `_currentSessionId` 取代 URL 解析 |
+| [4.31.18](changelog/v4.md#43118---2026-08-27) | 清除 61 個檔案中共 85 處不可達的 `globalThis` 相容守衛，`typeof globalThis !== 'undefined' ? globalThis : window` 全數收斂為裸 `globalThis` |
+| [4.31.17](changelog/v4.md#43117---2026-08-27) | 移除只為測試存在的 export 別名：`temporary-chat-toggle.js` 的 `__setCacheForCrossTabSync` 與 `__setMasterEnabled` 移除，spec 改由真實入口驅動 |
+| [4.31.16](changelog/v4.md#43116---2026-08-27) | 刪除 `utils/messaging.js` 並將 `broadcastActivePreset` 併入 `tab-control`：整個檔案重新實作了 tab-control 已有的查詢加送出管線，合併後淨刪 137 行 spec 與兩個 script 標籤 |
+| [4.31.15](changelog/v4.md#43115---2026-08-27) | `censor-reply-restore.markdown` 移除檔內重複的 HTML 轉義實作，`_renderInline` 改呼叫同檔 `_escapeHtml` |
+| [4.31.14](changelog/v4.md#43114---2026-08-27) | editor window URL 解析改由 `utils/window-control` 提供 `getExtensionUrl()`，消除 popup 層直接呼叫 `chrome.runtime.getURL` |
+| [4.31.13](changelog/v4.md#43113---2026-08-27) | `popup.live-sync` 改由 `StorageManager.subscribeToSettingChanges()` 訂閱設定變更，消除 popup 層直接呼叫 `chrome.storage.onChanged` |
+| [4.31.12](changelog/v4.md#43112---2026-08-27) | `pending-store` 移出 content 層至 `background/pending-store.js`，該模組 10 處呼叫 `chrome.storage` 不屬 content 層；同時移除 5 個不可達的常數 fallback |
+| [4.31.11](changelog/v4.md#43111---2026-08-27) | `DSS_SETTINGS_MSG` 讀取統一為單一 accessor `getSettingsMessageTypes()`，消除六處三種互斥寫法；另抽出 `clampPercent` 消除 chat-width 與 input-width 的重複夾值邏輯 |
+| [4.31.10](changelog/v4.md#43110---2026-08-27) | 三個 message type 改用具名常數 `DSS_AUTH_CAPTURED_TYPE`、`DSS_HISTORY_NAV_TYPE`、`DSS_FRAGMENT_COMPLETE_TYPE`，MAIN world 生產端加註釘住值 |
+| [4.31.9](changelog/v4.md#4319---2026-08-27) | 移除最後兩份 `_getConst` 複製並補齊測試側常數載入，`_getConst` 至此於整個 repo 歸零 |
+| [4.31.8](changelog/v4.md#4318---2026-08-27) | 移除六份 `_getConst` 複製與其不可達的硬編碼 fallback，全數收斂為裸 `globalThis` 常數讀取，淨移除 48 行 |
+| [4.31.7](changelog/v4.md#4317---2026-08-27) | alarm 名稱抽為 `background/service-worker-constants.js`，十一支 spec 改讀 production 常數取代手抄值 |
+| [4.31.6](changelog/v4.md#4316---2026-08-27) | DeepSeek 選擇器全數歸位 `ds-selectors.js`：新增 `INPUT_TEXTAREA_SELECTOR`、`ROLE_BUTTON_DIV_SELECTOR`、`FLOATING_BUTTON_BAR_DIV_SELECTOR`，七處消費端改讀常數，移除零消費者的 `SEND_BUTTON_ICON_PATH_PREFIX` export |
+| [4.31.5](changelog/v4.md#4315---2026-08-27) | `popup.markdown-export` 補上載入順序 fail-fast 守衛，`DSSTabControl` 與 `dsI18n` 缺少時同步拋出明確訊息 |
+| [4.31.4](changelog/v4.md#4314---2026-08-27) | 臨時對話啟用旗標寫入被拒時以世代計數回滾快取，避免從未持久化的值停留在 `_isEnabledCache` |
+| [4.31.3](changelog/v4.md#4313---2026-08-27) | `chat-session-id` 上移 `utils/` 並消除 popup 的重複 regex，popup 層不再違反層規則依賴 content 模組 |
+| [4.31.2](changelog/v4.md#4312---2026-08-27) | 移除 `prompt-injector` 重複的行動裝置判定實作，改以 IIFE 作用域解析共用 `DSSMobileDevice` 模組 |
 | [4.31.1](changelog/v4.md#4311---2026-08-25) | 跨裝置待刪佇列改為租約 + 心跳模型：佇列項目擴為 `{ chatUuid, attemptCount, lastActiveAt }`，新增常數 `LEASE_TTL_MS = 600000`、`HEARTBEAT_INTERVAL_MS = 60000`，存取層新增 `refreshLease`／`releaseLease`／純函式 `isLeaseExpired`，佇列的 read-modify-write 全數經 promise 鏈式互斥閘序列化。`remediatePendingDeletes()` 改為不帶參數且只刪除租約過期項目，`onStartup`、`dss-delete-retry` 排程與 sync `onChanged` 三條路徑套用同一道閘，使用中的對話因此在所有裝置上受保護；`onStartup` 先釋放本機開啟中項目的租約再掃描，關機前開著的對話重啟後即刻刪除；即時刪除完全失敗時 coordinator 送 `DSS_RELEASE_LEASE` 立即讓出。新增 `content/temporary-chat-heartbeat.js`（綁定分頁生命週期的續租心跳）與 `content/temporary-chat-sidebar-hide.js`（待刪對話於所有裝置的側邊欄隱藏，以日期群組為單位判定全隱或個別隱藏，套用 `ds-temp-chat-hidden` 且不移除節點），新增四種訊息型別與兩個側邊欄選擇器。新增 5 份 spec 與 `test/helpers/sidebar-fixtures.js` |
 | [4.29.2](changelog/v4.md#4292---2026-08-22) | 償還兩筆可獨立排程的重構債：`performDeleteFetch` 擴為超集簽名（`keepalive` 選項 + guard）後 `deleteChatSession` 改為一行委派，重複的刪除 fetch 合而為一，端點 URL 私有於 `utils/deepseek-api.js`（`DSS_DELETE_ENDPOINT_URL` 自常數檔刪除）；`temporary-chat-constants.js` 自 `content/` 移正至 `utils/`，manifest 與 service worker 載入點、fail-fast 訊息、guidelines skill 範例路徑同步更新。測試端：`temporary-chat-delete-api.spec.js` 重寫（28 測試，含委派契約組），三份 T6 殘留慢測試轉虛擬時間（write-queue 9805ms → 22ms，合計省約 10.5 秒）。認證 10 份 spec 205/205 全綠 |
 | [4.29.1](changelog/v4.md#4291---2026-08-22) | Theme B wave 2：單一站點的 DeepSeek 混淆選擇器收斂至 `content/ds-selectors.js`（新增 30 個具名條目，58 個匯出鍵），12 個消費檔改讀常數且字串值不變：`censor-reply-restore` 三檔、`content-script.export.js`、`edit-message-cleanup.js`、`websearch-toggle.js`、`sidebar-auto-hide.js`（一併刪除無讀取者的死常數 `div._70b689f`）、`mobile-homepage-cleanup.js`、`preset-overlay.resolvers.js`、go-top 三檔（跨檔重複的 `_0706cde` 收斂為單一常數）。thinkblock 寫入用的 `_74c0879`／`_9ecc93a`／`ds-think-content` 改組合自查詢常數消除隱性雙份字面值。24 份受影響 spec 全綠（496 測試） |
