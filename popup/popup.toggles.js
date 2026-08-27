@@ -67,6 +67,7 @@ function createToggleManager(ctx) {
             hideThinkingToggle,
             showSystemTimeToggle,
             preventAutoScrollToggle,
+            autoExpandMessagesToggle,
             websearchRadios,
         } = elements;
 
@@ -137,6 +138,15 @@ function createToggleManager(ctx) {
         if (preventAutoScrollToggle) {
             preventAutoScrollToggle.addEventListener('change', async () => {
                 await StorageManager.savePreventAutoScroll(preventAutoScrollToggle.checked);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        }
+
+        // --- 自動展開訊息開關 ---
+        if (autoExpandMessagesToggle) {
+            autoExpandMessagesToggle.addEventListener('change', async () => {
+                await StorageManager.saveAutoExpandMessages(autoExpandMessagesToggle.checked);
                 await refreshSyncStatus();
                 showSaveStatus();
             });

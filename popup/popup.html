@@ -145,12 +145,50 @@
                     <input type="file" id="importRestoredInput" accept=".json" hidden>
                 </div>
             </div>
+
+            <!-- 功能開關卡片 -->
+            <div class="card">
+                <div class="card-title">Features</div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hideThinkingToggle">
+                        <label for="hideThinkingToggle" data-i18n="hideThinkingLabel">隱藏思考過程</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoExpandMessagesToggle">
+                        <label for="autoExpandMessagesToggle" data-i18n="autoExpandMessagesLabel">自動展開訊息</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="preventAutoScrollToggle">
+                        <label for="preventAutoScrollToggle" data-i18n="preventAutoScrollLabel">防止自動回滾</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <label data-i18n="websearchToggleLabel">連網搜索</label>
+                    </div>
+                    <div class="websearch-options">
+                        <label class="segmented-option">
+                            <input type="radio" name="websearchToggle" value="on" checked>
+                            <span data-i18n="websearchOnLabel">開啟</span>
+                        </label>
+                        <label class="segmented-option">
+                            <input type="radio" name="websearchToggle" value="off">
+                            <span data-i18n="websearchOffLabel">關閉</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="column">
             <div class="card">
                 <div class="card-title-row">
-                    <div class="card-title">Features & Export</div>
+                    <div class="card-title">Export</div>
                     <div class="card-title-actions">
                         <button id="localeSwitcherBtn" class="icon-btn" title="Switch Language">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -179,10 +217,6 @@
                         <input type="checkbox" id="includeReferencesToggle" checked>
                         <label for="includeReferencesToggle" data-i18n="includeReferencesLabel">匯出包含參考連結 (Reference Links)</label>
                     </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="showSystemTimeToggle">
-                        <label for="showSystemTimeToggle" data-i18n="showSystemTimeLabel">在訊息開頭注入目前系統時間</label>
-                    </div>
                     <button id="exportMdBtn" class="btn" data-i18n="exportMarkdownButton">匯出當前頁面對話為 Markdown</button>
                 </div>
             </div>
@@ -197,29 +231,8 @@
                 </div>
                 <div class="input-group">
                     <div class="checkbox-group">
-                        <input type="checkbox" id="hideThinkingToggle">
-                        <label for="hideThinkingToggle" data-i18n="hideThinkingLabel">隱藏思考過程</label>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="preventAutoScrollToggle">
-                        <label for="preventAutoScrollToggle" data-i18n="preventAutoScrollLabel">防止自動回滾</label>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <div class="checkbox-group">
-                        <label data-i18n="websearchToggleLabel">連網搜索</label>
-                    </div>
-                    <div class="websearch-options">
-                        <label class="segmented-option">
-                            <input type="radio" name="websearchToggle" value="on" checked>
-                            <span data-i18n="websearchOnLabel">開啟</span>
-                        </label>
-                        <label class="segmented-option">
-                            <input type="radio" name="websearchToggle" value="off">
-                            <span data-i18n="websearchOffLabel">關閉</span>
-                        </label>
+                        <input type="checkbox" id="showSystemTimeToggle">
+                        <label for="showSystemTimeToggle" data-i18n="showSystemTimeLabel">在訊息開頭注入目前系統時間</label>
                     </div>
                 </div>
                 <div class="input-group input-group--no-gap">

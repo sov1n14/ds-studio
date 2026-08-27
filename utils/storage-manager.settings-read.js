@@ -19,6 +19,7 @@
         globalDefaultPrompt: 'GLOBAL_DEFAULT_PROMPT',
         sidebarAutoHide: 'SIDEBAR_AUTO_HIDE',
         hideThinking: 'HIDE_THINKING',
+        autoExpandMessages: 'AUTO_EXPAND_MESSAGES',
         preventAutoScroll: 'PREVENT_AUTO_SCROLL',
         websearchToggle: 'WEBSEARCH_TOGGLE',
         isShowSystemTime: 'SHOW_SYSTEM_TIME',

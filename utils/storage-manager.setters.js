@@ -50,6 +50,10 @@
             return this._set({ [this.KEYS.HIDE_THINKING]: enabled });
         },
 
+        async saveAutoExpandMessages(enabled) {
+            return this._set({ [this.KEYS.AUTO_EXPAND_MESSAGES]: enabled });
+        },
+
         async savePreventAutoScroll(enabled) {
             return this._set({ [this.KEYS.PREVENT_AUTO_SCROLL]: enabled });
         },
