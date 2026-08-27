@@ -12,8 +12,8 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 28 script tags', () => {
-        expect(scriptSrcs).toHaveLength(28);
+    it('has exactly 29 script tags', () => {
+        expect(scriptSrcs).toHaveLength(29);
     });
 
     it.each([
@@ -34,17 +34,18 @@ describe('editor.html script tag structure', () => {
         ['storage-manager.setters.js fifteenth', 14, '../../utils/storage-manager.setters.js'],
         ['storage-manager.settings-read.js sixteenth', 15, '../../utils/storage-manager.settings-read.js'],
         ['storage-manager.js seventeenth', 16, '../../utils/storage-manager.js'],
-        ['tab-control.js eighteenth', 17, '../../utils/tab-control.js'],
-        ['i18n.locales.zhTW.js nineteenth', 18, '../../utils/i18n.locales.zhTW.js'],
-        ['i18n.locales.en.js twentieth', 19, '../../utils/i18n.locales.en.js'],
-        ['i18n.locales.js twenty-first', 20, '../../utils/i18n.locales.js'],
-        ['i18n.js twenty-second', 21, '../../utils/i18n.js'],
-        ['popup.i18n-apply.js twenty-third', 22, '../popup.i18n-apply.js'],
-        ['popup.preset-domain.js twenty-fourth', 23, '../popup.preset-domain.js'],
-        ['editor.parse.js twenty-fifth', 24, 'editor.parse.js'],
-        ['editor.render.js twenty-sixth', 25, 'editor.render.js'],
-        ['editor.storage.js twenty-seventh', 26, 'editor.storage.js'],
-        ['editor.js last (twenty-eighth)', 27, 'editor.js'],
+        ['url-constants.js eighteenth', 17, '../../utils/url-constants.js'],
+        ['tab-control.js nineteenth', 18, '../../utils/tab-control.js'],
+        ['i18n.locales.zhTW.js twentieth', 19, '../../utils/i18n.locales.zhTW.js'],
+        ['i18n.locales.en.js twenty-first', 20, '../../utils/i18n.locales.en.js'],
+        ['i18n.locales.js twenty-second', 21, '../../utils/i18n.locales.js'],
+        ['i18n.js twenty-third', 22, '../../utils/i18n.js'],
+        ['popup.i18n-apply.js twenty-fourth', 23, '../popup.i18n-apply.js'],
+        ['popup.preset-domain.js twenty-fifth', 24, '../popup.preset-domain.js'],
+        ['editor.parse.js twenty-sixth', 25, 'editor.parse.js'],
+        ['editor.render.js twenty-seventh', 26, 'editor.render.js'],
+        ['editor.storage.js twenty-eighth', 27, 'editor.storage.js'],
+        ['editor.js last (twenty-ninth)', 28, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });
