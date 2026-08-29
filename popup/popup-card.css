@@ -29,8 +29,8 @@
 }
 
 .card-title-actions {
+    height: 0;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
     position: relative;
 }
