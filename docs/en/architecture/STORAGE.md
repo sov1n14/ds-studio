@@ -1,0 +1,274 @@
+# Storage and State Management Architecture
+
+> 📂 [DS studio Docs](../) › [Architecture](../ARCHITECTURE.md) › Storage and State Management
+>
+> **Related specs**: [Data Storage Spec](../spec/05-data-storage.md) · [Prompt System Spec](../spec/01-prompt-system.md)
+>
+> **v4.0.0 modularization**: `StorageManager` has been split into an entry file `utils/storage-manager.js` (API, `getSettings`, `initialize`, shared state) plus four method bundles: `storage-manager.chunking.js` (chunking), `storage-manager.lock.js` (cross-context lock), `storage-manager.sync.js` (cloud sync/conflict/restore), `storage-manager.presets.js` (prompt CRUD and conversation binding). The entry file merges the method bundles via `Object.assign`; the external API and behavior remain completely unchanged. All mechanisms described in this document still apply.
+>
+> **v4.7.0/4.7.1 unified sync entry point**: Added `StorageManager.syncNow()` (`utils/storage-manager.syncnow.js`), called when the popup opens and when a `chat.deepseek.com` page loads, replacing the previous approach of directly calling `getSettings()`. `syncNow()` internally calls `retrySync()` followed by `getSettings()`. v4.7.1 fixed a defect: `_get()`, when determining that remote was newer, originally only returned the merged result in-memory without persisting the overridden value back to `chrome.storage.local`; this is now corrected to write back to local via the existing `_safeSet('local', ...)` in the remote-wins branch, preventing the device from reading stale local residual values after reopening.
+>
+> **v4.7.3 local-only settings + file split**: `isEnabled`/`globalPromptEnabled` changed to local-only (see table below). The entry file `utils/storage-manager.js` exceeded the 600-line absolute limit due to this change and was split into `utils/storage-manager.local.js` (local-only settings: `saveEnabledState`/`getEnabledState`/`saveGlobalPromptEnabled`/`getGlobalPromptEnabled`/`getRestoredMessages`/`saveRestoredMessages`) and `utils/storage-manager.init.js` (`initialize()` and the `_installChunkCacheInvalidator` call), bringing the entry file down to 411 lines at the time. v4.7.4 fixed a closure regression caused by the split: `_installChunkCacheInvalidator()`'s `onChanged` listener originally used bare `StorageManager.xxx`; before the split this happened to point to the same context's instance via module-level lexical scope. After the split, bare references resolved to the global `window.StorageManager` (which in multi-context scenarios always points to the "last loaded" context), causing another context's chunk cache to never be correctly invalidated. Fixed by capturing `const self = this` at installation time and using `self.xxx` in the listener.
+>
+> **v4.8.3 deletion tombstone mechanism**: Fixed the "deleted prompt preset resurrects on cross-device sync" defect. Added `utils/storage-manager.tombstones.js`, providing `_mergeTombstones`/`_pruneTombstones` (30-day retention)/`_isTombstonedAway` and `recordPresetTombstones()`, plus a new storage key `dsPresetTombstones` (`{ [presetId]: deletedAt }`, see table below). `savePromptPresets()` now records tombstones (both local and sync) when deleting presets. `mergePresets()` gained an optional `tombstones` parameter: during merge, if a given id's `updatedAt` on either side is not later than its tombstone's `deletedAt`, that id is excluded and will not be resurrected; if the id has a later edit (`updatedAt` newer than the tombstone), it is kept. `resolveSyncConflict()` reads and merges tombstones from both sides before passing them to `mergePresets()`, and persists the merged tombstones back. Also fixed another gap in `_get()`: previously when `dsPresetIndex`/`dsPresetOrderMeta` on the sync side won due to being newer, they were only returned in-memory and never persisted back to `chrome.storage.local`; now follows the existing `dsPreset_*` remote-wins-persist pattern to also write back to local, preventing stale index reads on the next access.
+>
+> **v4.10.2 tombstone merge algorithm fix**: Fixed a defect where `clearPresetTombstones()` (clearing tombstones during JSON import restore) used direct `delete tombstones[id]` — when a key is absent there is no timestamp for `_mergeTombstones()`'s `MAX(deletedAt)` comparison mechanism to arbitrate, causing whichever side still holds a stale tombstone entry to always "win" and resurrect the cleared tombstone on the next merge, thereby re-deleting the just-restored preset. Fix: tombstone entry shape changed from a bare number to an object `{ ts: number, deleted: boolean }` (`dsPresetTombstones` type, see table below). `recordPresetTombstones()` (actual deletion) writes `{ ts, deleted: true }`; `clearPresetTombstones()` (import restore) now writes `{ ts, deleted: false }` instead of deleting the key. `_mergeTombstones()` now compares by `entry.ts`, with the side having the newer `ts` winning entirely (including its `deleted` value) — "clear" and "delete" are now two ordinary writes on the same timeline, and the newer one always wins. `_isTombstonedAway()` now checks `entry.deleted === true` (rather than key presence). `_pruneTombstones()` now compares `entry.ts`, with both `deleted:true` and `deleted:false` states expiring under the same retention period (30 days). Added backward-compatible normalization: legacy bare-number entries are automatically converted to `{ ts: <that number>, deleted: true }` on read (the old format only represented "deleted"), ensuring correct merge with the new format after upgrade.
+
+> **v4.11.x audit slimdown: method bundle landscape changes (read this before the rest of the document)**: The version notes above describe each mechanism's location **at the time**; file names no longer correspond to the current state. Method bundles went from nine to six: `storage-manager.chunking.js` and `storage-manager.lock.js` merged into `storage-manager.chunk-lock.js`; `storage-manager.syncnow.js` merged into `storage-manager.sync.js` (`syncNow()` now lives there). All mechanism behavior remains completely unchanged; only file locations changed. Additionally, `saveChatPresetMap()` was deleted — it was a thin wrapper around `mutateChatPresetMap()` with no production callers, only referenced by tests.
+>
+> **Method bundles are now fourteen** (load order: `keys`/`chunk-lock`/`rw`/`sync`/`tombstone`/`preset-merge`/`preset-recency`/`presets`/`chatmap.diff`/`chatmap`/`local`/`init`/`setters`/`settings-read`):
+> - `keys`: Storage key names (`KEYS`), defaults (`DEFAULTS`), error classes (`LockAcquireTimeoutError`/`WriteReconciliationExhaustedError`), and pure helper functions (`_buildNextMeta`).
+> - `chunk-lock`: Cross-context chatPresetMap advisory lock (`_acquireLock`/`_releaseLock`/`_withLock`), `_writeChunkWithReconciliation`, chunk cache loading and invalidation (`_ensureChunkCachesLoaded`/`_installChunkCacheInvalidator`), `LOCK_CONSTANTS`.
+> - `rw`: `chrome.storage` safe read/write wrappers (`_safeGet`/`_safeSet`) and dual-layer sync/local reading (`_get`), writing (`_set`), byte-length calculation (`_byteLen`).
+> - `sync`: Cloud sync and conflict resolution (`retrySync`/`resolveSyncConflict`/`syncNow`/`isSyncedWithCloud`/`hasOversizedItems`).
+> - `tombstone`: Prompt preset deletion tombstone management (`_mergeTombstones`/`_pruneTombstones`/`_isTombstonedAway`/`recordPresetTombstones`/`clearPresetTombstones`, `TOMBSTONE_RETENTION_MS`).
+> - `preset-merge`: Map-based merge logic for dual-side preset arrays (`mergePresets`), including order metadata decisions and tombstone filtering.
+> - `preset-recency`: Preset recency determination (`_pickPresetOrderByRecency`/`_pickNewerPreset`), `retrySync` push guard helpers, `resolveGlobalPromptEnabled()`.
+> - `presets`: Prompt CRUD (`savePromptPresets`/`saveOnePromptPreset`/`saveCurrentPresetContent`) and conversation binding.
+> - `chatmap.diff`: chatPresetMap diff calculation and application (`_applyChatPresetMapDiff`), defines `CHUNK_SOFT_LIMIT_BYTES` (7168).
+> - `chatmap`: chatPresetMap chunked read/write (`bindChatToPreset`/`unbindChat`/`mutateChatPresetMap`/`getChatPresetMap`) and write queue.
+> - `local`: Local-only settings (`saveEnabledState`/`getEnabledState`/`saveGlobalPromptEnabled`/`getGlobalPromptEnabled`/`getRestoredMessages`/`saveRestoredMessages`).
+> - `init`: `initialize()` and the `_installChunkCacheInvalidator` installation call.
+> - `setters`: 14 single-key `save<X>` one-liner setters (`saveActivePresetId`/`savePinnedPresetId`/`saveIncludeThinking`/`saveIncludeReferences`/`saveGlobalDefaultPrompt`/`saveSidebarAutoHide`/`saveHideThinking`/`savePreventAutoScroll`/`saveWebsearchToggle`/`saveShowSystemTime`/`saveChatWidth`/`saveChatWidthEnabled`/`saveInputWidth`/`saveInputWidthEnabled`). Pure relocation, zero behavior change. Note that `storage-manager.local.js`'s `saveEnabledState`/`saveGlobalPromptEnabled` are local-only settings and remain in their original file.
+> - `settings-read`: The entire settings read path — allowlist constants `SYNCED_SETTINGS_KEYS` (18 synced keys) and `LOCAL_ONLY_SETTINGS_KEYS` (`isEnabled`/`globalPromptEnabled`, two local keys), plus `getSettings()` and `getActivePromptContent()`. **The allowlist is the sole inclusion criterion** — `KEYS` members not listed (sync retry bookkeeping, chunk layout metadata, key-prefix constants, etc.) are treated as internal details and must not appear in the `getSettings()` return object. `getSettings()` therefore returns a fixed 22 fields: 18 synced keys + 2 local keys + runtime-composed `promptPresets` and `chatPresetMap`.
+>
+> **Load-order invariant (five loaders; a missing bundle means missing methods)**: `manifest.json`'s `content_scripts`, `popup/popup.html`, `popup/editor/editor.html`, `background/service-worker.js`'s `importScripts`, `test/setup/vitest.setup.js`. All fourteen method bundles must be placed before the entry file `utils/storage-manager.js`.
+>
+> This merge also fixed a latent production defect: `background/service-worker.js`'s `importScripts` had never loaded `storage-manager.tombstones.js`, but `resolveSyncConflict()` calls `_mergeTombstones()`, so background sync retry (`onStartup`/`onInstalled`/alarm) had been silently failing whenever conflicts were auto-resolvable — the error was swallowed by a `catch` annotated "best-effort, swallow everything". See `docs/changelog/v4.md` (4.11.3) and `docs/architecture/POPUP.md`'s "Load-order invariant" section.
+
+## State Management
+
+User settings and prompt presets are managed across `chrome.storage.sync` (primary) and `chrome.storage.local` (fallback + local-authoritative tracking).
+
+| Key | Type | Default | Description |
+|-|-|-|-|
+| `dsPresetIndex` | `string[]` | `[]` | Ordered array of prompt preset IDs. |
+| `dsPreset_<id>` | `PromptPreset` | — | Individual prompt preset object, stored under its own key to bypass the 8KB per-item sync limit. Shape: `{ id, name, content, createdAt, updatedAt, globalPromptEnabled }`. (v4.20.0) `globalPromptEnabled` is the preset's own global-prompt injection toggle — written explicitly as `true` on creation, treated as `true` when the field is absent on pre-v4.20.0 data, and synced across devices with the preset itself. |
+| `activePresetId` | string | `""` | The ID of the currently active preset. |
+| `pinnedPresetId` | string | `""` | (v4.18.0) The ID of the preset pinned as the default; `""` means no default. A single scalar, so uniqueness is structural — two presets can never be pinned at once. Read only when a NEW conversation is opened (no chat id in the URL) to preselect that preset; existing conversations are never touched. Written via `savePinnedPresetId()`, which shares `saveActivePresetId()`'s `_set` path (sync primary, local fallback), and included in both backup export and import. |
+| `isEnabled` | boolean | `false` | Whether prompt injection is active (master switch). (v4.7.3) Local-only, device-scoped — excluded from sync, `resolveSyncConflict()`, and `restoreSettings()` import. |
+| `includeThinking` | boolean | `true` | Include AI thinking process in exported MD. |
+| `includeReferences` | boolean | `true` | Include citation reference links in exported MD. |
+| `globalDefaultPrompt` | string | `''` | A global prompt prepended before the per-preset prompt in every conversation. |
+| `globalPromptEnabled` | boolean | `true` | Whether the global prompt is injected (v3.0.0). Subordinate to the master switch — when `isEnabled` is false, the global prompt is never injected regardless of this flag. (v4.7.3) Local-only, device-scoped, same exclusions as `isEnabled` — note `globalDefaultPrompt` (the prompt *content*) still syncs normally; only this toggle is local-only. (v4.20.0) Demoted to a **legacy fallback**: it is consulted only when there is no active preset. When a preset IS active, that preset's own `globalPromptEnabled` field wins. Resolution is centralized in `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)`. |
+| `chatPresetMap` | object | `{}` | Maps chat UUIDs (`/a/chat/s/{uuid}`) to preset IDs, enabling per-conversation preset binding. *Replaced in v2.4.0 by chunked keys (see Physical Chunking section).* |
+| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, chunkCount:0, chunkSizes:[] }` | Index key for chunk discovery and write-target selection (v2.4.0+). |
+| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | Physical chunks, each <= 7KB, holding a subset of the chatPresetMap entries (v2.4.0+). |
+| `dsSidebarAutoHide` | boolean | `false` | Whether the sidebar auto-hide feature is enabled. |
+| `dsHideThinking` | boolean | `false` | Whether the hide-thinking-process feature is enabled. |
+| `dsAutoExpandMessages` | boolean | `false` | (v4.32.0) Whether auto-expand-messages is active. When true, a MutationObserver auto-clicks collapsed expand buttons so all messages are shown expanded. Gated by the master switch. |
+| `dsPreventAutoScroll` | boolean | `false` | (v4.12.0) Whether anti-scroll-back protection is permanently active. When true, `PreventAutoScroll` suppresses downward auto-scroll at all times instead of only during go-top and Markdown export. Gated by the master switch. |
+| `dsShowSystemTime` | boolean | `false` | Whether system time injection before user messages is active (added in v2.7.0). |
+| `dsWebSearchToggle` | string | `'on'` | (v4.13.0; reduced to two states in v4.17.0) Page-entry default for the web-search toggle: `'on'` starts the page's smart-search button at `aria-pressed="true"`, `'off'` starts it at `"false"`. Applied at most once per activation event — page entry, a change to this key, or the master switch turning on (v4.17.1) — after which the user's later manual toggling is preserved until the next activation event. Clicks only on state mismatch. The removed `'default'` value is normalized to `'on'` on read (never written back). Gated by the master switch. |
+| `dsChatWidth` | number | `70` | Chat width percentage (30–100). |
+| `dsChatWidthEnabled` | boolean | `false` | Whether the chat width adjustment is active. |
+| `dsInputWidth` | number | `70` | Input width percentage (30–100). |
+| `dsInputWidthEnabled` | boolean | `false` | Whether the input width adjustment is active. |
+| `syncInitialized` | boolean | `false` | Whether initial sync has been performed (local-only). |
+| `syncConflictPending` | boolean | `false` | Whether a sync conflict needs user resolution (local-only). |
+| `restored_messages` | object | `{}` | Stores censor-restored messages keyed by message ID (local-only, excluded from sync). |
+| `dss-temporary-chat-enabled` | boolean | `false` | Whether temporary-conversation mode is on. Local-only, device-scoped, and outside `StorageManager.KEYS` — it is read/written by `content/temporary-chat-enabled-flag.js` purely through `DSS_GET_SETTINGS`/`DSS_SET_SETTINGS`, and is listed in `background/settings-routes.js`'s `EXTRA_WATCHED_LOCAL_KEYS` so its changes still broadcast as `DSS_SETTINGS_CHANGED`. Strict boolean: only `true` counts as on. The UUID of the conversation currently being tracked for deletion lives in per-tab `sessionStorage` (owned by `content/temporary-chat-delete.tracking.js`), never in `chrome.storage`. |
+| `dsLocalAuth` | `string[]` | `[]` | (v4.7.2) Pending-retry queue of keys whose sync write failed and fell back to local. No longer used to pin/override reads — `retrySync()` drains it. (v4.11.18) `retrySync()` drains it through a **per-key push guard**, not an unconditional re-push — see *Sync Write Quota Strategy* below. (v4.8.2) Never contains a permanently-oversized key — those are filtered out by the 8KB guard before reaching this queue. |
+| `dsOversizedKeys` | `string[]` | `[]` | (v4.8.2) Local-only tracking list of keys whose serialized value exceeds `QUOTA_BYTES_PER_ITEM` (8192 bytes) and can therefore never sync. Self-healing: a key is removed the next time it's written at a size at or under the limit. |
+| `dsPresetTombstones` | `Object<id, { ts: number, deleted: boolean }>` | `{}` | (v4.8.3) Deletion tombstone map for prompt presets, synced to both `local` and `sync`. Consulted by `mergePresets()` so a preset deleted on one device is not resurrected by a stale copy still present on another device during conflict-resolution merge. Merged (keeping the entry with the newer `ts` per id) and pruned (30-day retention) inside `resolveSyncConflict()`. (v4.10.1) `restoreSettings()` calls `clearPresetTombstones(ids)` after a JSON import to remove entries for re-imported preset IDs, so a stale tombstone can't cause the next sync to delete the just-restored preset again. (v4.10.2) Entry shape changed from a bare `deletedAt` number to `{ ts, deleted }` — `recordPresetTombstones()` writes `{ ts: now, deleted: true }`; `clearPresetTombstones()` now writes `{ ts: now, deleted: false }` instead of deleting the key, so a "clear" has a timestamp to win merge arbitration against a stale "delete" from the other side. `_isTombstonedAway()` checks `entry.deleted === true`. Legacy bare-number entries are normalized to `{ ts: <that number>, deleted: true }` on read for backward compatibility. (v4.11.18) `resolveSyncConflict()` is no longer the only place this key is merged: when the key is in `dsLocalAuth`, `retrySync()` now also merges it per-id via `_mergeTombstones()` before pushing, instead of pushing the local value wholesale. Pushing wholesale silently resurrected whatever the other device had deleted, and an empty local set wiped the cloud set entirely. |
+| `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | (v4.6.2) Recency timestamp for preset ordering. **Three independent consumers, each with its own rule** — do not assume they share one code path:<br>**Read path** — `_pickPresetOrderByRecency()` (`utils/storage-manager.presets.js:269`, called from `_get()` at `utils/storage-manager.js:315`, *not* from conflict resolution) picks the side with the strictly larger `orderUpdatedAt`; on an exact tie it returns `null` and `_get()`'s `{ ...lData, ...sData }` spread leaves sync's value in place.<br>**Merge path** — `mergePresets()` has its own order-selection block (`utils/storage-manager.presets.js:188-193`) that never calls `_pickPresetOrderByRecency()`. (v4.11.19) Local's `order` is used only when `baseTs > incTs`; every other case, **including an exact tie, uses the cloud side's `order`** (cloud-wins-on-tie). Before v4.11.19 a tie left `chosen` undefined and the function fell back to the merged Map's insertion order — i.e. locally-cached presets floated to the front, discarding the stored order.<br>**Push path** — (v4.11.18) `retrySync()` pushes this key only when local's `orderUpdatedAt >= ` cloud's. Previously it was pushed unconditionally, because `'dsPresetOrderMeta'.startsWith('dsPreset_')` is `false` and it therefore matched no guard branch. |
+| `promptPresets` | `PromptPreset[]` | — | *Retired as a storage key in v1.7.0*: Replaced by `dsPresetIndex` + `dsPreset_<id>` per-key format. Still composed as a runtime property in `getSettings()` return value. |
+
+### PromptPreset Interface
+
+```typescript
+interface PromptPreset {
+  id: string;
+  name: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+  globalPromptEnabled?: boolean;  // v4.20.0 — absent means true
+}
+```
+
+`globalPromptEnabled` (v4.20.0) makes the global-prompt injection toggle a per-preset property. New presets are created with it explicitly set to `true`; presets written before v4.20.0 have no such field and are treated as `true`, so upgrading changes nothing for existing users. Because it lives on the preset, it syncs and merges with the preset — unlike the same-named device-level key, which remains local-only and is now just the fallback for "no active preset". The resolution rule is centralized in `resolveGlobalPromptEnabled()` (`utils/storage-manager.preset-recency.js`) so the popup and the content script cannot drift apart:
+
+```javascript
+resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag) {
+    if (!activePreset) return legacyGlobalFlag;
+    return activePreset.globalPromptEnabled ?? true;
+}
+```
+
+### Dual-Storage Architecture
+
+`StorageManager` uses a dual-storage strategy with per-preset key isolation and local-authoritative tracking:
+
+- **Per-Preset Key Isolation**: To bypass the `QUOTA_BYTES_PER_ITEM` (8KB) limit of `chrome.storage.sync`, each prompt preset is stored under its own key (`dsPreset_<id>`). An index key (`dsPresetIndex`) maintains the order and list of active presets.
+- **Read path** (`_get()`): Attempts `chrome.storage.sync.get()` first, then `chrome.storage.local.get()`. Sync data overrides local data by default; `dsPreset_*` keys and the preset order meta are reconciled per-item via pure `updatedAt` recency (`_pickNewerPreset` / `_pickPresetOrderByRecency`) regardless of write-failure history. During a pending conflict (`syncConflictPending === true`), it strictly returns local data. (v4.7.1) When the remote/sync side wins the per-item recency comparison, the winning value is also persisted back to `chrome.storage.local` via `_safeSet('local', ...)` — not just returned in-memory — so a stale local copy doesn't linger after a `syncNow()` pass. (v4.7.2) `_get()` no longer reads `dsLocalAuth` at all — the previous "pin-on-read" override (a parked key's local value unconditionally beating a newer sync value) was removed, since it allowed a stale local edit that once failed to sync to permanently shadow genuinely newer cloud data. `dsLocalAuth` is now exclusively a write-failure retry queue, drained by `retrySync()`; it no longer influences what `_get()` returns.
+- **Write path** (`_set()`): (v4.8.2) Before attempting anything, splits the incoming `items` batch per-key by serialized byte size (`_byteLen()`, now `new TextEncoder().encode(JSON.stringify(obj)).length` — UTF-8-accurate, fixing an earlier undercount of multi-byte content like Chinese text that used raw JS string `.length`). Keys whose `{ [key]: value }` payload exceeds `QUOTA_BYTES_PER_ITEM` (8192 bytes) are diverted before the sync call: they are written to `chrome.storage.local` only (value never lost) and tracked in `dsOversizedKeys`, but are excluded from `dsLocalAuth` and never passed to `chrome.storage.sync.set()` — retrying an inherently-oversized payload can never succeed, so it must not enter the transient-retry queue (see report.md §4.2). The list is self-healing: a key already in `dsOversizedKeys` is removed on any subsequent write where it's at or under the limit. The remaining (normal-sized) keys proceed through `chrome.storage.sync.set()` exactly as before:
+  - **On Success**: The keys are removed from `dsLocalAuth` in local storage, and a backup is written to local.
+  - **On Failure** (e.g., quota exceeded): The keys are added to `dsLocalAuth` in local storage, and the data is written to local storage. This ensures the extension remains functional even when sync limits are reached.
+- **`hasOversizedItems()`** (`utils/storage-manager.sync.js`, v4.8.2): Reads `dsOversizedKeys` and returns `true` iff the array is non-empty. `popup.js`'s `refreshSyncStatus()` checks this alongside `isSyncedWithCloud()` and shows a distinct "Too Large — Local Only" status (`dsI18n.t('syncStatusOversized')`, `.unsynced` styling) that takes precedence over the normal synced/unsynced text — so a permanently-unsyncable item is never confused with a normal transient-pending state.
+
+### ChatPresetMap Write Queue (v2.3.0)
+
+`StorageManager` serializes all `chatPresetMap` writes through an **in-memory promise-chain queue** to eliminate same-context race conditions (e.g., popup cleanup loop racing with a content-script auto-bind). The queue is private to the module:
+
+- `_chatPresetMapChainTail` (`Promise.resolve()`) — the tail of the promise chain, module-scoped so it survives all `StorageManager` instances.
+- `_enqueueChatPresetMapWrite(taskFn)` — appends `taskFn` to the chain; returns a promise for the task's result. One task's rejection does NOT block subsequent tasks (`.catch(() => {})` on the tail only).
+- `mutateChatPresetMap(mutator)` — the public transactional API. Reads the freshest map from storage inside the queue, calls `mutator(map)`, writes back. If `mutator` returns `undefined`, the in-place-mutated `map` is written; otherwise the returned value is written.
+
+All three write entry points (`bindChatToPreset`, `unbindChat`, and the `chatPresetMap` branch of `restoreSettings`) route through this queue. (A fourth, `saveChatPresetMap`, was deleted in the v4.11.x audit — it was a thin wrapper over `mutateChatPresetMap` with no production caller.) Same-context calls from popup.js and content-script.js are fully serialized. Cross-context races (Tab A vs Tab B vs Popup) remain possible and are deferred to later phases.
+
+### ChatPresetMap Physical Chunking (v2.4.0)
+
+To bypass Chrome's 8KB per-item sync quota (which `chatPresetMap` reached at ~170 UUID bindings), the map is split across N physical storage keys, each <= 7KB, with a small meta index key for discovery.
+
+**Data model:**
+
+| Key | Shape | Purpose |
+|-|-|-|
+| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | Index for discovery + concurrency token |
+| `chatPresetMap_0..N-1` | `{ [uuid]: presetId }` | Physical chunks, each <= `CHUNK_SOFT_LIMIT_BYTES` (7168) |
+
+**Invariants:**
+- A uuid appears in **at most one** chunk.
+- `chunkCount >= 0`. When 0, the logical map is empty and no `chatPresetMap_*` keys exist.
+- `chunkSizes[i] = this._byteLen(chunk_i)` (UTF-8 byte accurate via TextEncoder, see Dual-Storage Architecture section for `_byteLen()` details).
+- The empty map `{}` has JSON.stringify length 2.
+- `version` is strictly monotonic: incremented by exactly 1 on every successful write. No-op operations (same-value bind, unknown-uuid unbind, empty-diff mutate) do not bump version. Reserved as a concurrency token for Method D.
+
+**Strategy β (single-chunk affinity):** Each `uuid` is assigned to exactly one physical chunk. `bindChatToPreset` and `unbindChat` locate the target via an in-memory `_chunkIndexCache` (Map<uuid, chunkIdx>) and read/write only that single chunk — no write-amplification on the hot path. Only `mutateChatPresetMap` (full-map operations) reads all chunks.
+
+**In-memory caches (module-scoped):**
+- `_chunkIndexCache` — Map<uuid, chunkIdx>, O(1) lookup for write-target selection.
+- `_metaCache` — `{ version, chunkCount, chunkSizes[] }`, cached copy of the meta key.
+- Both are invalidated (set to `null`) by `_installChunkCacheInvalidator()` on any `chrome.storage.onChanged` event touching chunk or meta keys from other contexts. Lazy-reloaded on the next operation.
+
+**Write flow (all inside `_enqueueChatPresetMapWrite`):**
+
+- **`bindChatToPreset(uuid, pid)`**: If uuid exists in cache → write that chunk in-place (1 chunk + meta). If new → first-fit into existing chunk with space, or append new chunk. Update `_chunkIndexCache`.
+- **`unbindChat(uuid)`**: Delete from its chunk. If chunk becomes empty AND it is the last chunk → cascade-trim trailing empty chunks + remove orphaned keys. Otherwise write updated chunk + meta.
+- **`mutateChatPresetMap(mutator)`**: Snapshot full map, run mutator, diff entries. Preserve existing uuid→chunk affinity for unchanged/deleted entries. First-fit new entries. Diff-write only changed chunks + meta. Rebuild `_chunkIndexCache`.
+- **`getChatPresetMap()`**: Read meta + all chunks, merge into `{ [uuid]: presetId }`, return.
+
+**Migration (in `initialize()`):** On first load after upgrade, detects legacy `chatPresetMap` flat key. If meta index doesn't exist, calls `mutateChatPresetMap(() => legacy)` to bin-pack entries into chunks, then removes the legacy key from both sync and local storage. Idempotent: if crash occurs mid-migration, the legacy key is cleaned up on retry.
+
+```mermaid
+flowchart TB
+    subgraph queue [Phase A queue _enqueueChatPresetMapWrite]
+        Op1[bindChatToPreset]
+        Op2[unbindChat]
+        Op3[mutateChatPresetMap]
+        Op4[getChatPresetMap]
+    end
+
+    queue --> Logic{Operation type}
+    Logic -->|bind / unbind| Single[Touch one chunk via cache]
+    Logic -->|mutate / save| Multi[Read all chunks, rebalance, diff-write]
+    Logic -->|read| Read[Read meta + chunks 0..N-1, merge]
+
+    Single --> Set[_set chunk_i and meta]
+    Multi --> Set
+    Read --> Done
+
+    Set --> Storage[(chrome.storage.sync<br/>chatPresetMapMeta + chatPresetMap_0..N-1)]
+    Set -.local fallback.-> StorageLocal[(chrome.storage.local<br/>same keys)]
+
+    OC[chrome.storage.onChanged] -->|invalidate| CacheInv[_chunkIndexCache = null<br/>_metaCache = null]
+```
+
+### Cross-Context Concurrency Control (v2.5.0)
+
+Phase A's in-memory promise-chain queue serializes writes within one JS context, and Phase B's Strategy β shrinks cross-context collision to a single chunk. Phase C+D closes the residual cross-context races using two complementary methods:
+
+- **Method C (Scoped Advisory Lock)**: Multi-chunk operations (migration, rebalance, batch cleanup) acquire a TTL-scoped `chatPresetMapLock` in `chrome.storage.local` before proceeding. The lock is sleep-polled with post-write CAS verification and auto-releases after 3000ms if the holder crashes.
+- **Method D (`onChanged` Reconciliation Retry)**: Single-chunk hot-path writes (`bindChatToPreset`, `unbindChat` non-trailing) use optimistic concurrency control: they verify `meta.version` has not advanced between cache load and write. On version mismatch, caches are invalidated and the idempotent delta is re-applied against fresh data, with a bounded retry budget of 3.
+
+**Lock primitive:**
+
+| Key | Shape | TTL | Poll interval | Acquire timeout |
+|-|-|-|-|-|
+| `chatPresetMapLock` | `{ owner: string, expiresAt: number }` | 3000 ms | 50 ms | 5000 ms |
+
+These four numbers plus `RECONCILIATION_RETRY_BUDGET` have a single definition site — the `LOCK_CONSTANTS` block at the top of `utils/storage-manager.chunk-lock.js` — and are mixed into the `StorageManager` surface as `CHAT_PRESET_MAP_LOCK_KEY`, `LOCK_TTL_MS`, `LOCK_POLL_INTERVAL_MS`, `LOCK_ACQUIRE_TIMEOUT_MS`, and `RECONCILIATION_RETRY_BUDGET`, so production code and tests read the same values. `CHUNK_SOFT_LIMIT_BYTES` (7168) is exposed the same way from `utils/storage-manager.chatmap.js`. The lock API is generic — `_acquireLock(lockKey)` / `_releaseLock(lockKey, token)` / `_withLock(lockKey, fn)` — with `_withChatPresetMapLock(fn)` as the chatPresetMap-specific wrapper that every call site in `storage-manager.init.js` and `storage-manager.chatmap.js` uses.
+
+**Reconciliation retry:** Budget = 3 attempts (4 total); `applyDelta` MUST be idempotent on each retry. Throws `WriteReconciliationExhaustedError` after exhaustion.
+
+**Updated invariants:**
+- Single-chunk hot-path writes (`bindChatToPreset`, `unbindChat` non-trailing) NEVER take the lock.
+- Multi-chunk / rebalance operations ALWAYS take the lock.
+- `meta.version` is the optimistic concurrency token verified by `_writeChunkWithReconciliation` on every hot-path write.
+- Reconciliation retry budget = 3; on exhaustion a typed `WriteReconciliationExhaustedError` is thrown.
+- Lock TTL = 3000 ms; expired locks are auto-collected on next acquire. If the popup crashes while holding the lock, storage writes are paused for at most ~3 seconds until TTL auto-recovery.
+- `mutateChatPresetMap` mutators must be idempotent, side-effect-free, and input-respecting (the lock path re-reads + re-runs the mutator against the latest committed state).
+
+```mermaid
+flowchart TB
+    subgraph Caller[Write Operation]
+        OpType{Operation type}
+    end
+
+    OpType -->|bindChatToPreset single-chunk in-place| ReconD[Method D<br/>_writeChunkWithReconciliation]
+    OpType -->|bindChatToPreset single-chunk insert| ReconD
+    OpType -->|unbindChat non-trailing empty| ReconD
+    OpType -->|bindChatToPreset append new chunk| LockC[Method C<br/>_withChatPresetMapLock]
+    OpType -->|unbindChat trailing-empty cascade-trim| LockC
+    OpType -->|mutateChatPresetMap multi-chunk / rebalance| LockC
+    OpType -->|mutateChatPresetMap single-chunk diff| ReconD
+
+    ReconD --> CAS{CAS check<br/>meta.version match?}
+    CAS -->|Yes| Write[Write chunk + meta]
+    CAS -->|No| Retry[Invalidate caches<br/>retry with fresh data]
+    Retry -->|attempt <= 3| ReconD
+    Retry -->|exhausted| Throw[Throw WriteReconciliationExhaustedError]
+
+    LockC --> Acquire[Sleep-poll acquire lock]
+    Acquire -->|success| LockedOp[Execute multi-chunk op]
+    LockedOp --> Release[Release lock in finally]
+    Acquire -->|timeout| ThrowLock[Throw LockAcquireTimeoutError]
+```
+
+### Sync Write Quota Strategy (v2.0.0)
+
+Chrome enforces `MAX_WRITE_OPERATIONS_PER_MINUTE = 120`. To avoid exhausting this quota during typing:
+
+- **Content-edit hot path**: `saveCurrentPresetContent()` calls `saveOnePromptPreset(preset)` — a single `_set({ dsPreset_<id>: preset })` write. The `dsPresetIndex` key is never touched for content edits.
+- **Structural operations** (add/rename/delete/reorder): Still call `savePromptPresets(presets)`, which writes the index conditionally (only when `JSON.stringify(oldIds) !== JSON.stringify(newIds)` OR when `dsPresetIndex` is in `dsLocalAuth` pending recovery).
+- **Editor-window saves** (v3.0.0, replacing the old popup blur-triggered saves; debounce shortened to 500 ms in v4.8.1): Prompt content is edited in the standalone editor window. The `input` event sets a dirty flag and schedules a debounced write (500 ms); `blur`, `visibilitychange`, and `pagehide` flush immediately (fire-and-forget). Writes only fire when dirty, keeping sync write-quota pressure low.
+- **Popup slider saves** (v4.8.1): `chatWidthSlider`/`inputWidthSlider` `change` events go through a 500 ms debounced wrapper before writing `dsChatWidth`/`dsInputWidth` to storage, matching the editor's debounce cadence. The `input` event's live label update never touches storage.
+- **Sync status API**: `isSyncedWithCloud()` reads `dsLocalAuth` and returns `true` when empty. `retrySync()` iterates `dsLocalAuth` and returns `{ success, remainingUnsyncedCount }`, but does **not** re-push uniformly — each key passes a guard first (see next bullet).
+- **`retrySync()` per-key push guards** (v4.11.18): a stale local value must never clobber a newer cloud value, so the push loop branches per key:
+
+  | Key | Guard |
+  |-|-|
+  | `dsPresetIndex` | Pushes only when local `orderUpdatedAt >= ` cloud's |
+  | `dsPresetOrderMeta` | Pushes only when local `orderUpdatedAt >= ` cloud's |
+  | `dsPreset_<id>` | Pushes only when `_pickNewerPreset()` picks the local copy |
+  | `dsPresetTombstones` | Never replaces cloud — merged per-id via `_mergeTombstones()` (union; newer `ts` wins per id) and the merged result is pushed |
+  | everything else | Unconditional push |
+
+  Before v4.11.18 only `dsPresetIndex` and `dsPreset_<id>` were guarded. `dsPresetOrderMeta` and `dsPresetTombstones` fell through to the unconditional push — the former because `'dsPresetOrderMeta'.startsWith('dsPreset_')` is `false` (character 8 is `O`, not `_`), a near-miss prefix collision that reads as already-covered.
+- **UI feedback**: `refreshSyncStatus()` in popup.js calls `isSyncedWithCloud()` after every write and on initialization, updating `#syncStatus` in the header. **There is no manual sync button** — `#forceSyncBtn` was removed in v4.8.5 in favour of pure automatic sync. Sync is triggered by `syncNow()` on popup open (`popup/popup.js:170`), on DeepSeek page load (`content/content-script.js:96`, inside `initSettings()`), and by the service worker's periodic alarm.
+
+### Data Migration
+
+- **v1.6.x to v1.7.0**: On first load, `StorageManager` detects the legacy `promptPresets` array. It automatically migrates each preset to the new per-key format, populates `dsPresetIndex`, and removes the retired `promptPresets` key from both sync and local storage.
+- **v1.2.x to v1.7.0**: If no presets exist but the legacy `promptPrefix` string is found in local storage, it is migrated into a new preset named "My Prompt" (我的提示詞).
+
+### Sync Conflict Logic
+
+On the first run after upgrade, the extension compares `promptPresets` between local and sync. If they differ, it sets `syncConflictPending = true` (local-only). In this state, `StorageManager._get()` strictly returns local data to avoid silent overwrite. The popup then shows a resolution modal where the user can choose to merge cloud presets with local ones via `StorageManager.mergePresets()`. Once resolved, `syncInitialized` and `syncConflictPending` are updated. (v4.8.3) Before merging, `resolveSyncConflict()` also reads, merges, and prunes `dsPresetTombstones` from both local and sync, and passes the merged tombstone map into `mergePresets()` so deleted presets are not resurrected by the conflict-resolution merge; the merged tombstones are persisted back to both storage areas. (v4.10.2) The merge now compares `entry.ts` and takes the entire winning entry (including its `deleted` flag), so a newer "clear" (from a JSON restore) correctly overrides an older "delete" tombstone from the other side, and vice versa for a re-delete after restore.
+
+### Preset Merging (`mergePresets`)
+
+Both sync conflict resolution and JSON import use `mergePresets(basePresets, newPresets, baseOrderMeta, incOrderMeta, tombstones)`: a Map-based deduplication by `id`. For each preset in both arrays, the one with the newer `updatedAt` timestamp is kept. Presets with new IDs (not in the base array) are appended. This prevents data loss when merging from multiple sources. (v4.8.3) Before the recency-based merge runs, any id that is "tombstoned away" (`_isTombstonedAway`: the id has a tombstone whose `deletedAt` is not older than that side's `updatedAt`) is dropped from both sides — this is what prevents a preset deleted on one device from being silently resurrected by a stale copy still present on another device or in a JSON import/backup. (v4.10.1) `restoreSettings()` does NOT pass a `tombstones` map to `mergePresets()` for JSON import, so an imported preset is never blocked by a tombstone at import time — but its ID could still carry a stale, unexpired tombstone from an earlier deletion, which the next `resolveSyncConflict()` would then use to delete it again. To prevent this, `restoreSettings()` now calls the new `clearPresetTombstones(ids)` (in `utils/storage-manager.tombstone.js`) right after `savePromptPresets()`, removing tombstone entries for exactly the IDs present in the imported preset list (unmatched IDs are silently skipped) from both `local` and `sync` storage. (v4.10.2) `_isTombstonedAway` now checks `entry.deleted === true` (the tombstone entry shape changed from a bare `deletedAt` number to `{ ts, deleted }`) instead of key-presence, and `clearPresetTombstones()` no longer deletes the key — it writes `{ ts: now, deleted: false }`, giving the "clear" a timestamp that can correctly win merge arbitration against a stale "delete" entry from the other side.
+
+**Output ordering** (v4.11.19): `mergePresets()` also decides the order of the array it returns, using `baseOrderMeta`/`incOrderMeta` — a mechanism entirely separate from `_pickPresetOrderByRecency()`, which it never calls. Local's `order` array is used only when `baseOrderMeta.orderUpdatedAt > incOrderMeta.orderUpdatedAt`; every other case, **including an exact timestamp tie, uses the cloud side's (`incOrderMeta`) `order` array**. Ids present in neither `order` array are appended in Map insertion order.
+
+Cloud-wins-on-tie matters because the tie is the normal daily path, not an edge case: a single `_set()` writes to `chrome.storage.sync` and then mirrors the identical object to `chrome.storage.local`, so after any successful save both areas hold a bitwise-identical `orderUpdatedAt`. Cloud-wins is also the only self-converging choice — the read path never writes a merge decision back to cloud (`_get()` persists winners to `local` only), so local-wins would let two devices keep divergent orders indefinitely. Protecting a genuinely newer local edit is the `dsLocalAuth` retry queue's job, not the tie rule's.
+
+Before v4.11.19 a tie left `chosen` undefined and the function fell back to the merged Map's insertion order — "locally-cached presets first, then the rest from cloud". That made the visible order depend on **which preset objects happened to be cached in `chrome.storage.local`** rather than on the stored order array, so a drag-to-reorder was silently discarded on the next merge.
+
+### Content Script Runtime State
+
+`content/content-script.js` obtains its startup values through `StorageManager.syncNow()` and hands them to the chat-binding state machine in `content/chat-binding-controller.js`, which owns every mutable runtime field (`promptPrefix`, `globalDefaultPrompt`, `isGlobalPromptEnabled`, `isShowSystemTime`, `currentChatUuid`, `chatPresetMap`, `isEnabled`, `pendingPresetId`, `isInjecting`). Subsequent updates arrive as `DSS_SETTINGS_CHANGED` messages broadcast by `background/settings-routes.js`, which is the sole `chrome.storage.onChanged` listener for settings; the content script reacts to them in `applySettingsChanged()` without requiring page reloads. `buildInjectionPrefix()` includes `globalDefaultPrompt` only when `isGlobalPromptEnabled` is true (v3.0.0); the master switch retains highest priority via the `injectPrefix()` early return on `!isEnabled`. When `dsPresetIndex`, any `dsPreset_<id>` key, or a `chatPresetMap` chunk/meta key changes, it recalculates `promptPrefix` from the current chat's UUID binding via `updatePromptPrefixFromBinding()`, rather than reading the global `activePresetId`. The popup additionally sends per-tab `ACTIVE_PRESET_CHANGED` messages directly to the active tab's content script, ensuring cross-tab preset isolation.
+
+Feature modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, GoToTop, QuoteReply, PreventAutoScroll, WebsearchToggle, MobileSidebarSwipe, MobileHomepageCleanup, TemporaryChatToggle, AutoRetry) route their on/off gating through the shared pipeline in `content/feature-toggle.js`: `registerFeatureToggle({ ownKey, onEnable, onDisable })`. The pipeline fetches the initial values with a single `DSS_GET_SETTINGS` round-trip and keeps them current from the `DSS_SETTINGS_CHANGED` broadcast, using one shared `chrome.runtime.onMessage` listener for all registered features. A feature is on when the master switch `isEnabled !== false` **and** its own key `!== false` — an unset own key counts as on, and only an explicit `false` turns it off. Modules registered without an `ownKey` (e.g. GoToTop) are gated by the master switch alone. When the initial fetch fails, the pipeline holds the feature dormant rather than guessing it on.
