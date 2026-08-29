@@ -46,7 +46,7 @@
 ## 16. 引用回覆 (Quote Reply)
 
 - **觸發範圍**：僅在使用者於 `div.ds-virtual-list-visible-items`（AI 回覆虛擬列表）內選取文字時觸發。`anchorNode` 與 `focusNode` 皆須位於此容器內；跨容器選取一律忽略。空選取或純空白選取不觸發。
-- **浮動按鈕**：選取完成後（`mouseup` / `selectionchange` / Shift-Arrow，250ms debounce），在選取範圍第一行上方顯示 `.dss-quote-btn` 浮動按鈕，包含引號 SVG 圖示與「引用回覆」文字標籤。
+- **浮動按鈕**：選取完成後（`selectionchange`，250ms debounce），在選取範圍第一行上方顯示 `.dss-quote-btn` 浮動按鈕，包含引號 SVG 圖示與「引用回覆」文字標籤。
 - **定位規則**：按鈕預設置於選取首行上方 16px、水平置中；左右邊界限制最小 10px；若 `top < 10` 則翻轉至選取下方 8px；選取完全滾出視口時自動隱藏。
 - **注入格式**：點擊按鈕後，將選取文字以 Markdown blockquote 格式（每行加 `> ` 前綴）追加至 `<textarea>`：
   - textarea 為空 → 直接填入 `> 選取內容`（無多餘空行）。

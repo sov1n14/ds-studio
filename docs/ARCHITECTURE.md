@@ -9,8 +9,20 @@ ds-studio/
 ├── assets/icons/            ─  Extension icons (16px, 48px, 128px)
 ├── content/                 ─  Content scripts & web-accessible resources
 │   ├── content-script.js    ─  Entry: event interception, init, prefix injection (v4.0.0 split)
-│   ├── content-script.export.js   ─  Markdown export pipeline (HTML→MD, download)
-│   ├── edit-message-cleanup.js    ─  Strip injected wrapper from edit textarea (v3.2.1)
+│   ├── content-script.export.js       ─  Markdown export pipeline (HTML→MD, download)
+│   ├── content-script.export.markdown.js ─  Export Markdown formatting bundle
+│   ├── content-script.export.time.js  ─  Export timestamp formatting bundle
+│   ├── ds-selectors.js      ─  Shared DOM selector constants for obfuscated DeepSeek class names
+│   ├── feature-toggle.js    ─  Shared master-switch + per-feature toggle pipeline (registerFeatureToggle)
+│   ├── retry-until.js       ─  Polling-until-ready utility (fixed-interval retry with cap)
+│   ├── mobile-device.js     ─  Mobile device detection shared utility
+│   ├── width-feature.js     ─  Shared factory for vw-percentage CSS injection width features
+│   ├── main-world-injector.js ─  One-shot injector for all MAIN-world scripts from isolated world
+│   ├── prompt-injector.controller.js ─  Prefix assembly, textarea injection, Enter & send-button interception
+│   ├── prompt-injector.send-button.js ─  Send-button identification, enabled-state check, textarea resolution
+│   ├── chat-binding-controller.js ─  Current-conversation ↔ preset binding state machine, SPA navigation detection
+│   ├── edit-message-cleanup.pure.js   ─  Pure logic for edit-message wrapper stripping
+│   ├── edit-message-cleanup.js        ─  Strip injected wrapper from edit textarea (v3.2.1)
 │   ├── preset-overlay.controller.js ─  PresetOverlay lifecycle, mount/unmount, observer setup, placement writes
 │   ├── preset-overlay.resolvers.js  ─  Semantic DOM resolvers for title & new-chat button
 │   ├── preset-overlay.styles.js     ─  Overlay CSS inject/remove
@@ -23,35 +35,62 @@ ds-studio/
 │   ├── preset-dropdown.options.js   ─  Option rendering, label & aria-selected sync (v4.18.1)
 │   ├── preset-dropdown.keyboard.js  ─  Keyboard navigation for the dropdown (v4.18.1)
 │   ├── preset-settle.scheduler.js   ─  Bounded settle retry loop (mobile position race condition)
-│   ├── sidebar-auto-hide.js ─  Sidebar idle collapse / hover expand
+│   ├── sidebar-auto-hide.js         ─  Entry: sidebar idle collapse / hover expand
+│   ├── sidebar-auto-hide.observers.js ─  MutationObserver / ResizeObserver wiring for sidebar auto-hide
+│   ├── sidebar-auto-hide.styles.js  ─  CSS inject/remove for sidebar auto-hide
 │   ├── temporary-chat-toggle.js     ─  Homepage toggle UI for temporary chat (v4.5.0)
 │   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
-│   ├── temporary-chat-delete.js     ─  Delete logic for temporary conversations (v4.5.0)
+│   ├── temporary-chat-delete.js     ─  Entry: delete logic for temporary conversations (v4.5.0)
+│   ├── temporary-chat-delete.tracking.js   ─  Shared state, UUID sessionStorage persistence, create+completion co-occurrence detection
+│   ├── temporary-chat-delete.coordinator.js ─  Delete coordination (Fiber → API retry → SW alarm fallback)
+│   ├── temporary-chat-delete.handlers.js    ─  Event handlers for temporary-chat deletion
 │   ├── temporary-chat-delete-api.js ─  Delete API fetch wrapper for temporary chat
-│   ├── temporary-chat-pending-store.js † ─  Pending-delete queue storage layer — owned by the service worker, NOT a content script
+│   ├── temporary-chat-enabled-flag.js ─  Master-switch-independent temporary-chat enabled flag via settings pipeline
 │   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
-│   ├── temporary-chat-fiber-delete.js   ─  React Fiber-based conversation deletion integration
+│   ├── temporary-chat-fiber-delete.js * ─  React Fiber-based conversation deletion integration (web accessible)
 │   ├── temporary-chat-heartbeat.js      ─  Lease heartbeat for the tracked temporary conversation (v4.31.1)
 │   ├── temporary-chat-sidebar-hide.js   ─  Hides queued temporary conversations from the DeepSeek sidebar (v4.31.1)
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
 │   ├── input-width.js       ─  Input box width (independent toggle & clamping)
 │   ├── hide-thinking.js     ─  Auto-collapse thinking blocks via MutationObserver
 │   ├── websearch-toggle.js  ─  One-shot per-activation default for web-search button (v4.13.0; language-independent two-tier locator v4.20.1)
-│   ├── quote-reply.js       ─  Floating "引用回覆" button on text selection
+│   ├── quote-reply.js       ─  Entry: floating "引用回覆" button on text selection
+│   ├── quote-reply.geometry.js ─  Selection geometry calculation bundle
+│   ├── quote-reply.button.js   ─  Quote-reply button rendering bundle
+│   ├── quote-reply.css      ─  Quote-reply button styles
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
+│   ├── censor-reply-restore.keymap.js    ─  Key mapping for censor-reply-restore
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
-│   ├── censor-reply-restore.dom.js       ─  Fragment extraction & DOM injection bundle
-│   ├── censor-reply-restore.storage.js   ─  Restored-message persistence bundle
+│   ├── censor-reply-restore.dom.js       ─  DOM orchestration entry bundle
+│   ├── censor-reply-restore.dom.extract.js ─  Fragment extraction from DOM
+│   ├── censor-reply-restore.dom.resolve.js ─  DOM element resolution for restored content
+│   ├── censor-reply-restore.dom.inject.js  ─  Restored-content DOM injection
+│   ├── censor-reply-restore.dom.scan.js    ─  DOM scanning for censor events
+│   ├── censor-reply-restore.thinkblock.js  ─  Think-block handling for restored content
+│   ├── censor-reply-restore.detection.js   ─  Censor event detection logic
+│   ├── censor-reply-restore.observer.js    ─  MutationObserver wiring for censor detection
+│   ├── censor-reply-restore.storage.js     ─  Restored-message persistence bundle
 │   ├── censor-reply-restore.css ─  Restored-content display styles
 │   ├── harvest.js           ─  Entry: scroll-and-harvest full-conversation Markdown export
 │   ├── harvest.toast.js     ─  Export progress / cancel / incomplete-warning toast UI (v4.11.9 split)
 │   ├── harvest.policy.js    ─  Pure loop-termination & scroll-step decisions, DOM-free (v4.19.0 split)
 │   ├── harvest.dom.js       ─  DOM probing: container lookup, message harvest, stability observer, mount measurement (v4.19.1 split)
-│   ├── go-top.js            ─  Entry: "回到頂部" button lifecycle & observers (v4.0.0 split)
-│   ├── go-top.locate.js     ─  DOM query / locator / visibility bundle
-│   ├── go-top.render.js     ─  Button render / inject / mode-transition bundle
+│   ├── go-top.js            ─  Entry: "回到頂部" button lifecycle (v4.0.0 split)
+│   ├── go-top.locate.js     ─  DOM query / locator / visibility orchestration bundle
+│   ├── go-top.locate.scroll.js  ─  Scroll-container locator bundle
+│   ├── go-top.locate.anchor.js  ─  Anchor-element locator bundle
+│   ├── go-top.render.js     ─  Button render orchestration bundle
+│   ├── go-top.render.button.js  ─  Button element creation bundle
+│   ├── go-top.render.inject.js  ─  Button DOM injection bundle
+│   ├── go-top.render.observer.js ─  Render-related observer bundle
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
-│   ├── mobile-sidebar-swipe.js ─  Mobile right-swipe gesture for sidebar toggle
+│   ├── go-top.observers.js  ─  GoToTop observer setup bundle
+│   ├── go-top.lifecycle.js  ─  GoToTop enable/disable lifecycle bundle
+│   ├── mobile-sidebar-swipe.js ─  Entry: mobile right-swipe gesture for sidebar toggle
+│   ├── mobile-sidebar-swipe.button.js    ─  Swipe-trigger button rendering
+│   ├── mobile-sidebar-swipe.gesture.js   ─  Touch gesture recognition
+│   ├── mobile-sidebar-swipe.bind.js      ─  Event binding for swipe gesture
+│   ├── mobile-sidebar-swipe.lifecycle.js ─  Enable/disable lifecycle for mobile swipe
 │   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-expand-messages.js ─  MutationObserver-based auto-click of collapsed expand buttons (v4.32.0)
 │   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
@@ -64,15 +103,31 @@ ds-studio/
 │   └── prevent-auto-scroll.js *       ─  Main-world auto-scroll patch (web accessible)
 ├── background/                 ─  Service worker
 │   ├── service-worker.js       ─  Background service worker: startup remediation, alarm-based retry, sync scheduling (v4.9.0)
+│   ├── service-worker-constants.js ─  Service worker shared constants
+│   ├── pending-store.js        ─  Pending-delete queue storage layer (importScripts only, not a content script)
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
 │   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
+│   ├── popup-button.css     ─  Button component styles
+│   ├── popup-card.css       ─  Card component styles
 │   ├── popup-controls.css   ─  Switch, button, icon-button, range slider, toast styles
+│   ├── popup-form.css       ─  Form element styles
+│   ├── popup-layout.css     ─  Page layout styles
+│   ├── popup-locale.css     ─  Locale switcher styles
+│   ├── popup-modal.css      ─  Modal overlay styles
+│   ├── popup-preset-controls.css ─  Preset control styles
+│   ├── popup-select.css     ─  Custom select component styles
+│   ├── popup-slider.css     ─  Slider component styles
+│   ├── popup-status.css     ─  Status indicator styles
+│   ├── popup-switch.css     ─  Switch toggle styles
+│   ├── popup-theme.css      ─  Theme variable definitions
+│   ├── popup-toast.css      ─  Toast notification styles
 │   ├── popup.js             ─  Entry: UI init & inline event wiring (v4.0.0 split)
 │   ├── popup.modal.js       ─  Modal + Toast components
+│   ├── popup.toast.js       ─  Toast notification component
 │   ├── popup.preset-manager.js  ─  Preset CRUD helpers (createPresetManager ctx factory)
 │   ├── popup.pin-manager.js ─  Pinned default preset toggle / clear-on-delete (createPinManager ctx factory, v4.18.0)
 │   ├── popup.backup-manager.js  ─  Backup / restore / sync UI (createBackupManager ctx factory)
@@ -81,44 +136,61 @@ ds-studio/
 │   ├── popup.settings-view.js  ─  applySettingsToDom: one-way settings → control mapping, no storage access
 │   ├── popup.preset-domain.js  ─  Pure preset rules: createPreset / validatePresetName (shared with the editor window)
 │   ├── popup.i18n-apply.js     ─  data-i18n DOM applier (shared with the editor window)
+│   ├── popup.editor-window.js  ─  Editor window lifecycle management
+│   ├── popup.markdown-export.js ─  Markdown export trigger from popup
+│   ├── popup.width-sliders.js  ─  Width slider UI controls
+│   ├── popup.locale.js         ─  Language switcher UI (v4.3.3)
 │   ├── custom-select.js        ─  Custom ARIA combobox component for preset selection (v1.9.0)
 │   ├── custom-select.drag.js   ─  Pointer-Events drag-reorder subsystem: createDragReorder / reorderPresets
-│   ├── popup.locale.js         ─  Language switcher UI (v4.3.3)
-│   ├── popup-modal.css         ─  Modal overlay styles
-│   ├── popup-select.css        ─  Custom select component styles
+│   ├── preset-item-renderer.js ─  Preset list item rendering
 │   └── editor/              ─  Standalone 1280×720 prompt editor (v3.0.0)
-│       ├── editor.html / editor.css
-│       └── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
+│       ├── editor.html      ─  Editor page markup
+│       ├── editor.css       ─  Editor page styles
+│       ├── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
+│       ├── editor.parse.js  ─  Prompt text parsing bundle
+│       ├── editor.render.js ─  Editor UI rendering bundle
+│       └── editor.storage.js ─  Editor storage read/write bundle
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
 │   ├── storage-manager.js   ─  Entry: storage API, getSettings (v4.0.0 split; initialize() moved out in v4.7.3)
-│   ├── storage-manager.chunk-lock.js ─  ChatPresetMap chunked read/write + cross-context advisory lock bundle (v4.11.3 merge of chunking.js + lock.js)
-│   ├── storage-manager.sync.js      ─  Cloud sync / conflict / restore bundle, incl. syncNow() entry point (absorbed syncnow.js in v4.11.3)
-│   ├── storage-manager.presets.js   ─  Preset CRUD & chat-binding bundle, incl. deletion-tombstone merge/prune (absorbed tombstones.js in v4.11.3)
-│   ├── storage-manager.chatmap.js   ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
-│   ├── storage-manager.local.js     ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
-│   ├── storage-manager.init.js      ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
-│   ├── storage-manager.setters.js   ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
+│   ├── storage-manager.keys.js          ─  Storage key names, defaults, error classes, pure helpers
+│   ├── storage-manager.chunk-lock.js    ─  ChatPresetMap chunked read/write + cross-context advisory lock bundle (v4.11.3 merge of chunking.js + lock.js)
+│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write logic
+│   ├── storage-manager.sync.js          ─  Cloud sync / conflict / restore bundle, incl. syncNow() entry point (absorbed syncnow.js in v4.11.3)
+│   ├── storage-manager.tombstone.js     ─  Deletion tombstone management bundle
+│   ├── storage-manager.preset-merge.js  ─  Dual-side preset array merge logic bundle
+│   ├── storage-manager.preset-recency.js ─  Preset recency判定, push guard, global prompt enabled resolution bundle
+│   ├── storage-manager.presets.js       ─  Preset CRUD & chat-binding bundle, incl. deletion-tombstone merge/prune (absorbed tombstones.js in v4.11.3)
+│   ├── storage-manager.chatmap.diff.js  ─  ChatPresetMap diff computation & application bundle
+│   ├── storage-manager.chatmap.js       ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
+│   ├── storage-manager.local.js         ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
+│   ├── storage-manager.init.js          ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
+│   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
 │   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants
 │   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)
 │   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
 │   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
-│   ├── tab-control.js          ─  DeepSeek tab query / send helpers (DSSTabControl)
+│   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
+│   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
+│   ├── url-constants.js        ─  URL pattern matching constants
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
-│   ├── i18n.locales.js         ─  zh_TW / en string dictionaries, pure data (v4.11.14 split)
-│   ├── logger.js               ─  Diagnostic logger, .warn() only after v4.8.4 cleanup
-│   └── messaging.js         ─  Tab-broadcast ACTIVE_PRESET_CHANGED (v3.0.0)
-├── samples/                 ─  DOM reference HTML samples
-└── test/                    ─  Unit tests (Vitest only; integration tests removed v2.8.2)
-    ├── TEST_CASES.md        ─  Manual test plan
-    └── bug_list.md          ─  Known issues
+│   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
+│   ├── i18n.locales.en.js      ─  en string dictionary, pure data
+│   ├── i18n.locales.js         ─  Locale aggregator: imports and registers the per-language dictionaries (v4.11.14 split)
+│   └── logger.js               ─  Diagnostic logger, .warn() only after v4.8.4 cleanup
+└── test/                    ─  Unit tests (Vitest only)
+    ├── vitest.config.js     ─  Vitest configuration
+    ├── setup/               ─  Test setup and preload
+    ├── unit/                ─  Unit test specs
+    ├── fixtures/            ─  Test data fixtures
+    └── helpers/             ─  Test helper utilities
 ```
 
 > `*` = 標記者為 web_accessible_resources，注入至頁面 MAIN world，不受 content script 的 isolated world CSP 限制。
 >
-> `†` = 檔案位於 `content/`，但**不在** `manifest.json` 的 `content_scripts` 清單中；僅由 `background/service-worker.js` 以 `importScripts` 載入，執行情境為 service worker。
+> `†` = 檔案**不在** `manifest.json` 的 `content_scripts` 清單中；僅由 `background/service-worker.js` 以 `importScripts` 載入，執行情境為 service worker。
 
 ### Modular Load Order (v4.0.0)
 
@@ -152,7 +224,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 
 - **Popup UI**: When the master toggle is turned off, `applyMasterSwitchUI()` disables all sub-controls (sidebar auto-hide checkbox, hide-thinking checkbox, system time toggle, chat width toggle + slider, input width toggle + slider) via `el.disabled = true`.
 - **Content modules**: All modules (SidebarAutoHide, ChatWidth, InputWidth, HideThinking, AutoExpandMessages, WebSearchToggle, GoToTop, MobileSidebarSwipe) listen for `isEnabled` changes. When set to false, each module calls its `disable()` method. When set back to true, each module re-reads its own toggle from storage and enables if true. **Exception — WebSearchToggle (v4.17.0, revised in v4.17.1)**: its setting is a per-activation-event default rather than an enforced state. Turning the master switch back on IS an activation event and does re-apply the default exactly once, as is a change to `dsWebSearchToggle` itself. After each application the module releases control via its `_isSpent` flag, so the user's own manual toggling of the page button is never overridden until the next activation event.
-- **System time injection**: When `isEnabled` is false, `showSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
+- **System time injection**: When `isEnabled` is false, `isShowSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
 - **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0) `isGlobalPromptEnabled` is no longer a straight mirror of one storage key — it is resolved per navigation from the active preset's own `globalPromptEnabled` field, falling back to the legacy device-level key when no preset is active. Subordination to the master switch is unchanged.
@@ -165,7 +237,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 - **Tier 2 — positional fallback**: the second `.ds-toggle-button[aria-pressed]` candidate (index 1; search sits after deep-thinking in the toggle group). Restricted to the toggle group — positional guessing among generic candidates is forbidden.
 - **Total failure**: `null` plus exactly one `console.warn('[DSS] websearch-toggle: failed to locate the web-search button')`, so a future DeepSeek redesign is diagnosable from a user's console paste. No warning on success.
 
-The two tiers have mutually exclusive failure modes (icon redesign vs. toolbar reorder); both would have to change in one release for the feature to fail. Recovery procedure: re-capture `to-do/samples/input-bar-*.html` against the new build.
+The two tiers have mutually exclusive failure modes (icon redesign vs. toolbar reorder); both would have to change in one release for the feature to fail. Recovery procedure: capture fresh `input-bar-*.html` DOM snapshots from the updated DeepSeek build and update the icon-path constant accordingly.
 
 **Rejected signals — do NOT reintroduce:** label text (`智能搜索` / `智慧搜尋` / `Search`) — the original bug, and a multi-language keyword list is unbounded; hashed classes (`f79352dc`, `_58b31c9`, `_46d2264`, `_6dbc175`, `ec4f5d61`) — CSS-module build hashes that rotate on every DeepSeek redeploy; `clipPath id="__lottie_element_*"` — assigned sequentially by the lottie-web runtime at parse time, so it shifts if any other animation renders first.
 
