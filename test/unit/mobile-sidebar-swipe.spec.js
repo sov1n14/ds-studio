@@ -251,7 +251,7 @@ describe('swipe gesture', () => {
         expect(clickSpy).not.toHaveBeenCalled();
     });
 
-    it('does NOT trigger when deltaX is negative (swiping left, not right)', () => {
+    it('does NOT trigger when |deltaX| is below threshold', () => {
         setupForSwipe();
         const button = createSidebarButton();
         const clickSpy = vi.spyOn(button, 'click');
@@ -461,3 +461,176 @@ describe('vertical zone rejection (_onTouchStart)', () => {
         expect(MobileSidebarSwipe._startPoint).toBeNull();
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  7. Left-swipe gesture (close sidebar)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a sidebar close button matching the primary selector:
+ *   div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]
+ */
+function createCloseButton() {
+    const btn = document.createElement('div');
+    btn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+    btn.setAttribute('role', 'button');
+    // SVG with path[fill-rule] so primary :has(path[fill-rule]) selector matches
+    btn.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
+    document.body.appendChild(btn);
+    return btn;
+}
+
+/**
+ * Dispatch a gesture that satisfies every swipe condition: 70px leftward,
+ * dominantly horizontal, instantaneous, starting inside the centre 80% zone.
+ */
+function dispatchValidLeftSwipe() {
+    dispatchTouch('touchstart', 370, 400);
+    dispatchTouch('touchmove', 300, 410);
+    dispatchTouch('touchend', 300, 410);
+}
+
+describe('left-swipe gesture (close sidebar)', () => {
+    it('triggers close button click on a valid left-swipe (deltaX=-70, |deltaX| >= 50, dominant horizontal, within duration)', () => {
+        setupForSwipe();
+        const closeBtn = createCloseButton();
+        const clickSpy = vi.spyOn(closeBtn, 'click');
+
+        MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 370, clientY: 400 }] });
+        MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 300, clientY: 410 }] });
+        MobileSidebarSwipe._onTouchEnd();
+
+        expect(clickSpy).toHaveBeenCalledOnce();
+    });
+
+    it('right-swipe still triggers open button click (not close button)', () => {
+        setupForSwipe();
+        const openBtn = createSidebarButton();
+        const closeBtn = createCloseButton();
+        const openSpy = vi.spyOn(openBtn, 'click');
+        const closeSpy = vi.spyOn(closeBtn, 'click');
+
+        MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 300, clientY: 400 }] });
+        MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 370, clientY: 410 }] });
+        MobileSidebarSwipe._onTouchEnd();
+
+        expect(openSpy).toHaveBeenCalledOnce();
+        expect(closeSpy).not.toHaveBeenCalled();
+    });
+
+    it('left-swipe below threshold does nothing (|deltaX|=25 < 50)', () => {
+        setupForSwipe();
+        const closeBtn = createCloseButton();
+        const clickSpy = vi.spyOn(closeBtn, 'click');
+
+        MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 325, clientY: 400 }] });
+        MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 300, clientY: 405 }] });
+        // deltaX = -25, |deltaX| = 25 < 50 threshold
+        MobileSidebarSwipe._onTouchEnd();
+
+        expect(clickSpy).not.toHaveBeenCalled();
+    });
+
+    it('left-swipe with dominant vertical movement does nothing', () => {
+        setupForSwipe();
+        const closeBtn = createCloseButton();
+        const clickSpy = vi.spyOn(closeBtn, 'click');
+
+        MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 370, clientY: 400 }] });
+        // deltaX = -40, deltaY = -200 -> |deltaX|(40) <= |deltaY|*1.5(300) -> rejected
+        MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 330, clientY: 200 }] });
+        MobileSidebarSwipe._onTouchEnd();
+
+        expect(clickSpy).not.toHaveBeenCalled();
+    });
+
+    it('left-swipe does not click the open button', () => {
+        setupForSwipe();
+        const openBtn = createSidebarButton();
+        const openSpy = vi.spyOn(openBtn, 'click');
+
+        MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 370, clientY: 400 }] });
+        MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 300, clientY: 410 }] });
+        MobileSidebarSwipe._onTouchEnd();
+
+        expect(openSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when no close button is in the DOM for left-swipe', () => {
+        setupForSwipe();
+
+        expect(() => {
+            MobileSidebarSwipe._onTouchStart({ touches: [{ clientX: 370, clientY: 400 }] });
+            MobileSidebarSwipe._onTouchMove({ touches: [{ clientX: 300, clientY: 410 }] });
+            MobileSidebarSwipe._onTouchEnd();
+        }).not.toThrow();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  8. _findCloseButton() selector cascade
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('_findCloseButton() selector cascade', () => {
+    it('primary: returns element matching :has(path[fill-rule]) selector', () => {
+        setupForSwipe();
+        const closeBtn = createCloseButton();
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBe(closeBtn);
+    });
+
+    it('fallback 1: when primary returns null, returns last element from querySelectorAll if length > 1', () => {
+        setupForSwipe();
+        // Two iconLabelTertiary buttons without path[fill-rule] (primary won't match)
+        const searchBtn = document.createElement('div');
+        searchBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        searchBtn.setAttribute('role', 'button');
+        document.body.appendChild(searchBtn);
+
+        const closeBtn = document.createElement('div');
+        closeBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        closeBtn.setAttribute('role', 'button');
+        document.body.appendChild(closeBtn);
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBe(closeBtn);
+    });
+
+    it('fallback 1 edge case: querySelectorAll returns only 1 element (likely search button) — returns null, not that element', () => {
+        setupForSwipe();
+        // Single iconLabelTertiary button without path[fill-rule]
+        const searchBtn = document.createElement('div');
+        searchBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        searchBtn.setAttribute('role', 'button');
+        document.body.appendChild(searchBtn);
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBeNull();
+    });
+
+    it('fallback 2: returns element matching .ds-button--iconLabelTertiary.ds-button--icon:has(path[fill-rule])', () => {
+        setupForSwipe();
+        // Element matching fallback 2 only (no --capsule, no role=button, has --icon class)
+        const fallbackBtn = document.createElement('div');
+        fallbackBtn.className = 'ds-button--iconLabelTertiary ds-button--icon';
+        fallbackBtn.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
+        document.body.appendChild(fallbackBtn);
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBe(fallbackBtn);
+    });
+
+    it('returns null when no selector matches', () => {
+        setupForSwipe();
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBeNull();
+    });
+});
+

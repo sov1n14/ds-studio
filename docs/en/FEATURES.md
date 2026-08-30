@@ -177,8 +177,8 @@ The **Back to Top** button is fully automatic and requires no configuration:
 
 This feature only works on mobile devices and requires no configuration:
 
-- **Trigger Method**: Swipe right with your finger within the central 80% area of the DeepSeek conversation page (excluding 10% margins on each side) to toggle the sidebar.
-- **Accidental Trigger Prevention**: The system automatically detects swipe direction and distance — only a clear rightward swipe (≥ 50px, predominantly horizontal, < 500ms) triggers the action; vertical scrolling or brief touches do not activate it.
+- **Trigger Method**: Swipe horizontally with your finger within the central 80% area of the DeepSeek conversation page (excluding 10% margins on each side) to open or close the sidebar. Right-swipe (left→right) opens the sidebar; left-swipe (right→left) closes it.
+- **Accidental Trigger Prevention**: The system automatically detects swipe direction and distance — only a clear horizontal swipe (≥ 50px, predominantly horizontal, < 500ms) triggers the action; vertical scrolling or brief touches do not activate it.
 - **Compatibility**: The trigger area deliberately avoids the screen edges to prevent conflicts with Chrome Android's system back gesture.
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle.
 

@@ -92,7 +92,7 @@
 
 ## 19. Mobile Sidebar Swipe Gesture
 
-- **Purpose**: On mobile devices, allows users to swipe right within the central 80% of the screen to expand/collapse the sidebar, solving the lack of a quick sidebar toggle mechanism on mobile.
+- **Purpose**: On mobile devices, allows users to swipe horizontally within the central 80% of the screen to open or close the sidebar (right-swipe opens, left-swipe closes), solving the lack of a quick sidebar toggle mechanism on mobile.
 - **Mobile Only**: Determined via `_isMobileDevice()` — `navigator.maxTouchPoints > 0` (physical touch device) or User-Agent matching `/Mobi|Android|iPhone|iPad/i` (Chrome DevTools mobile emulation). Desktop environments have zero overhead, with no event listeners bound.
 - **Trigger Area Geometry**: The touch start point must fall within the central 80% × 80% area of the screen (10% margin excluded from each side horizontally and vertically). This design avoids conflicts with Chrome Android's system back gesture (triggered from screen edges) and accidental touches from the top status bar / bottom navigation bar:
   - `minX = innerWidth * 0.10`, `maxX = innerWidth * 0.90`
@@ -100,12 +100,14 @@
 - **Gesture Recognition Conditions** (all five must be met to trigger):
   | Condition | Threshold | Description |
   |-|-|-|
-  | a. Minimum swipe distance | `deltaX ≥ 50px` (`SWIPE_THRESHOLD_PX`) | Excludes minor jitter |
-  | b. Horizontal dominance | `deltaX > |deltaY| × 1.5` | Excludes vertical-scroll-like swipes |
+  | a. Minimum swipe distance | `|deltaX| ≥ 50px` (`SWIPE_THRESHOLD_PX`) | Excludes minor jitter |
+  | b. Horizontal dominance | `|deltaX| > |deltaY| × 1.5` | Excludes vertical-scroll-like swipes |
   | c. Duration | `< 500ms` (`SWIPE_MAX_DURATION_MS`) | Excludes slow drags |
   | d. Horizontal start position | `clientX ∈ [10%, 90%] innerWidth` | Excludes screen edges |
   | e. Vertical start position | `clientY ∈ [10%, 90%] innerHeight` | Excludes top/bottom edges |
-- **Target Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`; fallback path includes 5 alternative class combinations.
+- **Direction Detection**: After threshold check, `deltaX > 0` (right-swipe) triggers the open-sidebar button; `deltaX < 0` (left-swipe) triggers the close-sidebar button.
+- **Open Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`; fallback path includes 5 alternative class combinations.
+- **Close Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]`; fallback path includes 3 alternative class combinations.
 - **DOM Polling**: `_tryConnectDom()` polls for the target button every 500ms, up to 60 times (~30 seconds), silently giving up on timeout (no error thrown).
 - **Master Switch Integration**: Follows the extension's master switch (`isEnabled`) entirely. Monitors `isEnabled` changes via `chrome.storage.onChanged` for instant enable/disable, with no individual feature toggle.
 - **Lifecycle Methods**:
