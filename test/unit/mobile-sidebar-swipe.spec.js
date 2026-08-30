@@ -474,6 +474,8 @@ function createCloseButton() {
     const btn = document.createElement('div');
     btn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
     btn.setAttribute('role', 'button');
+    // SVG with path[fill-rule] so primary :has(path[fill-rule]) selector matches
+    btn.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
     document.body.appendChild(btn);
     return btn;
 }
@@ -570,7 +572,7 @@ describe('left-swipe gesture (close sidebar)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('_findCloseButton() selector cascade', () => {
-    it('returns element matching primary selector (iconLabelTertiary)', () => {
+    it('primary: returns element matching :has(path[fill-rule]) selector', () => {
         setupForSwipe();
         const closeBtn = createCloseButton();
 
@@ -579,12 +581,43 @@ describe('_findCloseButton() selector cascade', () => {
         expect(result).toBe(closeBtn);
     });
 
-    it('falls back when primary selector returns null', () => {
+    it('fallback 1: when primary returns null, returns last element from querySelectorAll if length > 1', () => {
         setupForSwipe();
-        // Create element matching first fallback only: .ds-button--capsule.ds-button--iconLabelTertiary
-        // (without role="button" — so primary div[role=button] won't match, but the fallback will)
-        const fallbackBtn = document.createElement('span');
-        fallbackBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        // Two iconLabelTertiary buttons without path[fill-rule] (primary won't match)
+        const searchBtn = document.createElement('div');
+        searchBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        searchBtn.setAttribute('role', 'button');
+        document.body.appendChild(searchBtn);
+
+        const closeBtn = document.createElement('div');
+        closeBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        closeBtn.setAttribute('role', 'button');
+        document.body.appendChild(closeBtn);
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBe(closeBtn);
+    });
+
+    it('fallback 1 edge case: querySelectorAll returns only 1 element (likely search button) — returns null, not that element', () => {
+        setupForSwipe();
+        // Single iconLabelTertiary button without path[fill-rule]
+        const searchBtn = document.createElement('div');
+        searchBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
+        searchBtn.setAttribute('role', 'button');
+        document.body.appendChild(searchBtn);
+
+        const result = MobileSidebarSwipe._findCloseButton();
+
+        expect(result).toBeNull();
+    });
+
+    it('fallback 2: returns element matching .ds-button--iconLabelTertiary.ds-button--icon:has(path[fill-rule])', () => {
+        setupForSwipe();
+        // Element matching fallback 2 only (no --capsule, no role=button, has --icon class)
+        const fallbackBtn = document.createElement('div');
+        fallbackBtn.className = 'ds-button--iconLabelTertiary ds-button--icon';
+        fallbackBtn.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
         document.body.appendChild(fallbackBtn);
 
         const result = MobileSidebarSwipe._findCloseButton();
@@ -594,10 +627,10 @@ describe('_findCloseButton() selector cascade', () => {
 
     it('returns null when no selector matches', () => {
         setupForSwipe();
-        // No close button in DOM at all
 
         const result = MobileSidebarSwipe._findCloseButton();
 
         expect(result).toBeNull();
     });
 });
+

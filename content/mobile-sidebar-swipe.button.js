@@ -37,22 +37,23 @@
      * 主要差異：iconLabelTertiary（關閉）vs iconLabelPrimary（開啟）。
      */
     _findCloseButton() {
-        // 主選擇器（關閉側邊欄按鈕）
+        // 主選擇器：透過 :has(path[fill-rule]) 精準定位關閉按鈕（排除搜尋按鈕）
         const primary = document.querySelector(
-            'div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]'
+            'div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]:has(path[fill-rule])'
         );
         if (primary) return primary;
 
-        // 降級路徑：逐一嘗試各 class 組合
-        const fallbacks = [
-            '.ds-button--capsule.ds-button--iconLabelTertiary',
-            '.ds-button--iconLabelTertiary.ds-button--icon',
-            '.ds-button--iconLabelTertiary[role="button"]',
-        ];
-        for (const sel of fallbacks) {
-            const el = document.querySelector(sel);
-            if (el) return el;
-        }
+        // 降級路徑一：取最後一個 iconLabelTertiary 按鈕（關閉按鈕排在搜尋按鈕之後）
+        const all = document.querySelectorAll(
+            'div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]'
+        );
+        if (all.length > 1) return all[all.length - 1];
+
+        // 降級路徑二：備用選擇器組合
+        const fallback = document.querySelector(
+            '.ds-button--iconLabelTertiary.ds-button--icon:has(path[fill-rule])'
+        );
+        if (fallback) return fallback;
 
         return null;
     },
