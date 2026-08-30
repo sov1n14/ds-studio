@@ -149,7 +149,7 @@ Exposed on `window.DSstudio.GoToTop`: `enable()`, `disable()`, `init()`, `scroll
 
 ## Mobile Sidebar Swipe
 
-The `MobileSidebarSwipe` module in `content/mobile-sidebar-swipe.js` detects right-swipe gestures on mobile devices within the central 80% viewport area and clicks the sidebar toggle button to show/hide the navigation sidebar.
+The `MobileSidebarSwipe` module in `content/mobile-sidebar-swipe.js` detects bidirectional swipe gestures on mobile devices within the central 80% viewport area — right-swipe (left→right) opens the sidebar, left-swipe (right→left) closes it.
 
 ### Trigger Zone
 
@@ -165,12 +165,14 @@ This central-zone design avoids conflicts with Chrome Android's system back-swip
 Five conditions must ALL be satisfied for a click to fire:
 
 | # | Condition | Constant | Rationale |
-|---|-----------|----------|-----------|
-| a | `deltaX >= 50px` | `SWIPE_THRESHOLD_PX` | Minimum travel distance to filter noise |
-| b | `deltaX > |deltaY| * 1.5` | — | Horizontal dominance (reject scroll-like vertical swipes) |
+|-|-|-|-|
+| a | `|deltaX| >= 50px` | `SWIPE_THRESHOLD_PX` | Minimum travel distance to filter noise (absolute value, symmetric) |
+| b | `|deltaX| > |deltaY| * 1.5` | — | Horizontal dominance (reject scroll-like vertical swipes) |
 | c | `duration < 500ms` | `SWIPE_MAX_DURATION_MS` | Reject slow drags that aren't intentional fast swipes |
 | d | startX within center 80% horizontal | `TRIGGER_ZONE_MARGIN_RATIO = 0.10` | Reject screen-edge swipes |
 | e | startY within center 80% vertical | `TRIGGER_ZONE_MARGIN_RATIO = 0.10` | Reject top/bottom edge swipes |
+
+Once all five conditions pass, `_onTouchEnd` branches on the sign of `deltaX`: positive (right-swipe) clicks the open button via `_findButton()`, negative (left-swipe) clicks the close button via `_findCloseButton()`.
 
 ### Mobile Guard
 
@@ -178,7 +180,7 @@ Five conditions must ALL be satisfied for a click to fire:
 
 ### DOM Discovery
 
-`_findButton()` uses a primary selector `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]` with 5 fallback class combinations. `_tryConnectDom()` polls every 500ms up to 60 times (≈30s) until the button is found, then calls `_bindTouchEvents()`.
+`_findButton()` (open) uses a primary selector `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]` with 5 fallback class combinations. `_findCloseButton()` (close) uses a primary selector `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]` with 3 fallback class combinations. `_tryConnectDom()` polls every 500ms up to 60 times (≈30s) until the open button is found, then calls `_bindTouchEvents()`. The close button is looked up on demand at swipe time rather than cached at bind time.
 
 ### Master Switch Integration
 

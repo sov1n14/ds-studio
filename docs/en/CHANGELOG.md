@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.33.0](changelog/v4.md#4330---2026-08-30) | Added bidirectional mobile sidebar swipe gesture: left-swipe closes sidebar (new), right-swipe opens (existing); new `_findCloseButton()` method with symmetric threshold detection |
 | [4.32.5](changelog/v4.md#4325---2026-08-29) | Unified vertical spacing on all six popup section titles; `.card-title-actions` changed to `height: 0` with `align-items: center` so action buttons no longer stretch `.card-title-row` |
 | [4.32.4](changelog/v4.md#4324---2026-08-28) | Fixed `popup.html` and `editor.html` missing `url-constants.js` script tag; `editor-window-autoclose.js` wrapped in try/catch for context invalidation; `temporary-chat-heartbeat.js` stops interval on context invalidation |
 | [4.32.2](changelog/v4.md#4322---2026-08-28) | Popup layout adjustments: `showSystemTimeToggle` moved to first position in Features card; Features toggles reordered; Backup & Restore card moved to right column; disabling auto-expand messages now collapses all expanded messages; i18n cleanup (removed Chinese labels with English parentheses, added `autoExpandMessagesLabel`, fixed clear button text) |

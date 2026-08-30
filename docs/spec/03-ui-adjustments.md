@@ -92,20 +92,23 @@
 
 ## 19. 行動裝置側欄滑動手勢 (Mobile Sidebar Swipe)
 
-- **目的**：在行動裝置上，讓使用者在畫面中央 80% 區域內向右滑動即可展開/收合側邊欄，解決行動版缺乏側邊欄快速切換機制的問題。
+- **目的**：在行動裝置上，讓使用者在畫面中央 80% 區域內透過左右滑動手勢控制側邊欄 — 向右滑動展開、向左滑動收合，解決行動版缺乏側邊欄快速切換機制的問題。
 - **僅行動裝置**：透過 `_isMobileDevice()` 判斷——`navigator.maxTouchPoints > 0`（實體觸控裝置）或 User-Agent 符合 `/Mobi|Android|iPhone|iPad/i`（Chrome DevTools 行動模擬）。桌面環境完全零開銷，不綁定任何事件監聽器。
 - **觸發區域幾何**：觸控起點必須落在畫面正中央 80% × 80% 區域內（水平與垂直各扣除 10% 邊界）。此設計避免與 Chrome Android 系統返回手勢（螢幕邊緣觸發）及頂部狀態列／底部導航列的誤觸衝突：
   - `minX = innerWidth * 0.10`, `maxX = innerWidth * 0.90`
   - `minY = innerHeight * 0.10`, `maxY = innerHeight * 0.90`
 - **手勢辨識條件**（五項**全部**滿足才觸發點擊）：
   | 條件 | 閾值 | 說明 |
-  |------|------|------|
-  | a. 最小滑動距離 | `deltaX ≥ 50px`（`SWIPE_THRESHOLD_PX`） | 排除微小抖動 |
-  | b. 水平主導 | `deltaX > |deltaY| × 1.5` | 排除垂直捲動類滑動 |
+  |-|-|-|
+  | a. 最小滑動距離 | `|deltaX| ≥ 50px`（`SWIPE_THRESHOLD_PX`） | 排除微小抖動（取絕對值，雙向對稱） |
+  | b. 水平主導 | `|deltaX| > |deltaY| × 1.5` | 排除垂直捲動類滑動 |
   | c. 持續時間 | `< 500ms`（`SWIPE_MAX_DURATION_MS`） | 排除慢速拖曳 |
   | d. 起點水平位置 | `clientX ∈ [10%, 90%] innerWidth` | 排除螢幕邊緣 |
   | e. 起點垂直位置 | `clientY ∈ [10%, 90%] innerHeight` | 排除頂部/底部邊緣 |
-- **目標按鈕選擇器**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`；降級路徑包含 5 個備用 class 組合。
+- **方向分支**：五項條件皆滿足後，依 `deltaX` 正負決定動作 — `deltaX > 0`（向右滑動）點擊展開按鈕，`deltaX < 0`（向左滑動）點擊收合按鈕。
+- **目標按鈕選擇器**：
+  - **展開按鈕**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`；降級路徑包含 5 個備用 class 組合。
+  - **收合按鈕**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]`；降級路徑包含 3 個備用 class 組合。
 - **DOM 輪詢**：`_tryConnectDom()` 每 500ms 輪詢一次目標按鈕，最多 60 次（約 30 秒），逾時靜默放棄（不拋錯）。
 - **主開關整合**：完全跟隨擴充功能主開關（`isEnabled`）。透過 `chrome.storage.onChanged` 監聽 `isEnabled` 變化即時啟用/停用，無各別功能切換。
 - **生命週期方法**：
@@ -113,7 +116,7 @@
   - `enable()`：啟動 DOM 輪詢。
   - `disable()`：解除觸控事件監聽、清除輪詢計時器、重設手勢狀態。
   - `destroy()`：委派給 `disable()`。
-- **實作位置**：`content/mobile-sidebar-swipe.js`；公開 API 掛載於 `window.DSstudio.MobileSidebarSwipe`。
+- **實作位置**：`content/mobile-sidebar-swipe.js`（入口）、`content/mobile-sidebar-swipe.button.js`（按鈕查找）、`content/mobile-sidebar-swipe.gesture.js`（手勢處理）、`content/mobile-sidebar-swipe.bind.js`（事件綁定）、`content/mobile-sidebar-swipe.lifecycle.js`（生命週期）；公開 API 掛載於 `window.DSstudio.MobileSidebarSwipe`。
 
 ## 20. 行動版首頁清理 (Mobile Homepage Cleanup) — v4.1.0
 

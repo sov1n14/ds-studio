@@ -8,7 +8,7 @@
 
 | Module Group | Covered Features | Detail Document |
 |-|-|-|
-| **UI Adjustment Modules** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, AutoExpandMessages, WebSearchToggle, GoToTop, Mobile Sidebar Swipe | [→ content-ui.md](content-ui.md) |
+| **UI Adjustment Modules** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, AutoExpandMessages, WebSearchToggle, GoToTop, Mobile Sidebar Swipe (bidirectional) | [→ content-ui.md](content-ui.md) |
 | **Navigation & Interface Modules** | SPA Navigation, Overlay Preset Selector, Empty Preset, Toast | [→ content-navigation.md](content-navigation.md) |
 | **User Interaction Modules** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup, AutoRetry | [→ content-interaction.md](content-interaction.md) |
 | **Interaction Restore Modules** | Censor Reply Restore (12 JS + CSS: `keymap`/`markdown`/`dom` (with `dom.extract`/`dom.resolve`/`dom.inject`/`dom.scan` four sub-packages)/`thinkblock`/`storage`/`detection`/`observer` method packages + entry file; MAIN world `sse-parser.js`/`censor-xhr-hook.js` injected via `main-world-injector.js`) | [→ spec/04-features.md](../../spec/04-features.md) (Chinese) |
