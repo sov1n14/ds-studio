@@ -23,6 +23,7 @@ function applySettingsToDom(dom, settings) {
         hideThinkingToggle,
         showSystemTimeToggle,
         preventAutoScrollToggle,
+        autoExpandMessagesToggle,
         websearchRadios = [],
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
@@ -35,6 +36,7 @@ function applySettingsToDom(dom, settings) {
     if (hideThinkingToggle)      hideThinkingToggle.checked      = settings.hideThinking;
     if (showSystemTimeToggle)    showSystemTimeToggle.checked    = settings.isShowSystemTime;
     if (preventAutoScrollToggle) preventAutoScrollToggle.checked = settings.preventAutoScroll;
+    if (autoExpandMessagesToggle) autoExpandMessagesToggle.checked = settings.autoExpandMessages;
 
     // 舊版 'default' 值由 StorageManager 的讀取路徑統一校正，此處僅處理尚未設定的情況
     if (websearchRadios.length) {

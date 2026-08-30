@@ -16,8 +16,8 @@ The `SidebarAutoHide` module in `content/sidebar-auto-hide.js` manages the sideb
 - **Overflow handling**: The wrapper gets `overflow: hidden` (except when DeepSeek's native collapse is active, where the thin bar should remain visible).
 - **SPA resilience**: A `MutationObserver` on `document.body` detects when the sidebar DOM node is replaced (SPA navigation), re-binds events, and re-collapses. A sidebar-specific `MutationObserver` watches for DeepSeek's native collapse/expand cycles and reapplies the custom collapse state when needed.
 - **Master switch awareness**: When `isEnabled` (master switch) changes to `false`, the module disables regardless of its own toggle. When it changes to `true`, the module re-reads its own toggle and enables if true.
-- **Storage listener**: Registers a `chrome.storage.onChanged` listener for `dsSidebarAutoHide` and `isEnabled` to enable/disable in real time.
-- **Startup**: On `start()`, reads `dsSidebarAutoHide` and `isEnabled` from storage, enables if both are true.
+- **Feature toggle integration**: Uses `registerFeatureToggle` from `content/feature-toggle.js` with `ownKey: STORAGE_KEY` to delegate master-switch and own-toggle gating. Settings are obtained from background via `DSS_GET_SETTINGS` and subsequent `DSS_SETTINGS_CHANGED` broadcasts.
+- **Startup**: `start()` sets up the resize handler, then calls `registerFeatureToggle` which handles initial state retrieval and change subscription.
 
 ## Chat Width Adjuster
 
@@ -30,8 +30,8 @@ The `ChatWidth` module in `content/chat-width.js` controls the conversation area
 - **Range**: 30% to 100% viewport width, clamped via `Math.min(Math.max(...))`.
 - **SPA resilience**: A `MutationObserver` on `._765a5cd` (or `document.body` fallback) re-injects styles after DOM changes, debounced at 200ms.
 - **Master switch awareness**: When `isEnabled` changes to `false`, disables. When changed to `true`, re-reads own toggle and enables if true.
-- **Storage listener**: Listens for `dsChatWidth` and `dsChatWidthEnabled` changes, and `isEnabled` for master switch, applying/reverting styles in real time.
-- **Startup**: Reads `dsChatWidth`, `dsChatWidthEnabled`, and `isEnabled` from storage, enables if both toggles are true.
+- **Feature toggle integration**: Uses `registerFeatureToggle` from `content/feature-toggle.js` (via `content/width-feature.js` factory) with `ownKey: ENABLED_KEY` to delegate master-switch and own-toggle gating. Percent-value changes are obtained via `DSS_GET_SETTINGS` and `DSS_SETTINGS_CHANGED` broadcasts from background, applying/reverting styles in real time.
+- **Startup**: `start()` calls `registerFeatureToggle` which handles initial state retrieval and change subscription.
 
 ## Input Width Adjuster
 
@@ -42,7 +42,7 @@ The `InputWidth` module in `content/input-width.js` is structurally similar to `
 - **Chat width clamping**: The effective input width is capped by the chat width when chat width adjustment is enabled (`getEffectivePercent()`). If chat width is 70% and input width is set to 100%, the actual applied width is 70%. This clamping is enforced in both `enable()` and during SPA re-application via `getEffectivePercent()`. The module also listens for `dsChatWidth` and `dsChatWidthEnabled` changes to re-clamp in real time.
 - **SPA resilience**: Same `MutationObserver` pattern with 200ms debounce, observes `._765a5cd` for attribute changes (`class`).
 - **Master switch awareness**: Same pattern as ChatWidth — disables when `isEnabled` is turned off, re-reads own toggle when turned back on.
-- **Storage listener**: Listens for `dsInputWidth`, `dsInputWidthEnabled`, `dsChatWidth`, `dsChatWidthEnabled`, and `isEnabled`.
+- **Feature toggle integration**: Same `registerFeatureToggle` mechanism as ChatWidth via the `width-feature.js` factory. Also subscribes to `dsChatWidth` and `dsChatWidthEnabled` changes to re-clamp in real time.
 - **Independence**: Chat width and input width can be toggled and set independently. Input width only affects the edit area, while chat width affects both the message list and input container.
 
 ## Hide Thinking Module
@@ -87,10 +87,10 @@ Before clicking, three conditions are checked:
 
 ### Master Switch Awareness
 
-The module reads both `dsHideThinking` and `isEnabled` (master switch) from storage at startup. `setupStorageListener()` registers a `chrome.storage.onChanged` listener that:
-- When `isEnabled` changes to `false` → calls `disable()` regardless of `dsHideThinking`.
-- When `isEnabled` changes to `true` → re-reads `dsHideThinking` and calls `enable()` if true.
-- When `dsHideThinking` changes → only acts if `isEnabled` is already `true`.
+`start()` delegates master-switch and own-toggle gating to `registerFeatureToggle` from `content/feature-toggle.js`, passing `ownKey: STORAGE_KEY` with `onEnable` → `enable()` and `onDisable` → `disable()`. Settings are obtained from background via `DSS_GET_SETTINGS` and subsequent `DSS_SETTINGS_CHANGED` broadcasts. The combined effect is:
+- When `isEnabled` changes to `false` → `onDisable` fires, calling `disable()` regardless of `dsHideThinking`.
+- When `isEnabled` changes to `true` and `dsHideThinking` is true → `onEnable` fires, calling `enable()`.
+- When `dsHideThinking` changes → `onEnable` or `onDisable` fires based on the combined state of both toggles.
 
 ### Known Limitation
 
@@ -139,7 +139,7 @@ This is the programmatic scroll-to-top API, returning a `Promise<{success, reaso
 
 ### Master Switch
 
-GoToTop is controlled **solely** by `isEnabled` (no per-feature toggle). `setupStorageListener()` listens for `chrome.storage.onChanged` on the `local` namespace for `isEnabled`. The module auto-starts via `GoToTop.init()` at module load.
+GoToTop is controlled **solely** by `isEnabled` (no per-feature toggle). `init()` delegates master-switch gating to `registerFeatureToggle` from `content/feature-toggle.js`, which obtains settings from background via `DSS_GET_SETTINGS` and subscribes to `DSS_SETTINGS_CHANGED` broadcasts. The module auto-starts via `GoToTop.init()` at module load.
 
 **Teardown contract.** `disable()` must leave nothing behind that continues to act on the page. It stops all three observers (DOM, route, wrapper), removes the scroll listener and the button, clears all three timers (`_observerTimer`, `_enableRetryTimer`, `_routeChangeTimer`), and aborts any in-flight scroll by CALLING `_scrollReject` before nulling it. Every timer in the module must therefore keep its handle on a `this._`-prefixed field — a handle held only in a closure or discarded outright is unreachable from `disable()`, and a callback that fires after teardown can re-attach observers that nothing will ever remove. `_evaluateVisibility()` is not a sufficient backstop despite its own `if (!this.enabled || !this._masterEnabled) return;` guard: it runs last in `_tryConnectDom()`'s success branch, so it suppresses only the visibility update, not the injection that already happened. Regression coverage: `test/unit/go-top.enable.spec.js`, describe block `disable — teardown correctness (regression)`.
 
@@ -182,7 +182,7 @@ Five conditions must ALL be satisfied for a click to fire:
 
 ### Master Switch Integration
 
-`_setupStorageListener()` registers a `chrome.storage.onChanged` listener for `isEnabled` on the local namespace. When the master switch is turned off, `disable()` unbinds touch listeners, clears timers, and resets swipe state. When turned back on, `enable()` restarts DOM polling.
+`start()` delegates master-switch gating to `registerFeatureToggle` from `content/feature-toggle.js`, which obtains settings from background via `DSS_GET_SETTINGS` and subscribes to `DSS_SETTINGS_CHANGED` broadcasts. When the master switch is turned off, `disable()` unbinds touch listeners, clears timers, and resets swipe state. When turned back on, `enable()` restarts DOM polling.
 
 ### Lifecycle
 

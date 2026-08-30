@@ -23,6 +23,7 @@
     exportMarkdownButton: 'Export Current Page Conversation as Markdown',
     sidebarAutoHideLabel: 'Auto-hide Sidebar (60px on hover to expand)',
     hideThinkingLabel: 'Collapse Thinking Process',
+    autoExpandMessagesLabel: 'Auto-expand messages',
     preventAutoScrollLabel: 'Prevent Auto-Scroll',
     websearchToggleLabel: 'Web Search',
     websearchOnLabel: 'On',

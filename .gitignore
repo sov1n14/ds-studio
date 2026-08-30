@@ -3,6 +3,7 @@
 *.zip
 .claude/screenshots/
 .ignore/
+.playwright-cli/
 .venv/
 .vitest-cache/
 coverage/

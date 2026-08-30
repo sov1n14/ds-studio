@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.32.5](changelog/v4.md#4325---2026-08-29) | 統一 popup 六個區段標題的上下垂直間距，`.card-title-actions` 改為 `height: 0` 搭配 `align-items: center`，動作按鈕不再撐高 `.card-title-row` |
+| [4.32.4](changelog/v4.md#4324---2026-08-28) | 修復 `popup.html` 與 `editor.html` 缺少 `url-constants.js` script tag、`editor-window-autoclose.js` 加上 try/catch 處理 context 失效、`temporary-chat-heartbeat.js` 偵測到 context 失效後停止 interval |
+| [4.32.2](changelog/v4.md#4322---2026-08-28) | 彈出選單佈局調整：`showSystemTimeToggle` 移至 Features 卡片首位、Features 開關重新排序、Backup & Restore 卡片移至右欄；自動展開訊息停用時收合所有已展開訊息；i18n 清理（移除中文標籤英文括號、新增 `autoExpandMessagesLabel`、修正清除按鈕文字） |
+| [4.32.0](changelog/v4.md#4320---2026-08-28) | 新增「Features」卡片（隱藏思考過程、防止自動回滾、連網搜索自 UI 調整卡片移入）、新增「自動展開訊息」功能（MutationObserver 自動點擊收合的展開按鈕，儲存鍵 `dsAutoExpandMessages`），原「功能與匯出」卡片更名為「Export」 |
 | [4.31.27](changelog/v4.md#43127---2026-08-27) | 最後四個布林識別字補上 is／has 前綴：`_storedRecordsApplied`→`_hasStoredRecordsApplied`、`_locked`→`_isLocked`、`completionDetected`→`isCompletionDetected`、`showSystemTime`→`isShowSystemTime`，涵蓋 13 個生產檔與 24 個測試檔共 98 處 |
 | [4.31.26](changelog/v4.md#43126---2026-08-27) | 拆分 go-top 與 sidebar-auto-hide 兩個超長檔案：go-top 新增 `go-top.observers.js`、`go-top.lifecycle.js`（425→73 行），sidebar-auto-hide 新增 `sidebar-auto-hide.styles.js`、`sidebar-auto-hide.observers.js`（416→211 行） |
 | [4.31.25](changelog/v4.md#43125---2026-08-27) | 移除四模組的 `__getState`／`__setState`／`__resetState` 測試鏡像，保留 state 直接存取 |

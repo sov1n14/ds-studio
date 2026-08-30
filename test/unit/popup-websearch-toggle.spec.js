@@ -3,7 +3,7 @@
  *
  * Requirement contract under test (updated - 'default' option removed):
  *   1. popup.html defines a radio group named "websearchToggle" with ONLY two
- *      values 'on'/'off' inside the "UI Adjustments" card, in a new
+ *      values 'on'/'off' inside the "Features" card, in a new
  *      input-group placed after the preventAutoScrollToggle input-group;
  *      the group is labeled with data-i18n="websearchToggleLabel". The
  *      legacy 'default' radio and its i18n label key no longer exist.
@@ -86,27 +86,27 @@ function checkedRadioTagRegex(value) {
     return new RegExp(`<input\\b(?=[^>]*\\bname="websearchToggle")(?=[^>]*\\bvalue="${value}")(?=[^>]*\\bchecked\\b)[^>]*>`);
 }
 
-function uiAdjustmentsCardHtml(html) {
-    const cardStart = html.indexOf("UI Adjustments");
+function featuresCardHtml(html) {
+    const cardStart = html.indexOf("Features");
     const cardEnd = html.indexOf("<!-- Toast");
-    expect(cardStart, "could not locate the UI Adjustments card").toBeGreaterThan(-1);
+    expect(cardStart, "could not locate the Features card").toBeGreaterThan(-1);
     expect(cardEnd, "could not locate end-of-container marker").toBeGreaterThan(cardStart);
     return html.slice(cardStart, cardEnd);
 }
 
 describe("popup.html - websearchToggle radio group markup", () => {
-    it("places the radio group inside the UI Adjustments card, after the preventAutoScrollToggle input-group", () => {
-        const cardHtml = uiAdjustmentsCardHtml(readPopupHtml());
+    it("places the radio group inside the Features card, after the preventAutoScrollToggle input-group", () => {
+        const cardHtml = featuresCardHtml(readPopupHtml());
 
         const websearchIdx = cardHtml.indexOf('name="websearchToggle"');
         const preventIdx = cardHtml.indexOf('id="preventAutoScrollToggle"');
-        expect(websearchIdx, "no websearchToggle radio group found in the UI Adjustments card").toBeGreaterThan(-1);
-        expect(preventIdx, "could not locate preventAutoScrollToggle in the UI Adjustments card").toBeGreaterThan(-1);
+        expect(websearchIdx, "no websearchToggle radio group found in the Features card").toBeGreaterThan(-1);
+        expect(preventIdx, "could not locate preventAutoScrollToggle in the Features card").toBeGreaterThan(-1);
         expect(websearchIdx, "websearchToggle radio group must come after the preventAutoScrollToggle input-group").toBeGreaterThan(preventIdx);
     });
 
     it("defines radio inputs named websearchToggle with ONLY the values 'on' and 'off'", () => {
-        const cardHtml = uiAdjustmentsCardHtml(readPopupHtml());
+        const cardHtml = featuresCardHtml(readPopupHtml());
 
         for (const value of ["on", "off"]) {
             expect(cardHtml, `missing <input name="websearchToggle" value="${value}">`).toMatch(radioTagRegex(value));
@@ -118,12 +118,12 @@ describe("popup.html - websearchToggle radio group markup", () => {
     });
 
     it("pre-checks the 'on' radio in the markup", () => {
-        const cardHtml = uiAdjustmentsCardHtml(readPopupHtml());
+        const cardHtml = featuresCardHtml(readPopupHtml());
         expect(cardHtml, "the 'on' radio must carry the checked attribute in the markup").toMatch(checkedRadioTagRegex("on"));
     });
 
     it("labels the radio group with data-i18n=\"websearchToggleLabel\"", () => {
-        expect(uiAdjustmentsCardHtml(readPopupHtml())).toMatch(/data-i18n="websearchToggleLabel"/);
+        expect(featuresCardHtml(readPopupHtml())).toMatch(/data-i18n="websearchToggleLabel"/);
     });
 
     it("no longer references the removed 'default' option's i18n key (websearchDefaultLabel) anywhere in popup.html", () => {
@@ -244,7 +244,7 @@ function extractApplyMasterSwitchUI() {
 const CLOSURE_VAR_NAMES = [
     "sidebarAutoHideToggle", "hideThinkingToggle", "showSystemTimeToggle",
     "chatWidthToggle", "chatWidthSlider", "inputWidthToggle", "inputWidthSlider",
-    "preventAutoScrollToggle", "websearchRadios",
+    "preventAutoScrollToggle", "autoExpandMessagesToggle", "websearchRadios",
 ];
 
 function buildApplyMasterSwitchUI(dom) {

@@ -8,11 +8,11 @@
 
 | 模組群組 | 涵蓋功能 | 詳細文件 |
 |-|-|-|
-| **UI 調整模組** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, GoToTop, Mobile Sidebar Swipe | [→ content-ui.md](content-ui.md) |
+| **UI 調整模組** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, AutoExpandMessages, WebSearchToggle, GoToTop, Mobile Sidebar Swipe | [→ content-ui.md](content-ui.md) |
 | **導航與介面模組** | SPA Navigation, Overlay Preset Selector, Empty Preset, Toast | [→ content-navigation.md](content-navigation.md) |
-| **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup | [→ content-interaction.md](content-interaction.md) |
-| **互動復原模組** | Censor Reply Restore（6 個 JS + CSS：`keymap`／`markdown`／`dom`／`thinkblock`／`storage` 方法包 + 入口檔；MAIN world 的 `sse-parser.js`／`censor-xhr-hook.js` 經 `main-world-injector.js` 注入） | [→ spec/04-features.md](../spec/04-features.md) |
-| **臨時對話模組** | Temporary Conversation（`utils/temporary-chat-constants.js`、`temporary-chat-enabled-flag.js`、`temporary-chat-toggle.js` + `.css`、`temporary-chat-delete-api.js`、`temporary-chat-delete.tracking.js`、`temporary-chat-delete.coordinator.js`、`temporary-chat-delete.handlers.js`、`temporary-chat-delete.js`；`temporary-chat-pending-store.js` 由 service worker 以 `importScripts` 載入） | [→ spec/04-features.md](../spec/04-features.md) |
+| **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup, AutoRetry | [→ content-interaction.md](content-interaction.md) |
+| **互動復原模組** | Censor Reply Restore（12 個 JS + CSS：`keymap`／`markdown`／`dom`（含 `dom.extract`／`dom.resolve`／`dom.inject`／`dom.scan` 四個子包）／`thinkblock`／`storage`／`detection`／`observer` 方法包 + 入口檔；MAIN world 的 `sse-parser.js`／`censor-xhr-hook.js` 經 `main-world-injector.js` 注入） | [→ spec/04-features.md](../spec/04-features.md) |
+| **臨時對話模組** | Temporary Conversation（`utils/temporary-chat-constants.js`、`temporary-chat-enabled-flag.js`、`temporary-chat-toggle.js` + `.css`、`temporary-chat-delete-api.js`、`temporary-chat-delete.tracking.js`、`temporary-chat-delete.coordinator.js`、`temporary-chat-delete.handlers.js`、`temporary-chat-delete.js`；`background/pending-store.js` 由 service worker 以 `importScripts` 載入） | [→ spec/04-features.md](../spec/04-features.md) |
 | **匯出工具模組** | Scroll-and-Harvest Markdown export engine | [→ EXPORT.md](EXPORT.md) |
 | **工具模組** | Mobile Homepage DOM cleanup (v4.1.0)、`ds-selectors.js`（v4.11.13，共用選擇器常數）、`feature-toggle.js`（總開關＋自身開關的共用閘控管線）、`width-feature.js`（寬度類功能工廠）、`main-world-injector.js`（MAIN world 腳本注入）、`settings-message-constants.js`（設定訊息型別常數）、`editor-window-autoclose.js`（v4.29.0，window `focus` 時送出 `DSS_CLOSE_EDITOR_WINDOWS`，關閉開啟中的提示詞編輯器視窗；常數取自 `utils/editor-window-constants.js`，實際關閉由 `background/editor-window-routes.js` 執行） | — |
 
@@ -21,8 +21,9 @@
 > **v4.0.0 模組化**：以下大型內容腳本已拆分為「入口檔 + 方法包」（行為不變，方法包經 `globalThis.__DS_*` 由入口檔 `Object.assign` 合併，載入順序於 `manifest.json` 強制：方法包先於入口檔）。此外，`harvest.js`（捲動擷取引擎）與 `mobile-homepage-cleanup.js`（行動版首頁 DOM 清理）也是透過 `manifest.json` 的 `content_scripts` 清單載入：
 >
 > - `content-script.js` → `content-script.js`（入口／接線層，持有唯一的 body `MutationObserver`）+ `content-script.export.js`（Markdown 匯出）+ `prompt-injector.controller.js`（提示詞注入，v4.11.15 追加）+ `prompt-injector.send-button.js`（送出按鈕偵測與攔截）+ `chat-binding-controller.js`（對話綁定狀態機，持有全部可變狀態）<!-- overlay 於 v4.2.0 進一步拆分為 6 個獨立模組，詳見 ARCHITECTURE.md 目錄樹 -->
-> - `go-top.js` → `go-top.js`（入口）+ `go-top.locate.js`（查詢/定位/可見性）+ `go-top.render.js`（渲染/注入/模式切換）+ `go-top.scroll.js`（捲動動畫引擎）
-> - `censor-reply-restore.js` → `censor-reply-restore.js`（入口）+ `censor-reply-restore.keymap.js`（key ↔ messageId 雙向對應表）+ `censor-reply-restore.markdown.js`（Markdown 渲染）+ `censor-reply-restore.dom.js`（DOM 注入）+ `censor-reply-restore.thinkblock.js`（思考區塊 widget，v4.11.12 追加）+ `censor-reply-restore.storage.js`（持久化）
+> - `go-top.js` → `go-top.js`（入口）+ `go-top.locate.scroll.js`（捲動容器定位策略）+ `go-top.locate.anchor.js`（錨點偵測與原生按鈕定位）+ `go-top.locate.js`（DOM 查詢輔助、包裝容器定位與可見性評估，合入 locate.scroll 與 locate.anchor）+ `go-top.render.button.js`（按鈕建構與 SVG 圖示）+ `go-top.render.inject.js`（注入策略與堆疊偏移計算）+ `go-top.render.observer.js`（包裝容器 Observer 與模式切換）+ `go-top.render.js`（渲染 bundle 入口，合入 render.button、render.inject、render.observer）+ `go-top.scroll.js`（捲動動畫引擎）+ `go-top.observers.js`（DOM 變動監控、滾動監聽及路由偵測）+ `go-top.lifecycle.js`（路由切換處理、啟用／停用、DOM 就緒輪詢及生命週期管理）
+> - `censor-reply-restore.js` → `censor-reply-restore.js`（入口）+ `censor-reply-restore.keymap.js`（key ↔ messageId 雙向對應表）+ `censor-reply-restore.markdown.js`（Markdown 渲染）+ `censor-reply-restore.dom.extract.js`（fragment 萃取）+ `censor-reply-restore.dom.resolve.js`（messageId 解析）+ `censor-reply-restore.dom.inject.js`（復原內容注入）+ `censor-reply-restore.dom.scan.js`（儲存記錄完整掃描復原）+ `censor-reply-restore.dom.js`（DOM bundle 入口，合入以上四個子包）+ `censor-reply-restore.thinkblock.js`（思考區塊 widget，v4.11.12 追加）+ `censor-reply-restore.storage.js`（持久化）+ `censor-reply-restore.detection.js`（審查偵測、工具列定位、前置使用者提示取得）+ `censor-reply-restore.observer.js`（MutationObserver 啟停與 DOM 掃描）
+> - `mobile-sidebar-swipe.js` → `mobile-sidebar-swipe.js`（入口）+ `mobile-sidebar-swipe.button.js`（側邊欄切換按鈕查找與 DOM 就緒輪詢）+ `mobile-sidebar-swipe.gesture.js`（觸控手勢處理器）+ `mobile-sidebar-swipe.bind.js`（觸控事件綁定與解除）+ `mobile-sidebar-swipe.lifecycle.js`（生命週期方法）
 
 > **v4.11.9 拆分**：`harvest.js` → `harvest.js`（入口，捲動擷取引擎）+ `harvest.toast.js`（進度提示 UI）。原檔 502 行超出 `coding-guidelines` §8 的 450 行 JS 主動拆分門檻，且同時承載「擷取引擎」與「toast UI」兩個關注點；拆分後為 426 行 + 102 行，行為不變。
 >

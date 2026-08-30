@@ -46,7 +46,7 @@
 ## 16. 引用回覆 (Quote Reply)
 
 - **觸發範圍**：僅在使用者於 `div.ds-virtual-list-visible-items`（AI 回覆虛擬列表）內選取文字時觸發。`anchorNode` 與 `focusNode` 皆須位於此容器內；跨容器選取一律忽略。空選取或純空白選取不觸發。
-- **浮動按鈕**：選取完成後（`mouseup` / `selectionchange` / Shift-Arrow，250ms debounce），在選取範圍第一行上方顯示 `.dss-quote-btn` 浮動按鈕，包含引號 SVG 圖示與「引用回覆」文字標籤。
+- **浮動按鈕**：選取完成後（`selectionchange`，250ms debounce），在選取範圍第一行上方顯示 `.dss-quote-btn` 浮動按鈕，包含引號 SVG 圖示與「引用回覆」文字標籤。
 - **定位規則**：按鈕預設置於選取首行上方 16px、水平置中；左右邊界限制最小 10px；若 `top < 10` 則翻轉至選取下方 8px；選取完全滾出視口時自動隱藏。
 - **注入格式**：點擊按鈕後，將選取文字以 Markdown blockquote 格式（每行加 `> ` 前綴）追加至 `<textarea>`：
   - textarea 為空 → 直接填入 `> 選取內容`（無多餘空行）。
@@ -59,7 +59,7 @@
 
 ## 19. 系統時間注入 (System Time Injection)
 
-- **開關位置**：彈出選單「功能與匯出」卡片中的 `#showSystemTimeToggle` 核取方塊，位於參考連結開關下方。
+- **開關位置**：彈出選單「Features」卡片中的 `#showSystemTimeToggle` 核取方塊，為該卡片的第一個項目（v4.32.2 自 Export 卡片移至此處）。
 - **儲存鍵**：`dsShowSystemTime`（布林值，預設 `false`）。
 - **注入格式**：啟用後，在每則訊息前端以 `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`（24 小時制、零補位，含當地時區偏移）格式插入目前系統時間，位於 `<system-reminder>` 區塊（若存在）或 `<user-input>` 區塊之前。範例：`Current Time: 2026/06/14 20:19:32 (UTC+08:00)`。
 - **重複注入處理**：注入邏輯每次皆重新產生時間戳並前置於訊息開頭（無重複防護檢查）。若文字輸入區已含有舊時間戳，將被新時間戳取代。

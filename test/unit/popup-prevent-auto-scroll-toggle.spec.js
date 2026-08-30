@@ -85,11 +85,11 @@ describe("StorageManager - preventAutoScroll setting", () => {
 // -----------------------------------------------------------------------------
 
 describe("popup.html - preventAutoScrollToggle checkbox markup", () => {
-    it("defines a checkbox with id=preventAutoScrollToggle inside the UI Adjustments card", () => {
+    it("defines a checkbox with id=preventAutoScrollToggle inside the Features card", () => {
         const html = readPopupHtml();
-        const cardStart = html.indexOf("UI Adjustments");
+        const cardStart = html.indexOf("Features");
         const cardEnd = html.indexOf("<!-- Toast");
-        expect(cardStart, "could not locate the UI Adjustments card").toBeGreaterThan(-1);
+        expect(cardStart, "could not locate the Features card").toBeGreaterThan(-1);
         expect(cardEnd, "could not locate end-of-container marker").toBeGreaterThan(cardStart);
 
         const cardHtml = html.slice(cardStart, cardEnd);
@@ -171,7 +171,7 @@ function extractApplyMasterSwitchUI() {
 const CLOSURE_VAR_NAMES = [
     "sidebarAutoHideToggle", "hideThinkingToggle", "showSystemTimeToggle",
     "chatWidthToggle", "chatWidthSlider", "inputWidthToggle", "inputWidthSlider",
-    "preventAutoScrollToggle", "websearchRadios",
+    "preventAutoScrollToggle", "autoExpandMessagesToggle", "websearchRadios",
 ];
 
 function buildApplyMasterSwitchUI(dom) {

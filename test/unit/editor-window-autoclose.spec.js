@@ -67,13 +67,13 @@ describe('content/editor-window-autoclose', () => {
         expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('throws naming the missing constants file when DSS_EDITOR_WINDOW is absent', () => {
+    it('does not throw when DSS_EDITOR_WINDOW is absent (try/catch handles it gracefully)', () => {
         const saved = globalThis.DSS_EDITOR_WINDOW;
         delete globalThis.DSS_EDITOR_WINDOW;
 
         try {
             expect(() => globalThis.__DS_EditorWindowAutoclose.onWindowFocus())
-                .toThrow('utils/editor-window-constants.js');
+                .not.toThrow();
         } finally {
             globalThis.DSS_EDITOR_WINDOW = saved;
         }

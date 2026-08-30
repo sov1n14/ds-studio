@@ -2,28 +2,26 @@
 
 ## Table of Contents
 
-- [DS studio Feature Guide](#ds-studio-feature-guide)
-  - [Table of Contents](#table-of-contents)
-  - [Managing Prompt Groups](#managing-prompt-groups)
-  - [Global Prompt](#global-prompt)
-  - [Using Prompt Injection](#using-prompt-injection)
-    - [Using No Prompt Group](#using-no-prompt-group)
-  - [Conversation-Bound Prompt Groups](#conversation-bound-prompt-groups)
-  - [In-Page Quick Switch Overlay](#in-page-quick-switch-overlay)
-  - [UI Adjustment Features](#ui-adjustment-features)
-  - [Back to Top Button](#back-to-top-button)
-  - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
-  - [Auto Retry](#auto-retry)
-  - [Exporting Conversations](#exporting-conversations)
-    - [Export Options](#export-options)
-  - [Quote Reply](#quote-reply)
-  - [System Time Injection](#system-time-injection)
-  - [Restoring Censored Replies](#restoring-censored-replies)
-  - [Backup and Restore Settings](#backup-and-restore-settings)
-  - [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
-  - [Master Switch Linkage](#master-switch-linkage)
-  - [Temporary Conversation](#temporary-conversation)
-  - [Legacy Data Migration](#legacy-data-migration)
+- [Managing Prompt Groups](#managing-prompt-groups)
+- [Global Prompt](#global-prompt)
+- [Using Prompt Injection](#using-prompt-injection)
+- [Conversation-Bound Prompt Groups](#conversation-bound-prompt-groups)
+- [In-Page Quick Switch Overlay](#in-page-quick-switch-overlay)
+- [Temporary Conversation](#temporary-conversation)
+- [UI Adjustment Features](#ui-adjustment-features)
+- [Back to Top Button](#back-to-top-button)
+- [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
+- [Mobile Homepage Cleanup](#mobile-homepage-cleanup)
+- [Auto Retry](#auto-retry)
+- [Exporting Conversations](#exporting-conversations)
+- [Quote Reply](#quote-reply)
+- [Edit Message Cleanup](#edit-message-cleanup)
+- [System Time Injection](#system-time-injection)
+- [Restoring Censored Replies](#restoring-censored-replies)
+- [Backup and Restore Settings](#backup-and-restore-settings)
+- [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
+- [Master Switch Linkage](#master-switch-linkage)
+- [Legacy Data Migration](#legacy-data-migration)
 
 ---
 
@@ -45,7 +43,7 @@ Prompt Groups are the core feature of DS studio, allowing you to create multiple
    - Only one default at a time. Clicking another group's pin moves the default there; clicking the lit pin again removes the default, and new conversations go back to preselecting nothing.
    - Deleting the group that is currently the default also clears the default.
    - The default travels with the **Export Settings** backup file and is restored on import.
-6. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused but its text is no longer selected (v4.18.2) — the caret sits at the end of the existing name, so typing appends instead of replacing it; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first).
+6. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused but its text is no longer selected (v4.18.2) — the caret sits at the end of the existing name, so typing appends instead of replacing it; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first). Switching back to the DeepSeek tab also closes any open editor window automatically (v4.29.0), so editor windows never pile up in the background — `Esc` and the window's close button still work as before; all three close methods save unsaved content first, so nothing is lost.
 7. The system allows deleting all custom prompt groups: the dropdown always retains a blank option as the default, and hovering over it reveals a **✕** (delete all prompt groups, with confirmation) button that clears every custom prompt group at once.
 
 ## Global Prompt
@@ -89,6 +87,64 @@ A prompt group dropdown is displayed directly in the center of the title bar at 
 - On mobile (< 768px), uses gap-mode positioning between buttons.
 - Built-in auto-stabilization: continuously adjusts position on page load until the layout is fully settled, ensuring it does not get stuck at an incorrect early measurement after a refresh.
 
+## Temporary Conversation
+
+On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control appears 38px below `div.aaff8b8f` (toggle on the left, label on the right):
+
+- **Purpose**: When turned on, any **new conversation created from the homepage** is marked as temporary. When you leave that temporary conversation, the extension automatically calls the DeepSeek deletion API to remove it — ideal for one-off questions you do not want to keep.
+- **Only newly created conversations are deleted**: Whether a conversation is temporary is determined by whether the `POST /api/v0/chat_session/create` API was called. **Existing conversations opened from the history list are never marked and never deleted** — even with the toggle on, entering and leaving a history conversation does not delete it.
+- **Default off**: The toggle defaults to off. When off, no new conversations are marked.
+- **Already-marked conversations after turning off**: If you created temporary conversations while the toggle was on and then turn it off, those conversations are still deleted when you leave them (the mark belongs to the conversation itself). Turning off the toggle only stops **future** new conversations from being marked.
+- **Toggle exists only on the homepage**: When you leave the homepage (the URL is no longer `chat.deepseek.com/`), the toggle is automatically removed from the page; returning to the homepage re-displays it. Removing the toggle does not change its on/off state.
+- **State persistence**: The toggle state and the tracked conversation are stored in different scopes.
+  - The **toggle state** is stored in `chrome.storage.local` (key `dss-temporary-chat-enabled`), so it **persists across tabs and browser restarts**: if you left it on last time, it is still on the next time you open the browser and visit DeepSeek. Multiple tabs open at the same time also sync to the same state in real time.
+  - The **currently tracked temporary conversation** is stored in the tab's `sessionStorage` (key `dss-temporary-chat-uuid`), valid only for that tab's session (including in-page navigation and page refresh); it is lost when the tab is closed.
+- **Scenarios that trigger deletion** (only for already-marked temporary conversations):
+  - Navigating to another conversation, returning to the homepage, back/forward navigation, or any other navigation away from the temporary conversation.
+  - Typing a different URL in the address bar, clicking an external link, closing the tab, or closing the browser.
+- **Scenarios that do NOT trigger deletion**:
+  - Page refresh (F5, the refresh button, Ctrl+R / Cmd+R).
+  - Navigating to the current URL (typing the current URL in the address bar and pressing Enter, which is equivalent to re-entering the page).
+  - Entering or leaving a non-temporary history conversation.
+- **Independent operation**: This feature is not controlled by the master switch (top-right); it is independently controlled by its own homepage toggle.
+
+### Cross-Device Protection (v4.31.1)
+
+When a temporary conversation is being used in a tab, the extension automatically maintains a lease for that conversation, preventing remediation mechanisms on other devices from deleting it while it is still in use:
+
+- **Heartbeat renewal**: An immediate heartbeat is sent when tracking begins, followed by automatic renewals every 1 minute. The heartbeat is sent from the content script to the background service worker, which updates the lease timestamp for that conversation in the pending-delete queue.
+- **Lease TTL**: 10 minutes. Any device's remediation deletion process checks whether the lease has expired before processing a pending-delete item — deletion is performed only when the lease has gone unrenewed for more than 10 minutes. The TTL is set generously to absorb `chrome.storage.sync` propagation delay, background tab timer throttling, and cross-device clock skew.
+- **Tab unfreeze catch-up**: When the tab transitions from background to foreground (`visibilitychange`, `pageshow`), an immediate heartbeat is sent to prevent the lease from expiring due to browser timer throttling.
+- **Natural stop**: When the tab is closed, crashes, or is forcefully terminated, the heartbeat stops naturally and the lease expires on its own — no device identifier is needed.
+
+### Privacy Guarantee
+
+The Temporary Conversation feature automatically calls the deletion API to remove the conversation from the DeepSeek server after you leave it. The following scenarios describe the effective scope of this guarantee:
+
+- **Guaranteed deletion scenarios**:
+  - Normal in-page (SPA) navigation away to another page or conversation.
+  - Normally closing the browser tab or window (including closing the entire browser).
+- **Delayed deletion (on next browser launch) scenarios**:
+  - Computer is forcefully shut down (holding the power button, power outage).
+  - Browser crashes or is forcefully terminated by the operating system.
+
+This extension is a browser extension only and has no system-level control outside the browser. If you require the highest level of privacy assurance, close the browser normally before shutting down your computer.
+
+### Known Limitations
+
+| Scenario | Behavior |
+|-|-|
+| Forced shutdown (power button, power outage) | Conversation persists until the browser is next opened, at which point remediation deletion occurs |
+| Browser crash / forcefully terminated by OS | Same as above |
+| Long idle without opening the browser | Conversation persists until the browser is opened |
+| Auth token expires before remediation deletion | Remediation fails; conversation persists permanently |
+| Remediation device has never logged into the same DeepSeek account | That device cannot remediate; must wait for a device with a valid token to start up |
+| Chrome sync is off, or the device is not signed into the same Chrome account | Cross-device remediation does not occur; each device can only remediate conversations it marked itself |
+| The same conversation is in use on another device under the same DeepSeek account | The heartbeat renewal mechanism maintains the lease; other devices do not delete while the lease is active (10-minute TTL) |
+| Pending-delete item reaches the retry limit | The item is removed from the queue; the conversation persists permanently with no further notification |
+| Browsing in incognito mode or a non-syncing profile | `chrome.storage.sync` may be unavailable or behave differently; cross-device remediation may fail |
+| Rapid tracking/un-tracking of temporary conversations in a short period | May theoretically hit the `chrome.storage.sync` write-rate limit; a theoretical boundary scenario |
+
 ## UI Adjustment Features
 
 In the popup menu's **UI Adjustments** section, you can adjust the following settings:
@@ -96,8 +152,9 @@ In the popup menu's **UI Adjustments** section, you can adjust the following set
 | Feature | Description |
 |-|-|
 | **Auto-hide Sidebar** | Automatically collapses the sidebar to 60px width when the mouse leaves it, and expands on mouse hover, saving screen space |
-| **Collapse Thinking Process** | Automatically collapses DeepSeek's thinking blocks (reasoning process) when they appear; manually expanded blocks are unaffected |
-| **Prevent Auto-Scroll** | Suppresses the page's downward auto-scroll at all times, instead of only during back-to-top and Markdown export. **Trade-off**: the view no longer follows a streaming AI reply downward, so you scroll yourself; native wheel/trackpad scrolling is unaffected. Off by default |
+| **Collapse Thinking Process** | Automatically collapses DeepSeek's thinking blocks (reasoning process) when they appear; manually expanded blocks are unaffected. Located in the **Features** card |
+| **Auto Expand Messages** | Automatically clicks collapsed expand buttons so all messages are shown expanded by default. When disabled, all expanded messages on screen are collapsed back. Located in the **Features** card, off by default |
+| **Prevent Auto-Scroll** | Suppresses the page's downward auto-scroll at all times, instead of only during back-to-top and Markdown export. **Trade-off**: the view no longer follows a streaming AI reply downward, so you scroll yourself; native wheel/trackpad scrolling is unaffected. Located in the **Features** card, off by default |
 | **Web Search** | Sets the starting state of the page's smart-search toggle: `On` starts it at `aria-pressed="true"`, `Off` starts it at `"false"`. Applied exactly once per activation event — entering the page, changing this setting in the popup, or turning the master switch back on. After each application the extension releases control, so your own manual toggling sticks until the next activation event. Clicks only on state mismatch, so it never toggles the state away. Controlled by the master switch |
 | **Conversation Area Width** | After enabling the toggle, use the slider to adjust the conversation message display width (30%–100% viewport width) |
 | **Input Box Width** | After enabling the toggle, use the slider to independently adjust the input box display width (30%–100% viewport width); the input box width is automatically constrained by the conversation area width and will not exceed it |
@@ -125,6 +182,15 @@ This feature only works on mobile devices and requires no configuration:
 - **Compatibility**: The trigger area deliberately avoids the screen edges to prevent conflicts with Chrome Android's system back gesture.
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle.
 
+## Mobile Homepage Cleanup
+
+On mobile devices browsing the DeepSeek homepage (v4.1.0), the extension automatically removes specific decorative DOM elements, resulting in a cleaner page layout:
+
+- **Device Detection**: Determined by touch capability (`navigator.maxTouchPoints > 0`) or mobile user-agent markers (`Mobi`, `Android`, `iPhone`, `iPad`), independent of screen size. On desktop devices this feature is completely inactive with zero overhead.
+- **Effective Scope**: Active only on the homepage path (`/`). After leaving the homepage, the MutationObserver remains listening but does not perform removals.
+- **Instant Removal**: Uses a MutationObserver on `document.body` subtree changes; target elements dynamically inserted by the DeepSeek SPA are removed immediately.
+- **No Independent Toggle**: This feature is controlled by the master switch (top-right) — disabled when the master switch is off.
+
 ## Auto Retry
 
 When a DeepSeek response fails (e.g. "The server is busy. Please try again later.") and a retry button appears, the extension clicks it for you:
@@ -142,7 +208,7 @@ You can export the conversation history from the current DeepSeek chat room as a
 2. Press the **Export current page conversation as Markdown** button.
 3. The system automatically scrolls to the top of the conversation, then progressively captures the full conversation content from top to bottom (including messages not yet visible on screen in long conversations). The current progress and the number of messages captured so far are displayed on screen.
 4. During capture, you can still type and send messages normally. However, do not manually scroll the conversation history, as this may interrupt the capture.
-5. The progress toast carries a **Cancel** button, so you can stop a capture at any time (v4.19.0). Cancelling still exports whatever was collected — the work is not thrown away. The button switches to "Cancelling…" once clicked; the actual stop happens at the next capture step boundary.
+5. The progress toast carries a **Cancel** button, so you can stop a capture at any time (v4.19.0). Cancelling still exports whatever was collected — the work is not thrown away. The button switches to "Cancelling..." once clicked; the actual stop happens at the next capture step boundary.
 6. Once capture is complete, the system automatically downloads the `.md` file and restores your original scroll position.
 7. **A long conversation will not interrupt the export** (v4.19.0). As long as new messages keep being captured, the run is never cut short no matter how long it takes. Earlier versions imposed a 120-second total cap, which truncated long conversations and lost their newest messages; that cap has been removed. The run now stops only after 20 continuous seconds with no progress at all.
 8. If the capture is interrupted — by a stall, by manual scrolling, or because you cancelled it — the system still exports the content collected so far, and:
@@ -167,6 +233,15 @@ After selecting text within an AI reply area, a **Quote Reply** floating button 
 - **Multi-Line Support**: When multiple lines are selected, each line is prefixed with `> `.
 - **Auto-Dismiss**: Automatically hides when the selection is cleared, when clicking outside the button area, or when the button scrolls out of the viewport.
 
+## Edit Message Cleanup
+
+When you click DeepSeek's edit message button (v3.2.1), the extension automatically cleans up wrapper tags in the edit box that were injected by prompt injection, so you see only your original input text:
+
+- **Trigger**: Clicking the edit button next to a message (CSS class `d4910adc`); the extension detects the click via event delegation and waits for DeepSeek to asynchronously render the edit textarea.
+- **Cleanup Content**: If the textarea content matches the `<user-input>...</user-input>` wrapper format, the wrapper is stripped, keeping only the original input. Outer `<system-reminder>` and other injected content is also removed.
+- **Height Adjustment**: After the edit box appears, the container's max-height restriction is automatically removed, and the max-height of related elements is dynamically calculated based on the viewport height, ensuring the edit area has sufficient visible space. The edit box is automatically scrolled into view.
+- **Fully Automatic**: This feature is active as soon as the extension is injected; it has no independent toggle and is not gated by the master switch.
+
 ## System Time Injection
 
 When enabled, the current system time and local timezone offset are automatically prepended to each sent message.
@@ -174,7 +249,7 @@ When enabled, the current system time and local timezone offset are automaticall
 - **Format**: `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`
 - **Example**: `Current Time: 2026/06/14 20:19:32 (UTC+08:00)`
 - **Duplicate Prevention**: If the text input area already starts with the `Current Time:` prefix, injection is skipped.
-- **Settings Location**: Checkbox in the **Features & Export** card of the popup menu.
+- **Settings Location**: First item in the **Features** card of the popup menu.
 - **Master Switch Awareness**: This toggle is disabled when the master switch is turned off.
 
 ## Restoring Censored Replies
@@ -207,8 +282,8 @@ If multiple devices edit prompt groups simultaneously:
 
 1. The next time you open the popup menu, a **Cloud Sync Conflict** dialog will appear.
 2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp).
-3. Interface settings (except device-local toggles like `isEnabled` and the legacy device-level `globalPromptEnabled` fallback) are overwritten by the cloud version. Note that since v4.20.0 the per-prompt-group `globalPromptEnabled` flag lives on the prompt group itself and therefore DOES sync and merge with it.
-4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only**).
+3. Interface settings are overwritten by the cloud version (except device-local toggles like `isEnabled` and the legacy device-level `globalPromptEnabled` fallback, which are excluded from sync conflict resolution). Since v4.20.0, each prompt group's own `globalPromptEnabled` field lives on the prompt group data itself and therefore syncs and merges along with it.
+4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only** when total prompt group data exceeds the `chrome.storage.sync` capacity limit, in which case data is kept locally only and cloud sync is skipped).
 
 ## Master Switch Linkage
 
@@ -216,6 +291,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 
 - Auto-hide sidebar
 - Collapse thinking process
+- Auto expand messages
 - Prevent auto-scroll
 - Web search toggle
 - System time injection
@@ -223,36 +299,9 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - In-page overlay dropdown
 - Back to top button
 - Mobile sidebar swipe gesture
-- ⚠️ **Not controlled**: Temporary Conversation has its own independent toggle on the DeepSeek homepage.
+- Mobile homepage cleanup
 
 This ensures one-click disabling of all extension behaviors.
-
-## Temporary Conversation
-
-The Temporary Conversation feature allows you to use DeepSeek conversations without leaving a trace — conversations started while the feature is enabled are automatically deleted when you leave them.
-
-### How It Works
-
-1. **Toggle**: A switch on the DeepSeek homepage (`chat.deepseek.com/`) controls the feature. When turned ON (default: OFF), any **new** conversation you create is automatically marked as a "temporary" conversation.
-2. **Detection**: A conversation is identified as temporary only when a `POST /api/v0/chat_session/create` API call is observed. Opening an existing conversation from the history list (which calls `/api/v0/chat/history_messages`) is **never** marked or deleted.
-3. **Deletion triggers**: Leaving the temporary conversation (navigating to a different URL), closing the tab, or closing the browser all trigger deletion by calling `POST /api/v0/chat_session/delete`.
-4. **Exclusions**: Page refresh (F5/Ctrl+R), navigating to the same URL, or navigating to the same conversation with a different query string or hash (e.g., `?model=v3`) will **not** trigger deletion.
-
-### Architecture
-
-- **Layer 1 (real-time)**: The content script calls `fetch(..., { keepalive: true })` directly on tab/browser close. SPA navigation uses Fiber-based deletion with API fallback.
-- **Layer 2 (remediation)**: A Service Worker reads a shared pending-delete queue on browser startup and retries any failed deletions.
-- **Cross-device**: The pending-delete queue lives in `chrome.storage.sync` so any device signed into the same Chrome account can remediate entries.
-- **Privacy**: The auth token used for deletion is stored in `chrome.storage.local` only — it is never synced across devices.
-
-### Known Limitations
-
-| Scenario | Deletion Guarantee | Explanation |
-|-|-|-|
-| Normal leave (navigate away, close tab) | ✅ Guaranteed | Real-time fetch with keepalive |
-| Browser crash | ⏳ Delayed (next startup) | Layer 2 remediation on `onStartup` |
-| Browser crash + token expired | ❌ Not possible | Auth token must be recaptured; safety measure prevents deleting wrong content |
-| Cross-device cleanup | ✅ Guaranteed | Any device can remediate any pending entry |
 
 ## Legacy Data Migration
 

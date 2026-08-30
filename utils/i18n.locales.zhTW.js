@@ -17,12 +17,13 @@
     noSearchResultsHint: '無相符結果',
 
     // ---- Popup: Feature Toggles & Export ----
-    includeThinkingLabel: '匯出包含思考過程 (Thinking Process)',
-    includeReferencesLabel: '匯出包含參考連結 (Reference Links)',
+    includeThinkingLabel: '匯出包含思考過程',
+    includeReferencesLabel: '匯出包含參考連結',
     showSystemTimeLabel: '在訊息開頭注入目前系統時間',
     exportMarkdownButton: '匯出當前頁面對話為 Markdown',
     sidebarAutoHideLabel: '側邊欄自動隱藏（保留 60px hover 展開）',
     hideThinkingLabel: '隱藏思考過程',
+    autoExpandMessagesLabel: '自動展開訊息',
     preventAutoScrollLabel: '防止自動回滾',
     websearchToggleLabel: '連網搜索',
     websearchOnLabel: '開啟',
@@ -41,7 +42,7 @@
     importLabel: '匯入：',
     importJsonSettingsButton: '擴充設定',
     importRestoredBackupButton: '已復原信息',
-    clearRestoredRecordsButton: '清除所有已還原紀錄',
+    clearRestoredRecordsButton: '清除所有訊息復原記錄',
 
     // ---- Popup: Sync Status ----
     syncStatusSynced: '雲端同步',

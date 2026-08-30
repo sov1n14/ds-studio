@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputWidthValue           = document.getElementById('inputWidthValue');
     const inputWidthSliderContainer = document.getElementById('inputWidthSliderContainer');
     const preventAutoScrollToggle   = document.getElementById('preventAutoScrollToggle');
+    const autoExpandMessagesToggle   = document.getElementById('autoExpandMessagesToggle');
     const websearchRadios           = Array.from(document.querySelectorAll('input[name="websearchToggle"]'));
 
     let saveTimeout;
@@ -66,6 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             chatWidthToggle, chatWidthSlider,
             inputWidthToggle, inputWidthSlider,
             preventAutoScrollToggle,
+            autoExpandMessagesToggle,
             ...websearchRadios,
         ];
         subControls.forEach(el => {
@@ -178,7 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.__DS_PopupSettingsView.applySettingsToDom({
         enableToggle, includeThinkingToggle, includeReferencesToggle,
         sidebarAutoHideToggle, hideThinkingToggle, showSystemTimeToggle,
-        preventAutoScrollToggle, websearchRadios,
+        preventAutoScrollToggle, autoExpandMessagesToggle, websearchRadios,
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
     }, settings);
@@ -238,6 +240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
             inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
             preventAutoScrollToggle,
+            autoExpandMessagesToggle,
             websearchRadios,
         },
         applyMasterSwitchUI,
@@ -286,6 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         hideThinkingToggle,
         showSystemTimeToggle,
         preventAutoScrollToggle,
+        autoExpandMessagesToggle,
         websearchRadios,
     });
     // 全域提示詞開關初始值：依目前活躍 preset（或裝置本機舊鍵）決定

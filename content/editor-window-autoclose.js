@@ -20,8 +20,12 @@
 
     /** window 取得焦點時，請求 background 關閉所有追蹤中的編輯器視窗。 */
     function onWindowFocus() {
-        const { CLOSE_MESSAGE_TYPE } = resolveConstants();
-        chrome.runtime.sendMessage({ type: CLOSE_MESSAGE_TYPE }).catch(() => {});
+        try {
+            const { CLOSE_MESSAGE_TYPE } = resolveConstants();
+            chrome.runtime.sendMessage({ type: CLOSE_MESSAGE_TYPE }).catch(() => {});
+        } catch (_) {
+            // 擴充功能情境已失效，靜默忽略
+        }
     }
 
     /** 模組啟動入口：註冊 window focus 監聽。 */

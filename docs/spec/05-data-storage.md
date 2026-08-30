@@ -93,6 +93,7 @@
 | `dsInputWidth` | number | `70` | 輸入框寬度百分比（30–100）。 |
 | `dsInputWidthEnabled` | boolean | `false` | 輸入框寬度調整是否啟用。 |
 | `dsHideThinking` | boolean | `false` | 隱藏思考過程功能是否啟用。 |
+| `dsAutoExpandMessages` | boolean | `false` | （v4.32.0）自動展開訊息是否啟用。開啟時以 MutationObserver 自動點擊收合狀態的展開按鈕，使所有訊息預設展開。受主開關連動。 |
 | `dsPreventAutoScroll` | boolean | `false` | （v4.12.0）防止自動回滾是否常駐啟用。開啟時 `PreventAutoScroll` 全時抑制向下自動捲動，而非僅在「回到頂部」與 Markdown 匯出期間生效。 |
 | `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
 | `dsWebSearchToggle` | string | `'on'` | （v4.13.0，v4.17.0 改為二態）連網搜索按鈕的**預設值**：`'on'` 使頁面智能搜索按鈕為 `aria-pressed="true"`、`'off'` 為 `"false"`。每個啟動事件只套用一次 —— 進場、本鍵變更、主開關由關轉開（v4.17.1）—— 之後使用者手動切換的結果會保留到下一個啟動事件；只在狀態不符時點擊。舊版 `'default'` 值已移除，讀取到殘留值一律當作 `'on'`（不寫回）。受主開關連動。 |

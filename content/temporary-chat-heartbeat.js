@@ -20,6 +20,7 @@
                 .catch((err) => console.warn('[DSS] temporary-chat-heartbeat send:', err));
         } catch (err) {
             console.warn('[DSS] temporary-chat-heartbeat send:', err);
+            stop();
         }
     }
 

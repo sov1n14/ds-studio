@@ -203,6 +203,12 @@
     /** 按鈕停用狀態的語意化 BEM class */
     const BUTTON_DISABLED_CLASS = 'ds-button--disabled';
 
+    /** 展開按鈕外層容器的裸 class */
+    const EXPAND_BUTTON_CONTAINER_CLASS = '_08f18f6';
+
+    /** 展開按鈕圖示的裸 class */
+    const EXPAND_BUTTON_ICON_CLASS = 'd630ec62';
+
     const DSSelectors = {
         VIRTUAL_LIST_SELECTOR, VIRTUAL_LIST_FALLBACK, SCROLL_AREA_CLASS,
         MESSAGE_CLASS, MESSAGE_SELECTOR,
@@ -236,6 +242,7 @@
         SEARCH_ICON_PATH_PREFIX,
         EDIT_SEND_BUTTON_VARIANT_CLASSES,
         BUTTON_CONTENT_SELECTOR, BUTTON_DISABLED_CLASS,
+        EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS,
     };
 
     // === Test export (no-op in browser) ===

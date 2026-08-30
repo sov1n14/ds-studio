@@ -118,7 +118,7 @@ The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's
 - `isEnabled()`: Reads the current flag. **There is no reference counting** — outside persistent mode, `disable()` is an unconditional global off-switch. Any caller that may run nested inside another caller's enabled window MUST save the prior state via `isEnabled()` and restore it, rather than blind-toggling.
 - `setPersistent(shouldPersist)` (v4.12.0): When true, enables protection and marks `bridge.dataset.persistent = 'true'`. When false, clears the mark and force-writes `dataset.enabled = 'false'` directly — deliberately bypassing `disable()`'s own persistent guard, which would otherwise make turning persistence off unable to ever release the protection.
 - `isPersistent()` (v4.12.0): Reads the persistent flag. Persistent state lives on the same hidden bridge element's dataset as `enabled`, so the module keeps no module-scope mutable state.
-- `start()` (v4.12.0): Auto-invoked at module load, mirroring `content/hide-thinking.js`'s bootstrap convention. Reads `dsPreventAutoScroll` and the `isEnabled` master switch from `chrome.storage.local`, applies the result, then subscribes to `chrome.storage.onChanged` (ignoring namespaces other than `local`). Persistent mode is on only when the master switch is enabled AND the setting is true; an absent master key counts as disabled. Every relevant change re-reads both keys from storage rather than caching partial state.
+- `start()` (v4.12.0): Auto-invoked at module load, mirroring `content/hide-thinking.js`'s bootstrap convention. Delegates master-switch and own-toggle gating to `registerFeatureToggle` from `content/feature-toggle.js` with `ownKey: StorageManager.KEYS.PREVENT_AUTO_SCROLL`, calling `setPersistent(true)` on enable and `setPersistent(false)` on disable. Settings are obtained from background via `DSS_GET_SETTINGS` and subsequent `DSS_SETTINGS_CHANGED` broadcasts. Persistent mode is on only when the master switch is enabled AND the setting is true.
 
 ### Consumers
 
@@ -147,16 +147,14 @@ The system time injection feature prepends a timestamp before user messages to p
 
 ### Popup Toggle
 
-A checkbox in the Features & Export card (`#showSystemTimeToggle`) controls the setting. It is part of the master-switch-aware sub-controls: when `isEnabled` is turned off, the toggle is disabled.
+A checkbox in the Features card (`#showSystemTimeToggle`) controls the setting. It is part of the master-switch-aware sub-controls: when `isEnabled` is turned off, the toggle is disabled.
 
 ### Content Script Integration
 
-In `content-script.export.js` (re-exported through `content-script.js`):
-
-- `let showSystemTime = false` — runtime state variable, initialized from storage during `initSettings()`.
-- `formatSystemTime(date = new Date())` — pure function returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
-- `formatTimezoneOffset(date)` — pure helper returning the timezone offset string `UTC±hh:mm` (e.g., `UTC+08:00`, `UTC-03:45`).
-- In `injectPrefix()`, the system time is prepended before the injection prefix:
+- `isShowSystemTime: false` — runtime state field in `content/chat-binding-controller.js`, initialized from storage during `initSettings()` via `applyInitialSettings()`.
+- `formatSystemTime(date = new Date())` — pure function defined in `content/content-script.export.time.js`, returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
+- `formatTimezoneOffset(date)` — pure helper in the same file, returning the timezone offset string `UTC±hh:mm` (e.g., `UTC+08:00`, `UTC-03:45`).
+- In `injectPrefix()` (`content/prompt-injector.controller.js`), the system time is prepended before the injection prefix:
   ```
   Current Time: 2026/05/31 14:30:00 (UTC+08:00)\n\n
   ```
@@ -164,8 +162,8 @@ In `content-script.export.js` (re-exported through `content-script.js`):
 
 ### Re-injection Guard
 
-The timestamp is captured once at injection time (not at page load), so each message reflects the time when the user pressed send. If `showSystemTime` changes between messages (via popup toggle + `chrome.storage.onChanged`), the new value takes effect on the next send.
+The timestamp is captured once at injection time (not at page load), so each message reflects the time when the user pressed send. If `isShowSystemTime` changes between messages (via popup toggle + `chrome.storage.onChanged`), the new value takes effect on the next send.
 
 ### Master Switch Awareness
 
-When `isEnabled` is `false`, `injectPrefix()` returns early — the system time is never prepended regardless of `showSystemTime`. The toggle in the popup is also disabled by `applyMasterSwitchUI()`.
+When `isEnabled` is `false`, `injectPrefix()` returns early — the system time is never prepended regardless of `isShowSystemTime`. The toggle in the popup is also disabled by `applyMasterSwitchUI()`.
