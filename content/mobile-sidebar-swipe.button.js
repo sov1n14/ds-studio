@@ -10,7 +10,7 @@
 
     const bundle = {
     _findButton() {
-        // 主選擇器（from sidebar-buttom.html）
+        // 主選擇器（開啟側邊欄按鈕）
         const primary = document.querySelector(
             'div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]'
         );
@@ -23,6 +23,31 @@
             '.ds-button--iconLabelPrimary.ds-button--icon',
             '.ds-button--capsule[role="button"]',
             '.ds-button--xl[role="button"]',
+        ];
+        for (const sel of fallbacks) {
+            const el = document.querySelector(sel);
+            if (el) return el;
+        }
+
+        return null;
+    },
+
+    /**
+     * 查找關閉側邊欄按鈕。
+     * 主要差異：iconLabelTertiary（關閉）vs iconLabelPrimary（開啟）。
+     */
+    _findCloseButton() {
+        // 主選擇器（關閉側邊欄按鈕）
+        const primary = document.querySelector(
+            'div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]'
+        );
+        if (primary) return primary;
+
+        // 降級路徑：逐一嘗試各 class 組合
+        const fallbacks = [
+            '.ds-button--capsule.ds-button--iconLabelTertiary',
+            '.ds-button--iconLabelTertiary.ds-button--icon',
+            '.ds-button--iconLabelTertiary[role="button"]',
         ];
         for (const sel of fallbacks) {
             const el = document.querySelector(sel);

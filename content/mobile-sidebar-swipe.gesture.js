@@ -56,11 +56,14 @@
      * touchend 處理器：驗證滑動手勢條件並觸發按鈕點擊。
      *
      * 五項條件必須全部滿足：
-     *   a. deltaX ≥ 50px（最小滑動距離）
-     *   b. deltaX > |deltaY| * 1.5（主要為水平方向）
+     *   a. |deltaX| ≥ 50px（最小滑動距離）
+     *   b. |deltaX| > |deltaY| * 1.5（主要為水平方向）
      *   c. 持續時間 < 500ms（非慢速拖曳）
      *   d. 起點位於畫面中央 80% 水平區域內
      *   e. 起點位於畫面中央 80% 垂直區域內
+     *
+     * deltaX > 0 → 右滑（開啟側邊欄）
+     * deltaX < 0 → 左滑（關閉側邊欄）
      */
     _onTouchEnd() {
         if (!this.enabled) return;
@@ -69,6 +72,7 @@
 
         const deltaX = this._deltaX;
         const deltaY = this._deltaY;
+        const absDeltaX = Math.abs(deltaX);
         const duration = Date.now() - this._startTime;
         const startX = this._startPoint.x;
         const startY = this._startPoint.y;
@@ -79,11 +83,11 @@
         this._deltaX = 0;
         this._deltaY = 0;
 
-        // 條件 a：最小滑動距離 ≥ 50px
-        if (deltaX < this.SWIPE_THRESHOLD_PX) return;
+        // 條件 a：最小滑動距離 ≥ 50px（雙向對稱）
+        if (absDeltaX < this.SWIPE_THRESHOLD_PX) return;
 
-        // 條件 b：主要為水平方向（deltaX > |deltaY| * 1.5）
-        if (deltaX <= Math.abs(deltaY) * 1.5) return;
+        // 條件 b：主要為水平方向（|deltaX| > |deltaY| * 1.5）
+        if (absDeltaX <= Math.abs(deltaY) * 1.5) return;
 
         // 條件 c：持續時間 < 500ms（非慢速拖曳）
         if (duration >= this.SWIPE_MAX_DURATION_MS) return;
@@ -95,8 +99,9 @@
         if (startX < vpWidth * margin || startX > vpWidth * (1 - margin)) return;
         if (startY < vpHeight * margin || startY > vpHeight * (1 - margin)) return;
 
-        // 所有條件滿足：尋找按鈕並點擊
-        const button = this._findButton();
+        // 所有條件滿足：依方向選擇對應按鈕並點擊
+        const isRightSwipe = deltaX > 0;
+        const button = isRightSwipe ? this._findButton() : this._findCloseButton();
         if (button) {
             button.click();
         }
