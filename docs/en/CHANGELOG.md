@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Version | Summary |
 |-|-|
 | [4.33.2](changelog/v4.md#4332---2026-09-06) | Fixed lease observation lost on service worker cold start (persisted as `{ lastActiveAt, observedAt }` in `chrome.storage.local`); `lastActiveAt` of 0 is immediately expired; orphan observation key cleanup after remediation; restored tabs with no token hand deletion off to the service worker |
+| [4.33.1](changelog/v4.md#4331---2026-08-30) | Fixed left-swipe sidebar close gesture hitting the search button; `_findCloseButton()` primary selector uses `:has(path[fill-rule])` to distinguish close from search button; fallback path 1 selects the last `iconLabelTertiary` button |
 | [4.33.0](changelog/v4.md#4330---2026-08-30) | Added bidirectional mobile sidebar swipe gesture: left-swipe closes sidebar (new), right-swipe opens (existing); new `_findCloseButton()` method with symmetric threshold detection |
 | [4.32.5](changelog/v4.md#4325---2026-08-29) | Unified vertical spacing on all six popup section titles; `.card-title-actions` changed to `height: 0` with `align-items: center` so action buttons no longer stretch `.card-title-row` |
 | [4.32.4](changelog/v4.md#4324---2026-08-28) | Fixed `popup.html` and `editor.html` missing `url-constants.js` script tag; `editor-window-autoclose.js` wrapped in try/catch for context invalidation; `temporary-chat-heartbeat.js` stops interval on context invalidation |
