@@ -12,14 +12,20 @@
     /**
      * 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）。
      * fire-and-forget：刪除流程不等待結果，失敗僅記錄。
+     * 同步 throw 防護：擴充功能情境失效時 chrome.runtime.sendMessage 會同步拋出，
+     * 以 try/catch 包覆避免逸入呼叫端（參照 temporary-chat-heartbeat.js 同模式）。
      * @param {string} type - 訊息型別常數
-     * @param {object} payload - 路由所需欄位（{uuid}）
+     * @param {object} payload - 路由所需欄位（{uuid} 或 {chatUuid}）
      * @param {string} context - 記錄用的呼叫點名稱
      */
     function sendPendingStoreRoute(type, payload, context) {
-        Promise.resolve(chrome.runtime.sendMessage({ type, ...payload }))
-            .then((response) => { if (response?.ok === false) throw new Error(response.error); })
-            .catch((err) => console.error(`[DSS] temporary-chat-delete.coordinator ${context}:`, err));
+        try {
+            Promise.resolve(chrome.runtime.sendMessage({ type, ...payload }))
+                .then((response) => { if (response?.ok === false) throw new Error(response.error); })
+                .catch((err) => console.error(`[DSS] temporary-chat-delete.coordinator ${context}:`, err));
+        } catch (err) {
+            console.error(`[DSS] temporary-chat-delete.coordinator ${context}:`, err);
+        }
     }
 
     /** 自跨裝置待刪佇列移除指定 UUID（確認刪除成功後呼叫）。 */
@@ -43,6 +49,25 @@
         if (!state) throw new Error('[DSS] temporary-chat-delete.coordinator: create(state, deps) requires the shared state object');
         if (!tracking || !readEnabledFlag || !detachListeners) {
             throw new Error('[DSS] temporary-chat-delete.coordinator: deps require tracking, readEnabledFlag and detachListeners');
+        }
+
+        /**
+         * 無 token 時的清理手續：停止心跳、釋放 lease、排程 SW 重試、移除 open-uuid、清除追蹤狀態。
+         * 供「重試耗盡」與「無 token 導航離開」兩條路徑共用，避免重複訊息發送邏輯。
+         * @param {string} uuid - 要交接給 SW 的對話 UUID
+         */
+        function handOffToServiceWorker(uuid) {
+            if (!uuid) return;
+            state.trackedTemporaryUuid = null;
+            tracking.saveTrackedUuid(null);
+            root.TemporaryChatHeartbeat?.stop?.();
+            sendPendingStoreRoute(globalThis.DSS_MSG_REMOVE_OPEN_UUID, { uuid }, 'removeOpenUuid');
+            // 排程 SW alarm 重試刪除（fire-and-forget，統一透過 sendPendingStoreRoute 防護同步 throw）
+            sendPendingStoreRoute(globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuid }, 'scheduleDeleteRetry');
+            sendPendingStoreRoute(globalThis.DSS_MSG_RELEASE_LEASE, { uuid }, 'releaseLease');
+            if (!readEnabledFlag()) {
+                detachListeners();
+            }
         }
 
         /**
@@ -94,17 +119,9 @@
                     if (isOk) {
                         removePendingDeleteRoute(uuidToDelete);
                     } else {
-                        // 情境存活但重試耗盡 → 保留佇列項目，請 SW 排程 alarm 重試
-                        chrome.runtime.sendMessage({
-                            type: globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
-                            chatUuid: uuidToDelete,
-                        });
-                        // 同步歸零本項 lease，讓其他裝置可立即接手（保留佇列項目，不移除）
-                        sendPendingStoreRoute(
-                            globalThis.DSS_MSG_RELEASE_LEASE,
-                            { uuid: uuidToDelete },
-                            'releaseLease'
-                        );
+                        // 情境存活但重試耗盡 → 釋放 lease 並排程 SW alarm 重試（統一透過 sendPendingStoreRoute 防護）
+                        sendPendingStoreRoute(globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuidToDelete }, 'scheduleDeleteRetry');
+                        sendPendingStoreRoute(globalThis.DSS_MSG_RELEASE_LEASE, { uuid: uuidToDelete }, 'releaseLease');
                     }
                 };
 
@@ -136,7 +153,7 @@
             }
         }
 
-        return { deleteTrackedAndClear };
+        return { deleteTrackedAndClear, handOffToServiceWorker };
     }
 
     const bundle = { create };

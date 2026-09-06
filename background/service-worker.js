@@ -81,6 +81,9 @@ async function remediatePendingDeletes() {
     const pending = await TemporaryChatPendingStore.getPendingDeletes();
     if (pending.length === 0) return;
 
+    // 佇列非空 → 先確保 alarm 存在（冷啟動或無 token 時也需重試）
+    await scheduleRetryAlarm(pending);
+
     const token = await TemporaryChatPendingStore.getLastAuthToken();
     if (!token) return; // 本機無 token → 保留佇列，交由具備 token 的裝置補救
 
@@ -132,7 +135,18 @@ async function remediatePendingDeletes() {
 
     if (hasChanged || hasTabGuarded) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
     await scheduleRetryAlarm(stillPending);
+
+    // 掃除孤兒 seen-change key：僅保留仍在佇列中的 UUID
+    try {
+        const pendingUuids = new Set(stillPending.map(e => e.chatUuid));
+        const all = await chrome.storage.local.get(null);
+        const orphans = Object.keys(all).filter(k => k.startsWith(DSS_LAST_SEEN_CHANGE_KEY_PREFIX) && !pendingUuids.has(k.slice(DSS_LAST_SEEN_CHANGE_KEY_PREFIX.length)));
+        if (orphans.length > 0) await chrome.storage.local.remove(orphans);
+    } catch (err) {
+        console.error('[DSS] remediate sweep:', err);
+    }
 }
+
 
 /**
  * 嘗試將停駐於 dsLocalAuth 的預設集寫入重新推送至雲端。
@@ -163,10 +177,11 @@ chrome.runtime.onStartup.addListener(() => {
     })();
 });
 
-// 安裝／更新時建立定期重試 alarm，並立即嘗試一次補推
+// 安裝／更新時建立定期重試 alarm、補救待刪佇列，並立即嘗試一次補推
 chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create(SYNC_RETRY_ALARM_NAME, { periodInMinutes: SYNC_RETRY_PERIOD_MINUTES });
     retryParkedSync();
+    remediatePendingDeletes(); // 重建 alarm 並處理待刪佇列（Chrome 重載/更新會清除所有 alarm）
 });
 
 // 監聯來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除

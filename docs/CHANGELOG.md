@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.33.4](changelog/v4.md#4334---2026-09-07) | 修正擴充功能重載或更新後 coordinator 殘存 content script 的 `chrome.runtime.sendMessage` 拋出未捕捉的 `Extension context invalidated`：`sendPendingStoreRoute` 以 try/catch 包裹並記錄，`handOffToServiceWorker` 與 `fallbackToApi` 的直接發送亦改經同一防護 |
+| [4.33.3](changelog/v4.md#4333---2026-09-07) | 修正 service worker 冷啟動或擴充功能重載後 `dss-delete-retry` alarm 未重新建立：`remediatePendingDeletes()` 在 auth-token 閘控之前即建立 alarm、`onInstalled` 新增呼叫 `remediatePendingDeletes()` 以重建被 Chrome 清除的 alarm |
+| [4.33.2](changelog/v4.md#4332---2026-09-06) | 修正 service worker 冷啟動導致租約觀察記錄遺失（改以 `chrome.storage.local` 持久化 `{ lastActiveAt, observedAt }`）、`lastActiveAt` 為 0 立即視為過期、補救掃描後清理孤兒觀察鍵、已還原分頁無 token 時將刪除交由 service worker 處理 |
+| [4.33.1](changelog/v4.md#4331---2026-08-30) | 修正左滑收合側邊欄手勢誤點搜尋按鈕，`_findCloseButton()` 主選擇器加上 `:has(path[fill-rule])` 精準區分關閉與搜尋按鈕，降級路徑一改取最後一個 `iconLabelTertiary` 按鈕 |
 | [4.33.0](changelog/v4.md#4330---2026-08-30) | 行動裝置側欄滑動手勢新增向左滑動收合功能，支援雙向操作；新增 `_findCloseButton()` 方法與對稱閾值偵測 |
 | [4.32.5](changelog/v4.md#4325---2026-08-29) | 統一 popup 六個區段標題的上下垂直間距，`.card-title-actions` 改為 `height: 0` 搭配 `align-items: center`，動作按鈕不再撐高 `.card-title-row` |
 | [4.32.4](changelog/v4.md#4324---2026-08-28) | 修復 `popup.html` 與 `editor.html` 缺少 `url-constants.js` script tag、`editor-window-autoclose.js` 加上 try/catch 處理 context 失效、`temporary-chat-heartbeat.js` 偵測到 context 失效後停止 interval |

@@ -66,6 +66,7 @@ const TemporaryChatDelete = (() => {
     const handlers = _handlersPart.create(state, {
         tracking,
         deleteTrackedAndClear: coordinator.deleteTrackedAndClear,
+        handOffToServiceWorker: coordinator.handOffToServiceWorker,
         readEnabledFlag,
         setEnabledFlagCache,
         attachListeners: () => attachListeners(),
@@ -165,6 +166,7 @@ const TemporaryChatDelete = (() => {
         saveTrackedUuid: tracking.saveTrackedUuid,
         checkCoOccurrence: tracking.checkCoOccurrence,
         deleteTrackedAndClear: coordinator.deleteTrackedAndClear,
+        handOffToServiceWorker: coordinator.handOffToServiceWorker,
         handleAuthMessage: handlers.handleAuthMessage,
         handleCreateMessage: handlers.handleCreateMessage,
         handleCompletionMessage: handlers.handleCompletionMessage,

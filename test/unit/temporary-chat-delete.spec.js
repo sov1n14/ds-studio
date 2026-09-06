@@ -584,7 +584,6 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
     it.each([
         ['J4: does NOT delete when leaving a NON-tracked conversation', '/a/chat/s/bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb', { trackedTemporaryUuid: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', capturedAuthToken: 'Bearer tok' }],
         ['J5: does NOT delete when no tracked uuid', '/a/chat/s/cccc3333-cccc-cccc-cccc-cccccccccccc', { trackedTemporaryUuid: null, capturedAuthToken: 'Bearer tok' }],
-        ['J6: does NOT delete when no auth token', '/a/chat/s/a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6', { trackedTemporaryUuid: 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6', capturedAuthToken: null }],
     ])('%s', (_label, pathname, state) => {
         setPathname(pathname);
         applyState(state);
@@ -605,6 +604,32 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
         // Nothing was deleted, so whatever was tracked must still be tracked --
         // dropping it here would leak an undeleted temporary conversation.
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(state.trackedTemporaryUuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('J6: hands off to service worker when no auth token — no delete, releases lease and schedules retry', () => {
+        const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
+        setPathname(`/a/chat/s/${uuid}`);
+        applyState({ trackedTemporaryUuid: uuid, capturedAuthToken: null });
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, uuid);
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: 'https://chat.deepseek.com/',
+            navigationType: 'push',
+        }));
+
+        // No delete attempt — neither Fiber postMessage nor API retry.
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        // Hands off to service worker: release lease so background can manage the pending delete.
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: globalThis.DSS_MSG_RELEASE_LEASE, uuid });
+        // Tracked UUID is cleared — the content script is no longer responsible.
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
 
         postMessageSpy.mockRestore();
     });
