@@ -15,6 +15,7 @@
      * @param {object} deps
      * @param {object} deps.tracking - tracking 部件的已綁定 API
      * @param {(options?: object) => void} deps.deleteTrackedAndClear
+     * @param {(uuid: string) => void} deps.handOffToServiceWorker
      * @param {() => boolean} deps.readEnabledFlag
      * @param {(isEnabled: boolean) => void} deps.setEnabledFlagCache
      * @param {() => void} deps.attachListeners - 由入口檔注入（避免循環依賴）
@@ -22,9 +23,9 @@
      */
     function create(state, deps = {}) {
         if (!state) throw new Error('[DSS] temporary-chat-delete.handlers: create(state, deps) requires the shared state object');
-        const { tracking, deleteTrackedAndClear, readEnabledFlag, setEnabledFlagCache, attachListeners, detachListeners } = deps;
-        if (!tracking || !deleteTrackedAndClear || !readEnabledFlag || !setEnabledFlagCache || !attachListeners || !detachListeners) {
-            throw new Error('[DSS] temporary-chat-delete.handlers: deps require tracking, deleteTrackedAndClear, readEnabledFlag, setEnabledFlagCache, attachListeners and detachListeners');
+        const { tracking, deleteTrackedAndClear, handOffToServiceWorker, readEnabledFlag, setEnabledFlagCache, attachListeners, detachListeners } = deps;
+        if (!tracking || !deleteTrackedAndClear || !handOffToServiceWorker || !readEnabledFlag || !setEnabledFlagCache || !attachListeners || !detachListeners) {
+            throw new Error('[DSS] temporary-chat-delete.handlers: deps require tracking, deleteTrackedAndClear, handOffToServiceWorker, readEnabledFlag, setEnabledFlagCache, attachListeners and detachListeners');
         }
 
         const extractUuidFromUrl = tracking.extractUuidFromUrl;
@@ -127,8 +128,14 @@
             const isSameConversation = !!destUuid && destUuid === state.trackedTemporaryUuid;
 
             // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
-            if (!isRefresh && !isSameConversation && fromUuid && fromUuid === state.trackedTemporaryUuid && state.capturedAuthToken) {
-                deleteTrackedAndClear({ keepalive: false });
+            const isLeavingTracked = !isRefresh && !isSameConversation && fromUuid && fromUuid === state.trackedTemporaryUuid;
+            if (isLeavingTracked) {
+                if (state.capturedAuthToken) {
+                    deleteTrackedAndClear({ keepalive: false });
+                } else {
+                    // 無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
+                    handOffToServiceWorker(fromUuid);
+                }
             }
 
             // 標記新建立的臨時對話：有待定旗標且目的地是對話頁面

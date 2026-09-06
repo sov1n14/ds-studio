@@ -32,9 +32,6 @@ function logWriteFailure(context, error) {
     console.error('[DSS]', 'pending-store:write-fail', context, error);
 }
 
-// 記憶體快取：追蹤每個 uuid 上次觀察到的 lastActiveAt 值
-const _lastActiveAtCache = new Map();
-
 const TemporaryChatPendingStore = (() => {
     async function getPendingDeletes() {
         try {
@@ -72,7 +69,6 @@ const TemporaryChatPendingStore = (() => {
             const filtered = queue.filter((entry) => entry.chatUuid !== chatUuid);
             if (filtered.length === queue.length) return;
             await savePendingDeletes(filtered);
-            _lastActiveAtCache.delete(chatUuid);
             await chrome.storage.local.remove(DSS_SEEN_CHANGE_KEY_PREFIX + chatUuid);
         });
     }
@@ -104,23 +100,25 @@ const TemporaryChatPendingStore = (() => {
         });
     }
 
-    // 純函式判定：優先以 lastSeenChange 判斷過期；缺失或非有限數時一律視為過期
+    // 純函式判定：lastActiveAt === 0 表示已釋放，立即可刪；否則以 lastSeenChange 判斷過期
     function isLeaseExpired(entry, now, lastSeenChange) {
+        if (entry.lastActiveAt === 0) return true;
         if (lastSeenChange === undefined || lastSeenChange === null || !Number.isFinite(lastSeenChange)) return true;
         return now - lastSeenChange > DSS_LEASE_TTL_MS;
     }
 
-    // 觀察並記錄 lastActiveAt 變更時間點；回傳本機觀察到的最後變更時間戳
+    // 觀察並記錄 lastActiveAt 變更時間點；持久化至 storage.local 以抵抗 MV3 cold start
+    // 儲存格式：{ lastActiveAt, observedAt }；舊版裸數字紀錄視為未知 lastActiveAt 重新觀察
     async function recordLeaseObservation(chatUuid, currentLastActiveAt) {
         const storageKey = DSS_SEEN_CHANGE_KEY_PREFIX + chatUuid;
-        const cached = _lastActiveAtCache.get(chatUuid);
-        if (cached === currentLastActiveAt) {
-            const result = await chrome.storage.local.get(storageKey);
-            return result?.[storageKey] ?? undefined;
+        const result = await chrome.storage.local.get(storageKey);
+        const stored = result?.[storageKey];
+        // 相容舊版裸數字紀錄：typeof number 且非物件則視為 lastActiveAt 未知，重新觀察
+        if (stored && typeof stored === 'object' && stored.lastActiveAt === currentLastActiveAt) {
+            return stored.observedAt;
         }
         const observedAt = Date.now();
-        _lastActiveAtCache.set(chatUuid, currentLastActiveAt);
-        await chrome.storage.local.set({ [storageKey]: observedAt });
+        await chrome.storage.local.set({ [storageKey]: { lastActiveAt: currentLastActiveAt, observedAt } });
         return observedAt;
     }
 

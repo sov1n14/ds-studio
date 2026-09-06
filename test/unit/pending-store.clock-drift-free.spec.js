@@ -72,7 +72,7 @@ describe('clock-drift-free expiry', () => {
             const rp = chrome.storage.local.get(storageKey);
             await vi.runAllTimersAsync();
             const result = await rp;
-            expect(result[storageKey]).toBe(T);
+            expect(result[storageKey]).toEqual({ lastActiveAt: 5000, observedAt: T });
         });
 
         it('CD-obs-2: does NOT write when lastActiveAt is unchanged from previous observation', async () => {
@@ -101,7 +101,7 @@ describe('clock-drift-free expiry', () => {
             const rp = chrome.storage.local.get(storageKey);
             await vi.runAllTimersAsync();
             const result = await rp;
-            expect(result[storageKey]).toBe(T1);
+            expect(result[storageKey]).toEqual({ lastActiveAt: 6000, observedAt: T1 });
         });
     });
 

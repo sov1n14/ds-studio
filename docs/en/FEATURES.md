@@ -116,6 +116,7 @@ When a temporary conversation is being used in a tab, the extension automaticall
 - **Lease TTL**: 10 minutes. Any device's remediation deletion process checks whether the lease has expired before processing a pending-delete item — deletion is performed only when the lease has gone unrenewed for more than 10 minutes. The TTL is set generously to absorb `chrome.storage.sync` propagation delay, background tab timer throttling, and cross-device clock skew.
 - **Tab unfreeze catch-up**: When the tab transitions from background to foreground (`visibilitychange`, `pageshow`), an immediate heartbeat is sent to prevent the lease from expiring due to browser timer throttling.
 - **Natural stop**: When the tab is closed, crashes, or is forcefully terminated, the heartbeat stops naturally and the lease expires on its own — no device identifier is needed.
+- **Restored tab hand-off (v4.33.2)**: When a tab restored by Chrome's "continue where you left off" navigates away from a tracked temporary conversation and no auth token was captured in this page session, the extension hands the deletion to the background service worker, which completes it within the next retry cycle.
 
 ### Privacy Guarantee
 

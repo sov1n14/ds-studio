@@ -153,6 +153,10 @@
   - **心跳**（`content/temporary-chat-heartbeat.js`，發布 `{ start, stop }`）：分頁追蹤中的臨時對話會立即送出一次 `{type: 'DSS_HEARTBEAT', uuid}`，其後每 `HEARTBEAT_INTERVAL_MS` 續送一次，service worker 路由收到後呼叫 `refreshLease`。心跳於 `trackUuid()` 與 sessionStorage 還原路徑啟動，於追蹤結束或監聽卸除時停止。由於它綁定 content script／分頁生命週期，分頁崩潰或被強制結束時心跳自然停止，租約隨之到期，無需任何裝置識別碼。
   - **快速重啟回收**：`onStartup` 時先將本機開啟集合中且仍在佇列內的每個 UUID 釋放租約，接著清空本機開啟集合，最後才執行補救掃描 —— 本裝置關機前開著的對話因此在重啟後即刻被刪除。
   - **明確釋放租約**：離開流程的即時刪除完全失敗時（Fiber 刪除失敗且 API 後援重試耗盡），coordinator 送出 `DSS_RELEASE_LEASE` 將租約歸零，讓任一裝置立即接手，不必等到 TTL 到期。
+  - **租約觀察記錄持久化（v4.33.2）**：`recordLeaseObservation` 將每個 UUID 的觀察以 `{ lastActiveAt, observedAt }` 結構寫入 `chrome.storage.local`（鍵 `dss-last-seen-change:<uuid>`）。每次補救掃描比較儲存的 `lastActiveAt` 與佇列現值：相等時沿用已儲存的 `observedAt`，不同時以 `Date.now()` 寫入新記錄。此機制使租約到期判定在 MV3 service worker 冷啟動後仍正確運作。
+  - **`lastActiveAt` 為 0 立即過期（v4.33.2）**：`releaseLease` 設定的 `lastActiveAt = 0`（含 `onStartup` 釋放本機開啟中對話）使該項目在下一次補救掃描即被刪除。
+  - **孤兒觀察鍵清理（v4.33.2）**：`remediatePendingDeletes` 儲存佇列後掃描 `chrome.storage.local`，移除 UUID 已不在佇列中的 `dss-last-seen-change:` 鍵。
+  - **已還原分頁無 token 交接（v4.33.2）**：`handOffToServiceWorker(uuid)` 於使用者離開追蹤中的臨時對話、且本次 session 未擷取到 auth token 時（常見於 Chrome 還原的分頁），停止心跳並送出 `DSS_REMOVE_OPEN_UUID`、`DSS_SCHEDULE_DELETE_RETRY`、`DSS_RELEASE_LEASE`，由 service worker 在下一次 alarm 補救掃描時刪除。
 - **側邊欄隱藏待刪對話（v4.31.1）**：待刪佇列中的對話會在所有裝置的 DeepSeek 側邊欄中隱藏，包含標記來源裝置上目前正開啟的那一個 —— 這是刻意的產品決策：在即時對話情境下，讓側邊欄切換到一個正在被拆除的臨時對話並無意義。
   - **資料來源**：`background/service-worker.js` 於每次 sync 佇列變動時將佇列 UUID 廣播給各分頁；`content/temporary-chat-sidebar-hide.js`（發布 `{ init, stop }`，由 `content/content-script.js` 啟動）維護一份記憶體內的 UUID 集合，初次以 `DSS_GET_PENDING_UUIDS` 取得，其後由 `DSS_PENDING_UUIDS_CHANGED` 推送更新。
   - **群組收合規則**：側邊欄將對話錨點依日期分組，每個群組容器內含一個日期標籤與一至多個列錨點。判定以容器為單位 —— 容器內全部錨點皆在佇列中時隱藏整個容器，日期標籤隨之消失；只要有任一錨點不在佇列中，就僅隱藏個別的待刪錨點。僅含單一錨點的群組，該錨點在佇列中即視為全數待刪。

@@ -46,6 +46,24 @@
         }
 
         /**
+         * 無 token 時的清理手續：停止心跳、釋放 lease、排程 SW 重試、移除 open-uuid、清除追蹤狀態。
+         * 供「重試耗盡」與「無 token 導航離開」兩條路徑共用，避免重複訊息發送邏輯。
+         * @param {string} uuid - 要交接給 SW 的對話 UUID
+         */
+        function handOffToServiceWorker(uuid) {
+            if (!uuid) return;
+            state.trackedTemporaryUuid = null;
+            tracking.saveTrackedUuid(null);
+            root.TemporaryChatHeartbeat?.stop?.();
+            sendPendingStoreRoute(globalThis.DSS_MSG_REMOVE_OPEN_UUID, { uuid }, 'removeOpenUuid');
+            chrome.runtime.sendMessage({ type: globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, chatUuid: uuid });
+            sendPendingStoreRoute(globalThis.DSS_MSG_RELEASE_LEASE, { uuid }, 'releaseLease');
+            if (!readEnabledFlag()) {
+                detachListeners();
+            }
+        }
+
+        /**
          * 刪除已追蹤的臨時對話並清除追蹤狀態。
          * Guard clause：無追蹤 UUID 或無 token 時立即返回。
          * keepalive=true → 以 keepalive fetch 執行（分頁關閉情境）。
@@ -94,17 +112,9 @@
                     if (isOk) {
                         removePendingDeleteRoute(uuidToDelete);
                     } else {
-                        // 情境存活但重試耗盡 → 保留佇列項目，請 SW 排程 alarm 重試
-                        chrome.runtime.sendMessage({
-                            type: globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
-                            chatUuid: uuidToDelete,
-                        });
-                        // 同步歸零本項 lease，讓其他裝置可立即接手（保留佇列項目，不移除）
-                        sendPendingStoreRoute(
-                            globalThis.DSS_MSG_RELEASE_LEASE,
-                            { uuid: uuidToDelete },
-                            'releaseLease'
-                        );
+                        // 情境存活但重試耗盡 → 釋放 lease 並排程 SW alarm 重試
+                        chrome.runtime.sendMessage({ type: globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, chatUuid: uuidToDelete });
+                        sendPendingStoreRoute(globalThis.DSS_MSG_RELEASE_LEASE, { uuid: uuidToDelete }, 'releaseLease');
                     }
                 };
 
@@ -136,7 +146,7 @@
             }
         }
 
-        return { deleteTrackedAndClear };
+        return { deleteTrackedAndClear, handOffToServiceWorker };
     }
 
     const bundle = { create };

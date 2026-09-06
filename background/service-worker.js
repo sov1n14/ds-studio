@@ -132,7 +132,18 @@ async function remediatePendingDeletes() {
 
     if (hasChanged || hasTabGuarded) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
     await scheduleRetryAlarm(stillPending);
+
+    // 掃除孤兒 seen-change key：僅保留仍在佇列中的 UUID
+    try {
+        const pendingUuids = new Set(stillPending.map(e => e.chatUuid));
+        const all = await chrome.storage.local.get(null);
+        const orphans = Object.keys(all).filter(k => k.startsWith(DSS_LAST_SEEN_CHANGE_KEY_PREFIX) && !pendingUuids.has(k.slice(DSS_LAST_SEEN_CHANGE_KEY_PREFIX.length)));
+        if (orphans.length > 0) await chrome.storage.local.remove(orphans);
+    } catch (err) {
+        console.error('[DSS] remediate sweep:', err);
+    }
 }
+
 
 /**
  * 嘗試將停駐於 dsLocalAuth 的預設集寫入重新推送至雲端。
