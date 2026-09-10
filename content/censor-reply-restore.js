@@ -5,12 +5,15 @@
  * 載入順序（manifest.json 中 bundle 必須先於 entry）：
  *   1. censor-reply-restore.keymap.js      → globalThis.__DS_CensorKeyToMessageIdMap
  *   2. censor-reply-restore.markdown.js    → globalThis.__DS_CensorReplyRestore_markdown
- *   3. censor-reply-restore.dom.js         → globalThis.__DS_CensorReplyRestore_dom
- *   4. censor-reply-restore.thinkblock.js  → globalThis.__DS_CensorReplyRestore_thinkblock
- *   5. censor-reply-restore.storage.js     → globalThis.__DS_CensorReplyRestore_storage
- *   6. censor-reply-restore.detection.js   → globalThis.__DS_CensorReplyRestore_detection
- *   7. censor-reply-restore.observer.js    → globalThis.__DS_CensorReplyRestore_observer
- *   8. censor-reply-restore.js             （本檔，Object.assign 合入以上六個 bundle）
+ *   3. censor-reply-restore.dom.extract.js  → globalThis.__DS_CensorReplyRestore_dom_extract
+ *   4. censor-reply-restore.dom.resolve.js  → globalThis.__DS_CensorReplyRestore_dom_resolve
+ *   5. censor-reply-restore.dom.inject.js   → globalThis.__DS_CensorReplyRestore_dom_inject
+ *   6. censor-reply-restore.dom.scan.js     → globalThis.__DS_CensorReplyRestore_dom_scan
+ *   7. censor-reply-restore.thinkblock.js   → globalThis.__DS_CensorReplyRestore_thinkblock
+ *   8. censor-reply-restore.storage.js      → globalThis.__DS_CensorReplyRestore_storage
+ *   9. censor-reply-restore.detection.js    → globalThis.__DS_CensorReplyRestore_detection
+ *  10. censor-reply-restore.observer.js     → globalThis.__DS_CensorReplyRestore_observer
+ *  11. censor-reply-restore.js              （本檔，Object.assign 合入以上十個 bundle）
  */
 // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
 var __DS_CensorChatSessionId = (globalThis).DSSChatSessionId ||
@@ -188,7 +191,7 @@ const CensorReplyRestore = {
 (function (root) {
     Object.assign(CensorReplyRestore,
         root.__DS_CensorReplyRestore_markdown || {},
-        root.__DS_CensorReplyRestore_dom || {},
+        root.__DS_CensorReplyRestore_dom_extract || {}, root.__DS_CensorReplyRestore_dom_resolve || {}, root.__DS_CensorReplyRestore_dom_inject || {}, root.__DS_CensorReplyRestore_dom_scan || {},
         root.__DS_CensorReplyRestore_thinkblock || {},
         root.__DS_CensorReplyRestore_storage || {},
         root.__DS_CensorReplyRestore_detection || {},

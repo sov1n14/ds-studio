@@ -58,7 +58,7 @@ const GoToTop = {
 
 // 合併所有 bundle（bundle 檔案須在 manifest 中先於此檔案載入）
 (function (root) {
-    Object.assign(GoToTop, root.__DS_GoToTop_locate || {}, root.__DS_GoToTop_render || {}, root.__DS_GoToTop_scroll || {}, root.__DS_GoToTop_observers || {}, root.__DS_GoToTop_lifecycle || {});
+    Object.assign(GoToTop, root.__DS_GoToTop_locate || {}, root.__DS_GoToTop_render_button || {}, root.__DS_GoToTop_render_inject || {}, root.__DS_GoToTop_render_observer || {}, root.__DS_GoToTop_scroll || {}, root.__DS_GoToTop_observers || {}, root.__DS_GoToTop_lifecycle || {});
 })(globalThis);
 
 GoToTop.init();
