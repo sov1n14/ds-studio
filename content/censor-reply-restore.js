@@ -179,7 +179,7 @@ const CensorReplyRestore = {
 
         // 註冊來自 popup 的訊息監聽器
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.type === 'clearRestoredMessages') {
+            if (request.type === DSS_CONTENT_MSG.CLEAR_RESTORED_MESSAGES) {
                 this.clearAllRestoredMessages();
                 sendResponse({ success: true });
             }

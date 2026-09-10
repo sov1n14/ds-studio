@@ -11,7 +11,7 @@
 const ACTIVE_DEEPSEEK_TAB_QUERY = {
     active: true,
     currentWindow: true,
-    url: DEEPSEEK_TAB_URL,
+    url: DSS_TAB_URL,
 };
 
 /**
@@ -34,7 +34,7 @@ async function queryActiveDeepseekTab() {
  */
 async function queryDeepseekTabs() {
     try {
-        const tabs = await chrome.tabs.query({ url: DEEPSEEK_TAB_URL });
+        const tabs = await chrome.tabs.query({ url: DSS_TAB_URL });
         return tabs ?? [];
     } catch (err) {
         console.error('[DSS] tab-control.queryDeepseekTabs:', err);
@@ -68,7 +68,7 @@ async function sendToTab(tabId, message) {
  */
 async function broadcastActivePreset(presetId, presetContent) {
     const tabs = await queryDeepseekTabs();
-    const message = { action: 'ACTIVE_PRESET_CHANGED', presetId, presetContent };
+    const message = { action: DSS_CONTENT_MSG.ACTIVE_PRESET_CHANGED, presetId, presetContent };
     await Promise.all(
         tabs
             .filter((tab) => tab?.id !== undefined)

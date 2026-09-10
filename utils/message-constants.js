@@ -9,7 +9,7 @@
     'use strict';
 
     // DeepSeek 分頁比對條件，與 manifest.json host_permissions 一致
-    globalThis.DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
+    globalThis.DSS_TAB_URL = '*://chat.deepseek.com/*';
 
     // 編輯器視窗常數
     globalThis.DSS_EDITOR_WINDOW = {
@@ -27,12 +27,21 @@
         SETTINGS_CHANGED: 'DSS_SETTINGS_CHANGED',
     };
 
+    // 跨層內容腳本訊息型別常數
+    globalThis.DSS_CONTENT_MSG = {
+        ACTIVE_PRESET_CHANGED: 'ACTIVE_PRESET_CHANGED',
+        CLEAR_RESTORED_MESSAGES: 'clearRestoredMessages',
+        GET_PENDING_PRESET: 'GET_PENDING_PRESET',
+        EXPORT_MARKDOWN: 'EXPORT_MARKDOWN',
+    };
+
     // === 測試匯出（瀏覽器情境為 no-op） ===
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
-            DEEPSEEK_TAB_URL: globalThis.DEEPSEEK_TAB_URL,
+            DSS_TAB_URL: globalThis.DSS_TAB_URL,
             DSS_EDITOR_WINDOW: globalThis.DSS_EDITOR_WINDOW,
             DSS_SETTINGS_MSG: globalThis.DSS_SETTINGS_MSG,
+            DSS_CONTENT_MSG: globalThis.DSS_CONTENT_MSG,
         };
     }
 })();

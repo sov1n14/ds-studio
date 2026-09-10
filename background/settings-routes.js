@@ -111,7 +111,7 @@
         if (!changedKeys.some((key) => isWatchedKey(key, area))) return;
 
         const message = { type: resolveMessageTypes().SETTINGS_CHANGED, area, changes };
-        const tabs = await chrome.tabs.query({ url: DEEPSEEK_TAB_URL });
+        const tabs = await chrome.tabs.query({ url: DSS_TAB_URL });
         for (const tab of tabs || []) {
             if (typeof tab?.id !== 'number') continue;
             try {

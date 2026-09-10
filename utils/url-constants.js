@@ -7,7 +7,7 @@
 (function () {
     'use strict';
 
-    globalThis.DEEPSEEK_TAB_URL = '*://chat.deepseek.com/*';
+    globalThis.DSS_TAB_URL = '*://chat.deepseek.com/*';
 
-    if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DEEPSEEK_TAB_URL;
+    if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DSS_TAB_URL;
 })();

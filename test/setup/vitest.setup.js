@@ -28,10 +28,13 @@ import '../../utils/logger.js';
 // spec that loads a toggle-gated content module gets the real constants instead
 // of a TypeError inside the toggle's initial settings read.
 import '../../utils/settings-message-constants.js';
-// utils/url-constants.js mounts DEEPSEEK_TAB_URL onto globalThis. It MUST load
+// utils/url-constants.js mounts DSS_TAB_URL onto globalThis. It MUST load
 // before utils/tab-control.js (preloaded indirectly by specs that import it) so
 // the tab query URL constant is available at call time.
 import '../../utils/url-constants.js';
+// utils/message-constants.js mounts DSS_CONTENT_MSG onto globalThis. Preload it
+// so specs referencing content-script messaging constants don't hit ReferenceError.
+import '../../utils/message-constants.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec

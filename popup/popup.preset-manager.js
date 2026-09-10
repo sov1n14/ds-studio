@@ -115,7 +115,7 @@ function createPresetManager(ctx) {
 
     // --- 從內容腳本查詢 pending preset ID ---
     async function getPendingPresetIdFromContentScript(tabId) {
-        const response = await DSSTabControl.sendToTab(tabId, { action: 'GET_PENDING_PRESET' });
+        const response = await DSSTabControl.sendToTab(tabId, { action: DSS_CONTENT_MSG.GET_PENDING_PRESET });
         return response?.pendingPresetId || null;
     }
 

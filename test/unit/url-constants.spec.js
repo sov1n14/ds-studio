@@ -1,15 +1,15 @@
 /**
  * utils/message-constants.js — shared URL constants (debt-registry paydown).
  *
- * Requirement: DEEPSEEK_TAB_URL ('*://chat.deepseek.com/*') is currently
+ * Requirement: DSS_TAB_URL ('*://chat.deepseek.com/*') is currently
  * duplicated in background/settings-routes.js:16 and utils/tab-control.js:10.
  * The fix extracts it into utils/message-constants.js so both consumers reference
  * a single source of truth.
  *
  * This test asserts:
- *   1. utils/message-constants.js exists and exports DEEPSEEK_TAB_URL with the
+ *   1. utils/message-constants.js exists and exports DSS_TAB_URL with the
  *      correct value.
- *   2. Neither consumer defines its own local DEEPSEEK_TAB_URL anymore.
+ *   2. Neither consumer defines its own local DSS_TAB_URL anymore.
  *   3. background/service-worker.js imports message-constants.js before both
  *      consumers.
  */
@@ -22,7 +22,7 @@ const read = (relPath) => fs.readFileSync(path.join(ROOT, relPath), 'utf8');
 
 describe('utils/message-constants.js — shared constant extraction', () => {
 
-    it('exports DEEPSEEK_TAB_URL with value *://chat.deepseek.com/*', () => {
+    it('exports DSS_TAB_URL with value *://chat.deepseek.com/*', () => {
         // Loading the module should make the constant available on globalThis
         // We cannot import it (classic script), so we verify it exists and
         // has the right value by loading it in the vitest environment.
@@ -35,26 +35,26 @@ describe('utils/message-constants.js — shared constant extraction', () => {
 
         // Read the source and verify the constant value is declared
         const src = read('utils/message-constants.js');
-        expect(src).toContain("DEEPSEEK_TAB_URL");
+        expect(src).toContain("DSS_TAB_URL");
         expect(src).toContain("*://chat.deepseek.com/*");
     });
 
-    it('background/settings-routes.js does NOT define its own DEEPSEEK_TAB_URL', () => {
+    it('background/settings-routes.js does NOT define its own DSS_TAB_URL', () => {
         const src = read('background/settings-routes.js');
-        // A local definition would be: const/let/var DEEPSEEK_TAB_URL =
-        const hasLocalDef = /\b(?:const|let|var)\s+DEEPSEEK_TAB_URL\s*=/.test(src);
+        // A local definition would be: const/let/var DSS_TAB_URL =
+        const hasLocalDef = /\b(?:const|let|var)\s+DSS_TAB_URL\s*=/.test(src);
         expect(
             hasLocalDef,
-            'background/settings-routes.js must not define a local DEEPSEEK_TAB_URL'
+            'background/settings-routes.js must not define a local DSS_TAB_URL'
         ).toBe(false);
     });
 
-    it('utils/tab-control.js does NOT define its own DEEPSEEK_TAB_URL', () => {
+    it('utils/tab-control.js does NOT define its own DSS_TAB_URL', () => {
         const src = read('utils/tab-control.js');
-        const hasLocalDef = /\b(?:const|let|var)\s+DEEPSEEK_TAB_URL\s*=/.test(src);
+        const hasLocalDef = /\b(?:const|let|var)\s+DSS_TAB_URL\s*=/.test(src);
         expect(
             hasLocalDef,
-            'utils/tab-control.js must not define a local DEEPSEEK_TAB_URL'
+            'utils/tab-control.js must not define a local DSS_TAB_URL'
         ).toBe(false);
     });
 

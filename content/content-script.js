@@ -211,7 +211,7 @@ globalThis.TemporaryChatSidebarHide?.init();
 
 // Popup 訊息監聽
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'EXPORT_MARKDOWN') {
+    if (request.action === DSS_CONTENT_MSG.EXPORT_MARKDOWN) {
         (async () => {
             await exportConversationToMarkdown(
                 request.includeThinking,
@@ -222,11 +222,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         // 同步回覆 ack，讓 popup 能區分「內容腳本未注入」與「已收下匯出指令」
         sendResponse({ received: true });
-    } else if (request.action === 'ACTIVE_PRESET_CHANGED') {
+    } else if (request.action === DSS_CONTENT_MSG.ACTIVE_PRESET_CHANGED) {
         bindingState.pendingPresetId = request.presetId ?? null;
         ChatBinding.updatePromptPrefixFromBinding();
         PresetOverlay.updateActiveId(request.presetId || '');
-    } else if (request.action === 'GET_PENDING_PRESET') {
+    } else if (request.action === DSS_CONTENT_MSG.GET_PENDING_PRESET) {
         sendResponse({ pendingPresetId: bindingState.pendingPresetId });
     }
 });
