@@ -36,7 +36,7 @@ const TemporaryChatEnabledFlag = (() => {
     }
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
-    const _messageTypes = () => globalThis.getSettingsMessageTypes();
+    const _messageTypes = () => DSS_SETTINGS_MSG;
 
     function isEnabled() {
         return _isEnabledCache;
@@ -92,7 +92,7 @@ const TemporaryChatEnabledFlag = (() => {
      * @param {{type?: string, area?: string, changes?: Object}} message
      */
     function _handleSettingsChanged(message) {
-        if (!message || message.type !== globalThis.getSettingsMessageTypes().SETTINGS_CHANGED) return;
+        if (!message || message.type !== DSS_SETTINGS_MSG.SETTINGS_CHANGED) return;
         if (message.area !== 'local') return;
 
         const changes = message.changes;

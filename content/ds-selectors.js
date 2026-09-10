@@ -188,8 +188,7 @@
     const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-icon-button[role="button"], div.ds-button[role="button"]';
 
     /** 送出圖示的 SVG path 起始字串；以屬性前綴比對，不序列化整個子樹 */
-    const SEND_BUTTON_ICON_PATH_PREFIX = 'M8.3125';
-    const SEND_BUTTON_ICON_SELECTOR = `svg path[d^="${SEND_BUTTON_ICON_PATH_PREFIX}"]`;
+    const SEND_BUTTON_ICON_SELECTOR = 'svg path[d^="M8.3125"]';
 
     /** 搜尋圖示的 SVG path 起始字串（語言無關的定位基準） */
     const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';

@@ -28,7 +28,7 @@
     }
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
-    const resolveMessageTypes = () => globalThis.getSettingsMessageTypes();
+    const resolveMessageTypes = () => DSS_SETTINGS_MSG;
 
     /** 判斷變更鍵是否受監看：前綴不分區；完整鍵僅 local 區。 */
     function isWatchedKey(key, area) {

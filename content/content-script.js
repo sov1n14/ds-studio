@@ -114,7 +114,7 @@ async function initSettings() {
  * area 沿用遷移前的範圍：local 與 sync 兩區的變更皆需反映。
  */
 function handleSettingsChangedMessage(message) {
-    if (!message || message.type !== globalThis.getSettingsMessageTypes().SETTINGS_CHANGED) return;
+    if (!message || message.type !== DSS_SETTINGS_MSG.SETTINGS_CHANGED) return;
     if (message.area !== 'local' && message.area !== 'sync') return;
     if (!message.changes) return;
     if (!isExtensionContextValid()) return;
