@@ -1,0 +1,11 @@
+{
+  "testRunner": "vitest",
+  "vitest": { "configFile": "test/stryker-vitest.config.js", "related": false },
+  "mutate": ["utils/**/*.js", "content/**/*.js"],
+  "ignorePatterns": [".venv", "node_modules", ".git", ".playwright-cli"],
+  "incremental": true,
+  "incrementalFile": "test/stryker-incremental.json",
+  "reporters": ["clear-text", "html"],
+  "htmlReporter": { "fileName": "test/reports/mutation.html" },
+  "thresholds": { "high": 80, "low": 60, "break": null }
+}
