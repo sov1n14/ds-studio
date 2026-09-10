@@ -73,6 +73,7 @@ function makeDom(overrides = {}) {
         includeReferencesToggle: makeCheckbox(true),
         sidebarAutoHideToggle: makeCheckbox(false),
         hideThinkingToggle: makeCheckbox(false),
+        autoExpandMessagesToggle: makeCheckbox(false),
         showSystemTimeToggle: makeCheckbox(false),
         chatWidthToggle: makeCheckbox(false),
         chatWidthSlider: makeSlider('70'),
@@ -200,6 +201,7 @@ describe('createLiveSyncListener — simple toggle keys', () => {
         ['SIDEBAR_AUTO_HIDE', 'sidebarAutoHideToggle'],
         ['HIDE_THINKING', 'hideThinkingToggle'],
         ['PREVENT_AUTO_SCROLL', 'preventAutoScrollToggle'],
+        ['AUTO_EXPAND_MESSAGES', 'autoExpandMessagesToggle'],
     ];
 
     it.each(cases)('updates %s -> dom.%s checkbox', (keyName, domField) => {
@@ -672,7 +674,7 @@ describe('popup.js — Live Sync wiring block', () => {
             'sidebarAutoHideToggle', 'hideThinkingToggle',
             'chatWidthToggle', 'chatWidthSlider', 'chatWidthValue', 'chatWidthSliderContainer',
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
-            'preventAutoScrollToggle', 'websearchRadios',
+            'preventAutoScrollToggle', 'autoExpandMessagesToggle', 'websearchRadios',
         ];
         for (const field of expectedDomFields) {
             expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));
