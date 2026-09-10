@@ -30,6 +30,7 @@
     websearchOffLabel: '關閉',
     chatWidthLabel: '對話區域寬度',
     inputWidthLabel: '編輯輸入框寬度',
+    switchLanguageTitle: '切換語言',
     narrowLabel: '窄',
     wideLabel: '寬',
     requiredIndicator: '* 必填',

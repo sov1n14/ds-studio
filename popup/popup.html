@@ -19,6 +19,13 @@
     <link rel="stylesheet" href="popup-modal.css">
 </head>
 <body>
+    <!-- 共用 SVG 圖標定義 -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+        <symbol id="icon-pencil" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
+            <path d="M10 4 L12 6"/>
+        </symbol>
+    </svg>
     <div class="container">
         <div class="column">
             <!-- 標題卡片：主開關 -->
@@ -47,10 +54,7 @@
                                 title="編輯全域提示詞"
                                 data-i18n="editGlobalPromptTitle"
                                 data-i18n-attr="title">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
-                                <path d="M10 4 L12 6"/>
-                            </svg>
+                            <svg width="14" height="14" aria-hidden="true"><use href="#icon-pencil"/></svg>
                         </button>
                     </div>
                     <!-- 全域提示詞啟用開關，右側對齊與主開關垂直一致 -->
@@ -81,10 +85,7 @@
                             <div class="preset-actions">
                                 <button id="addPresetBtn" class="icon-btn" title="新增提示詞組" data-i18n="addPresetTitle" data-i18n-attr="title">+</button>
                                 <button id="editPresetBtn" class="icon-btn" title="編輯提示詞組內容" data-i18n="editPresetContentTitle" data-i18n-attr="title" disabled>
-                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
-                                        <path d="M10 4 L12 6"/>
-                                    </svg>
+                                    <svg width="14" height="14" aria-hidden="true"><use href="#icon-pencil"/></svg>
                                 </button>
                             </div>
 
@@ -174,7 +175,7 @@
                 <div class="card-title-row">
                     <div class="card-title">Export</div>
                     <div class="card-title-actions">
-                        <button id="localeSwitcherBtn" class="icon-btn" title="Switch Language">
+                        <button id="localeSwitcherBtn" class="icon-btn" title="切換語言" data-i18n="switchLanguageTitle" data-i18n-attr="title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="10"/>
                                 <path d="M2 12h20"/>

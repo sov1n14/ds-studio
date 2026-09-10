@@ -90,14 +90,22 @@
     //  混淆雜湊 class（DeepSeek 每次改版都可能更換，故集中於此）
     // ---------------------------------------------------------------
 
+    // ── AI 回覆訊息 ──
+
     /** AI 回覆訊息節點（語意 class + 雜湊 class 精確組合） */
     const ASSISTANT_MESSAGE_SELECTOR = '.ds-message._63c77b1';
+
+    // ── 使用者訊息 ──
 
     /** 使用者訊息的文字內容包裝 */
     const USER_CONTENT_SELECTOR = '.fbb737a4';
 
+    // ── 滾動區域 ──
+
     /** 訊息列表的可滾動根容器（與 SCROLL_AREA_CLASS 同一元素） */
     const SCROLL_ROOT_SELECTOR = '._765a5cd';
+
+    // ── Think block ──
 
     /** 思考區塊（think block）外層容器的裸 class */
     const THINK_BLOCK_CLASS = '_74c0879';
@@ -111,11 +119,34 @@
     /** 思考區塊內容中的分隔／標題列（位於 ds-think-content 內、markdown 之前） */
     const THINK_SEPARATOR_SELECTOR = '.' + THINK_SEPARATOR_CLASS;
 
+    /** think block 標題列的雜湊 class */
+    const THINK_HEADER_CLASS = '_245c867 _34a54ec';
+
+    /** think block 間距層的雜湊 class */
+    const THINK_SPACER_CLASS = 'c2b72bb8';
+
+    /** think block 內容外層的雜湊 class */
+    const THINK_CONTENT_OUTER_CLASS = 'e1675d8b';
+
+    /** think block 內容修飾器的雜湊 class */
+    const THINK_CONTENT_MODIFIER_CLASS = '_767406f';
+
+    /** think block 載入動畫的雜湊 class */
+    const THINK_LOADING_DOTS_CLASS = 'ddd26891 _9b52f6c';
+
+    /** think block 尾部的雜湊 class */
+    const THINK_FOOTER_CLASS = '_8f7678d';
+
+
+    // ── 標題列與內容欄 ──
+
     /** 聊天標題列容器（preset overlay 的定位母體） */
     const CHAT_HEADER_SELECTOR = '._2be88ba';
 
     /** 置中的內容欄外層包裝（對話區與輸入框共用） */
     const CONTENT_COLUMN_SELECTOR = '._871cbca';
+
+    // ── 浮動按鈕列 ──
 
     /** 浮動按鈕列容器（原生 go-bottom 按鈕的直接父層） */
     const FLOATING_BUTTON_BAR_SELECTOR = '.aaff8b8f';
@@ -123,11 +154,15 @@
     /** 浮動按鈕列容器（限定 div 標籤的完整選擇器） */
     const FLOATING_BUTTON_BAR_DIV_SELECTOR = 'div' + FLOATING_BUTTON_BAR_SELECTOR;
 
+    // ── 送出按鈕 ──
+
     /** 送出按鈕所在的工具列容器 */
     const SEND_BUTTON_CONTAINER_SELECTOR = '.ba4f09d3';
 
     /** 送出按鈕的直接父層 class（以 classList.contains 比對） */
     const SEND_BUTTON_PARENT_CLASS = 'bf38813a';
+
+    // ── 訊息工具列 ──
 
     /** 訊息工具列群組容器 */
     const MESSAGE_TOOLBAR_SELECTOR = '.ds-flex._965abe9';
@@ -141,8 +176,12 @@
     /** think 區塊參考連結 */
     const THINK_REFERENCE_LINK_SELECTOR = 'a._04ab7b1';
 
+    // ── 首頁 ──
+
     /** 行動版移除的首頁元素 */
     const HOMEPAGE_MOBILE_CLEANUP_SELECTOR = '._9579690';
+
+    // ── 編輯區域 ──
 
     /** 編輯訊息按鈕 */
     const EDIT_MESSAGE_BUTTON_CLASS = 'd4910adc';
@@ -153,8 +192,12 @@
     /** 被賦予計算後 max-height 的容器 */
     const EDIT_BOX_HEIGHT_CONTAINER_SELECTOR = '._646a522';
 
+    // ── 虛擬列表 ──
+
     /** 僅以雜湊定位的虛擬列表容器（範圍較 VIRTUAL_LIST_SELECTOR 廣，故獨立保留） */
     const VIRTUAL_LIST_CONTAINER_SELECTOR = '._6f2c522';
+
+    // ── Sidebar ──
 
     /** 側邊欄外層包裝 */
     const SIDEBAR_WRAPPER_SELECTOR = 'div.dc04ec1d';
@@ -176,6 +219,8 @@
 
     /** 聊天標題節點雜湊降級 */
     const CHAT_TITLE_FALLBACK_SELECTOR = '._9986c0c';
+
+    // ── Go-top ──
 
     /** DeepSeek 原生回到頂端按鈕的定位 class */
     const GO_TOP_NATIVE_BUTTON_CLASS = '_0706cde';
@@ -243,6 +288,9 @@
         FLOATING_POSITION_WRAPPER_SELECTOR, ELEVATED_SURFACE_SELECTOR, CODE_BLOCK_CLASS,
         THINK_BLOCK_CLASS, THINK_BLOCK_SELECTOR,
         THINK_SEPARATOR_CLASS, THINK_SEPARATOR_SELECTOR,
+        THINK_HEADER_CLASS, THINK_SPACER_CLASS,
+        THINK_CONTENT_OUTER_CLASS, THINK_CONTENT_MODIFIER_CLASS,
+        THINK_LOADING_DOTS_CLASS, THINK_FOOTER_CLASS,
         ASSISTANT_MESSAGE_SELECTOR, USER_CONTENT_SELECTOR,
         SCROLL_ROOT_SELECTOR, CHAT_HEADER_SELECTOR,
         CONTENT_COLUMN_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR, FLOATING_BUTTON_BAR_DIV_SELECTOR,

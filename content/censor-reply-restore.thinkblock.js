@@ -22,7 +22,7 @@
             );
 
             const header = document.createElement('div');
-            header.className = '_245c867 _34a54ec';
+            header.className = selectors.THINK_HEADER_CLASS;
             header.style.cursor = 'pointer';
             header.addEventListener('click', function () {
                 const isCollapsed = container.getAttribute('data-ht-collapsed') === '1';
@@ -64,14 +64,14 @@
             container.appendChild(header);
 
             const spacer = document.createElement('div');
-            spacer.className = 'c2b72bb8';
+            spacer.className = selectors.THINK_SPACER_CLASS;
             container.appendChild(spacer);
 
             const thinkContent = document.createElement('div');
-            thinkContent.className = 'e1675d8b ' + selectors.THINK_CONTENT_CLASS + ' _767406f';
+            thinkContent.className = selectors.THINK_CONTENT_OUTER_CLASS + ' ' + selectors.THINK_CONTENT_CLASS + ' ' + selectors.THINK_CONTENT_MODIFIER_CLASS;
 
             const loadingDots = document.createElement('div');
-            loadingDots.className = 'ddd26891 _9b52f6c';
+            loadingDots.className = selectors.THINK_LOADING_DOTS_CLASS;
             loadingDots.setAttribute('style', 'width: 16px; height: 16px;');
             loadingDots.innerHTML = '<div class="a510c7ce _0652043"></div>';
             thinkContent.appendChild(loadingDots);
@@ -98,7 +98,7 @@
             });
 
             const footer = document.createElement('div');
-            footer.className = '_8f7678d';
+            footer.className = selectors.THINK_FOOTER_CLASS;
             container.appendChild(footer);
 
             return container;

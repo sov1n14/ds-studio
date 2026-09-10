@@ -30,6 +30,7 @@
     websearchOffLabel: 'Off',
     chatWidthLabel: 'Conversation Area Width',
     inputWidthLabel: 'Input Box Width',
+    switchLanguageTitle: 'Switch Language',
     narrowLabel: 'Narrow',
     wideLabel: 'Wide',
     requiredIndicator: '* Required',
