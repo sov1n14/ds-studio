@@ -8,6 +8,7 @@ importScripts(
     '../utils/storage-manager.chunk-lock.js',
     '../utils/storage-manager.rw.js',
     '../utils/storage-manager.sync.js',
+    '../utils/storage-manager.restore.js',
     '../utils/storage-manager.tombstone.js',
     '../utils/storage-manager.preset-merge.js',
     '../utils/storage-manager.preset-recency.js',

@@ -102,7 +102,8 @@ const StorageManager = {
         root.__DS_StorageManager_local     || {},
         root.__DS_StorageManager_init      || {},
         root.__DS_StorageManager_setters   || {},
-        root.__DS_StorageManager_settingsRead || {}
+        root.__DS_StorageManager_settingsRead || {},
+        root.__DS_StorageManager_restore    || {}
     );
 })(globalThis);
 

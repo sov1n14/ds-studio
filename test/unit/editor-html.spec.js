@@ -12,8 +12,8 @@ const html = fs.readFileSync(htmlPath, 'utf-8');
 const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 describe('editor.html script tag structure', () => {
-    it('has exactly 29 script tags', () => {
-        expect(scriptSrcs).toHaveLength(29);
+    it('has exactly 30 script tags', () => {
+        expect(scriptSrcs).toHaveLength(30);
     });
 
     it.each([
@@ -23,29 +23,30 @@ describe('editor.html script tag structure', () => {
         ['storage-manager.chunk-lock.js fourth', 3, '../../utils/storage-manager.chunk-lock.js'],
         ['storage-manager.rw.js fifth', 4, '../../utils/storage-manager.rw.js'],
         ['storage-manager.sync.js sixth', 5, '../../utils/storage-manager.sync.js'],
-        ['storage-manager.tombstone.js seventh', 6, '../../utils/storage-manager.tombstone.js'],
-        ['storage-manager.preset-merge.js eighth', 7, '../../utils/storage-manager.preset-merge.js'],
-        ['storage-manager.preset-recency.js ninth', 8, '../../utils/storage-manager.preset-recency.js'],
-        ['storage-manager.presets.js tenth', 9, '../../utils/storage-manager.presets.js'],
-        ['storage-manager.chatmap.diff.js eleventh', 10, '../../utils/storage-manager.chatmap.diff.js'],
-        ['storage-manager.chatmap.js twelfth', 11, '../../utils/storage-manager.chatmap.js'],
-        ['storage-manager.local.js thirteenth', 12, '../../utils/storage-manager.local.js'],
-        ['storage-manager.init.js fourteenth', 13, '../../utils/storage-manager.init.js'],
-        ['storage-manager.setters.js fifteenth', 14, '../../utils/storage-manager.setters.js'],
-        ['storage-manager.settings-read.js sixteenth', 15, '../../utils/storage-manager.settings-read.js'],
-        ['storage-manager.js seventeenth', 16, '../../utils/storage-manager.js'],
-        ['message-constants.js eighteenth', 17, '../../utils/message-constants.js'],
-        ['tab-control.js nineteenth', 18, '../../utils/tab-control.js'],
-        ['i18n.locales.zhTW.js twentieth', 19, '../../utils/i18n.locales.zhTW.js'],
-        ['i18n.locales.en.js twenty-first', 20, '../../utils/i18n.locales.en.js'],
-        ['i18n.locales.js twenty-second', 21, '../../utils/i18n.locales.js'],
-        ['i18n.js twenty-third', 22, '../../utils/i18n.js'],
-        ['popup.i18n-apply.js twenty-fourth', 23, '../popup.i18n-apply.js'],
-        ['popup.preset-domain.js twenty-fifth', 24, '../popup.preset-domain.js'],
-        ['editor.parse.js twenty-sixth', 25, 'editor.parse.js'],
-        ['editor.render.js twenty-seventh', 26, 'editor.render.js'],
-        ['editor.storage.js twenty-eighth', 27, 'editor.storage.js'],
-        ['editor.js last (twenty-ninth)', 28, 'editor.js'],
+        ['storage-manager.restore.js seventh', 6, '../../utils/storage-manager.restore.js'],
+        ['storage-manager.tombstone.js eighth', 7, '../../utils/storage-manager.tombstone.js'],
+        ['storage-manager.preset-merge.js ninth', 8, '../../utils/storage-manager.preset-merge.js'],
+        ['storage-manager.preset-recency.js tenth', 9, '../../utils/storage-manager.preset-recency.js'],
+        ['storage-manager.presets.js eleventh', 10, '../../utils/storage-manager.presets.js'],
+        ['storage-manager.chatmap.diff.js twelfth', 11, '../../utils/storage-manager.chatmap.diff.js'],
+        ['storage-manager.chatmap.js thirteenth', 12, '../../utils/storage-manager.chatmap.js'],
+        ['storage-manager.local.js fourteenth', 13, '../../utils/storage-manager.local.js'],
+        ['storage-manager.init.js fifteenth', 14, '../../utils/storage-manager.init.js'],
+        ['storage-manager.setters.js sixteenth', 15, '../../utils/storage-manager.setters.js'],
+        ['storage-manager.settings-read.js seventeenth', 16, '../../utils/storage-manager.settings-read.js'],
+        ['storage-manager.js eighteenth', 17, '../../utils/storage-manager.js'],
+        ['message-constants.js nineteenth', 18, '../../utils/message-constants.js'],
+        ['tab-control.js twentieth', 19, '../../utils/tab-control.js'],
+        ['i18n.locales.zhTW.js twenty-first', 20, '../../utils/i18n.locales.zhTW.js'],
+        ['i18n.locales.en.js twenty-second', 21, '../../utils/i18n.locales.en.js'],
+        ['i18n.locales.js twenty-third', 22, '../../utils/i18n.locales.js'],
+        ['i18n.js twenty-fourth', 23, '../../utils/i18n.js'],
+        ['popup.i18n-apply.js twenty-fifth', 24, '../popup.i18n-apply.js'],
+        ['popup.preset-domain.js twenty-sixth', 25, '../popup.preset-domain.js'],
+        ['editor.parse.js twenty-seventh', 26, 'editor.parse.js'],
+        ['editor.render.js twenty-eighth', 27, 'editor.render.js'],
+        ['editor.storage.js twenty-ninth', 28, 'editor.storage.js'],
+        ['editor.js last (thirtieth)', 29, 'editor.js'],
     ])('loads %s', (_label, index, expected) => {
         expect(scriptSrcs[index]).toBe(expected);
     });
