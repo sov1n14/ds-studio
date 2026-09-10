@@ -180,6 +180,12 @@
     /** DeepSeek 原生回到頂端按鈕的定位 class */
     const GO_TOP_NATIVE_BUTTON_CLASS = '_0706cde';
 
+    /** 回到頂部錨點選擇器（精確雜湊 class 組合） */
+    const GO_TOP_ANCHOR_SELECTOR = '._9663006._2c189bc';
+
+    /** 回到頂部錨點選擇器（單一雜湊 class 降級） */
+    const GO_TOP_ANCHOR_FALLBACK1_SELECTOR = '._9663006';
+
     // ---------------------------------------------------------------
     //  送出按鈕結構（桌面版 ds-icon-button / 行動版 ds-button 共用）
     // ---------------------------------------------------------------
@@ -207,6 +213,20 @@
 
     /** 展開按鈕圖示的裸 class */
     const EXPAND_BUTTON_ICON_CLASS = 'd630ec62';
+
+
+    // ---------------------------------------------------------------
+    //  按鈕變體 class（mobile-sidebar-swipe 等模組共用）
+    // ---------------------------------------------------------------
+
+    /** 膠囊型按鈕 */
+    const DS_BUTTON_CAPSULE_CLASS = 'ds-button--capsule';
+    /** 主要圖文按鈕 */
+    const DS_BUTTON_ICON_LABEL_PRIMARY_CLASS = 'ds-button--iconLabelPrimary';
+    /** 第三層圖文按鈕 */
+    const DS_BUTTON_ICON_LABEL_TERTIARY_CLASS = 'ds-button--iconLabelTertiary';
+    /** 加大按鈕 */
+    const DS_BUTTON_XL_CLASS = 'ds-button--xl';
 
     const DSSelectors = {
         VIRTUAL_LIST_SELECTOR, VIRTUAL_LIST_FALLBACK, SCROLL_AREA_CLASS,
@@ -236,12 +256,15 @@
         SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_CHAT_LINK_SELECTOR,
         CHAT_HEADER_TITLE_ROW_SELECTOR, CHAT_TITLE_FALLBACK_SELECTOR,
         GO_TOP_NATIVE_BUTTON_CLASS,
+        GO_TOP_ANCHOR_SELECTOR, GO_TOP_ANCHOR_FALLBACK1_SELECTOR,
         SEND_BUTTON_ROLE_SELECTOR,
         SEND_BUTTON_ICON_SELECTOR,
         SEARCH_ICON_PATH_PREFIX,
         EDIT_SEND_BUTTON_VARIANT_CLASSES,
         BUTTON_CONTENT_SELECTOR, BUTTON_DISABLED_CLASS,
         EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS,
+        DS_BUTTON_CAPSULE_CLASS, DS_BUTTON_ICON_LABEL_PRIMARY_CLASS,
+        DS_BUTTON_ICON_LABEL_TERTIARY_CLASS, DS_BUTTON_XL_CLASS,
     };
 
     // === Test export (no-op in browser) ===
