@@ -3,7 +3,7 @@
  * 單一職責：對 DeepSeek REST 端點發送請求並回報成敗。
  * 層級無關（不觸碰 window / document），可由 service worker 或任一層以 classic script 載入。
  */
-const DSSDeepSeekApi = (() => {
+(function (root) {
     'use strict';
 
     // 刪除對話端點；utils 層不得相依 content 層，故在此自行宣告同值常數
@@ -41,12 +41,10 @@ const DSSDeepSeekApi = (() => {
         }
     }
 
-    return { performDeleteFetch };
-})();
+    root.DSSDeepSeekApi = { performDeleteFetch };
 
-globalThis.DSSDeepSeekApi = DSSDeepSeekApi;
-
-// Test export（瀏覽器中為 no-op）
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = DSSDeepSeekApi;
-}
+    // Test export（瀏覽器中為 no-op）
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = root.DSSDeepSeekApi;
+    }
+})(globalThis);

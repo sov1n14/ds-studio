@@ -73,49 +73,36 @@
     }
 
     /** 讀取指定鍵，缺漏者以 StorageManager.DEFAULTS 補齊、網搜切換鍵經正規化後回應。 */
-    async function handleGetSettings(message, sendResponse) {
+    async function handleGetSettings(message) {
         const keys = message?.keys;
         if (!Array.isArray(keys) || keys.length === 0) {
-            sendResponse({ ok: false, error: 'DSS_GET_SETTINGS 需要非空的 keys 字串陣列' });
-            return;
+            throw new Error('DSS_GET_SETTINGS 需要非空的 keys 字串陣列');
         }
-        try {
-            const manager = resolveStorageManager();
-            const defaults = manager.DEFAULTS;
-            const stored = await readLocal(keys);
-            const values = {};
-            keys.forEach((key) => {
-                const rawValue = key in stored ? stored[key] : defaults[key];
-                // 僅網搜切換鍵需要舊值校正，規則與 StorageManager.getSettings() 共用一份
-                values[key] = key === manager.KEYS.WEBSEARCH_TOGGLE
-                    ? manager.normalizeWebsearchToggle(rawValue)
-                    : rawValue;
-            });
-            sendResponse({ ok: true, values });
-        } catch (err) {
-            console.error('[DSS] settings-routes GET_SETTINGS:', err);
-            sendResponse({ ok: false, error: err?.message || String(err) });
-        }
+        const manager = resolveStorageManager();
+        const defaults = manager.DEFAULTS;
+        const stored = await readLocal(keys);
+        const values = {};
+        keys.forEach((key) => {
+            const rawValue = key in stored ? stored[key] : defaults[key];
+            // 僅網搜切換鍵需要舊值校正，規則與 StorageManager.getSettings() 共用一份
+            values[key] = key === manager.KEYS.WEBSEARCH_TOGGLE
+                ? manager.normalizeWebsearchToggle(rawValue)
+                : rawValue;
+        });
+        return { values };
     }
 
     /** 將 values 寫入 chrome.storage.local 並回報結果。 */
-    async function handleSetSettings(message, sendResponse) {
+    async function handleSetSettings(message) {
         const values = message?.values;
         const hasWritableValues = !!values
             && typeof values === 'object'
             && !Array.isArray(values)
             && Object.keys(values).length > 0;
         if (!hasWritableValues) {
-            sendResponse({ ok: false, error: 'DSS_SET_SETTINGS 需要非空的 values 物件' });
-            return;
+            throw new Error('DSS_SET_SETTINGS 需要非空的 values 物件');
         }
-        try {
-            await writeLocal(values);
-            sendResponse({ ok: true });
-        } catch (err) {
-            console.error('[DSS] settings-routes SET_SETTINGS:', err);
-            sendResponse({ ok: false, error: err?.message || String(err) });
-        }
+        await writeLocal(values);
     }
 
     /** 將受監看的儲存變更原樣廣播給所有 DeepSeek 分頁；單一分頁失敗不影響其餘分頁。 */
@@ -136,23 +123,45 @@
     }
 
     /**
+     * 建立 message.type → 處理函式的對照表。
+     * @returns {Object<string, (message: object) => Promise<void|object>>}
+     */
+    function buildRouteTable() {
+        const types = resolveMessageTypes();
+        return {
+            [types.GET_SETTINGS]: (message) => handleGetSettings(message),
+            [types.SET_SETTINGS]: (message) => handleSetSettings(message),
+        };
+    }
+
+    /**
+     * 執行單一路由並回應結果；失敗於此邊界攔截（onMessage 之外無人可攔）。
+     * @param {(message: object) => Promise<void>} route
+     * @param {object} message
+     * @param {(response: object) => void} sendResponse
+     */
+    async function runRoute(route, message, sendResponse) {
+        try {
+            const result = await route(message);
+            sendResponse(result && typeof result === 'object' ? { ok: true, ...result } : { ok: true });
+        } catch (err) {
+            console.error(`[DSS] settings-routes ${message?.type}:`, err);
+            sendResponse({ ok: false, error: err?.message || String(err) });
+        }
+    }
+
+    /**
      * 註冊設定訊息路由與變更廣播監聽器。
      * 必須由 service worker 於頂層呼叫，確保 worker 重啟後仍能存活。
      */
     function install() {
-        const types = resolveMessageTypes();
+        const routes = buildRouteTable();
 
         chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-            const type = message?.type;
-            if (type === types.GET_SETTINGS) {
-                handleGetSettings(message, sendResponse);
-                return true; // 非同步回應
-            }
-            if (type === types.SET_SETTINGS) {
-                handleSetSettings(message, sendResponse);
-                return true; // 非同步回應
-            }
-            return false; // 交由其他監聽器處理
+            const route = routes[message?.type];
+            if (!route) return false; // 交由其他監聽器處理
+            runRoute(route, message, sendResponse);
+            return true; // 非同步回應
         });
 
         chrome.storage.onChanged.addListener((changes, area) => {

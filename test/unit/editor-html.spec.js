@@ -34,7 +34,7 @@ describe('editor.html script tag structure', () => {
         ['storage-manager.setters.js fifteenth', 14, '../../utils/storage-manager.setters.js'],
         ['storage-manager.settings-read.js sixteenth', 15, '../../utils/storage-manager.settings-read.js'],
         ['storage-manager.js seventeenth', 16, '../../utils/storage-manager.js'],
-        ['url-constants.js eighteenth', 17, '../../utils/url-constants.js'],
+        ['message-constants.js eighteenth', 17, '../../utils/message-constants.js'],
         ['tab-control.js nineteenth', 18, '../../utils/tab-control.js'],
         ['i18n.locales.zhTW.js twentieth', 19, '../../utils/i18n.locales.zhTW.js'],
         ['i18n.locales.en.js twenty-first', 20, '../../utils/i18n.locales.en.js'],

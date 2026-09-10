@@ -1,10 +1,8 @@
 /**
- * DS studio — 設定訊息型別常數（utils/settings-message-constants.js）
+ * DS studio — 已合併至 utils/message-constants.js
  *
- * 層級無關的 classic script：以顯式 globalThis 指派公開常數，
- * 讓經 importScripts 載入的 service worker 與 content script 皆能取用
- * （頂層 const 不會成為 globalThis 屬性，故不可改用 const 宣告發布）。
- * 除該指派外無任何載入期副作用。
+ * 此檔僅為測試相容性保留。瀏覽器環境由 message-constants.js 統一載入，
+ * 此處重複指派確保測試中 import 此檔仍能正常設定 globalThis。
  */
 (function () {
     'use strict';
@@ -15,7 +13,5 @@
         SETTINGS_CHANGED: 'DSS_SETTINGS_CHANGED',
     };
 
-
-    // === 測試匯出（瀏覽器情境為 no-op） ===
     if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DSS_SETTINGS_MSG;
 })();
