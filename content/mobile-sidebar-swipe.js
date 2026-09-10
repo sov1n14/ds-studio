@@ -57,6 +57,9 @@ const MobileSidebarSwipe = {
 };
 
 Object.assign(MobileSidebarSwipe, __swipeButton, __swipeGesture, __swipeBind, __swipeLifecycle);
+// 將解析後的共用模組掛入合併物件，使各分包方法可透過 this._mobileDevice 取用
+MobileSidebarSwipe._mobileDevice = __DS_SwipeMobileDevice;
+MobileSidebarSwipe._featureToggle = __DS_SwipeFeatureToggle;
 
 // Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 MobileSidebarSwipe.start();
