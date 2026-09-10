@@ -40,6 +40,7 @@ ds-studio/
 │   ├── sidebar-auto-hide.styles.js  ─  CSS inject/remove for sidebar auto-hide
 │   ├── temporary-chat-toggle.js     ─  Homepage toggle UI for temporary chat (v4.5.0)
 │   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
+│   ├── temporary-chat-toggle.ui.js  ─  Temporary chat toggle-row UI creation and visual state
 │   ├── temporary-chat-delete.js     ─  Entry: delete logic for temporary conversations (v4.5.0)
 │   ├── temporary-chat-delete.tracking.js   ─  Shared state, UUID sessionStorage persistence, create+completion co-occurrence detection
 │   ├── temporary-chat-delete.coordinator.js ─  Delete coordination (Fiber → API retry → SW alarm fallback)
@@ -61,8 +62,8 @@ ds-studio/
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
 │   ├── censor-reply-restore.keymap.js    ─  Key mapping for censor-reply-restore
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
-│   ├── censor-reply-restore.dom.js       ─  DOM orchestration entry bundle
-│   ├── censor-reply-restore.dom.extract.js ─  Fragment extraction from DOM
+│   ├── censor-reply-restore.dom.js       ─  DOM orchestration entry bundle (stub, merged into censor-reply-restore.js)
+│   ├── censor-reply-restore.dom.extract.js ─  Fragment extraction from DOM (stub, merged into censor-reply-restore.dom.resolve.js)
 │   ├── censor-reply-restore.dom.resolve.js ─  DOM element resolution for restored content
 │   ├── censor-reply-restore.dom.inject.js  ─  Restored-content DOM injection
 │   ├── censor-reply-restore.dom.scan.js    ─  DOM scanning for censor events
@@ -77,12 +78,13 @@ ds-studio/
 │   ├── harvest.dom.js       ─  DOM probing: container lookup, message harvest, stability observer, mount measurement (v4.19.1 split)
 │   ├── go-top.js            ─  Entry: "Go to Top" button lifecycle (v4.0.0 split)
 │   ├── go-top.locate.js     ─  DOM query / locator / visibility orchestration bundle
-│   ├── go-top.locate.scroll.js  ─  Scroll-container locator bundle
-│   ├── go-top.locate.anchor.js  ─  Anchor-element locator bundle
-│   ├── go-top.render.js     ─  Button render orchestration bundle
-│   ├── go-top.render.button.js  ─  Button element creation bundle
-│   ├── go-top.render.inject.js  ─  Button DOM injection bundle
-│   ├── go-top.render.observer.js ─  Render-related observer bundle
+│   ├── go-top.locate.scroll.js  ─  Scroll-container locator bundle (stub, merged into go-top.locate.js)
+│   ├── go-top.locate.anchor.js  ─  Anchor-element locator bundle (stub, merged into go-top.locate.js)
+│   ├── go-top.render.js     ─  Button render orchestration bundle (stub, merged into go-top.js)
+│   ├── go-top.render.button.js  ─  Button element creation bundle (stub, merged into go-top.render.combined.js)
+│   ├── go-top.render.combined.js ─  Go-top button render combined module (button, inject, observer)
+│   ├── go-top.render.inject.js  ─  Button DOM injection bundle (stub, merged into go-top.render.combined.js)
+│   ├── go-top.render.observer.js ─  Render-related observer bundle (stub, merged into go-top.render.combined.js)
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
 │   ├── go-top.observers.js  ─  GoToTop observer setup bundle
 │   ├── go-top.lifecycle.js  ─  GoToTop enable/disable lifecycle bundle
@@ -110,10 +112,8 @@ ds-studio/
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
-│   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
 │   ├── popup-button.css     ─  Button component styles
 │   ├── popup-card.css       ─  Card component styles
-│   ├── popup-controls.css   ─  Switch, button, icon-button, range slider, toast styles
 │   ├── popup-form.css       ─  Form element styles
 │   ├── popup-layout.css     ─  Page layout styles
 │   ├── popup-locale.css     ─  Locale switcher styles
@@ -156,6 +156,7 @@ ds-studio/
 │   ├── storage-manager.chunk-lock.js    ─  ChatPresetMap chunked read/write + cross-context advisory lock bundle (v4.11.3 merge of chunking.js + lock.js)
 │   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write logic
 │   ├── storage-manager.sync.js          ─  Cloud sync / conflict / restore bundle, incl. syncNow() entry point (absorbed syncnow.js in v4.11.3)
+│   ├── storage-manager.restore.js       ─  Backup restore logic (extracted from sync.js)
 │   ├── storage-manager.tombstone.js     ─  Deletion tombstone management bundle
 │   ├── storage-manager.preset-merge.js  ─  Dual-side preset array merge logic bundle
 │   ├── storage-manager.preset-recency.js ─  Preset recency determination, push guard, global prompt enabled resolution bundle
@@ -166,15 +167,16 @@ ds-studio/
 │   ├── storage-manager.init.js          ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
 │   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
-│   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants
-│   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)
+│   ├── message-constants.js          ─  Cross-layer message type and URL constants (merged)
+│   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants (stub, merged into message-constants.js)
+│   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0) (stub, merged into message-constants.js)
 │   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
 │   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
 │   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
-│   ├── url-constants.js        ─  URL pattern matching constants
+│   ├── url-constants.js        ─  URL pattern matching constants (stub, merged into message-constants.js)
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
 │   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
 │   ├── i18n.locales.en.js      ─  en string dictionary, pure data
