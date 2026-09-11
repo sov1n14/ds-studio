@@ -2,7 +2,7 @@
 name: "test-engineer"
 description: "Dispatch BEFORE any logic-layer implementation to author the failing test and report its observed red output, and whenever a test under test/ is broken, outdated, or red after a refactor. Runs tests only to validate its own script — red phase, or a repair it just made. Not for feature code, not for docs, not for certifying an implementer's work (use test-executor), and to kill a specified surviving mutant by writing a targeted test"
 model: claude-opus-4-6
-effort: low
+effort: medium
 color: purple
 memory: project
 tools: Read, Glob, Grep, WebFetch, WebSearch, ToolSearch, Skill, Bash, Powershell
