@@ -19,8 +19,13 @@
             Promise.resolve(chrome.runtime.sendMessage({ type, uuid: chatUuid }))
                 .catch((err) => console.warn('[DSS] temporary-chat-heartbeat send:', err));
         } catch (err) {
-            console.warn('[DSS] temporary-chat-heartbeat send:', err);
             stop();
+            // 擴充情境已失效時顯示 toast 引導重新整理；其餘錯誤僅記錄警告
+            if (err.message && err.message.includes('Extension context invalidated')) {
+                DSSInvalidationToast.show();
+            } else {
+                console.warn('[DSS] temporary-chat-heartbeat send:', err);
+            }
         }
     }
 

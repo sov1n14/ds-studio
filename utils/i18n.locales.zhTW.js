@@ -186,6 +186,10 @@
 
     // ---- Utils ----
     migratedPresetName: '我的提示詞',
+
+    // ---- Content Script: Invalidation Toast ----
+    'invalidationToast.message': 'DS Studio 已更新，請重新整理頁面以繼續使用',
+    'invalidationToast.refresh': '重新整理',
   };
 
   root.__DS_I18N_Locales_zhTW = zh_TW;

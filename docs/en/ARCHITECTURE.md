@@ -49,6 +49,7 @@ ds-studio/
 │   ├── temporary-chat-enabled-flag.js ─  Master-switch-independent temporary-chat enabled flag via settings pipeline
 │   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
 │   ├── temporary-chat-fiber-delete.js * ─  React Fiber-based conversation deletion integration (web accessible)
+│   ├── invalidation-toast.js    ─  Extension context invalidation toast with refresh button (v4.33.16)
 │   ├── temporary-chat-heartbeat.js      ─  Lease heartbeat for the tracked temporary conversation (v4.31.1)
 │   ├── temporary-chat-sidebar-hide.js   ─  Hides queued temporary conversations from the DeepSeek sidebar (v4.31.1)
 │   ├── chat-width.js        ─  Conversation area width via CSS injection

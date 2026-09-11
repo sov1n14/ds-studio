@@ -186,6 +186,10 @@
 
     // ---- Utils ----
     migratedPresetName: 'My Prompts',
+
+    // ---- Content Script: Invalidation Toast ----
+    'invalidationToast.message': 'DS Studio has been updated. Please refresh the page to continue.',
+    'invalidationToast.refresh': 'Refresh',
   };
 
   root.__DS_I18N_Locales_en = en;

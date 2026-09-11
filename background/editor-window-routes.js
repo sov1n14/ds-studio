@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DS studio — 編輯器視窗關閉訊息路由（background/editor-window-routes.js）
  *
  * 職責：background 層的訊息路由。install() 於呼叫時（非載入時）註冊單一
@@ -32,7 +32,7 @@
         try {
             await chrome.windows.remove(windowId);
         } catch (err) {
-            console.error('[DSS] editor-window-routes closeTrackedWindow:', err);
+
         } finally {
             await chrome.storage.session.remove(storageKey);
         }

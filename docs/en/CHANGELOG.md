@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.33.16](changelog/v4.md#43316---2026-09-12) | Added page-level invalidation toast with refresh button when extension context is invalidated; heartbeat detects context invalidation and triggers toast with heartbeat stop; editor-window-routes `closeTrackedWindow` catch silenced (expected race condition) |
 | [4.33.4](changelog/v4.md#4334---2026-09-07) | Fixed uncaught `Extension context invalidated` from the coordinator's orphaned content script after extension reload/update: `sendPendingStoreRoute` wrapped in try/catch with logging; `handOffToServiceWorker` and `fallbackToApi` direct sends routed through the same guard |
 | [4.33.3](changelog/v4.md#4333---2026-09-07) | Fixed `dss-delete-retry` alarm not re-armed after service worker cold start or extension reload: `remediatePendingDeletes()` arms the alarm before the auth-token gate; `onInstalled` now calls `remediatePendingDeletes()` to rebuild alarms cleared by Chrome |
 | [4.33.2](changelog/v4.md#4332---2026-09-06) | Fixed lease observation lost on service worker cold start (persisted as `{ lastActiveAt, observedAt }` in `chrome.storage.local`); `lastActiveAt` of 0 is immediately expired; orphan observation key cleanup after remediation; restored tabs with no token hand deletion off to the service worker |

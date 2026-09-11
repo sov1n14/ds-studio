@@ -150,4 +150,19 @@ describe('background/editor-window-routes', () => {
         expect(sessionData).toHaveProperty(globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.global, 999);
         expect(sendResponse).not.toHaveBeenCalled();
     });
+
+    it('windows.remove rejection does NOT call console.error (silent catch)', async () => {
+        const KEYS = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS;
+        sessionData[KEYS.global] = 777;
+        chrome.windows.remove = vi.fn().mockRejectedValue(new Error('No window with id 777'));
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const { sendResponse } = await send({ type: globalThis.DSS_EDITOR_WINDOW.CLOSE_MESSAGE_TYPE });
+
+        expect(chrome.windows.remove).toHaveBeenCalledWith(777);
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(sessionData).not.toHaveProperty(KEYS.global);
+        expect(firstResponse(sendResponse)).toEqual({ ok: true });
+        errorSpy.mockRestore();
+    });
 });
