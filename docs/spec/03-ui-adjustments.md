@@ -88,7 +88,7 @@
 - **捲動至頂部（可點擊中止）**：`scrollToTopAndWait()` 提供公開 API（供 Markdown 匯出整合），每輪輪詢直接寫入 `scrollContainer.scrollTop = 0` 一次到頂，搭配 MutationObserver 等待延遲載入的舊訊息掛載——虛擬列表若因此長高，收斂計數重置並再跳一次，最長 30 秒逾時。抵達時間僅取決於延遲載入的輪數，與對話長度無關。
   - **向上一次到頂、向下逐步前進，是刻意的不對稱**：`harvest.js` 的向下擷取迴圈每步只前進 `0.9 * viewportHeight`，因為它必須讓沿途每則訊息都渲染出來並擷取，虛擬列表跳過的內容就是匯出漏掉的內容；`scrollToTopAndWait()` 沒有這個義務，它只需要抵達，路過的一概不要。請勿為了「一致性」把兩者統一。捲動期間按鈕**全程維持可點**（`aria-disabled` 恆為 `"false"`，不再於捲動期間禁用）；若捲動進行中再次點擊，會以 `reason: 'stopped-by-user'` 中止目前捲動於當下位置、**不重新開始**（切換式），再次點擊才會重新捲動。
 - **鍵盤與無障礙**：`<div role="button" tabindex="0">`，支援 Enter / Space 鍵盤觸發；`aria-label="回到頂部"`；`aria-disabled` 全程維持 `"false"`。
-- **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
+- **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.combined.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
 
 ## 19. 行動裝置側欄滑動手勢 (Mobile Sidebar Swipe)
 

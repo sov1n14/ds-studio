@@ -3,8 +3,8 @@ import { createRequire } from 'module';
 import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 // Load the constants module as CommonJS so we can inspect its module.exports
-// object (requirement 1) AND trigger its Object.assign(globalThis, ...) that
-// publishes the flat top-level consts as globals. require() runs the file's
+// object (requirement 1) AND trigger its globalThis.DSS_TEMP_CHAT = ... that
+// publishes the consts under the DSS_TEMP_CHAT namespace. require() runs the file's
 // CJS export branch; import '...' alone would skip it.
 const require = createRequire(import.meta.url);
 const constantsExport = require('../../utils/temporary-chat-constants.js');

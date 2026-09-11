@@ -16,11 +16,12 @@
 
 > **v4.11.x 稽核瘦身：方法包版圖變更（讀本文件前務必先看這段）**：上面幾條版本註記描述的是各機制**當時**的落點，檔案名稱已不再對應現況。方法包由九個併為六個：`storage-manager.chunking.js` 與 `storage-manager.lock.js` 併為 `storage-manager.chunk-lock.js`；`storage-manager.syncnow.js` 併入 `storage-manager.sync.js`（`syncNow()` 現位於此）。所有機制的行為完全未變，僅檔案落點改變。另有 `saveChatPresetMap()` 已刪除——它只是 `mutateChatPresetMap()` 的薄包裝，且僅被測試引用，無任何生產端呼叫者。
 >
-> **方法包現為十四個**（載入順序：`keys`／`chunk-lock`／`rw`／`sync`／`tombstone`／`preset-merge`／`preset-recency`／`presets`／`chatmap.diff`／`chatmap`／`local`／`init`／`setters`／`settings-read`）：
+> **方法包現為十五個**（載入順序：`keys`／`chunk-lock`／`rw`／`sync`／`restore`／`tombstone`／`preset-merge`／`preset-recency`／`presets`／`chatmap.diff`／`chatmap`／`local`／`init`／`setters`／`settings-read`）：
 > - `keys`：儲存鍵名（`KEYS`）、預設值（`DEFAULTS`）、錯誤類別（`LockAcquireTimeoutError`／`WriteReconciliationExhaustedError`）與純輔助函式（`_buildNextMeta`）。
 > - `chunk-lock`：跨 context 的 chatPresetMap advisory lock（`_acquireLock`／`_releaseLock`／`_withLock`）、`_writeChunkWithReconciliation`、chunk cache 載入與失效（`_ensureChunkCachesLoaded`／`_installChunkCacheInvalidator`）、`LOCK_CONSTANTS`。
 > - `rw`：`chrome.storage` 安全讀寫包裝（`_safeGet`／`_safeSet`）與雙層 sync/local 讀取（`_get`）、寫入（`_set`）、位元組長度計算（`_byteLen`）。
 > - `sync`：雲端同步與衝突解決（`retrySync`／`resolveSyncConflict`／`syncNow`／`isSyncedWithCloud`／`hasOversizedItems`）。
+> - `restore`：備份還原邏輯（`restoreSettings`），從 sync.js 抽出。
 > - `tombstone`：提示詞組刪除墓碑管理（`_mergeTombstones`／`_pruneTombstones`／`_isTombstonedAway`／`recordPresetTombstones`／`clearPresetTombstones`、`TOMBSTONE_RETENTION_MS`）。
 > - `preset-merge`：雙側 preset 陣列的 Map-based 合併邏輯（`mergePresets`），含順序元資料決策與 tombstone 過濾。
 > - `preset-recency`：preset 新舊判定（`_pickPresetOrderByRecency`／`_pickNewerPreset`）、`retrySync` 推送守衛輔助、`resolveGlobalPromptEnabled()`。
@@ -32,7 +33,7 @@
 > - `setters`：14 個單鍵 `save<X>` 一行式 setter（`saveActivePresetId`／`savePinnedPresetId`／`saveIncludeThinking`／`saveIncludeReferences`／`saveGlobalDefaultPrompt`／`saveSidebarAutoHide`／`saveHideThinking`／`savePreventAutoScroll`／`saveWebsearchToggle`／`saveShowSystemTime`／`saveChatWidth`／`saveChatWidthEnabled`／`saveInputWidth`／`saveInputWidthEnabled`）。純搬移、零行為變更。注意 `storage-manager.local.js` 的 `saveEnabledState`／`saveGlobalPromptEnabled` 是本地專用設定，仍留在原處。
 > - `settings-read`：整條設定讀取路徑——白名單常數 `SYNCED_SETTINGS_KEYS`（18 個同步鍵）與 `LOCAL_ONLY_SETTINGS_KEYS`（`isEnabled`／`globalPromptEnabled` 兩個本機鍵），以及 `getSettings()` 與 `getActivePromptContent()`。**白名單是唯一的收錄依據**——未列入的 `KEYS` 成員（同步重試簿記、分塊佈局元資料、金鑰前綴常數等）一律視為內部細節，不得出現在 `getSettings()` 的回傳物件。`getSettings()` 因此固定回傳 22 個欄位：18 個同步鍵 + 2 個本機鍵 + 執行期組合的 `promptPresets` 與 `chatPresetMap`。
 >
-> **載入順序不變式（五個載入端，任一漏列即缺方法）**：`manifest.json` 的 `content_scripts`、`popup/popup.html`、`popup/editor/editor.html`、`background/service-worker.js` 的 `importScripts`、`test/setup/vitest.setup.js`。十四個方法包一律排在入口檔 `utils/storage-manager.js` 之前。
+> **載入順序不變式（五個載入端，任一漏列即缺方法）**：`manifest.json` 的 `content_scripts`、`popup/popup.html`、`popup/editor/editor.html`、`background/service-worker.js` 的 `importScripts`、`test/setup/vitest.setup.js`。十五個方法包一律排在入口檔 `utils/storage-manager.js` 之前。
 >
 > 此次合併同時修復了一個潛伏的生產缺陷：`background/service-worker.js` 的 `importScripts` 從未載入 `storage-manager.tombstones.js`，但 `resolveSyncConflict()` 會呼叫 `_mergeTombstones()`，因此背景同步重試（`onStartup`／`onInstalled`／alarm）在衝突可自動解決時一直靜默失效——錯誤被一個標註「best-effort，全部吞掉」的空 `catch` 吃掉。詳見 `docs/changelog/v4.md`（4.11.3）與 `docs/architecture/POPUP.md` 的「Load-order invariant」段落。
 

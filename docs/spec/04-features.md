@@ -119,8 +119,8 @@
   - `DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED'`（payload `{uuids}`）：background 於佇列變動時推送給各分頁
   - `LEASE_TTL_MS = 600000`（10 分鐘）：租約存續時間
   - `HEARTBEAT_INTERVAL_MS = 60000`（1 分鐘）：心跳續租間隔
-  - 常數以 `Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS)` 明確掛上 globalThis：classic script 的 top-level `const` 不會成為 globalThis 屬性，而 service worker 端經 `importScripts` 取用時必須以 `globalThis[name]` 解析。
-- **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
+  - 常數以 `globalThis.DSS_TEMP_CHAT = DSS_TEMP_CHAT_CONSTANTS` 掛上命名空間：classic script 的 top-level `const` 不會成為 globalThis 屬性，而 service worker 端經 `importScripts` 取用時必須以 `globalThis.DSS_TEMP_CHAT.KEY` 解析。
+- **開關 UI**（`content/temporary-chat-toggle.js` + `content/temporary-chat-toggle.ui.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
   - **SPA 注入／移除**：以 Navigation API `navigate` 事件（並輔以 `popstate` 與 `MutationObserver`）在每次導航重新評估：`pathname === '/'` 時等待 `div.aaff8b8f` 出現後於其下方 38px 注入（以 id 去重），`pathname !== '/'` 時移除開關列。移除僅刪除 DOM 元素，**不更動啟用旗標**（該旗標由 `TemporaryChatEnabledFlag` 持有於 `chrome.storage.local`）；重新注入時依持久化旗標還原視覺。旗標經 background 廣播同步至每個分頁並快取於記憶體，故 `readEnabledFlag()` 得以維持同步呼叫。
   - **診斷日誌**：於 init／navigation／anchor 查詢／注入／移除／observer 偵測斷線等決策點輸出 `[DV:TempChatToggle]` 前綴日誌，供在真實瀏覽器調查「開關偶爾未出現、重整後才出現」之用。
 - **新建偵測與授權擷取**（`content/censor-xhr-hook.js`，主 world）：
@@ -170,7 +170,7 @@
 
 ## 23. 設定讀寫的訊息化（content → background）
 
-一般設定同樣不由 content 層直讀儲存區。型別常數集中於 `utils/settings-message-constants.js`，以 `globalThis.DSS_SETTINGS_MSG` 發布 `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED` 三種型別；content script 與 service worker 載入同一份檔案，兩端皆不硬編碼字串。
+一般設定同樣不由 content 層直讀儲存區。型別常數集中於 `utils/message-constants.js`，以 `globalThis.DSS_SETTINGS_MSG` 發布 `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED` 三種型別；content script 與 service worker 載入同一份檔案，兩端皆不硬編碼字串。
 
 - **背景端路由**（`background/settings-routes.js`，`install()` 同樣於頂層呼叫）：
   - `DSS_GET_SETTINGS`（`{ keys: string[] }`）：自 `chrome.storage.local` 讀取指定鍵，缺漏者以 `StorageManager.DEFAULTS` 補齊，`dsWebSearchToggle` 經共用的 `normalizeWebsearchToggle()` 校正後回應 `{ ok: true, values }`。keys 非陣列或為空即回 `{ ok: false, error }`。

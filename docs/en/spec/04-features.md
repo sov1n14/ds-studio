@@ -119,8 +119,8 @@
   - `DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED'` (payload `{uuids}`): pushed by the background to all tabs when the queue changes
   - `LEASE_TTL_MS = 600000` (10 minutes): lease time-to-live
   - `HEARTBEAT_INTERVAL_MS = 60000` (1 minute): heartbeat renewal interval
-  - Constants are explicitly mounted on globalThis via `Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS)`: a classic script's top-level `const` does not become a globalThis property, and when consumed via `importScripts` in the service worker, `globalThis[name]` must be used for resolution.
-- **Toggle UI** (`content/temporary-chat-toggle.js` + `.css`): Displayed only when `pathname === '/'` (homepage). Text 14px / weight 500, off state `#f9fafb`, on state `#679efe`; toggle track on state `#4d6bfe`. Style selectors are all prefixed with `.dss-temp-chat-*` for isolation.
+  - Constants are mounted under a namespace via `globalThis.DSS_TEMP_CHAT = DSS_TEMP_CHAT_CONSTANTS`: a classic script's top-level `const` does not become a globalThis property, and when consumed via `importScripts` in the service worker, `globalThis.DSS_TEMP_CHAT.KEY` must be used for resolution.
+- **Toggle UI** (`content/temporary-chat-toggle.js` + `content/temporary-chat-toggle.ui.js` + `.css`): Displayed only when `pathname === '/'` (homepage). Text 14px / weight 500, off state `#f9fafb`, on state `#679efe`; toggle track on state `#4d6bfe`. Style selectors are all prefixed with `.dss-temp-chat-*` for isolation.
   - **SPA Injection/Removal**: The Navigation API `navigate` event (supplemented by `popstate` and `MutationObserver`) re-evaluates on each navigation: when `pathname === '/'`, waits for `div.aaff8b8f` to appear then injects 38px below it (deduplicated by id); when `pathname !== '/'`, removes the toggle row. Removal only deletes the DOM element, **does not change the enabled flag** (that flag is held by `TemporaryChatEnabledFlag` in `chrome.storage.local`); on re-injection, the visual state is restored from the persisted flag. The flag is broadcast-synced to every tab via the background and cached in memory, so `readEnabledFlag()` can be synchronous.
   - **Diagnostic Logs**: Outputs `[DV:TempChatToggle]` prefixed logs at decision points including init / navigation / anchor query / injection / removal / observer disconnect detection, for investigating "toggle occasionally not appearing, only appearing after refresh" in real browsers.
 - **Creation Detection and Auth Capture** (`content/censor-xhr-hook.js`, main world):
@@ -170,7 +170,7 @@
 
 ## 23. Settings Read/Write via Messages (content → background)
 
-General settings are likewise not read directly from storage by the content layer. Type constants are centralized in `utils/settings-message-constants.js`, published via `globalThis.DSS_SETTINGS_MSG` with three types: `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED`; both the content script and service worker load the same file, so neither side hardcodes strings.
+General settings are likewise not read directly from storage by the content layer. Type constants are centralized in `utils/message-constants.js`, published via `globalThis.DSS_SETTINGS_MSG` with three types: `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED`; both the content script and service worker load the same file, so neither side hardcodes strings.
 
 - **Background Routing** (`background/settings-routes.js`, `install()` likewise called at the top level):
   - `DSS_GET_SETTINGS` (`{ keys: string[] }`): Reads specified keys from `chrome.storage.local`, filling missing ones with `StorageManager.DEFAULTS`; `dsWebSearchToggle` is corrected via the shared `normalizeWebsearchToggle()` before responding with `{ ok: true, values }`. Returns `{ ok: false, error }` if keys is not an array or is empty.
