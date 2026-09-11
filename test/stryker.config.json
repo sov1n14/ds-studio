@@ -13,6 +13,7 @@
   "incremental": true,
   "incrementalFile": "test/stryker-incremental.json",
   "ignoreStatic": true,
+  "dryRunTimeoutMinutes": 15,
   "concurrency": 10,
   "reporters": ["clear-text", "html"],
   "htmlReporter": { "fileName": "test/reports/mutation.html" },
