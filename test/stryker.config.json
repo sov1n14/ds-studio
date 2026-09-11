@@ -5,7 +5,9 @@
   "ignorePatterns": [".venv", "node_modules", ".git", ".playwright-cli"],
   "incremental": true,
   "incrementalFile": "test/stryker-incremental.json",
+  "ignoreStatic": true,
+  "concurrency": 10,
   "reporters": ["clear-text", "html"],
   "htmlReporter": { "fileName": "test/reports/mutation.html" },
-  "thresholds": { "high": 80, "low": 60, "break": null }
+  "thresholds": { "high": 80, "low": 60, "break": 71 }
 }

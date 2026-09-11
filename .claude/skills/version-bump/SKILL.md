@@ -43,6 +43,17 @@ The following change types are **not** considered code changes and therefore **d
 
 > **Rule of thumb**: If the change does not affect the runtime behavior of the final product, it is not a code change and no version bump is needed.
 
+## Pre-Bump Quality Gate
+
+Before finalizing a version bump, mutation testing must pass on the changed scope:
+
+| Timing | Command | Scope |
+|-|-|-|
+| Every version bump | `npx --prefix test stryker run test/stryker.config.json --mutate <touched-files-glob>` | Files changed in this commit |
+| Release or full audit | `npm run test:mutation --prefix test` | Full `utils/` + `content/` |
+
+A surviving mutant that the lead classifies as "weak assertion" must be killed (test-engineer) before the bump proceeds. Equivalent mutants (lead judgment) are acceptable.
+
 ## Verification Checklist
 
 Before marking a task complete, verify:

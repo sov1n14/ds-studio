@@ -17,7 +17,7 @@ TDD applies by layer. DOM-adapter behavior is defined by the live DeepSeek page 
 
 ## Anti-Tautology Rules
 
-Apply project-wide, both layers. A test whose assertions were written by reading the implementation is invalid regardless of pass/fail. Assert observable behavior and return values, not internal call sequences — mocking a collaborator and asserting it was called proves nothing about correctness. This project shipped a real logic defect under more than 1,000 green tests that had never failed once because every assertion was transcribed from the implementation.
+Apply project-wide, both layers. A test whose assertions were written by reading the implementation is invalid regardless of pass/fail. Assert observable behavior and return values, not internal call sequences — mocking a collaborator and asserting it was called proves nothing about correctness. This project shipped a real logic defect under more than 1,000 green tests that had never failed once because every assertion was transcribed from the implementation. Mutation testing (Stryker) is the deterministic enforcement of this rule — a survived mutant is code that can change without any test noticing, directly exposing the tautology risk.
 
 ## Testing Policy
 
