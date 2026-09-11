@@ -17,11 +17,11 @@ import '../../utils/temporary-chat-constants.js';
 import '../../content/temporary-chat-heartbeat.js';
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 
-const HEARTBEAT_TYPE = globalThis.DSS_MSG_HEARTBEAT;
-const RELEASE_LEASE = globalThis.DSS_MSG_RELEASE_LEASE;
-const SCHEDULE_DELETE_RETRY = globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE;
-const UUID_KEY = globalThis.DSS_TEMP_CHAT_UUID_KEY;
-const HEARTBEAT_INTERVAL = globalThis.HEARTBEAT_INTERVAL_MS;
+const HEARTBEAT_TYPE = globalThis.DSS_TEMP_CHAT.DSS_MSG_HEARTBEAT;
+const RELEASE_LEASE = globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE;
+const SCHEDULE_DELETE_RETRY = globalThis.DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE;
+const UUID_KEY = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY;
+const HEARTBEAT_INTERVAL = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS;
 
 const UUID = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
 const OTHER_UUID = 'ffff0000-1111-2222-3333-444444444444';
@@ -173,7 +173,7 @@ describe('token-present navigation: existing delete path is unchanged (control)'
         }));
 
         expect(postMessageSpy).toHaveBeenCalledWith(
-            { type: globalThis.DSS_FIBER_DELETE_MESSAGE_TYPE, sessionId: UUID },
+            { type: globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_MESSAGE_TYPE, sessionId: UUID },
             '*'
         );
 

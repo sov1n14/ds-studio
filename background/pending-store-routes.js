@@ -22,13 +22,13 @@
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
     function resolveMessageTypes() {
         const types = {
-            TRACK_FOR_DELETION: globalThis.DSS_MSG_TRACK_FOR_DELETION,
-            REMOVE_PENDING_DELETE: globalThis.DSS_MSG_REMOVE_PENDING_DELETE,
-            REMOVE_OPEN_UUID: globalThis.DSS_MSG_REMOVE_OPEN_UUID,
-            SET_LAST_AUTH_TOKEN: globalThis.DSS_MSG_SET_LAST_AUTH_TOKEN,
-            HEARTBEAT: globalThis.DSS_MSG_HEARTBEAT,
-            RELEASE_LEASE: globalThis.DSS_MSG_RELEASE_LEASE,
-            GET_PENDING_UUIDS: globalThis.DSS_MSG_GET_PENDING_UUIDS,
+            TRACK_FOR_DELETION: globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION,
+            REMOVE_PENDING_DELETE: globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_PENDING_DELETE,
+            REMOVE_OPEN_UUID: globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_OPEN_UUID,
+            SET_LAST_AUTH_TOKEN: globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN,
+            HEARTBEAT: globalThis.DSS_TEMP_CHAT.DSS_MSG_HEARTBEAT,
+            RELEASE_LEASE: globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE,
+            GET_PENDING_UUIDS: globalThis.DSS_TEMP_CHAT.DSS_MSG_GET_PENDING_UUIDS,
         };
         const missing = Object.keys(types).filter((name) => !types[name]);
         if (missing.length > 0) {

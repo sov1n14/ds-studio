@@ -15,8 +15,8 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vite
 import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
 
 const RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
-const PENDING_SYNC_KEY = globalThis.DSS_PENDING_DELETES_SYNC_KEY;
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const PENDING_SYNC_KEY = globalThis.DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY;
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
 const NOW = 1700000000000;
 
 function flushMicrotasks() {

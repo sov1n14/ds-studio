@@ -21,8 +21,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/temporary-chat-constants.js";
 import "../../content/temporary-chat-heartbeat.js";
 
-const INTERVAL = globalThis.HEARTBEAT_INTERVAL_MS;
-const HEARTBEAT_TYPE = globalThis.DSS_MSG_HEARTBEAT;
+const INTERVAL = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS;
+const HEARTBEAT_TYPE = globalThis.DSS_TEMP_CHAT.DSS_MSG_HEARTBEAT;
 
 let heartbeat;
 let sendMessage;

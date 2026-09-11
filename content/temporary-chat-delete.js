@@ -130,7 +130,7 @@ const TemporaryChatDelete = (() => {
      * @returns {Promise<void>}
      */
     async function init() {
-        const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
+        const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
 
         const flag = _flag();

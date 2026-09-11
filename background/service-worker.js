@@ -121,7 +121,7 @@ async function remediatePendingDeletes() {
         const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
         if (isOk) {
             // 刪除成功 → 清除觀察紀錄 key
-            try { await chrome.storage.local.remove(DSS_LAST_SEEN_CHANGE_KEY_PREFIX + item.chatUuid); } catch {}
+            try { await chrome.storage.local.remove(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX + item.chatUuid); } catch {}
             hasChanged = true;
             continue;
         }
@@ -139,7 +139,7 @@ async function remediatePendingDeletes() {
     try {
         const pendingUuids = new Set(stillPending.map(e => e.chatUuid));
         const all = await chrome.storage.local.get(null);
-        const orphans = Object.keys(all).filter(k => k.startsWith(DSS_LAST_SEEN_CHANGE_KEY_PREFIX) && !pendingUuids.has(k.slice(DSS_LAST_SEEN_CHANGE_KEY_PREFIX.length)));
+        const orphans = Object.keys(all).filter(k => k.startsWith(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX) && !pendingUuids.has(k.slice(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX.length)));
         if (orphans.length > 0) await chrome.storage.local.remove(orphans);
     } catch (err) {
         console.error('[DSS] remediate sweep:', err);
@@ -185,7 +185,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // 監聯來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除
 chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type !== DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
+    if (msg?.type !== DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
     // 讀取佇列以計算正確退避週期
     TemporaryChatPendingStore.getPendingDeletes().then((items) => scheduleRetryAlarm(items));
     return false;
@@ -218,7 +218,7 @@ async function broadcastPendingUuids() {
     if (!Array.isArray(tabs)) return; // 查詢結果非陣列（環境無 tabs API）時視為無分頁可送
     for (const tab of tabs) {
         if (typeof tab.id !== 'number') continue;
-        Promise.resolve(chrome.tabs.sendMessage(tab.id, { type: DSS_MSG_PENDING_UUIDS_CHANGED, uuids }))
+        Promise.resolve(chrome.tabs.sendMessage(tab.id, { type: DSS_TEMP_CHAT.DSS_MSG_PENDING_UUIDS_CHANGED, uuids }))
             .catch(() => {}); // 無 content script 的分頁會 reject，靜默忽略
     }
 }
@@ -226,7 +226,7 @@ async function broadcastPendingUuids() {
 // 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
-    if (!(DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
+    if (!(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
     if (isRemediationInFlight) return;                       // 重入防護
     (async () => {
         isRemediationInFlight = true;

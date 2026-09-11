@@ -72,10 +72,10 @@ describe('background/pending-store-routes', () => {
         });
 
         it('publishes them as bare globals too (Object.assign(globalThis, ...) pattern)', () => {
-            expect(globalThis.DSS_MSG_TRACK_FOR_DELETION).toBe('DSS_TRACK_FOR_DELETION');
-            expect(globalThis.DSS_MSG_REMOVE_PENDING_DELETE).toBe('DSS_REMOVE_PENDING_DELETE');
-            expect(globalThis.DSS_MSG_REMOVE_OPEN_UUID).toBe('DSS_REMOVE_OPEN_UUID');
-            expect(globalThis.DSS_MSG_SET_LAST_AUTH_TOKEN).toBe('DSS_SET_LAST_AUTH_TOKEN');
+            expect(globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION).toBe('DSS_TRACK_FOR_DELETION');
+            expect(globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_PENDING_DELETE).toBe('DSS_REMOVE_PENDING_DELETE');
+            expect(globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_OPEN_UUID).toBe('DSS_REMOVE_OPEN_UUID');
+            expect(globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN).toBe('DSS_SET_LAST_AUTH_TOKEN');
         });
     });
 

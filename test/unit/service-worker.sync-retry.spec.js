@@ -26,7 +26,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const SYNC_RETRY_ALARM_NAME = globalThis.SYNC_RETRY_ALARM_NAME;
 const DELETE_RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
 
 function flushMicrotasks() {
     return new Promise((resolve) => setTimeout(resolve, 0));

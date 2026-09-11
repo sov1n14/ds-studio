@@ -98,7 +98,7 @@ const DSS_TEMP_CHAT_CONSTANTS = {
 };
 
 // 發布至 globalThis：classic script 的 top-level const 僅存在於全域語彙環境而非 globalThis 屬性，消費端以 globalThis[name] 解析常數時需要此份掛載
-Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS);
+globalThis.DSS_TEMP_CHAT = DSS_TEMP_CHAT_CONSTANTS;
 
 // Test export（瀏覽器中為 no-op）
 if (typeof module !== 'undefined' && module.exports) {

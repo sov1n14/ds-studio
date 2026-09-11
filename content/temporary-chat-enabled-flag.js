@@ -12,7 +12,7 @@ const TemporaryChatEnabledFlag = (() => {
     'use strict';
 
     // 常數由 temporary-chat-constants.js 在前載入時掛上 globalThis，三個執行環境（manifest content_scripts、service-worker importScripts、Vitest 前載）皆保證其載入順序在本檔之前
-    const ENABLED_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
+    const ENABLED_KEY = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY;
 
     let _isEnabledCache = false;
     // 世代計數：每次寫入快取即遞增，供 write() 判斷回滾時快取是否已被更新的寫入取代

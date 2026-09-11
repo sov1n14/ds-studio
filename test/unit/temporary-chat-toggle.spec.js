@@ -15,8 +15,8 @@ import '../../utils/storage-manager.js';
 import '../../utils/temporary-chat-constants.js';
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
-const STORAGE_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
-const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
+const STORAGE_KEY = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY;
+const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
 const IS_ENABLED_KEY = StorageManager.KEYS.IS_ENABLED;
 const MSG = () => globalThis.DSS_SETTINGS_MSG;
 

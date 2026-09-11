@@ -14,7 +14,7 @@
 
     /** 發送單次心跳；fire-and-forget，情境已卸載時吞掉錯誤僅記錄警告，絕不拋入計時器。 */
     function sendHeartbeat(chatUuid) {
-        const type = globalThis.DSS_MSG_HEARTBEAT;
+        const type = globalThis.DSS_TEMP_CHAT.DSS_MSG_HEARTBEAT;
         try {
             Promise.resolve(chrome.runtime.sendMessage({ type, uuid: chatUuid }))
                 .catch((err) => console.warn('[DSS] temporary-chat-heartbeat send:', err));
@@ -44,7 +44,7 @@
         currentUuid = chatUuid;
         sendHeartbeat(chatUuid);
 
-        const intervalMs = globalThis.HEARTBEAT_INTERVAL_MS;
+        const intervalMs = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS;
         intervalId = setInterval(() => sendHeartbeat(currentUuid), intervalMs);
     }
 

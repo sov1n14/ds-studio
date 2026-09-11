@@ -8,7 +8,7 @@ import '../../background/service-worker-constants.js';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 const RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
 const EXPIRED = 0;
 
 function flushMicrotasks() {

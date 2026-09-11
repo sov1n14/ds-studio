@@ -104,13 +104,13 @@ describe('A — initEnabledFlagFromStorage', () => {
     });
 
     it('A1: reads dss-temporary-chat-enabled through the settings pipeline', async () => {
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = true;
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = true;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
 
     it('A2: sets _enabledFlagCache to true when the reported value is true', async () => {
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = true;
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = true;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
     });
@@ -122,7 +122,7 @@ describe('A — initEnabledFlagFromStorage', () => {
     });
 
     it('A4: sets _enabledFlagCache to false when the reported value is false', async () => {
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = false;
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = false;
         await TemporaryChatDelete.initEnabledFlagFromStorage();
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
     });
@@ -149,15 +149,15 @@ describe('B — readEnabledFlag', () => {
         // both backing stores, then read. A cache-only read returns the cached value
         // immediately; anything that consulted storage would have to return false --
         // or a Promise, which `toBe(true)` also rejects.
-        await chrome.storage.local.set({ [globalThis.DSS_TEMP_CHAT_STORAGE_KEY]: false });
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = false;
+        await chrome.storage.local.set({ [globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY]: false });
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = false;
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
 
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(true);
 
         // ...and symmetrically, so the assertion cannot pass on a hardcoded `true`.
-        await chrome.storage.local.set({ [globalThis.DSS_TEMP_CHAT_STORAGE_KEY]: true });
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = true;
+        await chrome.storage.local.set({ [globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY]: true });
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = true;
         globalThis.TemporaryChatEnabledFlag.__setCache(false);
 
         expect(TemporaryChatDelete.readEnabledFlag()).toBe(false);
@@ -410,7 +410,7 @@ describe('H — checkCoOccurrence', () => {
         expect(state.createDetected).toBe(false);
         expect(state.isCompletionDetected).toBe(false);
         expect(state.trackedTemporaryUuid).toBe(uuid);
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBe(uuid);
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBe(uuid);
     });
 
     it('H6: when both are true and already on chat page → sends DSS_TRACK_FOR_DELETION to background', () => {
@@ -478,7 +478,7 @@ describe('I — handleNavigationEvent (marking)', () => {
             navigationType: 'push',
         }));
 
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBe(uuid);
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBe(uuid);
     });
 
     it.each([
@@ -612,7 +612,7 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
         const uuid = 'a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6';
         setPathname(`/a/chat/s/${uuid}`);
         applyState({ trackedTemporaryUuid: uuid, capturedAuthToken: null });
-        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, uuid);
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, uuid);
 
         const postMessageSpy = vi.spyOn(window, 'postMessage');
 
@@ -626,10 +626,10 @@ describe('J — handleNavigationEvent (deletion on leave)', () => {
             expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
         // Hands off to service worker: release lease so background can manage the pending delete.
-        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: globalThis.DSS_MSG_RELEASE_LEASE, uuid });
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE, uuid });
         // Tracked UUID is cleared — the content script is no longer responsible.
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
 
         postMessageSpy.mockRestore();
     });
@@ -886,7 +886,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
         ['M7: does NOT delete when no auth token', '/a/chat/s/face0003-f00d-dead-beef-0123456789ab', { trackedTemporaryUuid: 'face0003-f00d-dead-beef-0123456789ab', capturedAuthToken: null, suppressNextUnloadDelete: false, isKeyboardRefresh: false }],
     ])('%s', (_label, pathname, state) => {
         setPathname(pathname);
-        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, state.trackedTemporaryUuid);
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, state.trackedTemporaryUuid);
         applyState(state);
 
         TemporaryChatDelete.handleBeforeUnload();
@@ -896,7 +896,7 @@ describe('M — handleBeforeUnload (tab close)', () => {
         // A suppressed unload leaves tracking intact, in memory and in sessionStorage,
         // so the conversation is still deletable on the next real departure.
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(state.trackedTemporaryUuid);
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBe(state.trackedTemporaryUuid);
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBe(state.trackedTemporaryUuid);
     });
 });
 
@@ -1069,7 +1069,7 @@ describe('N — deleteTrackedAndClear', () => {
 
     it('N5: clears _trackedTemporaryUuid and saves null to sessionStorage', () => {
         const uuid = 'dede0003-dead-dead-dead-deaddeaddead';
-        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, uuid);
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, uuid);
         Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: 'Bearer tok',
@@ -1078,14 +1078,14 @@ describe('N — deleteTrackedAndClear', () => {
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
 
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
     });
 
     it.each([
         ['N6: is a no-op when trackedTemporaryUuid is null', { capturedAuthToken: 'Bearer tok', trackedTemporaryUuid: null }],
         ['N7: is a no-op when capturedAuthToken is null', { trackedTemporaryUuid: 'dede0004-dead-dead-dead-deaddeaddead', capturedAuthToken: null }],
     ])('%s', (_label, state) => {
-        if (state.trackedTemporaryUuid) sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, state.trackedTemporaryUuid);
+        if (state.trackedTemporaryUuid) sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, state.trackedTemporaryUuid);
         applyState(state);
 
         const postMessageSpy = vi.spyOn(window, 'postMessage');
@@ -1099,7 +1099,7 @@ describe('N — deleteTrackedAndClear', () => {
         // A no-op must leave tracking exactly as it found it -- clearing here would
         // silently orphan a conversation that was never deleted.
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(state.trackedTemporaryUuid);
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBe(state.trackedTemporaryUuid);
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBe(state.trackedTemporaryUuid);
 
         postMessageSpy.mockRestore();
     });
@@ -1217,7 +1217,7 @@ describe('P — listener lifecycle', () => {
     // These call the real init() and assert only what an outside observer can see.
 
     it('P5: init() seeds the enabled flag from the settings pipeline', async () => {
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = true;
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = true;
         globalThis.TemporaryChatEnabledFlag.__setCache(false);
 
         await TemporaryChatDelete.init();
@@ -1226,7 +1226,7 @@ describe('P — listener lifecycle', () => {
     });
 
     it('P6: after init() with the flag enabled, a real window message mutates state (listeners are live)', async () => {
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = true;
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = true;
         resetState();
 
         await TemporaryChatDelete.init();
@@ -1248,8 +1248,8 @@ describe('P — listener lifecycle', () => {
 
     it('P7: init() restores a tracked uuid from sessionStorage and goes live even while the flag is disabled', async () => {
         const uuid = 'eeee1111-2222-3333-4444-555555555555';
-        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, uuid);
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = false;
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, uuid);
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = false;
         resetState();
 
         await TemporaryChatDelete.init();
@@ -1268,7 +1268,7 @@ describe('P — listener lifecycle', () => {
 
     it('P8: with no tracked uuid and the flag disabled, init() leaves the listeners detached', async () => {
         sessionStorage.clear();
-        settingsStore[globalThis.DSS_TEMP_CHAT_STORAGE_KEY] = false;
+        settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = false;
         resetState();
 
         await TemporaryChatDelete.init();

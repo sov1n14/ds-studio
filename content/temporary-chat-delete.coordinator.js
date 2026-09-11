@@ -31,7 +31,7 @@
     /** 自跨裝置待刪佇列移除指定 UUID（確認刪除成功後呼叫）。 */
     function removePendingDeleteRoute(uuid) {
         sendPendingStoreRoute(
-            globalThis.DSS_MSG_REMOVE_PENDING_DELETE,
+            globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_PENDING_DELETE,
             { uuid },
             'removePendingDelete'
         );
@@ -61,10 +61,10 @@
             state.trackedTemporaryUuid = null;
             tracking.saveTrackedUuid(null);
             root.TemporaryChatHeartbeat?.stop?.();
-            sendPendingStoreRoute(globalThis.DSS_MSG_REMOVE_OPEN_UUID, { uuid }, 'removeOpenUuid');
+            sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_OPEN_UUID, { uuid }, 'removeOpenUuid');
             // 排程 SW alarm 重試刪除（fire-and-forget，統一透過 sendPendingStoreRoute 防護同步 throw）
-            sendPendingStoreRoute(globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuid }, 'scheduleDeleteRetry');
-            sendPendingStoreRoute(globalThis.DSS_MSG_RELEASE_LEASE, { uuid }, 'releaseLease');
+            sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuid }, 'scheduleDeleteRetry');
+            sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE, { uuid }, 'releaseLease');
             if (!readEnabledFlag()) {
                 detachListeners();
             }
@@ -91,7 +91,7 @@
             // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
             // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
             sendPendingStoreRoute(
-                globalThis.DSS_MSG_REMOVE_OPEN_UUID,
+                globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_OPEN_UUID,
                 { uuid: uuidToDelete },
                 'removeOpenUuid'
             );
@@ -104,8 +104,8 @@
                 // teardown 期間 .then 可能不執行 → 項目留在 sync 佇列，交由 onStartup 補救（confirmed-deletion invariant）
             } else {
                 // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
-                const FIBER_REQ = globalThis.DSS_FIBER_DELETE_MESSAGE_TYPE;
-                const FIBER_RES = globalThis.DSS_FIBER_DELETE_RESULT_TYPE;
+                const FIBER_REQ = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_MESSAGE_TYPE;
+                const FIBER_RES = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_RESULT_TYPE;
 
                 let hasFallbackTriggered = false;
                 let timeoutId = null;
@@ -120,8 +120,8 @@
                         removePendingDeleteRoute(uuidToDelete);
                     } else {
                         // 情境存活但重試耗盡 → 釋放 lease 並排程 SW alarm 重試（統一透過 sendPendingStoreRoute 防護）
-                        sendPendingStoreRoute(globalThis.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuidToDelete }, 'scheduleDeleteRetry');
-                        sendPendingStoreRoute(globalThis.DSS_MSG_RELEASE_LEASE, { uuid: uuidToDelete }, 'releaseLease');
+                        sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuidToDelete }, 'scheduleDeleteRetry');
+                        sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE, { uuid: uuidToDelete }, 'releaseLease');
                     }
                 };
 

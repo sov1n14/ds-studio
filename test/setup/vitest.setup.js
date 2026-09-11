@@ -40,12 +40,12 @@ import '../../utils/message-constants.js';
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the
 // entry's Object.assign finds the bundles already populated.
-// utils/temporary-chat-constants.js mounts every DSS_TEMP_CHAT_* constant onto
-// globalThis via Object.assign as a load side effect. It MUST load before any
-// preloaded module that resolves one of those constants -- content/temporary-chat-enabled-flag.js
-// reads DSS_TEMP_CHAT_STORAGE_KEY at load time (its module-level ENABLED_KEY), and the
-// temporary-chat-delete.* parts read DSS_* constants at call time. Placed at the top of
-// the preload block so it precedes all of them.
+// utils/temporary-chat-constants.js mounts DSS_TEMP_CHAT_CONSTANTS as a single
+// globalThis.DSS_TEMP_CHAT namespace object. It MUST load before any preloaded
+// module that resolves one of those constants -- content/temporary-chat-enabled-flag.js
+// reads DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY at load time, and the
+// temporary-chat-delete.* parts read DSS_TEMP_CHAT.* constants at call time.
+// Placed at the top of the preload block so it precedes all of them.
 import '../../utils/temporary-chat-constants.js';
 import '../../utils/storage-manager.keys.js';
 import '../../utils/storage-manager.chunk-lock.js';

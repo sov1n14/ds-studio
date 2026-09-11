@@ -44,7 +44,7 @@
      */
     function loadTrackedUuid() {
         try {
-            const key = globalThis.DSS_TEMP_CHAT_UUID_KEY;
+            const key = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY;
             return sessionStorage.getItem(key) || null;
         } catch {
             return null;
@@ -57,7 +57,7 @@
      */
     function saveTrackedUuid(uuid) {
         try {
-            const key = globalThis.DSS_TEMP_CHAT_UUID_KEY;
+            const key = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY;
             if (uuid) {
                 sessionStorage.setItem(key, uuid);
             } else {
@@ -95,7 +95,7 @@
             // 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）；
             // fire-and-forget，失敗僅記錄不中斷追蹤流程
             Promise.resolve(chrome.runtime.sendMessage({
-                type: globalThis.DSS_MSG_TRACK_FOR_DELETION,
+                type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION,
                 uuid,
             }))
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })

@@ -78,7 +78,7 @@ const TemporaryChatToggle = (() => {
     }
 
     function dispatchToggleEvent(isEnabled) {
-        const EVENT_NAME = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
+        const EVENT_NAME = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { isEnabled } }));
     }
 

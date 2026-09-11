@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const constantsExport = require('../../utils/temporary-chat-constants.js');
 
 const SYNC_KEY = 'dss-pending-deletes-sync';
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
 
 // fake-timer storage helpers. The in-memory chrome.storage mock resolves
 // get/set via setTimeout(0). Under vi.useFakeTimers() those macrotasks never
@@ -41,11 +41,11 @@ describe('TemporaryChatPendingStore lease support', () => {
 
     describe('1 lease constants', () => {
         it('L-const-1: LEASE_TTL_MS is 600000 as a flat global', () => {
-            expect(globalThis.LEASE_TTL_MS).toBe(600000);
+            expect(globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS).toBe(600000);
         });
 
         it('L-const-2: HEARTBEAT_INTERVAL_MS is 60000 as a flat global', () => {
-            expect(globalThis.HEARTBEAT_INTERVAL_MS).toBe(60000);
+            expect(globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS).toBe(60000);
         });
 
         it('L-const-3: both constants appear in the CommonJS export object', () => {
