@@ -106,6 +106,9 @@
          * @param {NavigateEvent} event
          */
         function handleNavigationEvent(event) {
+            // 擴充功能 context 已失效時直接跳出，避免後續 chrome API 呼叫擲出
+            if (!chrome.runtime?.id) return;
+
             const destinationUrl = event.destination?.url || '';
             const isReload = (event.navigationType === 'reload');
             const isSameUrl = (destinationUrl === window.location.href);
@@ -132,9 +135,11 @@
             if (isLeavingTracked) {
                 if (state.capturedAuthToken) {
                     deleteTrackedAndClear({ keepalive: false });
+                    return;
                 } else {
                     // 無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
                     handOffToServiceWorker(fromUuid);
+                    return;
                 }
             }
 

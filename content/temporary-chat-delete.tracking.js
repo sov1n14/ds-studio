@@ -92,15 +92,20 @@
         function trackUuid(uuid) {
             state.trackedTemporaryUuid = uuid;
             saveTrackedUuid(uuid);
-            // 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）；
-            // fire-and-forget，失敗僅記錄不中斷追蹤流程
-            Promise.resolve(chrome.runtime.sendMessage({
-                type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION,
-                uuid,
-            }))
-                .then((response) => { if (response?.ok === false) throw new Error(response.error); })
-                .catch((err) => console.error('[DSS] temporary-chat-delete.tracking trackUuid:', err));
             state.isPendingCreate = false;
+            // 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）；
+            // fire-and-forget，失敗僅記錄不中斷追蹤流程；
+            // 外層 try/catch 攔截 context invalidated 時 sendMessage 的同步擲出
+            try {
+                Promise.resolve(chrome.runtime.sendMessage({
+                    type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION,
+                    uuid,
+                }))
+                    .then((response) => { if (response?.ok === false) throw new Error(response.error); })
+                    .catch((err) => console.error('[DSS] temporary-chat-delete.tracking trackUuid:', err));
+            } catch (err) {
+                console.error('[DSS] temporary-chat-delete.tracking trackUuid:', err);
+            }
             // 追蹤開始即啟動心跳續約 lease（防禦性參照：單檔測試 bootstrap 可能未載入本模組）
             root.TemporaryChatHeartbeat?.start?.(uuid);
         }

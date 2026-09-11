@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.33.17](changelog/v4.md#43317---2026-09-12) | 修正 context 失效時 `handleNavigationEvent` 連鎖刪除非臨時對話：`trackUuid` 的 `isPendingCreate` 旗標提前重置並包裹 try/catch、`handleNavigationEvent` 補上 `return` 與 `chrome.runtime?.id` 守衛，新增 scenario test（5 測試） |
 | [4.33.16](changelog/v4.md#43316---2026-09-12) | 新增擴充功能 context 失效時的頁面 toast 提示與重新整理按鈕，heartbeat 偵測到 context 失效時觸發 toast 並停止心跳，editor-window-routes 的 `closeTrackedWindow` catch 改為靜默（預期競態） |
 | [4.33.4](changelog/v4.md#4334---2026-09-07) | 修正擴充功能重載或更新後 coordinator 殘存 content script 的 `chrome.runtime.sendMessage` 拋出未捕捉的 `Extension context invalidated`：`sendPendingStoreRoute` 以 try/catch 包裹並記錄，`handOffToServiceWorker` 與 `fallbackToApi` 的直接發送亦改經同一防護 |
 | [4.33.3](changelog/v4.md#4333---2026-09-07) | 修正 service worker 冷啟動或擴充功能重載後 `dss-delete-retry` alarm 未重新建立：`remediatePendingDeletes()` 在 auth-token 閘控之前即建立 alarm、`onInstalled` 新增呼叫 `remediatePendingDeletes()` 以重建被 Chrome 清除的 alarm |
