@@ -1,4 +1,4 @@
-/* i18n lifecycle / data-lookup contract  --  backlog U2 + U13 (RED phase)
+﻿/* i18n lifecycle / data-lookup contract  --  backlog U2 + U13 (RED phase)
  *
  * U2: utils/i18n.js must lose its module-level autoInit IIFE. Loading the file
  *     must be inert (no localStorage read, no chrome.storage read, no listener,
@@ -388,6 +388,23 @@ describe('U2 -- dsI18n.onLocaleChanged(cb)', () => {
             .not.toMatch(/dsI18n-locale-changed/);
         expect(I18N_SRC, 'utils/i18n.js must not dispatch any DOM event')
             .not.toMatch(/dispatchEvent/);
+    });
+
+    it('does not notify subscribers when setLocale is called with the current locale', async () => {
+        const chrome = makeChrome();
+        const i18n = loadI18n({ chrome, localStorage: makeLocalStorage(), document: globalThis.document });
+        await i18n.init();
+        // Default locale after init() is zh_TW
+        expect(i18n.getLocale()).toBe('zh_TW');
+
+        const seen = [];
+        i18n.onLocaleChanged((locale) => seen.push(locale));
+
+        // Call setLocale with the SAME locale -- should be a no-op
+        await i18n.setLocale('zh_TW');
+
+        expect(seen, 'subscriber must not fire when locale did not change').toEqual([]);
+        expect(i18n.getLocale()).toBe('zh_TW');
     });
 });
 
