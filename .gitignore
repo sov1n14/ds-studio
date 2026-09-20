@@ -16,3 +16,4 @@ to-do/
 .stryker-tmp/
 reports/
 test/stryker-incremental.json
+tools/test_auth.txt
