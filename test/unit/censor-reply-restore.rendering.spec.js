@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore } from '../helpers/censor-reply-restore-fixtures.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * Markdown rendering, think-block construction, and _injectRestoredContent
@@ -99,11 +100,11 @@ describe('CensorReplyRestore — rendering and content injection', () => {
 
             if (withThinkContainer) {
                 const thinkWrap = document.createElement('div');
-                thinkWrap.className = '_74c0879';
+                thinkWrap.className = DSSelectors.THINK_BLOCK_CLASS;
                 const thinkContent = document.createElement('div');
                 thinkContent.className = 'e1675d8b ds-think-content _767406f';
                 const sep = document.createElement('div');
-                sep.className = '_9ecc93a';
+                sep.className = DSSelectors.THINK_SEPARATOR_CLASS;
                 thinkContent.appendChild(sep);
                 thinkWrap.appendChild(thinkContent);
                 msgEl.appendChild(thinkWrap);
@@ -143,7 +144,7 @@ describe('CensorReplyRestore — rendering and content injection', () => {
             };
 
             CensorReplyRestore._injectRestoredContent(msgEl, record);
-            const thinkContent = msgEl.querySelector('._74c0879.restored-content');
+            const thinkContent = msgEl.querySelector(DSSelectors.THINK_BLOCK_SELECTOR + '.restored-content');
             expect(thinkContent).not.toBeNull();
             const restoredEl = msgEl.querySelector('.ds-assistant-message-main-content.restored-content');
             expect(restoredEl).not.toBeNull();
@@ -161,7 +162,7 @@ describe('CensorReplyRestore — rendering and content injection', () => {
             };
 
             CensorReplyRestore._injectRestoredContent(msgEl, record);
-            const thinkBlock = msgEl.querySelector('._74c0879');
+            const thinkBlock = msgEl.querySelector(DSSelectors.THINK_BLOCK_SELECTOR);
             expect(thinkBlock).not.toBeNull();
         });
 

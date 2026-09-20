@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * The full-DOM scan that matches stored records to censored elements by
@@ -193,7 +194,7 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
             const userMsgDiv = document.createElement('div');
             userMsgDiv.className = 'ds-message';
             const userContent = document.createElement('div');
-            userContent.className = 'fbb737a4';
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent.textContent = 'Hello';
             userMsgDiv.appendChild(userContent);
             userItem.appendChild(userMsgDiv);

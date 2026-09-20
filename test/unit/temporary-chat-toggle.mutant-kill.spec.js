@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import '../../utils/temporary-chat-constants.js';
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 
 const STORAGE_KEY = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY;
 const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
@@ -88,7 +89,7 @@ async function loadToggle(values = {}) {
 function createAnchorInDOM() {
     const parent = document.createElement('div');
     const anchor = document.createElement('div');
-    anchor.className = 'aaff8b8f';
+    anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
     parent.appendChild(anchor);
     document.body.appendChild(parent);
     return anchor;
@@ -297,7 +298,7 @@ describe('MK-L -- Observer detects anchor added deep in subtree', () => {
         await flush();
         const parent = document.createElement('div');
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         parent.appendChild(anchor);
         wrapper.appendChild(parent);
         await vi.waitFor(() => { expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull(); });

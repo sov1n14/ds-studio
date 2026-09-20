@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * _tryRestoreMessage and applyToExisting: post-refresh restore, idempotency,
@@ -153,7 +154,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             const userMsg = document.createElement('div');
             userMsg.className = 'ds-message';
             const userContent = document.createElement('div');
-            userContent.className = 'fbb737a4';
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent.textContent = 'Guard test prompt';
             userMsg.appendChild(userContent);
             userItem.appendChild(userMsg);

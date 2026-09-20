@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/storage-manager.js";
+import DSSelectors from "../../content/ds-selectors.js";
 const { createPresetOverlay } = require("../../content/preset-overlay.controller.js");
 
 function makeCtx(overrides = {}) {
@@ -88,7 +89,7 @@ describe("startSettle -- settle object", () => {
 
 describe("start -- enable branching", () => {
     let o, ctx, t;
-    beforeEach(() => { spySM(); ctx = makeCtx(); o = createPresetOverlay(ctx); t = document.createElement("div"); t.className = "_2be88ba"; document.body.appendChild(t); });
+    beforeEach(() => { spySM(); ctx = makeCtx(); o = createPresetOverlay(ctx); t = document.createElement("div"); t.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1); document.body.appendChild(t); });
     afterEach(() => { td(o, null); if (t && t.parentNode) t.parentNode.removeChild(t); restoreSM(); });
 
     it("false hides", () => { o.start([], "", false); expect(o.wrapperEl.style.display).toBe("none"); });

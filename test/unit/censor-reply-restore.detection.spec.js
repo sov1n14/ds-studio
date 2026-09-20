@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore } from '../helpers/censor-reply-restore-fixtures.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * DOM inspection: censored-toolbar detection, toolbar lookup, and reading
@@ -150,7 +151,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             const userMsg = document.createElement('div');
             userMsg.className = 'ds-message';
             const userContent = document.createElement('div');
-            userContent.className = 'fbb737a4';
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent.textContent = userPromptText;
             userMsg.appendChild(userContent);
             userItem.appendChild(userMsg);
@@ -223,7 +224,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             const userMsg1 = document.createElement('div');
             userMsg1.className = 'ds-message';
             const userContent1 = document.createElement('div');
-            userContent1.className = 'fbb737a4';
+            userContent1.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent1.textContent = 'First user';
             userMsg1.appendChild(userContent1);
             user1.appendChild(userMsg1);
@@ -242,7 +243,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             const userMsg2 = document.createElement('div');
             userMsg2.className = 'ds-message';
             const userContent2 = document.createElement('div');
-            userContent2.className = 'fbb737a4';
+            userContent2.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent2.textContent = 'Second user';
             userMsg2.appendChild(userContent2);
             user2.appendChild(userMsg2);

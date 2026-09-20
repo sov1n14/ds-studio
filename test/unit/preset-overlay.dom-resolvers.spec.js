@@ -29,6 +29,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 // Ensure resolvers global is populated before the controller resolves it.
 import '../../content/preset-overlay.resolvers.js';
 
@@ -99,16 +100,16 @@ function rect(left, width, top = 0) {
  */
 function buildRealisticHeader() {
     const container = document.createElement('div');
-    container.className = '_2be88ba';
+    container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
 
     const wrapper = document.createElement('div');
-    wrapper.className = '_1aa2651';
+    wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
 
     const btn1 = document.createElement('div');
     btn1.setAttribute('role', 'button');
 
     const titleEl = document.createElement('div');
-    titleEl.className = '_9986c0c';
+    titleEl.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
     titleEl.textContent = 'My Chat';
 
     const spacer = document.createElement('div');
@@ -308,17 +309,17 @@ describe('DOM resolvers — hash-fallback title path', () => {
         if (overlay) overlay.unmount();
         restoreStorageManager();
         vi.restoreAllMocks();
-        document.body.querySelectorAll('._2be88ba').forEach(el => el.remove());
+        document.body.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR).forEach(el => el.remove());
     });
 
     it('resolves title via container.querySelector("._9986c0c") when wrapper has only role-button children', () => {
         // Wrapper with only role-button children → semantic path skips all;
         // fallback finds ._9986c0c placed on the container.
         const container = document.createElement('div');
-        container.className = '_2be88ba';
+        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
 
         const wrapper = document.createElement('div');
-        wrapper.className = '_1aa2651';
+        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
 
         const onlyBtn = document.createElement('div');
         onlyBtn.setAttribute('role', 'button');
@@ -327,7 +328,7 @@ describe('DOM resolvers — hash-fallback title path', () => {
 
         // ._9986c0c as sibling to wrapper (hash fallback target)
         const fallbackTitle = document.createElement('div');
-        fallbackTitle.className = '_9986c0c';
+        fallbackTitle.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
         fallbackTitle.textContent = 'Hash title';
 
         container.appendChild(wrapper);
@@ -351,10 +352,10 @@ describe('DOM resolvers — hash-fallback title path', () => {
     it('falls back gracefully (no throw) when both wrapper and ._9986c0c are absent', () => {
         // No title found → titleRect=null → computePlacement falls back to center
         const container = document.createElement('div');
-        container.className = '_2be88ba';
+        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
 
         const wrapper = document.createElement('div');
-        wrapper.className = '_1aa2651';
+        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
         const btn = document.createElement('div');
         btn.setAttribute('role', 'button');
         btn.setAttribute('style', 'min-width: 44px;');
@@ -523,22 +524,22 @@ describe('DOM resolvers — structural-fallback button path', () => {
         if (overlay) overlay.unmount();
         restoreStorageManager();
         vi.restoreAllMocks();
-        document.body.querySelectorAll('._2be88ba').forEach(el => el.remove());
+        document.body.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR).forEach(el => el.remove());
     });
 
     it('picks first role-button AFTER title (structural fallback) when no min-width button present', () => {
         // btn1 (before title) | titleEl | btn2 (after title, no min-width)
         const container = document.createElement('div');
-        container.className = '_2be88ba';
+        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
 
         const wrapper = document.createElement('div');
-        wrapper.className = '_1aa2651';
+        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
 
         const btn1 = document.createElement('div');
         btn1.setAttribute('role', 'button');
 
         const titleEl = document.createElement('div');
-        titleEl.className = '_9986c0c';
+        titleEl.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
         titleEl.textContent = 'Title';
 
         const btn2 = document.createElement('div');
@@ -567,10 +568,10 @@ describe('DOM resolvers — structural-fallback button path', () => {
 
     it('falls back to LAST role-button in wrapper when title cannot be resolved', () => {
         const container = document.createElement('div');
-        container.className = '_2be88ba';
+        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
 
         const wrapper = document.createElement('div');
-        wrapper.className = '_1aa2651';
+        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
 
         const btnA = document.createElement('div');
         btnA.setAttribute('role', 'button');
@@ -616,14 +617,14 @@ describe('DOM resolvers — null paths and guard clauses', () => {
         if (overlay) overlay.unmount();
         restoreStorageManager();
         vi.restoreAllMocks();
-        document.body.querySelectorAll('._2be88ba').forEach(el => el.remove());
+        document.body.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR).forEach(el => el.remove());
     });
 
     it('buttonRect=null when no ._1aa2651 wrapper present — no throw, falls back to center', () => {
         const container = document.createElement('div');
-        container.className = '_2be88ba';
+        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         const titleEl = document.createElement('div');
-        titleEl.className = '_9986c0c';
+        titleEl.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
         container.appendChild(titleEl);
         document.body.appendChild(container);
 
@@ -647,7 +648,7 @@ describe('DOM resolvers — null paths and guard clauses', () => {
 
     it('reposition() skips computation when display:none', () => {
         const container = document.createElement('div');
-        container.className = '_2be88ba';
+        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         document.body.appendChild(container);
 
         overlay = createPresetOverlay(ctx);

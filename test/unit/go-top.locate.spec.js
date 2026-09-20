@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createWrapperWithoutNativeButton,
@@ -348,7 +349,7 @@ describe('GoToTop', () => {
 
         it('falls back to INJECT_PARENT_FALLBACK selector when .aaff8b8f is absent', () => {
             const outerWrapper = document.createElement('div');
-            outerWrapper.className = '_871cbca';
+            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
             const firstChild = document.createElement('div');
             const injectParent = document.createElement('div');
             outerWrapper.appendChild(firstChild);

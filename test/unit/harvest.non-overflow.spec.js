@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import harvestModule from '../../content/harvest.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 const { harvestAllMessages } = harvestModule;
 
@@ -76,7 +77,7 @@ function appendMessage(visibleItems, key, textContent = 'msg', isAI = false) {
         msg.appendChild(md);
     } else {
         const inner = document.createElement('div');
-        inner.className = 'fbb737a4';
+        inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
         inner.textContent = textContent;
         msg.appendChild(inner);
     }

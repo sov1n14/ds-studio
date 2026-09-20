@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/storage-manager.js";
+import DSSelectors from "../../content/ds-selectors.js";
 
 const { createPresetOverlay } = require("../../content/preset-overlay.controller.js");
 
@@ -283,7 +284,7 @@ describe("findAndMount -- DOM query", () => {
 
     it("does not remount if targetEl is already the found element", () => {
         target = document.createElement("div");
-        target.className = "_2be88ba";
+        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         document.body.appendChild(target);
         overlay.findAndMount();
         const firstDropdown = overlay.dropdown;
@@ -293,7 +294,7 @@ describe("findAndMount -- DOM query", () => {
 
     it("calls setVisible with ctx.getIsEnabled() result", () => {
         target = document.createElement("div");
-        target.className = "_2be88ba";
+        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         document.body.appendChild(target);
         ctx.getIsEnabled.mockReturnValue(false);
         overlay.findAndMount();
@@ -332,7 +333,7 @@ describe("start -- full initialization", () => {
         ctx = makeCtx();
         overlay = createPresetOverlay(ctx);
         target = document.createElement("div");
-        target.className = "_2be88ba";
+        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         document.body.appendChild(target);
     });
     afterEach(() => { teardown(overlay, null); if (target && target.parentNode) target.parentNode.removeChild(target); restoreStorageManager(); });

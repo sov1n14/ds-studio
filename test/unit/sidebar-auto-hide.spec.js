@@ -3,6 +3,7 @@ import '../../utils/storage-manager.js';
 import '../../content/sidebar-auto-hide.styles.js';
 import '../../content/sidebar-auto-hide.observers.js';
 import SidebarAutoHide from '../../content/sidebar-auto-hide.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -10,7 +11,7 @@ import SidebarAutoHide from '../../content/sidebar-auto-hide.js';
 
 function createSidebar() {
     const el = document.createElement('div');
-    el.className = 'dc04ec1d';
+    el.className = DSSelectors.SIDEBAR_WRAPPER_SELECTOR.split('.').pop();
     document.body.appendChild(el);
     return el;
 }
@@ -531,7 +532,7 @@ describe('Group F1 — applyOverflow() overflow state management', () => {
 
     it('F3: clears overflow when natively collapsed regardless of our collapse state', () => {
         const nativeBar = document.createElement('div');
-        nativeBar.className = 'ca6d4be1';
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
         SidebarAutoHide.sidebarEl.appendChild(nativeBar);
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.applyOverflow();

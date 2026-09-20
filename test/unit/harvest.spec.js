@@ -34,6 +34,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import harvestModule from '../../content/harvest.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 const {
     harvestAllMessages,
@@ -99,7 +100,7 @@ function appendMessage(visibleItems, key, textContent = 'msg', isAI = false) {
         msg.appendChild(md);
     } else {
         const inner = document.createElement('div');
-        inner.className = 'fbb737a4';
+        inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
         inner.textContent = textContent;
         msg.appendChild(inner);
     }
@@ -690,7 +691,7 @@ describe('harvestAllMessages', () => {
         const result = await harvestPromise;
 
         expect(result.items.length).toBeGreaterThanOrEqual(1);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent || '');
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent || '');
         expect([...new Set(texts)].filter(t => t === 'original-content').length).toBeLessThanOrEqual(1);
     });
 
@@ -715,7 +716,7 @@ describe('harvestAllMessages', () => {
         const result = await harvestPromise;
 
         expect(result.items.length).toBe(3);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(['msg-1', 'msg-2', 'msg-3']);
     });
 
@@ -855,7 +856,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('complete');
         expect(result.isComplete).toBe(true);
         expect(result.items.length).toBe(TOTAL_MESSAGES);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(Array.from({ length: TOTAL_MESSAGES }, (_, i) => "msg-" + i));
     }, 20000);
 
@@ -874,7 +875,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('stalled');
         expect(result.isComplete).toBe(false);
         expect(result.items.length).toBeGreaterThan(0);
-        expect(result.items[0].querySelector('.fbb737a4')?.textContent).toBe('captured-before-stall');
+        expect(result.items[0].querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent).toBe('captured-before-stall');
     }, 15000);
 
     it('does NOT stall when fresh progress arrives before the 20000ms threshold - the stall clock resets on progress', async () => {
@@ -923,7 +924,7 @@ describe('harvestAllMessages', () => {
 
         expect(result.reason).toBe('complete');
         expect(result.isComplete).toBe(true);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(['msg-0', 'msg-1']);
     }, 20000);
 
@@ -970,7 +971,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('cancelled');
         expect(result.isComplete).toBe(false);
         expect(result.items.length).toBeGreaterThan(0);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(expect.arrayContaining(['keep-me-0', 'keep-me-1']));
     }, 15000);
 

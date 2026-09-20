@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/settings-message-constants.js';
 import '../../content/ds-selectors.js';
-const { THINK_HEADER_TOGGLE_CLASS } = require('../../content/ds-selectors.js');
+const { THINK_BLOCK_CLASS, THINK_HEADER_TOGGLE_CLASS } = require('../../content/ds-selectors.js');
 import '../../utils/storage-manager.js';
 import StorageManager from '../../utils/storage-manager.js';
 
@@ -22,7 +22,7 @@ const OWN_KEY = StorageManager.KEYS.HIDE_THINKING;
 
 function createExpandedContainer() {
     const container = document.createElement('div');
-    container.className = '_74c0879';
+    container.className = THINK_BLOCK_CLASS;
     const header = document.createElement('div');
     header.className = THINK_HEADER_TOGGLE_CLASS;
     header.click = vi.fn(() => {
@@ -39,7 +39,7 @@ function createExpandedContainer() {
 
 function createCollapsedContainer() {
     const container = document.createElement('div');
-    container.className = '_74c0879';
+    container.className = THINK_BLOCK_CLASS;
     const header = document.createElement('div');
     header.className = THINK_HEADER_TOGGLE_CLASS;
     header.click = vi.fn();
@@ -153,7 +153,7 @@ describe('HideThinking', () => {
 
         it('does not click when container has no header element', () => {
             const container = document.createElement('div');
-            container.className = '_74c0879';
+            container.className = THINK_BLOCK_CLASS;
             const content = document.createElement('div');
             content.className = 'ds-think-content';
             container.appendChild(content);

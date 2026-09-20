@@ -49,16 +49,16 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
             expect(build().querySelector('._5ab5d64')).not.toBeNull();
         });
         it('_5255ff8 _4d41763 span', () => {
-            const span = build().querySelector('._5255ff8');
+            const span = build().querySelector(selectors.THINK_STATUS_SELECTOR);
             expect(span).not.toBeNull();
             expect(span.classList.contains('_4d41763')).toBe(true);
         });
         it('rounded seconds in header', () => {
-            const span = build('thinking', 3.7).querySelector('._5255ff8');
+            const span = build('thinking', 3.7).querySelector(selectors.THINK_STATUS_SELECTOR);
             expect(span.textContent).toContain('4');
         });
         it('empty seconds when 0', () => {
-            const span = build('thinking', 0).querySelector('._5255ff8');
+            const span = build('thinking', 0).querySelector(selectors.THINK_STATUS_SELECTOR);
             expect(span.textContent).not.toContain('0');
         });
         it('c99b79f8 divider', () => {

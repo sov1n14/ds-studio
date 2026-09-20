@@ -26,6 +26,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
+const DSSelectors = require('../../content/ds-selectors.js');
 
 const {
     extractUserInput,
@@ -59,7 +60,7 @@ describe('A. extractUserInput', () => {
     // USER_INPUT_REGEX's matching behavior is exercised by A2-A14 — a value change there
     // already fails those tests, so re-asserting the literal here would be a redundant mirror.
     it('A1: exports the correct constant values (constants with no other tripwire)', () => {
-        expect(EDIT_BUTTON_CLASS).toBe('d4910adc');
+        expect(EDIT_BUTTON_CLASS).toBe(DSSelectors.EDIT_MESSAGE_BUTTON_CLASS);
         expect(DETECTION_TIMEOUT_MS).toBe(2000);
         expect(VALUE_WAIT_TIMEOUT_MS).toBe(800);
     });
@@ -168,13 +169,13 @@ describe('C. applyMaxHeightAdjustments', () => {
         Element.prototype.getBoundingClientRect = originalGetBCR;
         vi.restoreAllMocks();
         // Remove any lingering source elements added directly to body
-        document.querySelectorAll('._2be88ba, ._871cbca').forEach(el => el.remove());
+        document.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR + ", " + DSSelectors.CONTENT_COLUMN_SELECTOR).forEach(el => el.remove());
     });
 
     // Helper: append a source element to document.body so document.querySelector can find it
     function appendSourceA(height = 0) {
         const el = document.createElement('div');
-        el.className = '_2be88ba';
+        el.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         el.getBoundingClientRect = () => ({ height });
         document.body.appendChild(el);
         return el;
@@ -182,7 +183,7 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     function appendSourceB(height = 0) {
         const el = document.createElement('div');
-        el.className = '_871cbca';
+        el.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
         el.getBoundingClientRect = () => ({ height });
         document.body.appendChild(el);
         return el;
@@ -192,10 +193,10 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     it('C1: sets maxHeight=none on all .cc852ac5 elements inside root', () => {
         const a = document.createElement('div');
-        a.className = 'cc852ac5';
+        a.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         a.style.maxHeight = '300px';
         const b = document.createElement('div');
-        b.className = 'cc852ac5';
+        b.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         b.style.maxHeight = '150px';
         container.append(a, b);
 
@@ -207,7 +208,7 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     it('C2: .cc852ac5 is cleared EVEN when source elements are absent (no sources in DOM)', () => {
         const el = document.createElement('div');
-        el.className = 'cc852ac5';
+        el.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         el.style.maxHeight = '200px';
         container.appendChild(el);
 
@@ -234,7 +235,7 @@ describe('C. applyMaxHeightAdjustments', () => {
         appendSourceB(50);
 
         const target = document.createElement('div');
-        target.className = '_646a522';
+        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         target.style.maxHeight = '400px';
         container.appendChild(target);
 
@@ -248,7 +249,7 @@ describe('C. applyMaxHeightAdjustments', () => {
         appendSourceA(50);
 
         const target = document.createElement('div');
-        target.className = '_646a522';
+        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         target.style.maxHeight = '400px';
         container.appendChild(target);
 
@@ -259,7 +260,7 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     it('C6: ._646a522 left untouched when BOTH source elements are missing', () => {
         const target = document.createElement('div');
-        target.className = '_646a522';
+        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         target.style.maxHeight = '400px';
         container.appendChild(target);
 
@@ -270,12 +271,12 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     it('C7: .cc852ac5 is still cleared when ._646a522 is left untouched (missing sources)', () => {
         const cc = document.createElement('div');
-        cc.className = 'cc852ac5';
+        cc.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         cc.style.maxHeight = '300px';
         container.appendChild(cc);
 
         const dyn = document.createElement('div');
-        dyn.className = '_646a522';
+        dyn.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         dyn.style.maxHeight = '400px';
         container.appendChild(dyn);
 
@@ -299,7 +300,7 @@ describe('C. applyMaxHeightAdjustments', () => {
         appendSourceB(bHeight);
 
         const target = document.createElement('div');
-        target.className = '_646a522';
+        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         container.appendChild(target);
 
         applyMaxHeightAdjustments(container);
@@ -318,11 +319,11 @@ describe('C. applyMaxHeightAdjustments', () => {
         appendSourceB(bHeight);
 
         const t1 = document.createElement('div');
-        t1.className = '_646a522';
+        t1.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         const t2 = document.createElement('div');
-        t2.className = '_646a522';
+        t2.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         const t3 = document.createElement('div');
-        t3.className = '_646a522';
+        t3.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         container.append(t1, t2, t3);
 
         applyMaxHeightAdjustments(container);
@@ -336,11 +337,11 @@ describe('C. applyMaxHeightAdjustments', () => {
 
     it('C10: root parameter scoping — does not affect .cc852ac5 elements outside root', () => {
         const inside = document.createElement('div');
-        inside.className = 'cc852ac5';
+        inside.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         container.appendChild(inside);
 
         const outside = document.createElement('div');
-        outside.className = 'cc852ac5';
+        outside.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         outside.style.maxHeight = '100px';
         document.body.appendChild(outside);
 
@@ -359,11 +360,11 @@ describe('C. applyMaxHeightAdjustments', () => {
         appendSourceB(20);
 
         const inside = document.createElement('div');
-        inside.className = '_646a522';
+        inside.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         container.appendChild(inside);
 
         const outside = document.createElement('div');
-        outside.className = '_646a522';
+        outside.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         outside.style.maxHeight = '999px';
         document.body.appendChild(outside);
 
@@ -650,7 +651,7 @@ describe('F. handleEditButtonClick', () => {
         }
         Element.prototype.getBoundingClientRect = originalGetBCR;
         vi.restoreAllMocks();
-        document.querySelectorAll('._2be88ba, ._871cbca').forEach(el => el.remove());
+        document.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR + ", " + DSSelectors.CONTENT_COLUMN_SELECTOR).forEach(el => el.remove());
     });
 
     // Helper: fire a synthetic click event targeting a specific element
@@ -738,13 +739,13 @@ describe('F. handleEditButtonClick', () => {
 
         // .cc852ac5 constrained element — must always be cleared
         const constrained1 = document.createElement('div');
-        constrained1.className = 'cc852ac5';
+        constrained1.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         constrained1.style.maxHeight = '300px';
         document.body.appendChild(constrained1);
 
         // ._646a522 element — must be left untouched because no source elements exist
         const constrained2 = document.createElement('div');
-        constrained2.className = '_646a522';
+        constrained2.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         constrained2.style.maxHeight = '150px';
         document.body.appendChild(constrained2);
 
@@ -773,12 +774,12 @@ describe('F. handleEditButtonClick', () => {
 
         // Source elements
         const sourceA = document.createElement('div');
-        sourceA.className = '_2be88ba';
+        sourceA.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         sourceA.getBoundingClientRect = () => ({ height: aHeight });
         document.body.appendChild(sourceA);
 
         const sourceB = document.createElement('div');
-        sourceB.className = '_871cbca';
+        sourceB.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
         sourceB.getBoundingClientRect = () => ({ height: bHeight });
         document.body.appendChild(sourceB);
 
@@ -791,7 +792,7 @@ describe('F. handleEditButtonClick', () => {
 
         // ._646a522 target
         const dynEl = document.createElement('div');
-        dynEl.className = '_646a522';
+        dynEl.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
         document.body.appendChild(dynEl);
 
         fireClick(inner);
@@ -910,7 +911,7 @@ describe('G. scroll-into-position', () => {
     }) {
         // Header (._2be88ba) — placed directly on body so document.querySelector finds it
         const header = document.createElement('div');
-        header.className = '_2be88ba';
+        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         header.getBoundingClientRect = () => ({ bottom: headerBottom, top: 0, height: headerBottom });
         document.body.appendChild(header);
 
@@ -931,7 +932,7 @@ describe('G. scroll-into-position', () => {
 
         // Edit box (.cc852ac5) — child of the list element
         const editBox = document.createElement('div');
-        editBox.className = 'cc852ac5';
+        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         editBox.getBoundingClientRect = () => ({ top: editBoxTop, bottom: editBoxTop + 50, height: 50 });
         listEl.appendChild(editBox);
 
@@ -958,7 +959,7 @@ describe('G. scroll-into-position', () => {
     it('G10: scrollable-ancestor detection — when ._6f2c522 is not scrollable, walks up to scrollable ancestor', () => {
         // Header
         const header = document.createElement('div');
-        header.className = '_2be88ba';
+        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         header.getBoundingClientRect = () => ({ bottom: 100, top: 0, height: 100 });
         document.body.appendChild(header);
 
@@ -977,7 +978,7 @@ describe('G. scroll-into-position', () => {
 
         // Edit box
         const editBox = document.createElement('div');
-        editBox.className = 'cc852ac5';
+        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         editBox.getBoundingClientRect = () => ({ top: 200, bottom: 250, height: 50 });
 
         listEl.appendChild(editBox);
@@ -995,7 +996,7 @@ describe('G. scroll-into-position', () => {
     it('G11: fallback to ._6f2c522 itself when no ancestor is scrollable', () => {
         // Header
         const header = document.createElement('div');
-        header.className = '_2be88ba';
+        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         header.getBoundingClientRect = () => ({ bottom: 100, top: 0, height: 100 });
         document.body.appendChild(header);
 
@@ -1008,7 +1009,7 @@ describe('G. scroll-into-position', () => {
 
         // Edit box
         const editBox = document.createElement('div');
-        editBox.className = 'cc852ac5';
+        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         editBox.getBoundingClientRect = () => ({ top: 200, bottom: 250, height: 50 });
         listEl.appendChild(editBox);
 
@@ -1023,7 +1024,7 @@ describe('G. scroll-into-position', () => {
     it('G12: guard — missing .cc852ac5 edit box is a no-op (no throw, no scrollTop change)', () => {
         // Header present, list with NO edit box
         const header = document.createElement('div');
-        header.className = '_2be88ba';
+        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         header.getBoundingClientRect = () => ({ bottom: 100 });
         document.body.appendChild(header);
 
@@ -1047,7 +1048,7 @@ describe('G. scroll-into-position', () => {
         listEl.scrollTop = 200;
 
         const editBox = document.createElement('div');
-        editBox.className = 'cc852ac5';
+        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         editBox.getBoundingClientRect = () => ({ top: 150 });
         listEl.appendChild(editBox);
         document.body.appendChild(listEl);
@@ -1059,12 +1060,12 @@ describe('G. scroll-into-position', () => {
     it('G14: guard — missing ._6f2c522 scroll container element is a no-op (no throw)', () => {
         // Header and edit box present but NO ._6f2c522 in DOM
         const header = document.createElement('div');
-        header.className = '_2be88ba';
+        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         header.getBoundingClientRect = () => ({ bottom: 100 });
         document.body.appendChild(header);
 
         const editBox = document.createElement('div');
-        editBox.className = 'cc852ac5';
+        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
         editBox.getBoundingClientRect = () => ({ top: 200 });
         document.body.appendChild(editBox);
 
