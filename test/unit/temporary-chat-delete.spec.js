@@ -1488,3 +1488,139 @@ describe('Q — handleHistoryNavMessage', () => {
         sessionStorage.clear();
     });
 });
+
+// ── Group S: download navigation must NOT delete ────────────────────────────
+
+describe('S — download navigation (blob / downloadRequest) must NOT delete', () => {
+    beforeEach(() => {
+        resetState();
+        sessionStorage.clear();
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        global.TemporaryChatDeleteApi.deleteChatSession.mockClear();
+        chrome.runtime.sendMessage.mockClear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        sessionStorage.clear();
+        setPathname('/');
+    });
+
+    /**
+     * Build a NavigateEvent that represents a file download triggered by
+     * an <a download> click. Chrome fires navigation.navigate for these
+     * with event.downloadRequest set to the filename and
+     * event.destination.url set to the blob URL.
+     */
+    function makeDownloadNavigateEvent({
+        downloadRequest = null,
+        destinationUrl,
+        navigationType = 'push',
+    }) {
+        return {
+            destination: { url: destinationUrl },
+            navigationType,
+            ...(downloadRequest != null ? { downloadRequest } : {}),
+        };
+    }
+
+    it('S1: blob destination + downloadRequest set → no deletion, tracking retained', () => {
+        const uuid = 'dddd1111-aaaa-bbbb-cccc-dddddddddddd';
+        setPathname(`/a/chat/s/${uuid}`);
+        Object.assign(TemporaryChatDelete.state, {
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeDownloadNavigateEvent({
+            downloadRequest: 'conversation.md',
+            destinationUrl: 'blob:https://chat.deepseek.com/abc-123-def',
+        }));
+
+        // No deletion must have occurred — neither Fiber nor API.
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        // Tracking must be retained — the user is still on the page.
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(uuid);
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('S2: downloadRequest set with a NON-blob destination → no deletion, tracking retained', () => {
+        const uuid = 'dddd2222-aaaa-bbbb-cccc-dddddddddddd';
+        setPathname(`/a/chat/s/${uuid}`);
+        Object.assign(TemporaryChatDelete.state, {
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeDownloadNavigateEvent({
+            downloadRequest: 'export.json',
+            destinationUrl: 'https://chat.deepseek.com/api/export/file.json',
+        }));
+
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(uuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('S3: blob destination but downloadRequest absent → no deletion, tracking retained', () => {
+        const uuid = 'dddd3333-aaaa-bbbb-cccc-dddddddddddd';
+        setPathname(`/a/chat/s/${uuid}`);
+        Object.assign(TemporaryChatDelete.state, {
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeDownloadNavigateEvent({
+            // downloadRequest is omitted (absent/null)
+            destinationUrl: 'blob:https://chat.deepseek.com/xyz-789-ghi',
+        }));
+
+        expect(postMessageSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(uuid);
+
+        postMessageSpy.mockRestore();
+    });
+
+    it('S4 (contrast): genuine navigation away — no downloadRequest, no blob — deletion DOES occur', () => {
+        const uuid = 'dddd4444-aaaa-bbbb-cccc-dddddddddddd';
+        setPathname(`/a/chat/s/${uuid}`);
+        Object.assign(TemporaryChatDelete.state, {
+            trackedTemporaryUuid: uuid,
+            capturedAuthToken: 'Bearer tok',
+        });
+
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
+
+        TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent({
+            destinationUrl: 'https://chat.deepseek.com/a/chat/s/eeee5555-ffff-0000-1111-222233334444',
+            navigationType: 'push',
+        }));
+
+        // Genuine leave: deletion MUST fire.
+        expect(postMessageSpy).toHaveBeenCalledWith({
+            type: 'DSS_FIBER_DELETE_SESSION',
+            sessionId: uuid,
+        }, '*');
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+
+        postMessageSpy.mockRestore();
+    });
+});

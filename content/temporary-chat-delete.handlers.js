@@ -110,6 +110,11 @@
             if (!chrome.runtime?.id) return;
 
             const destinationUrl = event.destination?.url || '';
+
+            // 匯出對話時 <a download> 點擊會觸發 navigate 事件，但使用者並未離開頁面。
+            // 透過 downloadRequest（瀏覽器標示檔案下載）或 blob: scheme 偵測，直接跳出避免誤刪。
+            const isDownload = event.downloadRequest != null || destinationUrl.startsWith('blob:');
+            if (isDownload) return;
             const isReload = (event.navigationType === 'reload');
             const isSameUrl = (destinationUrl === window.location.href);
             const isReloadOrSameUrl = isReload || isSameUrl;
