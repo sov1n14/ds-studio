@@ -173,6 +173,13 @@ describe('GoToTop render-combined mutant killers', () => {
     });
 
     describe('_startWrapperObserver callback', () => {
+        // happy-dom captures the real setTimeout at module-load time and uses it
+        // to deliver MutationObserver callbacks. vi.useFakeTimers() patches
+        // globalThis.setTimeout but NOT the already-bound reference inside
+        // happy-dom. We must yield to the real macrotask queue so MO callbacks
+        // fire and schedule the (fake) debounce timer before we advance it.
+        const realSetTimeout = globalThis.setTimeout;
+        const yieldToMacrotask = () => new Promise(resolve => realSetTimeout(resolve, 0));
         it('restores visibility for previously visible button', async () => {
             vi.useFakeTimers();
             const { injectParent, nativeBtn } = createFullWrapperWithNativeButton();
@@ -182,6 +189,7 @@ describe('GoToTop render-combined mutant killers', () => {
             vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
             originalBtn.remove();
             injectParent.appendChild(document.createElement('span'));
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 10);
             expect(GoToTop._button).not.toBeNull();
             expect(GoToTop._button.style.display).toBe('');
@@ -193,6 +201,7 @@ describe('GoToTop render-combined mutant killers', () => {
             const originalBtn = GoToTop._button;
             vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
             nativeBtn.remove();
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 10);
             expect(GoToTop._injectionMode).toBe('wrapper-solo');
             expect(GoToTop._button).toBe(originalBtn);
@@ -205,6 +214,7 @@ describe('GoToTop render-combined mutant killers', () => {
             GoToTop._button.remove();
             const evalSpy = vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
             injectParent.appendChild(document.createElement('span'));
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 10);
             expect(evalSpy).toHaveBeenCalled();
         });
@@ -214,6 +224,7 @@ describe('GoToTop render-combined mutant killers', () => {
             GoToTop._injectIntoWrapper(nativeBtn);
             const evalSpy = vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
             nativeBtn.remove();
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 10);
             expect(evalSpy).toHaveBeenCalled();
         });
@@ -224,10 +235,13 @@ describe('GoToTop render-combined mutant killers', () => {
             GoToTop._button.remove();
             const evalSpy = vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
             injectParent.appendChild(document.createElement('span'));
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(20);
             injectParent.appendChild(document.createElement('span'));
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(20);
             injectParent.appendChild(document.createElement('span'));
+            await yieldToMacrotask();
             await vi.advanceTimersByTimeAsync(GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 10);
             expect(evalSpy).toHaveBeenCalledTimes(1);
         });

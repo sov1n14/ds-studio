@@ -98,6 +98,7 @@ export function resetGoToTopState() {
     GoToTop._scrollPromise = null;
     GoToTop._scrollReject = null;
     GoToTop._observer = null;
+    if (GoToTop._wrapperObserver) GoToTop._wrapperObserver.disconnect();
     GoToTop._wrapperObserver = null;
     GoToTop._wrapperObserverTimer = null;
     GoToTop._scrollListener = null;
