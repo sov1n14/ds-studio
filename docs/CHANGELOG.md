@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.33.24](changelog/v4.md#43324---2026-09-21) | 新增 12 個選擇器常數並統一測試檔案的選擇器來源 |
 | [4.33.23](changelog/v4.md#43323---2026-09-21) | 補充捲動失敗回傳 reason 屬性 |
 | [4.33.22](changelog/v4.md#43322---2026-09-21) | 修正未溢出對話無法匯出 |
 | [4.33.21](changelog/v4.md#43321---2026-09-21) | 修正匯出時臨時對話被誤刪 |
