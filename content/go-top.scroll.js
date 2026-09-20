@@ -57,9 +57,10 @@
                     }
                 });
 
-                // 若快取容器無效，重新探測
+                // 若快取容器無效，重新探測（不以 scrollHeight <= clientHeight 判定無效：
+                // 未溢出僅代表內容尚短，容器本身仍然正確，見 harvest.dom.js 同理修正）
                 let scrollContainer = this._scrollContainer;
-                if (!scrollContainer || scrollContainer.scrollHeight <= scrollContainer.clientHeight) {
+                if (!scrollContainer) {
                     scrollContainer = this._findScrollContainer(this._getAnchor());
                     if (scrollContainer === document.scrollingElement || scrollContainer === document.documentElement) {
                         this._scrollContainer = null;

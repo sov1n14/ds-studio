@@ -56,10 +56,9 @@
         if (virtualList) {
             let el = virtualList.parentElement;
             while (el && el !== document.body) {
-                if (
-                    el.classList.contains(_DSSelectors.SCROLL_AREA_CLASS) &&
-                    el.scrollHeight > el.clientHeight
-                ) {
+                // 不可滾動的容器仍為有效目標：對話內容未超過視窗時，所有訊息已掛載於 DOM，
+                // 此時為最簡單的擷取情境，不應視為失敗。
+                if (el.classList.contains(_DSSelectors.SCROLL_AREA_CLASS)) {
                     return el;
                 }
                 el = el.parentElement;

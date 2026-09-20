@@ -151,10 +151,10 @@ describe('_findHarvestScrollContainer', () => {
         expect(result).toBe(scrollArea);
     });
 
-    it('strategy 1: skips .ds-scroll-area when scrollHeight <= clientHeight', () => {
-        buildVirtualListDOM({ scrollHeight: 300, clientHeight: 400 });
+    it('strategy 1: returns the .ds-scroll-area ancestor even when it does not overflow', () => {
+        const { scrollArea } = buildVirtualListDOM({ scrollHeight: 300, clientHeight: 400 });
         const result = _findHarvestScrollContainer();
-        expect(result).toBe(document.scrollingElement || document.documentElement);
+        expect(result).toBe(scrollArea);
     });
 
     it('strategy 2: finds overflow:auto ancestor of first visible message when no .ds-scroll-area', () => {
