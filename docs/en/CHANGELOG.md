@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.33.23](changelog/v4.md#43323---2026-09-21) | Add reason property to scroll failure results |
+| [4.33.22](changelog/v4.md#43322---2026-09-21) | Fix export failure on non-overflowing conversations |
+| [4.33.21](changelog/v4.md#43321---2026-09-21) | Fix temporary chat deletion during export |
 | [4.33.20](changelog/v4.md#43320---2026-09-21) | Fixed single-exchange conversation export failure (`harvest.dom.js`, `go-top.scroll.js` overflow gates removed — non-scrollable container is a valid success path); selector maintenance: `THINK_STATUS_SELECTOR` rotated `_08cbf39` → `_5255ff8`, removed four zero-match constants (`ds-icon-button` family and `ds-elevated`), added `THINK_HEADER_TOGGLE_CLASS`, deleted `mobile-homepage-cleanup` feature (`._9579690` gone from page); export count 74 → 71 |
 | [4.33.18](changelog/v4.md#43318---2026-09-20) | Fixed composer attachment button incorrectly triggering prompt injection: `isSendButtonCandidate` removed two container branches (`.ba4f09d3` closest and `.bf38813a` parent class), retaining SVG icon (`SEND_BUTTON_ICON_SELECTOR`) and edit-window button detection; `ds-selectors.js` deleted `SEND_BUTTON_CONTAINER_SELECTOR` and `SEND_BUTTON_PARENT_CLASS` (exports 76 → 74) |
 | [4.33.17](changelog/v4.md#43317---2026-09-12) | Fixed chain-delete of non-temporary chats on context invalidation: `trackUuid` resets `isPendingCreate` before `sendMessage` with try/catch; `handleNavigationEvent` adds missing `return` after delete/hand-off and `chrome.runtime?.id` guard; added scenario test (5 tests) |

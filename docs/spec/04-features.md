@@ -15,6 +15,8 @@
      - **擷取階段**：Toast 顯示 `正在擷取完整對話… 已擷取 N 則`（N 隨擷取進度動態更新），同時在下方持續顯示警告行 `⚠ 請勿捲動對話記錄，以免擷取失敗`，提醒使用者在擷取期間的手動捲動**不會**被抑制，並可能導致擷取失敗。
      - **取消按鈕**（v4.19.0）：兩個階段的 Toast 皆提供取消按鈕。點擊後最多只會觸發一次取消（按鈕隨即禁用並改顯示「正在取消…」），實際停止發生在下一個擷取步驟邊界，因此需要即時回饋讓使用者知道點擊已生效。由於 Toast 容器為 `pointer-events: none`，按鈕必須個別指定 `pointer-events: auto` 才可點擊。擷取階段的 Toast 每步都會重繪計數，重繪**不得**重新啟用已按下的按鈕，也不得重複掛上事件監聽器。
   3. **滾頂**：呼叫 `GoToTop.scrollToTopAndWait()` 將虛擬列表錨定至位置 0，確保擷取從第一則訊息開始。
+     - v4.33.22：移除 `_findScrollContainer` 三個策略中的 `scrollHeight > clientHeight` 溢出閘門，未溢出容器仍為有效目標
+     - v4.33.23：`scrollToTopAndWait` 失敗時補上 `reason: 'anchor_not_found'` 屬性
   4. **增量滾動擷取**：由上至下逐步捲動頁面，每次捲動後等待虛擬列表渲染新節點，持續收集出現在 DOM 中的訊息節點。去重使用 DeepSeek 虛擬列表渲染器指派的 `data-virtual-list-item-key` 數值屬性作為鍵（`Map<number, Element>`），採「已存在則不覆寫」策略，最終依鍵值遞增排序輸出。
 
      **自適應步幅**（v4.19.1）：步幅不再是固定的視窗高比例，而是**每一步實測後推導**。實測兩場真實對話得知，虛擬列表固定掛載 **18 個節點**（與訊息高度無關），掛載窗口向上不延伸（overscan 為 0）、向下延伸 3406～4244px。既然已擷取內容的最深處就是最低掛載節點的底緣，只要下一步的新視窗頂不越過該點就不可能漏；`_measureMountedBottomOffset()` 量出該距離，交由 `HarvestPolicy.computeScrollStep()` 取其 70% 作為步幅，下限為視窗高的 25%，量不到時退回視窗高的 90%（即 v4.19.1 之前的固定行為）。
@@ -132,6 +134,7 @@
   - **離開即刪除**：`navigate` 事件計算離開前的 `fromUuid` 與目的地 URL；當「非刷新」、「非導向同一對話」、`fromUuid` 等於追蹤的臨時 UUID、且已擷取 token 時，刪除並清除追蹤 UUID。
   - **同網址／重整不刪除（Bug 修正）**：`navigationType === 'reload'` 或目的地 URL 等於目前 URL（含於網址列重按目前對話網址）時不刪除，並設定抑制旗標阻擋後續 `beforeunload` 刪除；另以 F5 / Ctrl+R / Cmd+R 鍵盤偵測為第二層保險。
   - **導向同一對話不刪除（Bug 修正，v4.9.1）**：`handleNavigationEvent` 從目的地 URL 擷取 `/a/chat/s/{uuid}` 的 `destUuid`，以 `isSameConversation = destUuid === _trackedTemporaryUuid` 作為守衛。只要導向的是同一追蹤中對話（即使僅 query string 或 hash 不同，如 `?model=v3`、`#msg-42`）即不刪除，取代先前僅比對完整 URL 字串相等的脆弱判定；`extractUuidFromUrl` 相應擴充為可接受選用的完整 URL 參數。此守衛不影響「導向其他頁面仍刪除」與「關閉分頁仍刪除」的既有行為。
+  - v4.33.21：匯出對話時 `<a download>` 點擊會觸發 `navigate` 事件，透過 `event.downloadRequest` 或 `blob:` URL scheme 偵測提前返回，避免誤刪臨時對話
   - `beforeunload`：涵蓋關閉分頁／瀏覽器與整頁導航；當目前 UUID 等於追蹤 UUID、未被抑制、且有 token 時，以 `keepalive: true` 刪除。
 - **生命週期**：監聽於「開關開啟」或「存在追蹤中的臨時 UUID」任一成立時保持掛載；標記新對話僅在開關開啟時進行；刪除已追蹤對話不受開關關閉影響；追蹤對象清空且開關關閉後才卸除監聽。
 - **獨立性**：此功能不受彈出選單右上角主開關連動，僅由首頁開關獨立控制。

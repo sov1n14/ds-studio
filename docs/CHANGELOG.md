@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.33.23](changelog/v4.md#43323---2026-09-21) | 補充捲動失敗回傳 reason 屬性 |
+| [4.33.22](changelog/v4.md#43322---2026-09-21) | 修正未溢出對話無法匯出 |
+| [4.33.21](changelog/v4.md#43321---2026-09-21) | 修正匯出時臨時對話被誤刪 |
 | [4.33.20](changelog/v4.md#43320---2026-09-21) | 修正僅含一輪對話的匯出失敗（`harvest.dom.js`、`go-top.scroll.js` 移除溢位閘門，不可捲動容器為合法成功路徑）；選擇器維護：`THINK_STATUS_SELECTOR` 輪換 `_08cbf39` → `_5255ff8`、移除四個零匹配常數（`ds-icon-button` 系列與 `ds-elevated`）、新增 `THINK_HEADER_TOGGLE_CLASS`、刪除 `mobile-homepage-cleanup` 功能（`._9579690` 已從頁面消失）；匯出數 74 → 71 |
 | [4.33.18](changelog/v4.md#43318---2026-09-20) | 修正 composer 附件按鈕誤觸提示詞組注入：`isSendButtonCandidate` 移除兩個容器分支（`.ba4f09d3` closest 與 `.bf38813a` parent class），保留 SVG 圖示（`SEND_BUTTON_ICON_SELECTOR`）與編輯視窗按鈕判定；`ds-selectors.js` 刪除 `SEND_BUTTON_CONTAINER_SELECTOR` 與 `SEND_BUTTON_PARENT_CLASS`（匯出 76 → 74） |
 | [4.33.17](changelog/v4.md#43317---2026-09-12) | 修正 context 失效時 `handleNavigationEvent` 連鎖刪除非臨時對話：`trackUuid` 的 `isPendingCreate` 旗標提前重置並包裹 try/catch、`handleNavigationEvent` 補上 `return` 與 `chrome.runtime?.id` 守衛，新增 scenario test（5 測試） |
