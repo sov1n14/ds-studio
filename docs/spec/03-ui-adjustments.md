@@ -11,7 +11,7 @@
 - **收合行為**：啟用時，側邊欄（`div.dc04ec1d`）在滑鼠離開時收合至 60px 寬度。內部內容（`div.b8812f16.a2f3d50e`）透過負值 `margin-left` 位移，隱藏在收合的容器後方。
 - **展開行為**：滑鼠懸停時，經過 150ms 延遲（進入延遲），側邊欄展開至原始儲存寬度，內部邊距清除。
 - **收合觸發**：滑鼠離開時，經過 400ms 延遲（離開延遲），側邊欄收合回 60px。視窗縮放也會透過防抖（200ms）的調整大小處理器觸發重新收合。
-- **下拉選單感知**：當側邊欄有待處理的收合計時器，且滑鼠進入浮動/下拉式元素（透過類別 `ds-elevated` 或 `.ds-floating-position-wrapper` 偵測），收合計時器會取消，側邊欄保持展開。浮動元素上的 `mouseleave` 監聽器會在使用者移開時觸發收合。此功能透過 `document` 上的捕獲階段 `mouseover` 監聽器（在 `setupHoverZone()` 中）實作，使用 `el.closest()` 支援精確的子元素層級判定，對 React portal 渲染在側邊欄 DOM 階層外的下拉選單具有穩固性。
+- **下拉選單感知**：當側邊欄有待處理的收合計時器，且滑鼠進入浮動/下拉式元素（透過 `.ds-floating-position-wrapper` 偵測），收合計時器會取消，側邊欄保持展開。浮動元素上的 `mouseleave` 監聽器會在使用者移開時觸發收合。此功能透過 `document` 上的捕獲階段 `mouseover` 監聽器（在 `setupHoverZone()` 中）實作，使用 `el.closest()` 支援精確的子元素層級判定，對 React portal 渲染在側邊欄 DOM 階層外的下拉選單具有穩固性。
 - **CSS 轉場**：透過注入的 `<style>` 實現流暢動畫：`transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1)` 及 `transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)`。
 - **溢位處理**：容器設有 `overflow: hidden`，但 DeepSeek 原生收合啟用時除外（此時窄條必須完全可見）。
 - **主開關感知**：當主開關（`isEnabled`）關閉時，無論自身開關狀態為何，模組都會停用。重新開啟時，模組會重新讀取自身開關狀態。
@@ -118,15 +118,7 @@
   - `destroy()`：委派給 `disable()`。
 - **實作位置**：`content/mobile-sidebar-swipe.js`（入口）、`content/mobile-sidebar-swipe.button.js`（按鈕查找）、`content/mobile-sidebar-swipe.gesture.js`（手勢處理）、`content/mobile-sidebar-swipe.bind.js`（事件綁定）、`content/mobile-sidebar-swipe.lifecycle.js`（生命週期）；公開 API 掛載於 `window.DSstudio.MobileSidebarSwipe`。
 
-## 20. 行動版首頁清理 (Mobile Homepage Cleanup) — v4.1.0
-
-- **目的**：在行動版 DeepSeek 首頁自動清理 DOM 元素，優化行動裝置的使用體驗。
-- **實作位置**：`content/mobile-homepage-cleanup.js`。
-- **功能**：自動移除/隱藏特定類別選擇器（`._9579690`）的 DOM 元素。
-- **主開關連動**：完全跟隨擴充功能主開關（`isEnabled`），無獨立開關。
-- **SPA 韌性**：透過 MutationObserver 監控 DOM 變化，在 SPA 導航後重新套用清理邏輯。
-
-## 21. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
+## 20. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
 
 - **目的**：讓原本僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為**常駐**。此開關不新增任何攔截機制，只改變既有 `PreventAutoScroll` 補丁的生效期間。
 - **開關位置**：彈出選單「Features」卡片中的 `#preventAutoScrollToggle` 核取方塊（v4.32.0 自「UI 調整」卡片移至此處）。

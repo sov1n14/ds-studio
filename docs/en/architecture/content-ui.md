@@ -10,7 +10,7 @@ The `SidebarAutoHide` module in `content/sidebar-auto-hide.js` manages the sideb
 
 - **Collapse**: When enabled, the sidebar (`div.dc04ec1d`) is collapsed to 60px width. The inner content (`div.b8812f16.a2f3d50e`) is shifted via negative `margin-left` to hide behind the collapsed wrapper, leaving only a thin strip visible.
 - **Expand**: On `mouseenter`, after a 150ms delay, the sidebar expands to its original stored width and the inner margin is cleared.
-- **Hover zone expansion**: A capture-phase `mouseover` listener on `document` monitors the cursor position when the sidebar has a pending collapse timer (`leaveTimer`). If the mouse enters a floating/dropdown element (detected by class `ds-elevated` or elements inside `.ds-floating-position-wrapper`), the collapse timer is cancelled and the sidebar remains expanded until the mouse leaves the floating element. This ensures dropdown menus rendered via React portals (outside the sidebar's DOM tree) are properly handled.
+- **Hover zone expansion**: A capture-phase `mouseover` listener on `document` monitors the cursor position when the sidebar has a pending collapse timer (`leaveTimer`). If the mouse enters a floating/dropdown element (detected via `.ds-floating-position-wrapper`), the collapse timer is cancelled and the sidebar remains expanded until the mouse leaves the floating element. This ensures dropdown menus rendered via React portals (outside the sidebar's DOM tree) are properly handled.
 - **Collapse trigger**: On `mouseleave`, after a 400ms delay, the sidebar collapses back to 60px (unless the mouse entered a dropdown menu). Resizing the window also triggers re-collapse via a debounced (200ms) resize handler.
 - **CSS transitions**: A `<style>` element with `transition: width 0.22s cubic-bezier(...)` and `transition: margin-left 0.22s cubic-bezier(...)` is injected for smooth animation.
 - **Overflow handling**: The wrapper gets `overflow: hidden` (except when DeepSeek's native collapse is active, where the thin bar should remain visible).
@@ -52,7 +52,7 @@ The `HideThinking` module in `content/hide-thinking.js` auto-collapses DeepSeek'
 ### DOM Targeting
 
 - **Container selector**: `._74c0879` — the wrapper element for each thinking block.
-- **Header selector**: `._245c867` — the clickable toggle header inside the container. (Note: `._5ab5d64` does NOT exist as a fallback in `hide-thinking.js`; that class is used only in the unrelated `censor-reply-restore.thinkblock.js`.)
+- **Header selector**: `THINK_HEADER_TOGGLE_CLASS` (currently `._245c867`, derived as the first token of `THINK_HEADER_CLASS`) — the clickable toggle header inside the container. `hide-thinking.js` reads this value from the shared `ds-selectors.js` namespace. (Note: `._5ab5d64` does NOT exist as a fallback in `hide-thinking.js`; that class is used only in the unrelated `censor-reply-restore.thinkblock.js`.)
 - **Expanded indicator**: Presence of a `.ds-think-content` child inside the container. Blocks without `.ds-think-content` are already collapsed and are skipped.
 - **Collapse marker**: `data-ht-collapsed="1"` is written to the container element after the collapse click. Guards against re-processing blocks that were already collapsed in the current session.
 

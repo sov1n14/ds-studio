@@ -11,7 +11,6 @@
 - [UI Adjustment Features](#ui-adjustment-features)
 - [Back to Top Button](#back-to-top-button)
 - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
-- [Mobile Homepage Cleanup](#mobile-homepage-cleanup)
 - [Auto Retry](#auto-retry)
 - [Exporting Conversations](#exporting-conversations)
 - [Quote Reply](#quote-reply)
@@ -183,15 +182,6 @@ This feature only works on mobile devices and requires no configuration:
 - **Compatibility**: The trigger area deliberately avoids the screen edges to prevent conflicts with Chrome Android's system back gesture.
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle.
 
-## Mobile Homepage Cleanup
-
-On mobile devices browsing the DeepSeek homepage (v4.1.0), the extension automatically removes specific decorative DOM elements, resulting in a cleaner page layout:
-
-- **Device Detection**: Determined by touch capability (`navigator.maxTouchPoints > 0`) or mobile user-agent markers (`Mobi`, `Android`, `iPhone`, `iPad`), independent of screen size. On desktop devices this feature is completely inactive with zero overhead.
-- **Effective Scope**: Active only on the homepage path (`/`). After leaving the homepage, the MutationObserver remains listening but does not perform removals.
-- **Instant Removal**: Uses a MutationObserver on `document.body` subtree changes; target elements dynamically inserted by the DeepSeek SPA are removed immediately.
-- **No Independent Toggle**: This feature is controlled by the master switch (top-right) — disabled when the master switch is off.
-
 ## Auto Retry
 
 When a DeepSeek response fails (e.g. "The server is busy. Please try again later.") and a retry button appears, the extension clicks it for you:
@@ -300,7 +290,6 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - In-page overlay dropdown
 - Back to top button
 - Mobile sidebar swipe gesture
-- Mobile homepage cleanup
 
 This ensures one-click disabling of all extension behaviors.
 

@@ -38,7 +38,7 @@
   - The system does not auto-insert a `---` separator. Users have full control over injected content — any separators, line breaks, or formatting must be included in the prompt text.
 - **Injection triggers**: Injection occurs when:
   - The user presses `Enter` (excluding `Shift + Enter` for line breaks and IME composition state).
-  - The user clicks the on-screen send button (CSS selector: `div.ds-icon-button[role="button"]` (desktop) or `div.ds-button[role="button"]` (mobile), also identifiable via parent class selectors).
+  - The user clicks the on-screen send button (CSS selector: `div.ds-button[role="button"]`, also identifiable via the send-arrow SVG icon).
 - **Guard conditions**: Injection is skipped when:
   - The feature is disabled via the toggle.
   - User input is empty (whitespace only) and cannot be submitted in the blank state.

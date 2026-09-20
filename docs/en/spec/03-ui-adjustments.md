@@ -11,7 +11,7 @@
 - **Collapse Behavior**: When enabled, the sidebar (`div.dc04ec1d`) collapses to 60px width when the mouse leaves. Inner content (`div.b8812f16.a2f3d50e`) is offset via a negative `margin-left`, hidden behind the collapsed container.
 - **Expand Behavior**: On mouse hover, after a 150ms delay (enter delay), the sidebar expands to its originally stored width, and the inner padding is cleared.
 - **Collapse Trigger**: On mouse leave, after a 400ms delay (leave delay), the sidebar collapses back to 60px. Window resize also triggers re-collapse via a debounced (200ms) resize handler.
-- **Dropdown Awareness**: When the sidebar has a pending collapse timer and the mouse enters a floating/dropdown element (detected via the class `ds-elevated` or `.ds-floating-position-wrapper`), the collapse timer is cancelled and the sidebar stays expanded. A `mouseleave` listener on the floating element triggers collapse when the user moves away. This is implemented via a capture-phase `mouseover` listener on `document` (in `setupHoverZone()`), using `el.closest()` for precise descendant-level matching, making it robust against React portals rendered outside the sidebar's DOM hierarchy.
+- **Dropdown Awareness**: When the sidebar has a pending collapse timer and the mouse enters a floating/dropdown element (detected via `.ds-floating-position-wrapper`), the collapse timer is cancelled and the sidebar stays expanded. A `mouseleave` listener on the floating element triggers collapse when the user moves away. This is implemented via a capture-phase `mouseover` listener on `document` (in `setupHoverZone()`), using `el.closest()` for precise descendant-level matching, making it robust against React portals rendered outside the sidebar's DOM hierarchy.
 - **CSS Transitions**: Smooth animations via injected `<style>`: `transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1)` and `transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)`.
 - **Overflow Handling**: The container has `overflow: hidden`, except when DeepSeek's native collapse is active (the narrow strip must remain fully visible).
 - **Master Switch Awareness**: When the master switch (`isEnabled`) is off, the module is disabled regardless of its own toggle state. When re-enabled, the module re-reads its own toggle state.
@@ -117,15 +117,7 @@
   - `destroy()`: Delegates to `disable()`.
 - **Implementation Location**: `content/mobile-sidebar-swipe.js`; public API mounted at `window.DSstudio.MobileSidebarSwipe`.
 
-## 20. Mobile Homepage Cleanup — v4.1.0
-
-- **Purpose**: Automatically cleans up DOM elements on the mobile DeepSeek homepage to optimize the mobile device experience.
-- **Implementation Location**: `content/mobile-homepage-cleanup.js`.
-- **Functionality**: Automatically removes/hides DOM elements matching specific class selectors (`._9579690`).
-- **Master Switch Linkage**: Follows the extension's master switch (`isEnabled`) entirely, with no independent toggle.
-- **SPA Resilience**: Monitors DOM changes via MutationObserver, reapplying cleanup logic after SPA navigation.
-
-## 21. Prevent Auto-Scroll — v4.12.0
+## 20. Prevent Auto-Scroll — v4.12.0
 
 - **Purpose**: Allows the anti-scroll-back protection that previously only took effect briefly during "Back to Top" and Markdown export to be set as **persistent** by the user. This toggle adds no new interception mechanism; it only changes the active duration of the existing `PreventAutoScroll` patch.
 - **Toggle Location**: The `#preventAutoScrollToggle` checkbox in the popup menu's "Features" card (moved from the "UI Adjustments" card in v4.32.0).

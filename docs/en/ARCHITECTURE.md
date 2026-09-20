@@ -94,7 +94,6 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.gesture.js   ─  Touch gesture recognition
 │   ├── mobile-sidebar-swipe.bind.js      ─  Event binding for swipe gesture
 │   ├── mobile-sidebar-swipe.lifecycle.js ─  Enable/disable lifecycle for mobile swipe
-│   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-expand-messages.js ─  MutationObserver-based auto-click of collapsed expand buttons (v4.32.0)
 │   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
 │   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
