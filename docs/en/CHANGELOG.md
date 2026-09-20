@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.33.18](changelog/v4.md#43318---2026-09-20) | Fixed composer attachment button incorrectly triggering prompt injection: `isSendButtonCandidate` removed two container branches (`.ba4f09d3` closest and `.bf38813a` parent class), retaining SVG icon (`SEND_BUTTON_ICON_SELECTOR`) and edit-window button detection; `ds-selectors.js` deleted `SEND_BUTTON_CONTAINER_SELECTOR` and `SEND_BUTTON_PARENT_CLASS` (exports 76 → 74) |
 | [4.33.17](changelog/v4.md#43317---2026-09-12) | Fixed chain-delete of non-temporary chats on context invalidation: `trackUuid` resets `isPendingCreate` before `sendMessage` with try/catch; `handleNavigationEvent` adds missing `return` after delete/hand-off and `chrome.runtime?.id` guard; added scenario test (5 tests) |
 | [4.33.16](changelog/v4.md#43316---2026-09-12) | Added page-level invalidation toast with refresh button when extension context is invalidated; heartbeat detects context invalidation and triggers toast with heartbeat stop; editor-window-routes `closeTrackedWindow` catch silenced (expected race condition) |
 | [4.33.4](changelog/v4.md#4334---2026-09-07) | Fixed uncaught `Extension context invalidated` from the coordinator's orphaned content script after extension reload/update: `sendPendingStoreRoute` wrapped in try/catch with logging; `handOffToServiceWorker` and `fallbackToApi` direct sends routed through the same guard |

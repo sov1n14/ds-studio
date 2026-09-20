@@ -54,8 +54,6 @@ describe('DSSelectors — constant values', () => {
     it("CONTENT_COLUMN_SELECTOR", () => { expect(S.CONTENT_COLUMN_SELECTOR).toBe("._871cbca"); });
     it("FLOATING_BUTTON_BAR_SELECTOR", () => { expect(S.FLOATING_BUTTON_BAR_SELECTOR).toBe(".aaff8b8f"); });
     it("FLOATING_BUTTON_BAR_DIV_SELECTOR", () => { expect(S.FLOATING_BUTTON_BAR_DIV_SELECTOR).toBe("div.aaff8b8f"); });
-    it("SEND_BUTTON_CONTAINER_SELECTOR", () => { expect(S.SEND_BUTTON_CONTAINER_SELECTOR).toBe(".ba4f09d3"); });
-    it("SEND_BUTTON_PARENT_CLASS", () => { expect(S.SEND_BUTTON_PARENT_CLASS).toBe("bf38813a"); });
     it("MESSAGE_TOOLBAR_SELECTOR", () => { expect(S.MESSAGE_TOOLBAR_SELECTOR).toBe(".ds-flex._965abe9"); });
     it("THINK_STATUS_SELECTOR", () => { expect(S.THINK_STATUS_SELECTOR).toBe("._08cbf39"); });
     it("THINK_REFERENCE_LABEL_SELECTOR", () => { expect(S.THINK_REFERENCE_LABEL_SELECTOR).toBe("._442c8e7"); });
@@ -105,8 +103,8 @@ describe('DSSelectors — composite values', () => {
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 76 keys', () => {
-        expect(Object.keys(S)).toHaveLength(76);
+    it('exports exactly 74 keys', () => {
+        expect(Object.keys(S)).toHaveLength(74);
     });
     it('every value is a string except EDIT_SEND_BUTTON_VARIANT_CLASSES', () => {
         for (const [key, value] of Object.entries(S)) {

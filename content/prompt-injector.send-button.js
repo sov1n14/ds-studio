@@ -32,7 +32,7 @@
     }
 
     /**
-     * 判斷按鈕是否為送出按鈕（送出圖示、工具列容器、行動版父層 class，或編輯視窗傳送按鈕）。
+     * 判斷按鈕是否為送出按鈕（送出圖示 SVG，或編輯視窗傳送按鈕）。
      * @param {Element} button
      * @param {boolean} [isEditSendButton] 呼叫端已算出的編輯視窗傳送按鈕判定，避免重複計算
      * @returns {boolean}
@@ -40,10 +40,8 @@
     function isSendButtonCandidate(button, isEditSendButton) {
         if (!button) return false;
 
-        // 依成本由低到高短路求值，避免每次指標事件都跑完整條件鏈
+        // SVG 圖示比對成本最低，優先短路；其次才走編輯視窗判定
         return !!button.querySelector(selectors.SEND_BUTTON_ICON_SELECTOR) ||
-               !!button.closest(selectors.SEND_BUTTON_CONTAINER_SELECTOR) ||
-               !!button.parentElement?.classList.contains(selectors.SEND_BUTTON_PARENT_CLASS) ||
                (isEditSendButton === undefined ? isEditWindowSendButton(button) : isEditSendButton);
     }
 

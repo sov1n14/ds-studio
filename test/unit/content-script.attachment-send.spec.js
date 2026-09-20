@@ -223,3 +223,142 @@ describe('Send interception: attachment-only (empty textarea) via Enter keydown'
         expect(ev.defaultPrevented).toBe(false);
     });
 });
+
+
+// ---------------------------------------------------------------------------
+// Scenario: attachment button vs send button discrimination
+// ---------------------------------------------------------------------------
+
+describe('Send interception: attachment button must not trigger injection', function () {
+    var cleanup;
+
+    beforeEach(function () {
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
+        contentScript.state.isShowSystemTime = false;
+    });
+
+    afterEach(function () {
+        if (cleanup) { cleanup(); cleanup = null; }
+    });
+
+    it('clicking the attachment button leaves the textarea unchanged (no prefix injected)', function () {
+        var row = document.createElement('div');
+        row.className = 'bf38813a';
+
+        var attachBtn = document.createElement("div");
+        attachBtn.setAttribute("role", "button");
+        attachBtn.className = "ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25";
+        var attachBg = document.createElement("div");
+        attachBg.className = "ds-button__background";
+        var attachIconWrap = document.createElement("div");
+        attachIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var attachIconDiv = document.createElement("div");
+        attachIconDiv.className = "ds-icon";
+        var attachSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var attachPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        attachPathEl.setAttribute("d", "M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z");
+        attachSvg.appendChild(attachPathEl);
+        attachIconDiv.appendChild(attachSvg);
+        attachIconWrap.appendChild(attachIconDiv);
+        attachBtn.appendChild(attachBg);
+        attachBtn.appendChild(attachIconWrap);
+        attachBtn.tabIndex = 0;
+
+        var fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.style.display = 'none';
+
+        var sendWrapper = document.createElement("div");
+        sendWrapper.style.width = "fit-content";
+        var sendBtn = document.createElement("div");
+        sendBtn.setAttribute("role", "button");
+        sendBtn.className = "ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b bd74640a";
+        var sendBg = document.createElement("div");
+        sendBg.className = "ds-button__background";
+        var sendIconWrap = document.createElement("div");
+        sendIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var sendSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var sendPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        sendPathEl.setAttribute("d", "M8.3125 0.980206C8.66767 1.05312 8.97902 1.2042 9.2627 1.43235C9.48724 1.613 9.73029 1.85795 9.97949 2.10716L14.707 6.8347L13.293 8.24876L9 3.95579V15.0417H7V3.95579L2.70703 8.24876L1.29297 6.8347L6.02051 2.10716C6.26971 1.85795 6.51277 1.613 6.7373 1.43235C6.97662 1.23988 7.28445 1.04404 7.6875 0.980206C7.8973 0.947029 8.1031 0.955183 8.3125 0.980206Z");
+        sendSvg.appendChild(sendPathEl);
+        sendIconWrap.appendChild(sendSvg);
+        sendBtn.appendChild(sendBg);
+        sendBtn.appendChild(sendIconWrap);
+        sendWrapper.appendChild(sendBtn);
+
+        row.appendChild(attachBtn);
+        row.appendChild(fileInput);
+        row.appendChild(sendWrapper);
+
+        var container = document.createElement('div');
+        var textarea = document.createElement('textarea');
+        textarea.value = 'user message';
+        container.appendChild(textarea);
+        container.appendChild(row);
+        cleanup = mountInDocument(container);
+
+        var ev = dispatchClick(attachBtn);
+
+        expect(textarea.value).toBe('user message');
+        expect(ev.defaultPrevented).toBe(false);
+    });
+
+    it('clicking the send button from the same row still triggers injection', function () {
+        var row = document.createElement('div');
+        row.className = 'bf38813a';
+
+        var attachBtn = document.createElement("div");
+        attachBtn.setAttribute("role", "button");
+        attachBtn.className = "ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25";
+        var attachBg = document.createElement("div");
+        attachBg.className = "ds-button__background";
+        var attachIconWrap = document.createElement("div");
+        attachIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var attachIconDiv = document.createElement("div");
+        attachIconDiv.className = "ds-icon";
+        var attachSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var attachPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        attachPathEl.setAttribute("d", "M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z");
+        attachSvg.appendChild(attachPathEl);
+        attachIconDiv.appendChild(attachSvg);
+        attachIconWrap.appendChild(attachIconDiv);
+        attachBtn.appendChild(attachBg);
+        attachBtn.appendChild(attachIconWrap);
+
+        var sendWrapper = document.createElement("div");
+        sendWrapper.style.width = "fit-content";
+        var sendBtn = document.createElement("div");
+        sendBtn.setAttribute("role", "button");
+        sendBtn.className = "ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b bd74640a";
+        var sendBg = document.createElement("div");
+        sendBg.className = "ds-button__background";
+        var sendIconWrap = document.createElement("div");
+        sendIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var sendSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var sendPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        sendPathEl.setAttribute("d", "M8.3125 0.980206C8.66767 1.05312 8.97902 1.2042 9.2627 1.43235C9.48724 1.613 9.73029 1.85795 9.97949 2.10716L14.707 6.8347L13.293 8.24876L9 3.95579V15.0417H7V3.95579L2.70703 8.24876L1.29297 6.8347L6.02051 2.10716C6.26971 1.85795 6.51277 1.613 6.7373 1.43235C6.97662 1.23988 7.28445 1.04404 7.6875 0.980206C7.8973 0.947029 8.1031 0.955183 8.3125 0.980206Z");
+        sendSvg.appendChild(sendPathEl);
+        sendIconWrap.appendChild(sendSvg);
+        sendBtn.appendChild(sendBg);
+        sendBtn.appendChild(sendIconWrap);
+        sendWrapper.appendChild(sendBtn);
+
+        row.appendChild(attachBtn);
+        row.appendChild(sendWrapper);
+
+        var container = document.createElement('div');
+        var textarea = document.createElement('textarea');
+        textarea.value = 'user message';
+        container.appendChild(textarea);
+        container.appendChild(row);
+        cleanup = mountInDocument(container);
+
+        var ev = dispatchClick(sendSvg);
+
+        expect(textarea.value).toContain('<user-input>');
+        expect(textarea.value).toContain('user message');
+        expect(ev.defaultPrevented).toBe(true);
+    });
+});

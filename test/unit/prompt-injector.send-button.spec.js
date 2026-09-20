@@ -28,6 +28,7 @@ import {
     makeEditScenarioWithEmptyAncestorTextarea,
     makeEditSendButtonStandalone,
     mountInDocument,
+    makeAttachmentButtonInActionsRow,
 } from '../helpers/send-button-fixtures.js';
 
 const SB = globalThis.__DS_PromptInjectorSendButton;
@@ -97,24 +98,23 @@ describe('isSendButtonCandidate', () => {
         expect(SB.isSendButtonCandidate(button)).toBe(false);
     });
 
-    it('accepts an iconless button placed inside a .ba4f09d3 ancestor', () => {
-        const button = makeBareButton();
-        const inputArea = wrapIn('ba4f09d3', wrapIn('some-inner-row', button));
-        cleanup = mountInDocument(inputArea);
-        expect(SB.isSendButtonCandidate(button)).toBe(true);
-    });
-
-    it('accepts an iconless button whose direct parent carries class bf38813a', () => {
-        const button = makeBareButton();
-        const actionsRow = wrapIn('bf38813a', button);
-        cleanup = mountInDocument(actionsRow);
-        expect(SB.isSendButtonCandidate(button)).toBe(true);
-    });
-
-    it('rejects an iconless button that is neither inside .ba4f09d3 nor a child of .bf38813a', () => {
+    it('rejects an iconless button with no send icon', () => {
         const button = makeBareButton();
         cleanup = mountInDocument(wrapIn('unrelated-row', button));
         expect(SB.isSendButtonCandidate(button)).toBe(false);
+    });
+
+
+    it('rejects the attachment (paperclip) button even though it sits in a bf38813a row', () => {
+        const { row, attachmentButton } = makeAttachmentButtonInActionsRow();
+        cleanup = mountInDocument(row);
+        expect(SB.isSendButtonCandidate(attachmentButton)).toBe(false);
+    });
+
+    it('accepts the send button from the same real actions row that contains the attachment button', () => {
+        const { row, sendButton } = makeAttachmentButtonInActionsRow();
+        cleanup = mountInDocument(row);
+        expect(SB.isSendButtonCandidate(sendButton)).toBe(true);
     });
 
     it('returns false for a detached, parentless button instead of throwing', () => {
@@ -122,6 +122,28 @@ describe('isSendButtonCandidate', () => {
         expect(button.parentElement).toBe(null);
         expect(() => SB.isSendButtonCandidate(button)).not.toThrow();
         expect(SB.isSendButtonCandidate(button)).toBe(false);
+    });
+
+    it('returns false for null input instead of throwing', () => {
+        expect(() => SB.isSendButtonCandidate(null)).not.toThrow();
+        expect(SB.isSendButtonCandidate(null)).toBe(false);
+    });
+
+    it('returns false for undefined input instead of throwing', () => {
+        expect(() => SB.isSendButtonCandidate(undefined)).not.toThrow();
+        expect(SB.isSendButtonCandidate(undefined)).toBe(false);
+    });
+
+    it('honours an explicit isEditSendButton=true even when the button is not an edit-send button', () => {
+        const button = makeBareButton();
+        cleanup = mountInDocument(wrapIn('unrelated-row', button));
+        expect(SB.isSendButtonCandidate(button, true)).toBe(true);
+    });
+
+    it('honours an explicit isEditSendButton=false even when the button is structurally an edit-send button', () => {
+        const { container, button } = makeEditSendButtonInContainer('edit message', '发送');
+        cleanup = mountInDocument(container);
+        expect(SB.isSendButtonCandidate(button, false)).toBe(false);
     });
 });
 
