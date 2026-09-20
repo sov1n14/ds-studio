@@ -75,10 +75,10 @@ afterEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Group A — setupHoverZone(): direct ds-elevated interactions
+//  Group A — setupHoverZone(): floating-element detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Group A — setupHoverZone() direct ds-elevated interactions', () => {
+describe('Group A — setupHoverZone() floating-element detection', () => {
     beforeEach(() => {
         SidebarAutoHide.sidebarEl = createSidebar();
         SidebarAutoHide.setupHoverZone();
@@ -116,19 +116,7 @@ describe('Group A — setupHoverZone() direct ds-elevated interactions', () => {
         expect(collapseSpy).not.toHaveBeenCalled();
     });
 
-    it('A3: cancels leaveTimer when mouse enters a ds-elevated element directly', () => {
-        SidebarAutoHide.enabled = true;
-        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const floating = document.createElement('div');
-        floating.classList.add('ds-elevated');
-        document.body.appendChild(floating);
-
-        fireMouseover(floating);
-
-        expect(SidebarAutoHide.leaveTimer).toBeNull();
-        expect(SidebarAutoHide._activeDropdownEl).not.toBeNull();
-    });
 
     it('A4: cancels leaveTimer when mouse enters element inside .ds-floating-position-wrapper', () => {
         SidebarAutoHide.enabled = true;
@@ -199,36 +187,9 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.setupHoverZone();
     });
 
-    it('B1: cancels leaveTimer when mouse enters a child element inside ds-elevated', () => {
-        SidebarAutoHide.enabled = true;
-        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        const menuItem = document.createElement('div');
-        menuItem.className = 'menu-item';
-        dsElevated.appendChild(menuItem);
-        document.body.appendChild(dsElevated);
 
-        // The fix: hovering over a child of ds-elevated must also cancel the timer
-        fireMouseover(menuItem);
 
-        expect(SidebarAutoHide.leaveTimer).toBeNull();
-        expect(SidebarAutoHide._activeDropdownEl).not.toBeNull();
-    });
-
-    it('B2: sets _activeDropdownEl to the ds-elevated element on direct entry', () => {
-        SidebarAutoHide.enabled = true;
-        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
-
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
-
-        fireMouseover(dsElevated);
-
-        expect(SidebarAutoHide._activeDropdownEl).toBe(dsElevated);
-    });
 
     it('B3: sets _activeDropdownEl to the wrapper when inside .ds-floating-position-wrapper', () => {
         SidebarAutoHide.enabled = true;
@@ -253,17 +214,19 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        const inner = document.createElement('div');
+        wrapper.appendChild(inner);
+        document.body.appendChild(wrapper);
 
-        fireMouseover(dsElevated);
-        expect(SidebarAutoHide._activeDropdownEl).toBe(dsElevated);
+        fireMouseover(inner);
+        expect(SidebarAutoHide._activeDropdownEl).toBe(wrapper);
 
         const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
 
         // Simulate mouse leaving the dropdown
-        dsElevated.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 
         expect(collapseSpy).toHaveBeenCalledOnce();
         expect(SidebarAutoHide._activeDropdownEl).toBeNull();
@@ -276,17 +239,19 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        const inner = document.createElement('div');
+        wrapper.appendChild(inner);
+        document.body.appendChild(wrapper);
 
-        fireMouseover(dsElevated);
+        fireMouseover(inner);
 
         // Simulate user moving cursor back to sidebar before rAF fires
         SidebarAutoHide.enterTimer = setTimeout(() => {}, 9999);
 
         const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
-        dsElevated.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 
         // enterTimer is set — collapse must be skipped
         expect(collapseSpy).not.toHaveBeenCalled();
@@ -300,14 +265,16 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.enabled = true;
         SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        const inner = document.createElement('div');
+        wrapper.appendChild(inner);
+        document.body.appendChild(wrapper);
 
-        fireMouseover(dsElevated);
+        fireMouseover(inner);
         expect(SidebarAutoHide._activeDropdownEl).not.toBeNull();
 
-        dsElevated.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 
         expect(SidebarAutoHide._activeDropdownEl).toBeNull();
     });

@@ -160,7 +160,7 @@
             document.addEventListener(eventType, (e) => {
                 if (ctx.getIsInjecting()) return;
 
-                // 同時比對桌面版（ds-icon-button）與行動版（ds-button）送出按鈕
+                // 比對送出按鈕（ds-button）
                 const button = e.target.closest(selectors.SEND_BUTTON_ROLE_SELECTOR);
                 if (!button) return;
 

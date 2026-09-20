@@ -40,7 +40,7 @@ const SB = globalThis.__DS_PromptInjectorSendButton;
 /** An iconless [role=button] with no send-icon SVG and no content span. */
 function makeBareButton() {
     const button = document.createElement('div');
-    button.className = 'ds-icon-button';
+    button.className = 'ds-button ds-button--icon';
     button.setAttribute('role', 'button');
     return button;
 }

@@ -25,23 +25,21 @@ describe('DSSelectors — constant values', () => {
     it("THINK_CONTENT_SELECTOR", () => { expect(S.THINK_CONTENT_SELECTOR).toBe(".ds-think-content"); });
     it("ASSISTANT_MAIN_CONTENT_SELECTOR", () => { expect(S.ASSISTANT_MAIN_CONTENT_SELECTOR).toBe(".ds-assistant-message-main-content"); });
     it("MARKDOWN_CITE_SELECTOR", () => { expect(S.MARKDOWN_CITE_SELECTOR).toBe(".ds-markdown-cite"); });
-    it("ICON_BUTTON_SELECTOR", () => { expect(S.ICON_BUTTON_SELECTOR).toBe(".ds-icon-button"); });
     it("ICON_BUTTON_ROLE_SELECTOR", () => { expect(S.ICON_BUTTON_ROLE_SELECTOR).toBe("[role=\"button\"].ds-button.ds-button--icon"); });
-    it("ICON_BUTTON_ANY_SELECTOR", () => { expect(S.ICON_BUTTON_ANY_SELECTOR).toBe(".ds-icon-button, [role=\"button\"].ds-button.ds-button--icon"); });
-    it("ICON_BUTTON_DISABLED_CLASS", () => { expect(S.ICON_BUTTON_DISABLED_CLASS).toBe("ds-icon-button--disabled"); });
+    it("ICON_BUTTON_ANY_SELECTOR", () => { expect(S.ICON_BUTTON_ANY_SELECTOR).toBe("[role=\"button\"].ds-button.ds-button--icon"); });
     it("FLEX_ROW_SELECTOR", () => { expect(S.FLEX_ROW_SELECTOR).toBe(".ds-flex"); });
     it("INPUT_TEXTAREA_SELECTOR", () => { expect(S.INPUT_TEXTAREA_SELECTOR).toBe("textarea"); });
     it("ROLE_BUTTON_DIV_SELECTOR", () => { expect(S.ROLE_BUTTON_DIV_SELECTOR).toBe("div[role=\"button\"]"); });
     it("TOGGLE_BUTTON_SELECTOR", () => { expect(S.TOGGLE_BUTTON_SELECTOR).toBe(".ds-toggle-button[aria-pressed]"); });
     it("TOGGLE_BUTTON_FALLBACK_SELECTOR", () => { expect(S.TOGGLE_BUTTON_FALLBACK_SELECTOR).toBe("[aria-pressed=\"true\"], [aria-pressed=\"false\"]"); });
     it("FLOATING_POSITION_WRAPPER_SELECTOR", () => { expect(S.FLOATING_POSITION_WRAPPER_SELECTOR).toBe(".ds-floating-position-wrapper"); });
-    it("ELEVATED_SURFACE_SELECTOR", () => { expect(S.ELEVATED_SURFACE_SELECTOR).toBe(".ds-elevated"); });
     it("CODE_BLOCK_CLASS", () => { expect(S.CODE_BLOCK_CLASS).toBe("md-code-block"); });
     it("THINK_BLOCK_CLASS", () => { expect(S.THINK_BLOCK_CLASS).toBe("_74c0879"); });
     it("THINK_BLOCK_SELECTOR", () => { expect(S.THINK_BLOCK_SELECTOR).toBe("._74c0879"); });
     it("THINK_SEPARATOR_CLASS", () => { expect(S.THINK_SEPARATOR_CLASS).toBe("_9ecc93a"); });
     it("THINK_SEPARATOR_SELECTOR", () => { expect(S.THINK_SEPARATOR_SELECTOR).toBe("._9ecc93a"); });
     it("THINK_HEADER_CLASS", () => { expect(S.THINK_HEADER_CLASS).toBe("_245c867 _34a54ec"); });
+    it("THINK_HEADER_TOGGLE_CLASS", () => { expect(S.THINK_HEADER_TOGGLE_CLASS).toBe("_245c867"); });
     it("THINK_SPACER_CLASS", () => { expect(S.THINK_SPACER_CLASS).toBe("c2b72bb8"); });
     it("THINK_CONTENT_OUTER_CLASS", () => { expect(S.THINK_CONTENT_OUTER_CLASS).toBe("e1675d8b"); });
     it("THINK_CONTENT_MODIFIER_CLASS", () => { expect(S.THINK_CONTENT_MODIFIER_CLASS).toBe("_767406f"); });
@@ -55,10 +53,9 @@ describe('DSSelectors — constant values', () => {
     it("FLOATING_BUTTON_BAR_SELECTOR", () => { expect(S.FLOATING_BUTTON_BAR_SELECTOR).toBe(".aaff8b8f"); });
     it("FLOATING_BUTTON_BAR_DIV_SELECTOR", () => { expect(S.FLOATING_BUTTON_BAR_DIV_SELECTOR).toBe("div.aaff8b8f"); });
     it("MESSAGE_TOOLBAR_SELECTOR", () => { expect(S.MESSAGE_TOOLBAR_SELECTOR).toBe(".ds-flex._965abe9"); });
-    it("THINK_STATUS_SELECTOR", () => { expect(S.THINK_STATUS_SELECTOR).toBe("._08cbf39"); });
+    it("THINK_STATUS_SELECTOR", () => { expect(S.THINK_STATUS_SELECTOR).toBe("._5255ff8"); });
     it("THINK_REFERENCE_LABEL_SELECTOR", () => { expect(S.THINK_REFERENCE_LABEL_SELECTOR).toBe("._442c8e7"); });
     it("THINK_REFERENCE_LINK_SELECTOR", () => { expect(S.THINK_REFERENCE_LINK_SELECTOR).toBe("a._04ab7b1"); });
-    it("HOMEPAGE_MOBILE_CLEANUP_SELECTOR", () => { expect(S.HOMEPAGE_MOBILE_CLEANUP_SELECTOR).toBe("._9579690"); });
     it("EDIT_MESSAGE_BUTTON_CLASS", () => { expect(S.EDIT_MESSAGE_BUTTON_CLASS).toBe("d4910adc"); });
     it("EDIT_BOX_SELECTOR", () => { expect(S.EDIT_BOX_SELECTOR).toBe(".cc852ac5"); });
     it("EDIT_BOX_HEIGHT_CONTAINER_SELECTOR", () => { expect(S.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR).toBe("._646a522"); });
@@ -73,7 +70,7 @@ describe('DSSelectors — constant values', () => {
     it("GO_TOP_NATIVE_BUTTON_CLASS", () => { expect(S.GO_TOP_NATIVE_BUTTON_CLASS).toBe("_0706cde"); });
     it("GO_TOP_ANCHOR_SELECTOR", () => { expect(S.GO_TOP_ANCHOR_SELECTOR).toBe("._9663006._2c189bc"); });
     it("GO_TOP_ANCHOR_FALLBACK1_SELECTOR", () => { expect(S.GO_TOP_ANCHOR_FALLBACK1_SELECTOR).toBe("._9663006"); });
-    it("SEND_BUTTON_ROLE_SELECTOR", () => { expect(S.SEND_BUTTON_ROLE_SELECTOR).toBe("div.ds-icon-button[role=\"button\"], div.ds-button[role=\"button\"]"); });
+    it("SEND_BUTTON_ROLE_SELECTOR", () => { expect(S.SEND_BUTTON_ROLE_SELECTOR).toBe("div.ds-button[role=\"button\"]"); });
     it("SEND_BUTTON_ICON_SELECTOR", () => { expect(S.SEND_BUTTON_ICON_SELECTOR).toBe("svg path[d^=\"M8.3125\"]"); });
     it("SEARCH_ICON_PATH_PREFIX", () => { expect(S.SEARCH_ICON_PATH_PREFIX).toBe("M7.9995999336"); });
     it("EDIT_SEND_BUTTON_VARIANT_CLASSES", () => { expect(S.EDIT_SEND_BUTTON_VARIANT_CLASSES).toEqual(["ds-button--primary", "ds-button--filled"]); });
@@ -88,8 +85,8 @@ describe('DSSelectors — constant values', () => {
 });
 
 describe('DSSelectors — composite values', () => {
-    it('ICON_BUTTON_ANY_SELECTOR is ICON_BUTTON_SELECTOR + comma + ICON_BUTTON_ROLE_SELECTOR', () => {
-        expect(S.ICON_BUTTON_ANY_SELECTOR).toBe(S.ICON_BUTTON_SELECTOR + ', ' + S.ICON_BUTTON_ROLE_SELECTOR);
+    it('ICON_BUTTON_ANY_SELECTOR equals ICON_BUTTON_ROLE_SELECTOR (simplified after dead .ds-icon-button removal)', () => {
+        expect(S.ICON_BUTTON_ANY_SELECTOR).toBe(S.ICON_BUTTON_ROLE_SELECTOR);
     });
     it('THINK_BLOCK_SELECTOR is dot-prefixed THINK_BLOCK_CLASS', () => {
         expect(S.THINK_BLOCK_SELECTOR).toBe('.' + S.THINK_BLOCK_CLASS);
@@ -100,11 +97,14 @@ describe('DSSelectors — composite values', () => {
     it('FLOATING_BUTTON_BAR_DIV_SELECTOR is div + FLOATING_BUTTON_BAR_SELECTOR', () => {
         expect(S.FLOATING_BUTTON_BAR_DIV_SELECTOR).toBe('div' + S.FLOATING_BUTTON_BAR_SELECTOR);
     });
+    it('THINK_HEADER_TOGGLE_CLASS is the first word of THINK_HEADER_CLASS', () => {
+        expect(S.THINK_HEADER_TOGGLE_CLASS).toBe(S.THINK_HEADER_CLASS.split(' ')[0]);
+    });
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 74 keys', () => {
-        expect(Object.keys(S)).toHaveLength(74);
+    it('exports exactly 71 keys', () => {
+        expect(Object.keys(S)).toHaveLength(71);
     });
     it('every value is a string except EDIT_SEND_BUTTON_VARIANT_CLASSES', () => {
         for (const [key, value] of Object.entries(S)) {

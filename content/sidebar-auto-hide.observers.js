@@ -112,9 +112,7 @@
                 }
 
                 // 使用 closest 確保子元素也能正確識別浮動容器根元素
-                // .ds-floating-position-wrapper 優先；其次找最近的 .ds-elevated 根節點
-                const floatingRoot = el.closest(__DS_Selectors.FLOATING_POSITION_WRAPPER_SELECTOR) ||
-                                      el.closest(__DS_Selectors.ELEVATED_SURFACE_SELECTOR);
+                const floatingRoot = el.closest(__DS_Selectors.FLOATING_POSITION_WRAPPER_SELECTOR);
                 const isFloating = !!floatingRoot;
 
                 if (isFloating) {

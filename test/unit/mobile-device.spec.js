@@ -1,13 +1,12 @@
 /**
  * content/mobile-device.js — shared mobile-device detection contract.
  *
- * Contract source (the three duplicate implementations this helper replaces —
+ * Contract source (the two duplicate implementations this helper replaces —
  * verified identical in expression, only the function name differs):
- *   - content/mobile-homepage-cleanup.js:27-30      `_isMobileDevice()`
  *   - content/mobile-sidebar-swipe.js:48-51         `_isMobileDevice()`
  *   - content/prompt-injector.controller.js:119-121 `isMobileDevice()`
  *
- * All three evaluate exactly:
+ * Both evaluate exactly:
  *   navigator.maxTouchPoints > 0 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
  *
  * So the contract is: touch-capable OR a mobile user-agent token. Viewport size

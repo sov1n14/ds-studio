@@ -14,25 +14,6 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
     beforeEach(resetCensorReplyRestore);
 
     describe('_isCensored()', () => {
-        // ── Legacy DOM helpers (.ds-icon-button) ───────────────────────────────
-
-        function createLegacyToolbar(btnStates) {
-            const toolbar = document.createElement('div');
-            toolbar.className = 'ds-flex';
-            for (let i = 0; i < btnStates.length; i++) {
-                const btn = document.createElement('button');
-                btn.className = 'ds-icon-button';
-                if (btnStates[i] === 'disabled') {
-                    btn.classList.add('ds-icon-button--disabled');
-                    btn.setAttribute('aria-disabled', 'true');
-                } else if (btnStates[i] === 'enabled-disabled') {
-                    btn.setAttribute('aria-disabled', 'true');
-                }
-                toolbar.appendChild(btn);
-            }
-            return toolbar;
-        }
-
         // ── New DOM helpers ([role="button"].ds-button.ds-button--icon) ────────
 
         /**
@@ -60,19 +41,6 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             }
             return toolbar;
         }
-
-        // ── Legacy DOM tests ───────────────────────────────────────────────────
-        // True parameter variation: same builder, same assertion, differing button states/expectation.
-
-        it.each([
-            ['returns true when buttons[1] and buttons[4] both have ds-icon-button--disabled + aria-disabled', ['enabled', 'disabled', 'enabled', 'enabled', 'disabled'], true],
-            ['returns false when button[1] is enabled', ['enabled', 'enabled', 'enabled', 'enabled', 'disabled'], false],
-            ['returns false when button[4] is enabled', ['enabled', 'disabled', 'enabled', 'enabled', 'enabled'], false],
-            ['returns false when there are fewer than 5 buttons', ['enabled', 'disabled', 'enabled'], false]
-        ])('(legacy) %s', (_name, btnStates, expected) => {
-            const toolbar = createLegacyToolbar(btnStates);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(expected);
-        });
 
         // ── New DOM tests ──────────────────────────────────────────────────────
 
@@ -106,7 +74,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
          * Builds a virtual-list item containing an assistant message element
          * and optionally a separate toolbar sibling inside the same container.
          */
-        function buildVirtualItem({ toolbarClassName, buttonCount, useNewDom }) {
+        function buildVirtualItem({ toolbarClassName, buttonCount }) {
             const container = document.createElement('div');
             container.setAttribute('data-virtual-list-item-key', 'asst-1');
 
@@ -118,12 +86,8 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             toolbar.className = toolbarClassName;
             for (let i = 0; i < buttonCount; i++) {
                 const btn = document.createElement('div');
-                if (useNewDom) {
-                    btn.setAttribute('role', 'button');
-                    btn.className = 'ds-button ds-button--icon';
-                } else {
-                    btn.className = 'ds-icon-button';
-                }
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
                 toolbar.appendChild(btn);
             }
             container.appendChild(toolbar);
@@ -139,18 +103,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         it('(primary) finds .ds-flex._965abe9 container containing new-style ds-button children', () => {
             const { msgEl, toolbar } = buildVirtualItem({
                 toolbarClassName: 'ds-flex _965abe9 _54866f7',
-                buttonCount: 5,
-                useNewDom: true
-            });
-            const result = CensorReplyRestore._getToolbarGroup(msgEl);
-            expect(result).toBe(toolbar);
-        });
-
-        it('(primary) finds .ds-flex._965abe9 container containing legacy ds-icon-button children', () => {
-            const { msgEl, toolbar } = buildVirtualItem({
-                toolbarClassName: 'ds-flex _965abe9',
-                buttonCount: 5,
-                useNewDom: false
+                buttonCount: 5
             });
             const result = CensorReplyRestore._getToolbarGroup(msgEl);
             expect(result).toBe(toolbar);
@@ -159,8 +112,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         it('(fallback) finds .ds-flex with 5 new-style buttons when no .ds-flex._965abe9 exists', () => {
             const { msgEl, toolbar } = buildVirtualItem({
                 toolbarClassName: 'ds-flex some-other-class',
-                buttonCount: 5,
-                useNewDom: true
+                buttonCount: 5
             });
             const result = CensorReplyRestore._getToolbarGroup(msgEl);
             expect(result).toBe(toolbar);
@@ -169,8 +121,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         it('(fallback) returns null when the only .ds-flex has fewer than 5 buttons', () => {
             const { msgEl } = buildVirtualItem({
                 toolbarClassName: 'ds-flex some-other-class',
-                buttonCount: 3,
-                useNewDom: true
+                buttonCount: 3
             });
             const result = CensorReplyRestore._getToolbarGroup(msgEl);
             expect(result).toBeNull();

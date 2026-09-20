@@ -11,8 +11,8 @@ const __DS_HideThinkingSelectors = (globalThis).DSstudio?.Selectors ||
 
 const HideThinking = {
     STORAGE_KEY: StorageManager.KEYS.HIDE_THINKING,
-    CONTAINER_CLASS: '_74c0879',
-    HEADER_CLASS: '_245c867',
+    CONTAINER_CLASS: __DS_HideThinkingSelectors.THINK_BLOCK_CLASS,
+    HEADER_CLASS: __DS_HideThinkingSelectors.THINK_HEADER_TOGGLE_CLASS,
     THINK_CONTENT_CLASS: __DS_HideThinkingSelectors.THINK_CONTENT_CLASS,
     DATA_ATTR: 'data-ht-collapsed',
 

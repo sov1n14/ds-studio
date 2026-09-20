@@ -41,13 +41,13 @@ function makeIconSvg(d) {
 }
 
 /**
- * Desktop-style send button:
- *   <div class="ds-icon-button" role="button"><svg><path d="M8.3125..."/></svg></div>
+ * Desktop-style send button (now ds-button after .ds-icon-button removal):
+ *   <div class="ds-button ds-button--icon" role="button"><svg><path d="M8.3125..."/></svg></div>
  * Returns { button, svg } so the tap target (svg) can be dispatched.
  */
 export function makeDesktopSendButton() {
     const button = document.createElement('div');
-    button.className = 'ds-icon-button';
+    button.className = 'ds-button ds-button--icon';
     button.setAttribute('role', 'button');
     const svg = makeIconSvg(SEND_ICON_PATH_D);
     button.appendChild(svg);
@@ -83,7 +83,7 @@ export function makeMobileSendButton() {
  */
 export function makeOtherButton() {
     const button = document.createElement('div');
-    button.className = 'ds-icon-button';
+    button.className = 'ds-button ds-button--icon';
     button.setAttribute('role', 'button');
     const svg = makeIconSvg('M0 0 L10 10 L20 0');
     button.appendChild(svg);

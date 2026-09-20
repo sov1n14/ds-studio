@@ -75,7 +75,7 @@ function makeAiMessageWithThinking(opts) {
     const labelDiv = document.createElement('div');
     labelDiv.className = 'ds-think-label';
     const labelSpan = document.createElement('span');
-    labelSpan.className = '_08cbf39';
+    labelSpan.className = '_5255ff8';
     labelSpan.textContent = thoughtLabel;
     labelDiv.appendChild(labelSpan);
     thinkWrapper.appendChild(labelDiv);
@@ -230,7 +230,7 @@ describe('convertMessageNodeToMarkdown', () => {
             expect(result).toContain('Main answer text');
         });
 
-        it('includes thought label (._08cbf39) in thinking section', () => {
+        it('includes thought label (._5255ff8) in thinking section', () => {
             const msg = makeAiMessageWithThinking({ thoughtLabel: 'Thought for 5 seconds' });
             const result = convertMessageNodeToMarkdown(msg, true, true);
             expect(result).toContain('Thought for 5 seconds');

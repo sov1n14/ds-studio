@@ -12,14 +12,9 @@
     const bundle = {
         _isCensored(toolbarGroupEl) {
             if (!toolbarGroupEl || !toolbarGroupEl.querySelectorAll) return false;
-            // 舊設計系統：.ds-icon-button；新設計系統：.ds-button.ds-button--icon
-            let buttons = toolbarGroupEl.querySelectorAll(__DS_DetectionSelectors.ICON_BUTTON_SELECTOR);
-            if (buttons.length === 0) {
-                buttons = toolbarGroupEl.querySelectorAll(__DS_DetectionSelectors.ICON_BUTTON_ROLE_SELECTOR);
-            }
+            let buttons = toolbarGroupEl.querySelectorAll(__DS_DetectionSelectors.ICON_BUTTON_ROLE_SELECTOR);
             if (buttons.length < 5) return false;
             const isDisabled = (btn) =>
-                (btn.classList.contains(__DS_DetectionSelectors.ICON_BUTTON_DISABLED_CLASS) && btn.getAttribute('aria-disabled') === 'true') ||
                 btn.classList.contains(__DS_DetectionSelectors.BUTTON_DISABLED_CLASS);
             return isDisabled(buttons[1]) && isDisabled(buttons[4]);
         },

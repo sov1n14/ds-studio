@@ -51,17 +51,13 @@
     /** 匯出 markdown 中的引用標記 */
     const MARKDOWN_CITE_SELECTOR = '.ds-markdown-cite';
 
-    /** 舊版工具列圖示按鈕 */
-    const ICON_BUTTON_SELECTOR = '.ds-icon-button';
 
     /** 新版設計的工具列圖示按鈕 */
     const ICON_BUTTON_ROLE_SELECTOR = '[role="button"].ds-button.ds-button--icon';
 
-    /** 工具列圖示按鈕（新舊變體合併） */
-    const ICON_BUTTON_ANY_SELECTOR = ICON_BUTTON_SELECTOR + ', ' + ICON_BUTTON_ROLE_SELECTOR;
+    /** 工具列圖示按鈕（與 ICON_BUTTON_ROLE_SELECTOR 相同，保留供消費端引用） */
+    const ICON_BUTTON_ANY_SELECTOR = ICON_BUTTON_ROLE_SELECTOR;
 
-    /** 舊版圖示按鈕的停用狀態 class */
-    const ICON_BUTTON_DISABLED_CLASS = 'ds-icon-button--disabled';
 
     /** DeepSeek 通用 flex 列（工具列降級掃描） */
     const FLEX_ROW_SELECTOR = '.ds-flex';
@@ -75,8 +71,6 @@
     /** 浮動／下拉的定位根容器 */
     const FLOATING_POSITION_WRAPPER_SELECTOR = '.ds-floating-position-wrapper';
 
-    /** 抬升表面（elevated surface）降級根容器 */
-    const ELEVATED_SURFACE_SELECTOR = '.ds-elevated';
 
     /** 程式碼區塊容器 class（以 includes 比對） */
     const CODE_BLOCK_CLASS = 'md-code-block';
@@ -122,6 +116,8 @@
 
     /** think block 標題列的雜湊 class */
     const THINK_HEADER_CLASS = '_245c867 _34a54ec';
+    /** 可點擊的 toggle class（由 THINK_HEADER_CLASS 衍生，雜湊輪換時僅需改一處） */
+    const THINK_HEADER_TOGGLE_CLASS = THINK_HEADER_CLASS.split(' ')[0];
 
     /** think block 間距層的雜湊 class */
     const THINK_SPACER_CLASS = 'c2b72bb8';
@@ -162,7 +158,7 @@
     const MESSAGE_TOOLBAR_SELECTOR = '.ds-flex._965abe9';
 
     /** think 區塊狀態列 */
-    const THINK_STATUS_SELECTOR = '._08cbf39';
+    const THINK_STATUS_SELECTOR = '._5255ff8';  // 雜湊已輪換：_08cbf39 被 DeepSeek 重新指派給搜尋結果計數元素
 
     /** think 區塊參考標籤 */
     const THINK_REFERENCE_LABEL_SELECTOR = '._442c8e7';
@@ -170,10 +166,7 @@
     /** think 區塊參考連結 */
     const THINK_REFERENCE_LINK_SELECTOR = 'a._04ab7b1';
 
-    // ── 首頁 ──
 
-    /** 行動版移除的首頁元素 */
-    const HOMEPAGE_MOBILE_CLEANUP_SELECTOR = '._9579690';
 
     // ── 編輯區域 ──
 
@@ -226,11 +219,11 @@
     const GO_TOP_ANCHOR_FALLBACK1_SELECTOR = '._9663006';
 
     // ---------------------------------------------------------------
-    //  送出按鈕結構（桌面版 ds-icon-button / 行動版 ds-button 共用）
+    //  送出按鈕結構（ds-button 變體）
     // ---------------------------------------------------------------
 
-    /** 可能為送出按鈕的可點擊容器（桌面版圖示鈕與行動版按鈕兩種變體） */
-    const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-icon-button[role="button"], div.ds-button[role="button"]';
+    /** 可能為送出按鈕的可點擊容器 */
+    const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-button[role="button"]';
 
     /** 送出圖示的 SVG path 起始字串；以屬性前綴比對，不序列化整個子樹 */
     const SEND_BUTTON_ICON_SELECTOR = 'svg path[d^="M8.3125"]';
@@ -275,14 +268,14 @@
         MARKDOWN_CLASS, MARKDOWN_SELECTOR,
         THINK_CONTENT_CLASS, THINK_CONTENT_SELECTOR,
         ASSISTANT_MAIN_CONTENT_SELECTOR, MARKDOWN_CITE_SELECTOR,
-        ICON_BUTTON_SELECTOR, ICON_BUTTON_ROLE_SELECTOR, ICON_BUTTON_ANY_SELECTOR,
-        ICON_BUTTON_DISABLED_CLASS, FLEX_ROW_SELECTOR,
+        ICON_BUTTON_ROLE_SELECTOR, ICON_BUTTON_ANY_SELECTOR,
+        FLEX_ROW_SELECTOR,
         INPUT_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
         TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR,
-        FLOATING_POSITION_WRAPPER_SELECTOR, ELEVATED_SURFACE_SELECTOR, CODE_BLOCK_CLASS,
+        FLOATING_POSITION_WRAPPER_SELECTOR, CODE_BLOCK_CLASS,
         THINK_BLOCK_CLASS, THINK_BLOCK_SELECTOR,
         THINK_SEPARATOR_CLASS, THINK_SEPARATOR_SELECTOR,
-        THINK_HEADER_CLASS, THINK_SPACER_CLASS,
+        THINK_HEADER_CLASS, THINK_HEADER_TOGGLE_CLASS, THINK_SPACER_CLASS,
         THINK_CONTENT_OUTER_CLASS, THINK_CONTENT_MODIFIER_CLASS,
         THINK_LOADING_DOTS_CLASS, THINK_FOOTER_CLASS,
         ASSISTANT_MESSAGE_SELECTOR, USER_CONTENT_SELECTOR,
@@ -290,7 +283,7 @@
         CONTENT_COLUMN_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR, FLOATING_BUTTON_BAR_DIV_SELECTOR,
         MESSAGE_TOOLBAR_SELECTOR, THINK_STATUS_SELECTOR,
         THINK_REFERENCE_LABEL_SELECTOR, THINK_REFERENCE_LINK_SELECTOR,
-        HOMEPAGE_MOBILE_CLEANUP_SELECTOR, EDIT_MESSAGE_BUTTON_CLASS,
+        EDIT_MESSAGE_BUTTON_CLASS,
         EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR,
         VIRTUAL_LIST_CONTAINER_SELECTOR,
         SIDEBAR_WRAPPER_SELECTOR, SIDEBAR_INNER_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
