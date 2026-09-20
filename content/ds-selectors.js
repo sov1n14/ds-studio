@@ -9,6 +9,7 @@
  * 單一職責：僅匯出常數字串，不含任何邏輯或副作用。
  */
 
+// Stryker disable StringLiteral: 純常數模組，選擇器字串的變異只能用逐字比對來殺，屬反模式（tautological assertion）
 (function () {
     'use strict';
 
