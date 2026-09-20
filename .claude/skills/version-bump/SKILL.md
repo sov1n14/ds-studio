@@ -54,6 +54,17 @@ Before finalizing a version bump, mutation testing must pass on the changed scop
 
 A surviving mutant that the lead classifies as "weak assertion" must be killed (test-engineer) before the bump proceeds. Equivalent mutants (lead judgment) are acceptable.
 
+### Selector Health Check (Capture Sweep)
+
+Before finalizing a version bump, run the DOM capture sweep to verify selectors still match live DeepSeek elements:
+
+| Timing | Command | Expected |
+|-|-|-|
+| Every version bump | `node tools/capture.mjs && node tools/report.mjs` | No new zero-match selectors vs previous sweep |
+| After suspected DeepSeek build update | Same | Identifies rotated CSS hash classes |
+
+Runtime: ~60 seconds (headed browser required, uses persistent profile at `tools/.pw-profile/`). Review the report's "matched nowhere" list — any selector dropping to zero matches is a rotation candidate requiring update in `content/ds-selectors.js`.
+
 ## Verification Checklist
 
 Before marking a task complete, verify:
