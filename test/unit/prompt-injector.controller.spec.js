@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../content/ds-selectors.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/prompt-injector.send-button.js';
 import '../../content/prompt-injector.controller.js';
 import {
@@ -294,7 +295,7 @@ describe('send interception via click', () => {
         if (opts.disabled) button.classList.add('ds-button--disabled');
 
         const row = document.createElement('div');
-        row.className = 'bf38813a';
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
         row.appendChild(button);
 
         const inputArea = document.createElement('div');
@@ -417,7 +418,7 @@ describe('send interception via Enter', () => {
     function mountComposer(value) {
         const { button } = makeMobileSendButton();
         const row = document.createElement('div');
-        row.className = 'bf38813a';
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
         row.appendChild(button);
 
         const inputArea = document.createElement('div');

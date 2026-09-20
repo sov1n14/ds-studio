@@ -38,7 +38,7 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
         });
         it('sparkle icon 16x16', () => {
             const html = build().children[0].innerHTML;
-            expect(html).toContain('_970ac5e');
+            expect(html).toContain(selectors.THINK_ICON_CLASS);
             expect(html).toContain('font-size: 16px');
         });
         it('arrow icon 14x14', () => {
@@ -51,7 +51,7 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
         it('_5255ff8 _4d41763 span', () => {
             const span = build().querySelector(selectors.THINK_STATUS_SELECTOR);
             expect(span).not.toBeNull();
-            expect(span.classList.contains('_4d41763')).toBe(true);
+            expect(span.classList.contains(selectors.THINK_TIME_CLASS)).toBe(true);
         });
         it('rounded seconds in header', () => {
             const span = build('thinking', 3.7).querySelector(selectors.THINK_STATUS_SELECTOR);
@@ -63,7 +63,7 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
         });
         it('c99b79f8 divider', () => {
             const html = build().children[0].innerHTML;
-            expect(html).toContain('c99b79f8');
+            expect(html).toContain(selectors.THINK_DIVIDER_CLASS);
             expect(html).toContain('opacity: 0');
         });
         it('right-arrow path', () => {
@@ -113,8 +113,8 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
             expect(d).not.toBeNull();
             expect(d.getAttribute('style')).toContain('width: 16px');
             expect(d.getAttribute('style')).toContain('height: 16px');
-            expect(d.innerHTML).toContain('a510c7ce');
-            expect(d.innerHTML).toContain('_0652043');
+            expect(d.innerHTML).toContain(selectors.THINK_CONTENT_WRAPPER_CLASS);
+            expect(d.innerHTML).toContain(selectors.THINK_INNER_CONTENT_CLASS);
         });
         it('separator', () => {
             expect(build().querySelector('.' + selectors.THINK_SEPARATOR_CLASS)).not.toBeNull();

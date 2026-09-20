@@ -25,11 +25,11 @@ function makeChatAnchor(uuid, { absolute = false } = {}) {
     ring.className = 'ds-focus-ring';
 
     const title = document.createElement('div');
-    title.className = 'c08e6e93';
+    title.className = DSSelectors.SIDEBAR_TITLE_CLASS;
     title.textContent = 'chat title';
 
     const actions = document.createElement('div');
-    actions.className = '_254829d';
+    actions.className = DSSelectors.SIDEBAR_ACTIONS_CLASS;
     const actionBtn = document.createElement('div');
     actionBtn.setAttribute('role', 'button');
     actionBtn.className = 'ds-button _2090548';
@@ -47,7 +47,7 @@ function makeDateGroup({ uuids = [], label = '今天', groupClass = DSSelectors.
     group.className = groupClass;
 
     const dateLabel = document.createElement('div');
-    dateLabel.className = 'f3d18f6a';
+    dateLabel.className = DSSelectors.SIDEBAR_DATE_LABEL_CLASS;
     dateLabel.textContent = label;
     group.appendChild(dateLabel);
 

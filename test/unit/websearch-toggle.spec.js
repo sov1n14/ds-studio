@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/settings-message-constants.js";
 import "../../utils/storage-manager.js";
 import StorageManager from "../../utils/storage-manager.js";
+import DSSelectors from "../../content/ds-selectors.js";
 
 const MASTER_KEY = "isEnabled";
 const MODE_KEY = StorageManager.KEYS.WEBSEARCH_TOGGLE;
@@ -57,7 +58,7 @@ const DEEP_THINK_ICON_D =
 function iconHtml(iconPath) {
     return `<div class="ds-toggle-button__icon">
         <div class="ds-icon">
-            <div class="_46d2264" aria-hidden="true">
+            <div class="${DSSelectors.WEBSEARCH_TOGGLE_CLASS}" aria-hidden="true">
                 <div style="width: 14px; height: 14px;">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
                         <defs>
@@ -92,7 +93,7 @@ function makeToggle(pressed, label, iconPath, generic = false) {
     }
     if (label !== null) {
         const labelSpan = document.createElement("span");
-        labelSpan.className = "_6dbc175";
+        labelSpan.className = DSSelectors.WEBSEARCH_LABEL_CLASS;
         labelSpan.textContent = label;
         toggle.appendChild(labelSpan);
     }

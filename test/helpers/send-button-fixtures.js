@@ -12,6 +12,8 @@
  *            prompt-injector.controller.spec.js
  */
 
+import DSSelectors from '../../content/ds-selectors.js';
+
 /** The d attribute of the real send-icon SVG path (composer send button, both layouts). */
 export const SEND_ICON_PATH_D = 'M8.3125 0L16.625 8.3125L8.3125 16.625';
 
@@ -236,7 +238,7 @@ export function makeEditSendButtonStandalone(value = 'edit text') {
  */
 export function makeAttachmentButtonInActionsRow() {
     const row = document.createElement('div');
-    row.className = 'bf38813a';
+    row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
 
     // --- attachment button ---
     const attachmentButton = document.createElement('div');

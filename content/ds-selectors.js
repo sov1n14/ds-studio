@@ -68,6 +68,12 @@
     /** 切換按鈕的成對降級候選集合 */
     const TOGGLE_BUTTON_FALLBACK_SELECTOR = '[aria-pressed="true"], [aria-pressed="false"]';
 
+    /** 網頁搜尋切換容器的雜湊 class */
+    const WEBSEARCH_TOGGLE_CLASS = '_46d2264';
+
+    /** 網頁搜尋標籤 span 的雜湊 class */
+    const WEBSEARCH_LABEL_CLASS = '_6dbc175';
+
     /** 浮動／下拉的定位根容器 */
     const FLOATING_POSITION_WRAPPER_SELECTOR = '.ds-floating-position-wrapper';
 
@@ -134,6 +140,21 @@
     /** think block 尾部的雜湊 class */
     const THINK_FOOTER_CLASS = '_8f7678d';
 
+    /** think block 火花／原子圖示的雜湊 class */
+    const THINK_ICON_CLASS = '_970ac5e';
+
+    /** think block 狀態時間 span 的雜湊 class */
+    const THINK_TIME_CLASS = '_4d41763';
+
+    /** think block 分隔線的雜湊 class */
+    const THINK_DIVIDER_CLASS = 'c99b79f8';
+
+    /** think block 內容包裝層的雜湊 class */
+    const THINK_CONTENT_WRAPPER_CLASS = 'a510c7ce';
+
+    /** think block 內層內容的雜湊 class */
+    const THINK_INNER_CONTENT_CLASS = '_0652043';
+
 
     // ── 標題列與內容欄 ──
 
@@ -198,8 +219,17 @@
     /** 側邊欄日期分組容器（同組共用一個日期標籤） */
     const SIDEBAR_DATE_GROUP_SELECTOR = 'div._3098d02';
 
+    /** 側邊欄日期標籤的雜湊 class */
+    const SIDEBAR_DATE_LABEL_CLASS = 'f3d18f6a';
+
     /** 側邊欄對話列連結（以 href 定位，class 改版時仍可存活） */
     const SIDEBAR_CHAT_LINK_SELECTOR = 'a[href*="/a/chat/s/"]';
+
+    /** 側邊欄對話標題的雜湊 class */
+    const SIDEBAR_TITLE_CLASS = 'c08e6e93';
+
+    /** 側邊欄對話動作按鈕的雜湊 class */
+    const SIDEBAR_ACTIONS_CLASS = '_254829d';
 
     /** 標題列（title row）包裝 */
     const CHAT_HEADER_TITLE_ROW_SELECTOR = '._1aa2651';
@@ -225,6 +255,9 @@
     /** 可能為送出按鈕的可點擊容器 */
     const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-button[role="button"]';
 
+
+    /** 送出按鈕列容器的雜湊 class */
+    const SEND_BUTTON_ROW_CLASS = 'bf38813a';
     /** 送出圖示的 SVG path 起始字串；以屬性前綴比對，不序列化整個子樹 */
     const SEND_BUTTON_ICON_SELECTOR = 'svg path[d^="M8.3125"]';
 
@@ -245,6 +278,9 @@
 
     /** 展開按鈕圖示的裸 class */
     const EXPAND_BUTTON_ICON_CLASS = 'd630ec62';
+
+    /** 已確認排除的雜湊 class（位於 preset-overlay wrapper 外部） */
+    const STRAY_BUTTON_CLASS = '_57370c5';
 
 
     // ---------------------------------------------------------------
@@ -272,12 +308,15 @@
         FLEX_ROW_SELECTOR,
         INPUT_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
         TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR,
+        WEBSEARCH_TOGGLE_CLASS, WEBSEARCH_LABEL_CLASS,
         FLOATING_POSITION_WRAPPER_SELECTOR, CODE_BLOCK_CLASS,
         THINK_BLOCK_CLASS, THINK_BLOCK_SELECTOR,
         THINK_SEPARATOR_CLASS, THINK_SEPARATOR_SELECTOR,
         THINK_HEADER_CLASS, THINK_HEADER_TOGGLE_CLASS, THINK_SPACER_CLASS,
         THINK_CONTENT_OUTER_CLASS, THINK_CONTENT_MODIFIER_CLASS,
         THINK_LOADING_DOTS_CLASS, THINK_FOOTER_CLASS,
+        THINK_ICON_CLASS, THINK_TIME_CLASS, THINK_DIVIDER_CLASS,
+        THINK_CONTENT_WRAPPER_CLASS, THINK_INNER_CONTENT_CLASS,
         ASSISTANT_MESSAGE_SELECTOR, USER_CONTENT_SELECTOR,
         SCROLL_ROOT_SELECTOR, CHAT_HEADER_SELECTOR,
         CONTENT_COLUMN_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR, FLOATING_BUTTON_BAR_DIV_SELECTOR,
@@ -287,16 +326,18 @@
         EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR,
         VIRTUAL_LIST_CONTAINER_SELECTOR,
         SIDEBAR_WRAPPER_SELECTOR, SIDEBAR_INNER_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
-        SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_CHAT_LINK_SELECTOR,
+        SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_DATE_LABEL_CLASS, SIDEBAR_CHAT_LINK_SELECTOR,
+        SIDEBAR_TITLE_CLASS, SIDEBAR_ACTIONS_CLASS,
         CHAT_HEADER_TITLE_ROW_SELECTOR, CHAT_TITLE_FALLBACK_SELECTOR,
         GO_TOP_NATIVE_BUTTON_CLASS,
         GO_TOP_ANCHOR_SELECTOR, GO_TOP_ANCHOR_FALLBACK1_SELECTOR,
+                SEND_BUTTON_ROW_CLASS,
         SEND_BUTTON_ROLE_SELECTOR,
         SEND_BUTTON_ICON_SELECTOR,
         SEARCH_ICON_PATH_PREFIX,
         EDIT_SEND_BUTTON_VARIANT_CLASSES,
         BUTTON_CONTENT_SELECTOR, BUTTON_DISABLED_CLASS,
-        EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS,
+        EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS, STRAY_BUTTON_CLASS,
         DS_BUTTON_CAPSULE_CLASS, DS_BUTTON_ICON_LABEL_PRIMARY_CLASS,
         DS_BUTTON_ICON_LABEL_TERTIARY_CLASS, DS_BUTTON_XL_CLASS,
     };

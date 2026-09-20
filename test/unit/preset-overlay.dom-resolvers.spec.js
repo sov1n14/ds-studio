@@ -126,7 +126,7 @@ function buildRealisticHeader() {
     container.appendChild(wrapper);
 
     const stray57 = document.createElement('div');
-    stray57.className = '_57370c5';
+    stray57.className = DSSelectors.STRAY_BUTTON_CLASS;
     container.appendChild(stray57);
 
     document.body.appendChild(container);

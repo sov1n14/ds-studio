@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +60,7 @@ function makeInputArea(textareaValue, buttonInfo) {
 
     if (buttonInfo) {
         var actionsRow = document.createElement('div');
-        actionsRow.className = 'bf38813a';
+        actionsRow.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
         actionsRow.appendChild(buttonInfo.button);
         container.appendChild(actionsRow);
     }
@@ -245,7 +246,7 @@ describe('Send interception: attachment button must not trigger injection', func
 
     it('clicking the attachment button leaves the textarea unchanged (no prefix injected)', function () {
         var row = document.createElement('div');
-        row.className = 'bf38813a';
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
 
         var attachBtn = document.createElement("div");
         attachBtn.setAttribute("role", "button");
@@ -307,7 +308,7 @@ describe('Send interception: attachment button must not trigger injection', func
 
     it('clicking the send button from the same row still triggers injection', function () {
         var row = document.createElement('div');
-        row.className = 'bf38813a';
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
 
         var attachBtn = document.createElement("div");
         attachBtn.setAttribute("role", "button");

@@ -16,6 +16,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../content/ds-selectors.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/prompt-injector.send-button.js';
 import {
     SEND_ICON_PATH_D,
@@ -251,7 +252,7 @@ describe('isSendButtonEnabled', () => {
 describe('findSendButtonForTextarea', () => {
     it('finds the send button that shares an ancestor with the textarea', () => {
         const { button } = makeMobileSendButton();
-        const actionsRow = wrapIn('bf38813a', button);
+        const actionsRow = wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button);
         const inputArea = document.createElement('div');
         const textarea = makeTextarea('');
         inputArea.appendChild(textarea);
@@ -292,7 +293,7 @@ describe('findSendButtonForTextarea', () => {
 
     it('returns null for a detached textarea instead of walking off the tree', () => {
         const { button } = makeMobileSendButton();
-        cleanup = mountInDocument(wrapIn('bf38813a', button));
+        cleanup = mountInDocument(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
         const detached = makeTextarea('');
 
         expect(detached.parentElement).toBe(null);
@@ -368,7 +369,7 @@ describe('resolveTextareaForButton (composer case)', () => {
         const near = makeTextarea('near the button');
         const { button } = makeMobileSendButton();
         inputArea.appendChild(near);
-        inputArea.appendChild(wrapIn('bf38813a', button));
+        inputArea.appendChild(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
         cleanup = mountInDocument(first, inputArea);
         near.focus();
 
@@ -381,7 +382,7 @@ describe('resolveTextareaForButton (composer case)', () => {
         const near = makeTextarea('near the button');
         const { button } = makeMobileSendButton();
         inputArea.appendChild(near);
-        inputArea.appendChild(wrapIn('bf38813a', button));
+        inputArea.appendChild(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
         cleanup = mountInDocument(first, inputArea);
 
         expect(SB.resolveTextareaForButton(button)).toBe(first);
