@@ -137,7 +137,7 @@
                         consecutiveMisses++;
                         if (consecutiveMisses >= this.MAX_ANCHOR_RETRIES) {
                             cleanup();
-                            resolve({ success: false });
+                            resolve({ success: false, reason: 'anchor_not_found' });
                             return;
                         }
                     } else {
@@ -149,7 +149,7 @@
                             if (consecutiveMisses >= this.MAX_ANCHOR_RETRIES &&
                                 currentScrollTop <= 0) {
                                 cleanup();
-                                resolve({ success: false });
+                                resolve({ success: false, reason: 'anchor_not_found' });
                                 return;
                             }
                         }
