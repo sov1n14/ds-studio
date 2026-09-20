@@ -190,12 +190,12 @@
          * @returns {Element}
          */
         _findScrollContainer(anchor) {
-            // 策略 1：從 anchor 向上走，找到最近的 .ds-scroll-area 且具備可滾動高度
+            // 策略 1：從 anchor 向上走，找到最近的 .ds-scroll-area
             if (anchor) {
                 let el = anchor.parentElement;
                 while (el && el !== document.body) {
-                    if (el.classList.contains(SCROLL_AREA_CLASS) &&
-                        el.scrollHeight > el.clientHeight) {
+                    // 不可滾動的容器仍為有效目標：未溢出僅代表內容尚短，容器本身仍然正確，見 harvest.dom.js 同理修正。
+                    if (el.classList.contains(SCROLL_AREA_CLASS)) {
                         this._scrollContainer = el;
                         return el;
                     }
@@ -209,8 +209,8 @@
             if (virtualList) {
                 let el = virtualList.parentElement;
                 while (el && el !== document.body) {
-                    if (el.classList.contains(SCROLL_AREA_CLASS) &&
-                        el.scrollHeight > el.clientHeight) {
+                    // 不可滾動的容器仍為有效目標：未溢出僅代表內容尚短，容器本身仍然正確。
+                    if (el.classList.contains(SCROLL_AREA_CLASS)) {
                         this._scrollContainer = el;
                         return el;
                     }
@@ -224,8 +224,8 @@
                 while (el && el !== document.body) {
                     const style = getComputedStyle(el);
                     const overflowY = style.overflowY;
-                    if ((overflowY === 'auto' || overflowY === 'scroll') &&
-                        el.scrollHeight > el.clientHeight) {
+                    // 不可滾動的容器仍為有效目標：未溢出僅代表內容尚短，容器本身仍然正確。
+                    if (overflowY === 'auto' || overflowY === 'scroll') {
                         this._scrollContainer = el;
                         return el;
                     }
