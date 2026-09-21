@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.33.25](changelog/v4.md#43325---2026-09-21) | Add 4 selector constants and centralize production code selector sources |
 | [4.33.24](changelog/v4.md#43324---2026-09-21) | Add 12 selector constants and unify test file selector sources |
 | [4.33.23](changelog/v4.md#43323---2026-09-21) | Add reason property to scroll failure results |
 | [4.33.22](changelog/v4.md#43322---2026-09-21) | Fix export failure on non-overflowing conversations |
