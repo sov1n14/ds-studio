@@ -711,3 +711,351 @@ describe('Group I — enable() / disable() lifecycle', () => {
         expect(SidebarAutoHide.enterTimer).toBeNull();
     });
 });
+
+// ---------------------------------------------------------------------------
+//  Group J - setupResizeHandler(): window resize debounce
+// ---------------------------------------------------------------------------
+
+describe('Group J - setupResizeHandler() window resize debounce', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupResizeHandler();
+    });
+
+    it('J1: resize dispatches collapse after RESIZE_DEBOUNCE_MS when not collapsed', () => {
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).toHaveBeenCalledOnce();
+    });
+
+    it('J2: two rapid resize events result in only one collapse (debounce)', () => {
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS / 2);
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).toHaveBeenCalledOnce();
+    });
+
+    it('J3: resize with enabled = false does NOT collapse', () => {
+        SidebarAutoHide.enabled = false;
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).not.toHaveBeenCalled();
+    });
+
+    it('J4: resize while already collapsed does NOT collapse again', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).not.toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group K - setupMutationObserver(): sidebar replacement detection
+// ---------------------------------------------------------------------------
+
+describe('Group K - setupMutationObserver() sidebar replacement detection', () => {
+    it('K1: sidebar replaced in DOM triggers collapse on new element', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        oldSidebar.remove();
+        const newSidebar = createSidebar();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(SidebarAutoHide.sidebarEl).toBe(newSidebar);
+        expect(collapseSpy).toHaveBeenCalled();
+    });
+
+    it('K2: mutation but sidebar unchanged does NOT re-bind', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const bindSpy = vi.spyOn(SidebarAutoHide, 'bindEvents');
+
+        const unrelated = document.createElement('div');
+        unrelated.className = 'unrelated';
+        document.body.appendChild(unrelated);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(bindSpy).not.toHaveBeenCalled();
+    });
+
+    it('K3: sidebar replaced but enabled = false does NOT call bindEvents', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = false;
+        SidebarAutoHide.setupMutationObserver();
+
+        const bindSpy = vi.spyOn(SidebarAutoHide, 'bindEvents');
+
+        oldSidebar.remove();
+        createSidebar();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(bindSpy).not.toHaveBeenCalled();
+    });
+
+    it('K4: calling setupMutationObserver twice disconnects the first observer', () => {
+        SidebarAutoHide.setupMutationObserver();
+        const firstObserver = SidebarAutoHide.mutationObserver;
+        const disconnectSpy = vi.spyOn(firstObserver, 'disconnect');
+
+        SidebarAutoHide.setupMutationObserver();
+
+        expect(disconnectSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.mutationObserver).not.toBe(firstObserver);
+    });
+
+    it('K5: sidebar replacement disconnects old sidebarObserver', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+
+        SidebarAutoHide.sidebarObserver = new MutationObserver(() => {});
+        const disconnectSpy = vi.spyOn(SidebarAutoHide.sidebarObserver, 'disconnect');
+
+        SidebarAutoHide.setupMutationObserver();
+
+        oldSidebar.remove();
+        createSidebar();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(disconnectSpy).toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group L - observeSidebar(): native-expand re-collapse branch
+// ---------------------------------------------------------------------------
+
+describe('Group L - observeSidebar() native-expand re-collapse', () => {
+    it('L1: native expand while our collapse is active re-applies width, overflow, and marginLeft', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+
+        SidebarAutoHide.observeSidebar();
+        expect(SidebarAutoHide._wasNativelyCollapsed).toBe(true);
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        nativeBar.remove();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(sidebar.style.width).toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+        expect(overflowSpy).toHaveBeenCalled();
+        expect(innerEl.style.marginLeft).toBe(-(260 - SidebarAutoHide.COLLAPSED_WIDTH) + 'px');
+    });
+
+    it('L2: native expand with no inner element does not throw', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.observeSidebar();
+
+        nativeBar.remove();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(sidebar.style.width).toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+    });
+
+    it('L3: inner element with getBoundingClientRect().width = 0 does NOT set marginLeft', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.observeSidebar();
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 0 });
+
+        nativeBar.remove();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(innerEl.style.marginLeft).toBe('');
+    });
+
+    it('L4: non-native-state-change mutation triggers applyOverflow only (else branch)', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        SidebarAutoHide.observeSidebar();
+
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        const dummy = document.createElement('span');
+        sidebar.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group M - bindEvents() return values
+// ---------------------------------------------------------------------------
+
+describe('Group M - bindEvents() return values', () => {
+    it('M1: returns false when getSidebar() returns null (no sidebar in DOM)', () => {
+        SidebarAutoHide.sidebarEl = null;
+        const result = SidebarAutoHide.bindEvents();
+        expect(result).toBe(false);
+    });
+
+    it('M2: returns true when sidebar element exists in DOM', () => {
+        createSidebar();
+        SidebarAutoHide._eventAbortController = null;
+        const result = SidebarAutoHide.bindEvents();
+        expect(result).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+//  Group N - observeSidebar() guards
+// ---------------------------------------------------------------------------
+
+describe('Group N - observeSidebar() guards', () => {
+    it('N1: call with sidebarEl = null does NOT create sidebarObserver', () => {
+        SidebarAutoHide.sidebarEl = null;
+        SidebarAutoHide.sidebarObserver = null;
+
+        SidebarAutoHide.observeSidebar();
+
+        expect(SidebarAutoHide.sidebarObserver).toBeNull();
+    });
+
+    it('N2: mutation while enabled = false skips applyOverflow', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        SidebarAutoHide.observeSidebar();
+
+        SidebarAutoHide.enabled = false;
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        const dummy = document.createElement('span');
+        sidebar.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).not.toHaveBeenCalled();
+    });
+
+    it('N3: calling observeSidebar twice disconnects first observer', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+
+        SidebarAutoHide.observeSidebar();
+        const first = SidebarAutoHide.sidebarObserver;
+        const disconnectSpy = vi.spyOn(first, 'disconnect');
+
+        SidebarAutoHide.observeSidebar();
+
+        expect(disconnectSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.sidebarObserver).not.toBe(first);
+    });
+});
+
+// ---------------------------------------------------------------------------
+//  Group O - setupHoverZone() edge-case guards
+// ---------------------------------------------------------------------------
+
+describe('Group O - setupHoverZone() edge-case guards', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+    });
+
+    afterEach(() => {
+        if (SidebarAutoHide.leaveTimer) {
+            clearTimeout(SidebarAutoHide.leaveTimer);
+            SidebarAutoHide.leaveTimer = null;
+        }
+    });
+
+    it('O1: mouseover event on document body itself (no floating wrapper) does not throw', () => {
+        expect(() => {
+            document.body.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+        }).not.toThrow();
+    });
+
+    it('O2: mouseover same dropdown wrapper twice does NOT add duplicate listeners', () => {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+        const addListenerSpy = vi.spyOn(wrapper, 'addEventListener');
+
+        fireMouseover(wrapper);
+        expect(SidebarAutoHide._activeDropdownEl).toBe(wrapper);
+
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+        fireMouseover(wrapper);
+
+        expect(addListenerSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('O3: onLeave when _activeDropdownEl already null does not throw', () => {
+        vi.stubGlobal('requestAnimationFrame', (cb) => cb());
+
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+
+        fireMouseover(wrapper);
+        expect(SidebarAutoHide._activeDropdownEl).toBe(wrapper);
+
+        SidebarAutoHide._activeDropdownEl = null;
+
+        expect(() => {
+            wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        }).not.toThrow();
+    });
+});

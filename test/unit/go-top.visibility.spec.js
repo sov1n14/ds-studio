@@ -408,5 +408,66 @@ describe('GoToTop', () => {
                 vi.useRealTimers();
             }
         });
+
+        it('cleanup sets aria-disabled to false on _button even when it was true before scroll', async () => {
+            vi.useFakeTimers();
+            try {
+                const button = document.createElement('div');
+                button.setAttribute('aria-disabled', 'true');
+                GoToTop._button = button;
+
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+
+                const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+                await vi.advanceTimersByTimeAsync(2000);
+                const result = await promise;
+
+                expect(result).toEqual({ success: true });
+                // The cleanup path must explicitly set aria-disabled to 'false'
+                expect(button.getAttribute('aria-disabled')).toBe('false');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('after abort (second call), no further step scheduling occurs', async () => {
+            vi.useFakeTimers();
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: -1000, bottom: -900, height: 100 }));
+                // Keep _isAtTop false so the scroll loop does not resolve before abort
+                vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(false);
+
+                const firstPromise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+
+                // Let a few steps run so the scroll loop is actively scheduling
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 3);
+
+                // Spy on setTimeout AFTER the scroll is running to count new timers
+                const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+                // Abort via second call
+                GoToTop.scrollToTopAndWait();
+                await expect(firstPromise).rejects.toEqual({ success: false, reason: 'stopped-by-user' });
+
+                // Clear the spy call count
+                setTimeoutSpy.mockClear();
+
+                // After abort, advance time — the isAborted guard in scheduleNext
+                // should prevent any further setTimeout calls from the scroll loop
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+                expect(setTimeoutSpy).not.toHaveBeenCalled();
+
+                setTimeoutSpy.mockRestore();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
     });
 });

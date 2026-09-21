@@ -167,4 +167,62 @@ describe('GoToTop: non-overflowing scroll container (short conversation)', () =>
         expect(typeof result.reason).toBe('string');
         expect(result.reason.length).toBeGreaterThan(0);
     }, 30000);
+
+    it('does not cache _scrollContainer when _findScrollContainer returns document.documentElement (distinct from scrollingElement)', async () => {
+        vi.useFakeTimers();
+        try {
+            GoToTop._scrollContainer = null;
+            GoToTop._isLocked = false;
+
+            // Make scrollingElement differ from documentElement so the second
+            // disjunct (=== document.documentElement) is the one that fires
+            const fakeScrollingElement = document.createElement('div');
+            Object.defineProperty(document, 'scrollingElement', {
+                value: fakeScrollingElement,
+                configurable: true,
+            });
+
+            // _findScrollContainer returns document.documentElement (NOT scrollingElement)
+            vi.spyOn(GoToTop, '_findScrollContainer').mockReturnValue(document.documentElement);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+
+            const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+            await vi.advanceTimersByTimeAsync(5000);
+            const result = await promise;
+
+            // The scroll proceeds (local scrollContainer is documentElement),
+            // but _scrollContainer must NOT be cached (set to null)
+            expect(GoToTop._scrollContainer).toBeNull();
+            expect(result).toHaveProperty('success');
+        } finally {
+            // Restore document.scrollingElement
+            delete document.scrollingElement;
+            vi.useRealTimers();
+        }
+    });
+
+    it('scrollToTopAndWait resolves with exact reason string anchor_not_found when scroll fails due to anchor verification', async () => {
+        vi.useFakeTimers();
+        const container = document.createElement('div');
+        container.style.overflowY = 'auto';
+        Object.defineProperty(container, 'scrollHeight', { value: 2000, configurable: true });
+        Object.defineProperty(container, 'clientHeight', { value: 400, configurable: true });
+        Object.defineProperty(container, 'scrollTop', { value: 0, writable: true, configurable: true });
+        container.scrollBy = vi.fn();
+        document.body.appendChild(container);
+        GoToTop._scrollContainer = container;
+        GoToTop._isLocked = false;
+        GoToTop.enabled = true;
+        GoToTop._masterEnabled = true;
+        // _isAtTop returns false to exhaust the consecutiveMisses counter after stability
+        vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(false);
+        vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+        const promise = GoToTop.scrollToTopAndWait({ timeout: 20000 });
+        await vi.advanceTimersByTimeAsync(20000);
+        const result = await promise;
+        expect(result.success).toBe(false);
+        expect(result.reason).toBe('anchor_not_found');
+    }, 30000);
+
 });

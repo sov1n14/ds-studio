@@ -388,3 +388,110 @@ describe('resolveTextareaForButton (composer case)', () => {
         expect(SB.resolveTextareaForButton(button)).toBe(first);
     });
 });
+
+// ---------------------------------------------------------------------------
+// isEditWindowSendButton — null / undefined / partial variant guards
+// ---------------------------------------------------------------------------
+
+describe('isEditWindowSendButton — null and partial-variant guards', () => {
+    it('returns false for null input instead of throwing', () => {
+        expect(() => SB.isEditWindowSendButton(null)).not.toThrow();
+        expect(SB.isEditWindowSendButton(null)).toBe(false);
+    });
+
+    it('returns false for undefined input instead of throwing', () => {
+        expect(() => SB.isEditWindowSendButton(undefined)).not.toThrow();
+        expect(SB.isEditWindowSendButton(undefined)).toBe(false);
+    });
+
+    it('rejects a button with --primary but NOT --filled (every→some mutant killer)', () => {
+        const button = document.createElement('div');
+        // Only primary, missing filled — should fail the .every() check
+        button.className = 'ds-button ds-button--primary ds-button--capsule ds-button--s';
+        button.setAttribute('role', 'button');
+        const span = document.createElement('span');
+        span.className = 'ds-button__content';
+        span.textContent = '发送';
+        button.appendChild(span);
+        cleanup = mountInDocument(button);
+        expect(SB.isEditWindowSendButton(button)).toBe(false);
+    });
+
+    it('rejects a button with --filled but NOT --primary', () => {
+        const button = document.createElement('div');
+        button.className = 'ds-button ds-button--filled ds-button--capsule ds-button--s';
+        button.setAttribute('role', 'button');
+        const span = document.createElement('span');
+        span.className = 'ds-button__content';
+        span.textContent = '发送';
+        button.appendChild(span);
+        cleanup = mountInDocument(button);
+        expect(SB.isEditWindowSendButton(button)).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// findSendButtonForTextarea — null guard
+// ---------------------------------------------------------------------------
+
+describe('findSendButtonForTextarea — null guard', () => {
+    it('returns null for null input instead of throwing', () => {
+        expect(() => SB.findSendButtonForTextarea(null)).not.toThrow();
+        expect(SB.findSendButtonForTextarea(null)).toBe(null);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// resolveTextareaForButton (edit path) — findTextareaNearButton edge cases
+// ---------------------------------------------------------------------------
+
+describe('resolveTextareaForButton (edit path) — findTextareaNearButton edge cases', () => {
+    it('treats a whitespace-only textarea as empty during walk-up', () => {
+        // Walk-up textarea has only whitespace → treated as empty
+        // A non-empty global textarea should be preferred (P3 priority)
+        const globalTa = makeTextarea('global non-empty');
+        const container = document.createElement('div');
+        const whitespaceTa = makeTextarea('   ');
+        const { button } = makeEditSendButtonStandalone();
+        container.appendChild(whitespaceTa);
+        container.appendChild(button);
+        cleanup = mountInDocument(globalTa, container);
+        clearFocus();
+
+        // P3: skip whitespace walk-up, take non-empty global
+        expect(SB.resolveTextareaForButton(button, true)).toBe(globalTa);
+    });
+
+    it('returns the nearer empty textarea when two empty textareas exist at different ancestor levels', () => {
+        // Outer ancestor has an empty textarea, inner ancestor also has one
+        // The walk-up should record the first (nearest) empty textarea
+        const outerContainer = document.createElement('div');
+        const outerTa = makeTextarea('');
+        const innerContainer = document.createElement('div');
+        const innerTa = makeTextarea('');
+        const { button } = makeEditSendButtonStandalone();
+
+        innerContainer.appendChild(innerTa);
+        innerContainer.appendChild(button);
+        outerContainer.appendChild(outerTa);
+        outerContainer.appendChild(innerContainer);
+        cleanup = mountInDocument(outerContainer);
+        clearFocus();
+
+        // Both textareas are empty, no non-empty global exists
+        // firstEmptyTextarea should be the nearest one (innerTa)
+        expect(SB.resolveTextareaForButton(button, true)).toBe(innerTa);
+    });
+
+    it('falls back to global empty textarea when walk-up finds no textarea at all', () => {
+        // Button is standalone (no textarea in ancestors), but a global empty textarea exists
+        const globalEmptyTa = makeTextarea('');
+        const { button } = makeEditSendButtonStandalone();
+        // Mount global textarea first, then button at body level (no textarea ancestor)
+        cleanup = mountInDocument(globalEmptyTa, button);
+        clearFocus();
+
+        // No walk-up textarea, no non-empty global → fall back to globalFallbackTextarea (empty)
+        expect(SB.resolveTextareaForButton(button, true)).toBe(globalEmptyTa);
+    });
+});

@@ -101,3 +101,10 @@ describe('isMobileDevice() — viewport is deliberately not an input', () => {
         expect(isMobileDevice()).toBe(true);
     });
 });
+
+describe('isMobileDevice() — maxTouchPoints boundary (kills > 0 → > 1 mutant)', () => {
+    it('is true when maxTouchPoints is exactly 1 with a desktop user agent', () => {
+        stubNavigator(1, DESKTOP_UA);
+        expect(isMobileDevice()).toBe(true);
+    });
+});

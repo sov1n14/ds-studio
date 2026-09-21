@@ -269,3 +269,124 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Mutant-killing boundary and fallback tests
+// ---------------------------------------------------------------------------
+
+describe('CensorReplyRestore — mutant-killing boundary tests', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    describe('_isCensored() — exactly 4 buttons boundary (kills < 5 → < 4 mutant)', () => {
+        it('returns false when toolbar has exactly 4 buttons with censored pattern positions', () => {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'ds-flex _965abe9 _54866f7';
+            // 4 buttons: [enabled, disabled, enabled, disabled]
+            // Even though buttons[1] is disabled, there are only 4 buttons total (< 5)
+            const states = ['enabled', 'disabled', 'enabled', 'disabled'];
+            for (const state of states) {
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
+                if (state === 'disabled') {
+                    btn.classList.add('ds-button--disabled');
+                }
+                toolbar.appendChild(btn);
+            }
+            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
+        });
+    });
+
+    describe('_getToolbarGroup() — parentElement fallback path', () => {
+        it('finds toolbar via parentElement when no [data-virtual-list-item-key] ancestor exists', () => {
+            // messageEl has no virtual-list-item-key ancestor, so closest() returns null
+            // Falls back to messageEl.parentElement
+            const parent = document.createElement('div');
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'ds-message _63c77b1';
+            parent.appendChild(msgEl);
+
+            const toolbar = document.createElement('div');
+            toolbar.className = 'ds-flex _965abe9 _54866f7';
+            for (let i = 0; i < 5; i++) {
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
+                toolbar.appendChild(btn);
+            }
+            parent.appendChild(toolbar);
+            document.body.appendChild(parent);
+
+            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBe(toolbar);
+        });
+    });
+
+    describe('_getToolbarGroup() — exactly 4 icon buttons boundary (kills >= 5 → >= 4 mutant)', () => {
+        it('returns null when fallback .ds-flex has exactly 4 icon buttons', () => {
+            const container = document.createElement('div');
+            container.setAttribute('data-virtual-list-item-key', 'asst-boundary');
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'ds-message _63c77b1';
+            container.appendChild(msgEl);
+
+            // No _965abe9 toolbar, only a generic ds-flex with 4 buttons (below threshold)
+            const flex = document.createElement('div');
+            flex.className = 'ds-flex some-other-class';
+            for (let i = 0; i < 4; i++) {
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
+                flex.appendChild(btn);
+            }
+            container.appendChild(flex);
+            document.body.appendChild(container);
+
+            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBeNull();
+        });
+    });
+
+    describe('_getPrecedingUserPromptKey() — skips non-message siblings', () => {
+        it('skips a non-message div between user and assistant items and still finds the user message', () => {
+            const container = document.createElement('div');
+            container.className = 'ds-virtual-list-visible-items';
+
+            // User item
+            const userItem = document.createElement('div');
+            userItem.setAttribute('data-virtual-list-item-key', 'user-1');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'ds-message';
+            const userContent = document.createElement('div');
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
+            userContent.textContent = 'User prompt here';
+            userMsg.appendChild(userContent);
+            userItem.appendChild(userMsg);
+            container.appendChild(userItem);
+
+            // Non-message sibling (e.g. a divider or ad injection)
+            const divider = document.createElement('div');
+            divider.setAttribute('data-virtual-list-item-key', 'divider-1');
+            // No .ds-message child inside
+            const innerDiv = document.createElement('div');
+            innerDiv.className = 'some-divider-class';
+            innerDiv.textContent = '---';
+            divider.appendChild(innerDiv);
+            container.appendChild(divider);
+
+            // Assistant item
+            const asstItem = document.createElement('div');
+            asstItem.setAttribute('data-virtual-list-item-key', 'asst-1');
+            const asstMsg = document.createElement('div');
+            asstMsg.className = 'ds-message _63c77b1';
+            asstItem.appendChild(asstMsg);
+            container.appendChild(asstItem);
+
+            document.body.appendChild(container);
+
+            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBe('User prompt here');
+        });
+    });
+});

@@ -35,6 +35,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import harvestModule from '../../content/harvest.js';
 import DSSelectors from '../../content/ds-selectors.js';
+import harvestDomBundle from '../../content/harvest.dom.js';
+
+const { _measureMountedBottomOffset } = harvestDomBundle;
+
 
 const {
     harvestAllMessages,
@@ -271,6 +275,229 @@ describe('_isAtBottom', () => {
         expect(_isAtBottom(makeContainer(0, 400, 300))).toBe(true);
     });
 });
+
+
+// --- section 3b: _isAtBottom tolerance boundary ---
+
+describe('_isAtBottom — HARVEST_BOTTOM_TOLERANCE boundary precision', () => {
+    function makeContainer(scrollTop, clientHeight, scrollHeight) {
+        const el = document.createElement('div');
+        el.scrollTop = scrollTop;
+        Object.defineProperty(el, 'clientHeight', { value: clientHeight, configurable: true });
+        Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true });
+        return el;
+    }
+
+    it('returns false when scrollTop+clientHeight === scrollHeight-5 (just outside tolerance=4)', () => {
+        expect(_isAtBottom(makeContainer(595, 400, 1000))).toBe(false);
+    });
+
+    it('returns true when scrollTop+clientHeight === scrollHeight-4 (exactly at tolerance boundary)', () => {
+        expect(_isAtBottom(makeContainer(596, 400, 1000))).toBe(true);
+    });
+
+    it('kills tolerance=5 mutant: 595+400=995 is false with tol=4 but would be true with tol=5', () => {
+        expect(_isAtBottom(makeContainer(595, 400, 1000))).toBe(false);
+    });
+});
+
+// --- section 3c: body exclusion guard ---
+
+describe('_findHarvestScrollContainer — body exclusion guard', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('strategy 1: does NOT return document.body even when body has .ds-scroll-area class', () => {
+        document.body.classList.add('ds-scroll-area');
+        const virtualListItems = document.createElement('div');
+        virtualListItems.className = 'ds-virtual-list-items _6f2c522';
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        virtualListItems.appendChild(visibleItems);
+        document.body.appendChild(virtualListItems);
+        const result = _findHarvestScrollContainer();
+        expect(result).not.toBe(document.body);
+        document.body.classList.remove('ds-scroll-area');
+    });
+
+    it('strategy 2: does NOT return document.body even when body has overflow:auto and overflows', () => {
+        document.body.style.overflowY = 'auto';
+        Object.defineProperty(document.body, 'scrollHeight', { value: 2000, configurable: true });
+        Object.defineProperty(document.body, 'clientHeight', { value: 400, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        document.body.appendChild(visibleItems);
+        const result = _findHarvestScrollContainer();
+        expect(result).not.toBe(document.body);
+        document.body.style.overflowY = '';
+    });
+});
+
+// --- section 3d: overflowY scroll ---
+
+describe('_findHarvestScrollContainer — strategy 2 overflowY scroll', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('finds ancestor with overflowY=scroll (not just auto)', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'scroll';
+        Object.defineProperty(outer, 'scrollHeight', { value: 800, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        const result = _findHarvestScrollContainer();
+        expect(result).toBe(outer);
+    });
+});
+
+// --- section 3e: documentElement fallback ---
+
+describe('_findHarvestScrollContainer — documentElement fallback', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('returns document.documentElement when document.scrollingElement is null', () => {
+        const orig = Object.getOwnPropertyDescriptor(Document.prototype, 'scrollingElement') ||
+            Object.getOwnPropertyDescriptor(document, 'scrollingElement');
+        Object.defineProperty(document, 'scrollingElement', { value: null, configurable: true });
+        const result = _findHarvestScrollContainer();
+        expect(result).toBe(document.documentElement);
+        if (orig) {
+            Object.defineProperty(document, 'scrollingElement', orig);
+        } else {
+            delete document.scrollingElement;
+        }
+    });
+});
+
+// --- section 3f: _measureMountedBottomOffset ---
+
+describe('_measureMountedBottomOffset', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('returns null when container is null', () => {
+        expect(_measureMountedBottomOffset(null)).toBeNull();
+    });
+
+    it('returns null when container is undefined', () => {
+        expect(_measureMountedBottomOffset(undefined)).toBeNull();
+    });
+
+    it('returns null when container lacks getBoundingClientRect', () => {
+        expect(_measureMountedBottomOffset({ scrollHeight: 100 })).toBeNull();
+    });
+
+    it('returns null when no VISIBLE_ITEMS_SELECTOR elements exist', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 500 });
+        document.body.appendChild(container);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('returns null when visible containers have no keyed nodes', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        vc.appendChild(msg);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('returns null when result is non-finite (keyed node bottom is Infinity)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: Infinity });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('returns null when mountedBottomOffset <= 0 (node bottom at or above container top)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 50 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('clamps negative container top to 0 via Math.max (containerVisibleTop clamping)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: -50, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 300 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        // Math.max(0, -50) = 0; 300 - 0 = 300
+        expect(_measureMountedBottomOffset(container)).toBe(300);
+    });
+
+    it('happy path: returns lowestNodeBottom minus containerVisibleTop', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 500 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        // Math.max(0, 100) = 100; 500 - 100 = 400
+        expect(_measureMountedBottomOffset(container)).toBe(400);
+    });
+
+    it('selects the lowest node bottom across multiple keyed nodes', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w1 = document.createElement('div');
+        w1.setAttribute('data-virtual-list-item-key', '0');
+        w1.getBoundingClientRect = () => ({ bottom: 200 });
+        vc.appendChild(w1);
+        const w2 = document.createElement('div');
+        w2.setAttribute('data-virtual-list-item-key', '1');
+        w2.getBoundingClientRect = () => ({ bottom: 800 });
+        vc.appendChild(w2);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBe(800);
+    });
+});
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  § 4  _waitForDomStability

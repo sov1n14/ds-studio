@@ -118,6 +118,30 @@ describe('HideThinking', () => {
         vi.restoreAllMocks();
     });
 
+    describe('isExpanded()', () => {
+        it('returns false for null input', () => {
+            expect(HideThinking.isExpanded(null)).toBe(false);
+        });
+
+        it('returns false for undefined input', () => {
+            expect(HideThinking.isExpanded(undefined)).toBe(false);
+        });
+
+        it('returns a strict boolean true (not merely truthy) for an expanded container', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            const result = HideThinking.isExpanded(container);
+            expect(result).toBe(true);
+        });
+
+        it('returns a strict boolean false (not merely falsy) for a collapsed container', () => {
+            const container = createCollapsedContainer();
+            document.body.appendChild(container);
+            const result = HideThinking.isExpanded(container);
+            expect(result).toBe(false);
+        });
+    });
+
     describe('tryCollapseButton()', () => {
         it('clicks an expanded button that is connected to the DOM', () => {
             const container = createExpandedContainer();
@@ -186,6 +210,20 @@ describe('HideThinking', () => {
             document.body.appendChild(wrapper);
             HideThinking.scanRoot(wrapper);
             expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+        });
+
+        it('does not crash when passed a text node (non-Element)', () => {
+            const textNode = document.createTextNode('hello');
+            document.body.appendChild(textNode);
+            expect(() => HideThinking.scanRoot(textNode)).not.toThrow();
+        });
+
+        it('collapses an expanded container passed directly as root (self-match)', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            HideThinking.scanRoot(container);
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            expect(header.click).toHaveBeenCalledOnce();
         });
     });
 
