@@ -1545,3 +1545,272 @@ describe('harvestAllMessages', () => {
         expect(MIN_STEP).toBeGreaterThan(Math.round(100 * 0.7));
     });
 });
+
+// ---------------------------------------------------------------------------
+//  section 10  Mutant-killer tests - _findHarvestScrollContainer
+// ---------------------------------------------------------------------------
+
+describe('_findHarvestScrollContainer - mutant killers', () => {
+    beforeEach(() => { document.body.innerHTML = ''; });
+
+    // Kills: line 53 || to &&
+    it('finds container via VIRTUAL_LIST_FALLBACK when primary VIRTUAL_LIST_SELECTOR does not match', () => {
+        const scrollArea = document.createElement('div');
+        scrollArea.className = 'ds-scroll-area';
+        const virtualList = document.createElement('div');
+        virtualList.className = 'ds-virtual-list-items _different-hash';
+        scrollArea.appendChild(virtualList);
+        document.body.appendChild(scrollArea);
+        expect(_findHarvestScrollContainer()).toBe(scrollArea);
+    });
+
+    // Kills: line 61 el.classList.contains(SCROLL_AREA_CLASS) to true
+    it('walks past ancestors without .ds-scroll-area and returns the one that has it', () => {
+        const scrollArea = document.createElement('div');
+        scrollArea.className = 'ds-scroll-area';
+        const middleDiv = document.createElement('div');
+        const virtualList = document.createElement('div');
+        virtualList.className = 'ds-virtual-list-items _6f2c522';
+        middleDiv.appendChild(virtualList);
+        scrollArea.appendChild(middleDiv);
+        document.body.appendChild(scrollArea);
+        const result = _findHarvestScrollContainer();
+        expect(result).toBe(scrollArea);
+        expect(result).not.toBe(middleDiv);
+    });
+
+    // Kills: line 77 && to ||, condition to true, line 78 > to true, > to >=
+    it('strategy 2: rejects ancestor with overflowY=auto when scrollHeight === clientHeight', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'auto';
+        Object.defineProperty(outer, 'scrollHeight', { value: 300, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        expect(_findHarvestScrollContainer()).not.toBe(outer);
+    });
+
+    // Kills: line 78 > to >=
+    it('strategy 2: accepts ancestor when scrollHeight is strictly greater than clientHeight', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'auto';
+        Object.defineProperty(outer, 'scrollHeight', { value: 301, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        expect(_findHarvestScrollContainer()).toBe(outer);
+    });
+
+    // Kills: line 77 && to ||
+    it('strategy 2: rejects ancestor with overflowY=hidden even when scrollHeight > clientHeight', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'hidden';
+        Object.defineProperty(outer, 'scrollHeight', { value: 800, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        expect(_findHarvestScrollContainer()).not.toBe(outer);
+    });
+});
+// ---------------------------------------------------------------------------
+//  section 11  Mutant-killer tests - _waitForDomStability
+//
+//  Strategy: mock MutationObserver to capture its callback, enabling
+//  deterministic mutation simulation with fake timers (bypasses happy-dom
+//  MutationObserver batching issue documented in section 4 above).
+// ---------------------------------------------------------------------------
+
+describe('_waitForDomStability - mutant killers', () => {
+    let observerCallback;
+    let mockObserver;
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        document.body.innerHTML = '';
+        mockObserver = { observe: vi.fn(), disconnect: vi.fn() };
+        vi.stubGlobal('MutationObserver', vi.fn((cb) => {
+            observerCallback = cb;
+            return mockObserver;
+        }));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    // Kills: line 126 false to true (initial isMutated)
+    // Kills: line 147 >= to > (HARVEST_STABLE_TICKS boundary)
+    it('resolves after exactly 3 ticks (300ms), not 4, when no mutations occur', async () => {
+        const container = document.createElement('div');
+        let resolved = false;
+        const p = _waitForDomStability(container, 10000);
+        p.then(() => { resolved = true; });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(resolved).toBe(false);
+        await vi.advanceTimersByTimeAsync(100);
+        expect(resolved).toBe(true);
+    });
+
+    // Kills: line 129 true to false (mutation callback does not set isMutated)
+    // Kills: line 142 !isMutated to true (stableTicks always increments)
+    it('mutation between ticks prevents stableTicks increment on that tick', async () => {
+        const container = document.createElement('div');
+        let resolved = false;
+        const p = _waitForDomStability(container, 10000);
+        p.then(() => { resolved = true; });
+        await vi.advanceTimersByTimeAsync(50);
+        observerCallback([]);
+        await vi.advanceTimersByTimeAsync(250);
+        expect(resolved).toBe(false);
+        await vi.advanceTimersByTimeAsync(100);
+        expect(resolved).toBe(true);
+    });
+
+    // Kills: line 133 isMutated reset (false in tick handler removed)
+    it('after one mutation, stability resumes once isMutated is reset by the tick handler', async () => {
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 60000);
+        observerCallback([]);
+        await vi.advanceTimersByTimeAsync(400);
+        await p;
+    });
+
+    // Kills: line 136 observer.disconnect() to noop (timeout path)
+    it('timeout path: calls observer.disconnect()', async () => {
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 50);
+        await vi.advanceTimersByTimeAsync(100);
+        await p;
+        expect(mockObserver.disconnect).toHaveBeenCalled();
+    });
+
+    // Kills: line 137 clearInterval(tickId) to noop (timeout path)
+    it('timeout path: calls clearInterval to stop tick timer', async () => {
+        const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 50);
+        await vi.advanceTimersByTimeAsync(100);
+        await p;
+        expect(clearIntervalSpy).toHaveBeenCalled();
+    });
+
+    // Kills: line 148 clearTimeout(timeoutId) to noop (stability path)
+    it('stability path: calls clearTimeout to cancel timeout fallback', async () => {
+        const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 60000);
+        await vi.advanceTimersByTimeAsync(500);
+        await p;
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    // Kills: line 150 observer.disconnect() to noop (stability path)
+    it('stability path: calls observer.disconnect()', async () => {
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 60000);
+        await vi.advanceTimersByTimeAsync(500);
+        await p;
+        expect(mockObserver.disconnect).toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  section 12  Mutant-killer tests - _measureMountedBottomOffset
+// ---------------------------------------------------------------------------
+
+describe('_measureMountedBottomOffset - mutant killers', () => {
+    beforeEach(() => { document.body.innerHTML = ''; });
+
+    // Kills: line 182 typeof ... !== function to false
+    it('returns null (no throw) when container lacks getBoundingClientRect, even with keyed nodes in DOM', () => {
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 500 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        const container = { nodeName: 'DIV' };
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    // Kills: line 192 rect.bottom > lowestNodeBottom to true
+    it('uses the highest node bottom, not the last one encountered', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w1 = document.createElement('div');
+        w1.setAttribute('data-virtual-list-item-key', '0');
+        w1.getBoundingClientRect = () => ({ bottom: 800 });
+        const w2 = document.createElement('div');
+        w2.setAttribute('data-virtual-list-item-key', '1');
+        w2.getBoundingClientRect = () => ({ bottom: 200 });
+        vc.appendChild(w1);
+        vc.appendChild(w2);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBe(800);
+    });
+
+    // Kills: line 203 <= to < (mountedBottomOffset boundary)
+    it('returns null when mountedBottomOffset is exactly 0', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 100 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    // Complement: barely positive offset must return a value.
+    it('returns value when mountedBottomOffset is barely positive (0.1)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 100.1 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeCloseTo(0.1);
+    });
+
+    // Kills: line 198 -Infinity to +Infinity (initial lowestNodeBottom)
+    it('correctly accumulates lowest node bottom from -Infinity initial value', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 400 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBe(400);
+    });
+});

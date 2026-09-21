@@ -295,3 +295,397 @@ describe('GoToTop', () => {
 
     });
 });
+
+// ---------------------------------------------------------------------------
+//  Mutant-killer tests for go-top.scroll.js
+//  Targets: timer management, loop control, anchor tracking, cleanup
+// ---------------------------------------------------------------------------
+
+describe('GoToTop — scroll mutant killers', () => {
+    beforeEach(resetGoToTopState);
+    afterEach(() => { vi.useRealTimers(); });
+
+    function interceptMutationObserver() {
+        let moCallback;
+        const OrigMO = globalThis.MutationObserver;
+        globalThis.MutationObserver = class {
+            constructor(cb) { moCallback = cb; }
+            observe() {}
+            disconnect() {}
+        };
+        return {
+            getCallback: () => moCallback,
+            restore: () => { globalThis.MutationObserver = OrigMO; },
+        };
+    }
+
+    function makeContainer({ scrollHeight = 500, scrollTop = 0 } = {}) {
+        const el = document.createElement('div');
+        el.style.overflowY = 'auto';
+        let _st = scrollTop;
+        Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true });
+        Object.defineProperty(el, 'clientHeight', { value: 100, configurable: true });
+        Object.defineProperty(el, 'scrollTop', {
+            get: () => _st,
+            set: (v) => { _st = Math.max(0, v); },
+            configurable: true,
+        });
+        document.body.appendChild(el);
+        return el;
+    }
+
+    // -- Line 47: _lastScrollHeight = -1 -> +1
+    it('_lastScrollHeight init: first tick does not count as stable (needs STABLE_REQUIRED+1 ticks)', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = makeContainer({ scrollHeight: 1 });
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            let settled = false;
+            GoToTop.scrollToTopAndWait({ timeout: 10000 }).then(
+                () => { settled = true; },
+                () => { settled = true; }
+            );
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 2);
+            expect(settled).toBe(false);
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL);
+            expect(settled).toBe(true);
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 51: mutationTimer !== null -> true
+    it('MO callback does not call clearTimeout when no timer is active', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = makeContainer();
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            GoToTop.scrollToTopAndWait({ timeout: 10000 });
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+            const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+            mo.getCallback()([{ type: 'childList' }]);
+            expect(clearSpy).not.toHaveBeenCalled();
+            clearSpy.mockRestore();
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 52: clearTimeout(mutationTimer) -> ;
+    it('MO callback clears pending timer when new mutation arrives', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            let heightVal = 500;
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { get: () => ++heightVal, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            Object.defineProperty(container, 'scrollTop', { value: 0, writable: true, configurable: true });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            GoToTop.scrollToTopAndWait({ timeout: 10000 });
+            const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+            mo.getCallback()([{ type: 'childList' }]);
+            expect(clearSpy).toHaveBeenCalled();
+            clearSpy.mockRestore();
+            await vi.advanceTimersByTimeAsync(11000);
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 106: > -> >= (timeout boundary)
+    it('step executes at the exact timeout boundary (> not >=)', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = makeContainer();
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            const timeout = GoToTop.ANCHOR_POLL_INTERVAL * 4;
+            let settledResult;
+            GoToTop.scrollToTopAndWait({ timeout }).then(
+                (r) => { settledResult = r; },
+                (e) => { settledResult = e; }
+            );
+            await vi.advanceTimersByTimeAsync(timeout + 100);
+            expect(settledResult).toEqual({ success: true });
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 119: currentScrollTop <= 0 -> true
+    it('scrollTop > 0 does not count toward stability', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { value: 500, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            Object.defineProperty(container, 'scrollTop', {
+                get: () => 50,
+                set: () => {},
+                configurable: true,
+            });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            let settled = false;
+            let settledResult;
+            GoToTop.scrollToTopAndWait({ timeout: 500 }).then(
+                (r) => { settled = true; settledResult = r; },
+                (e) => { settled = true; settledResult = e; }
+            );
+            await vi.advanceTimersByTimeAsync(600);
+            expect(settled).toBe(true);
+            expect(settledResult).toEqual({ success: false, reason: 'timeout' });
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 126: BlockStatement (stableTopCount reset) -> {}
+    it('height change while scrollTop > 0 resets _stableTopCount', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            let tick = 0;
+            const scrollTopSeq = [0, 0, 0, 50, 0, 0, 0, 0, 0, 0];
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { value: 500, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            Object.defineProperty(container, 'scrollTop', {
+                get: () => scrollTopSeq[Math.min(tick, scrollTopSeq.length - 1)],
+                set: () => { tick++; },
+                configurable: true,
+            });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            let settled = false;
+            let settledResult;
+            GoToTop.scrollToTopAndWait({ timeout: 10000 }).then(
+                (r) => { settled = true; settledResult = r; },
+                (e) => { settled = true; settledResult = e; }
+            );
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 3);
+            expect(settled).toBe(false);
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 5);
+            expect(settled).toBe(true);
+            expect(settledResult).toEqual({ success: true });
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 131: >= -> > (STABLE_REQUIRED boundary)
+    it('resolves when _stableTopCount reaches exactly STABLE_REQUIRED', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = makeContainer();
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            let settled = false;
+            GoToTop.scrollToTopAndWait({ timeout: 10000 }).then(
+                () => { settled = true; },
+                () => { settled = true; }
+            );
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 3);
+            expect(settled).toBe(true);
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 138: >= -> > (MAX_ANCHOR_RETRIES boundary)
+    it('resolves anchor_not_found at exactly MAX_ANCHOR_RETRIES after stability', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = makeContainer();
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(false);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            let settledResult;
+            GoToTop.scrollToTopAndWait({ timeout: 30000 }).then(
+                (r) => { settledResult = r; },
+                (e) => { settledResult = e; }
+            );
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 12);
+            expect(settledResult).toEqual({ success: false, reason: 'anchor_not_found' });
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 139: cleanup() -> ;
+    it('cleanup runs after post-stability anchor_not_found resolve', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            const container = makeContainer();
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(false);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            const promise = GoToTop.scrollToTopAndWait({ timeout: 30000 });
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 15);
+            await promise;
+            expect(GoToTop._isLocked).toBe(false);
+            expect(GoToTop._scrollPromise).toBeNull();
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 145: consecutiveMisses reset -> {}
+    it('finding anchor before stability resets consecutiveMisses', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            let heightVal = 500;
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { get: () => ++heightVal, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            Object.defineProperty(container, 'scrollTop', { value: 0, writable: true, configurable: true });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            let callCount = 0;
+            vi.spyOn(GoToTop, '_getAnchor').mockImplementation(() => {
+                callCount++;
+                return (callCount % 5 === 0) ? document.createElement('div') : null;
+            });
+            let settled = false;
+            let settledResult;
+            GoToTop.scrollToTopAndWait({ timeout: 2000 }).then(
+                (r) => { settled = true; settledResult = r; },
+                (e) => { settled = true; settledResult = e; }
+            );
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 8);
+            expect(settled).toBe(false);
+            await vi.advanceTimersByTimeAsync(2000);
+            expect(settled).toBe(true);
+            expect(settledResult).toEqual({ success: false, reason: 'timeout' });
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Lines 149-151: early anchor_not_found (scrollTop > 0 blocks)
+    it('does NOT early-resolve anchor_not_found when scrollTop > 0', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            let heightVal = 500;
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { get: () => ++heightVal, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            Object.defineProperty(container, 'scrollTop', {
+                get: () => 50,
+                set: () => {},
+                configurable: true,
+            });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
+            let settled = false;
+            let settledResult;
+            GoToTop.scrollToTopAndWait({ timeout: 2000 }).then(
+                (r) => { settled = true; settledResult = r; },
+                (e) => { settled = true; settledResult = e; }
+            );
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 15);
+            expect(settled).toBe(false);
+            await vi.advanceTimersByTimeAsync(2000);
+            expect(settled).toBe(true);
+            expect(settledResult).toEqual({ success: false, reason: 'timeout' });
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 151: cleanup() -> ; (early path)
+    it('cleanup runs after early anchor_not_found resolve', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            let heightVal = 500;
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { get: () => ++heightVal, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            Object.defineProperty(container, 'scrollTop', { value: 0, writable: true, configurable: true });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
+            const promise = GoToTop.scrollToTopAndWait({ timeout: 30000 });
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+            await promise;
+            expect(GoToTop._isLocked).toBe(false);
+            expect(GoToTop._scrollPromise).toBeNull();
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Line 104: isAborted -> false
+    it('aborted scroll does not execute further steps', async () => {
+        vi.useFakeTimers();
+        const mo = interceptMutationObserver();
+        try {
+            let heightVal = 500;
+            const container = document.createElement('div');
+            container.style.overflowY = 'auto';
+            Object.defineProperty(container, 'scrollHeight', { get: () => ++heightVal, configurable: true });
+            Object.defineProperty(container, 'clientHeight', { value: 100, configurable: true });
+            let _st = 100;
+            Object.defineProperty(container, 'scrollTop', {
+                get: () => _st,
+                set: (v) => { _st = Math.max(0, v); },
+                configurable: true,
+            });
+            document.body.appendChild(container);
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            const promise = GoToTop.scrollToTopAndWait({ timeout: 10000 });
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 2);
+            GoToTop.scrollToTopAndWait();
+            await expect(promise).rejects.toEqual({ success: false, reason: 'stopped-by-user' });
+            _st = 999;
+            await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 5);
+            expect(container.scrollTop).toBe(999);
+        } finally {
+            mo.restore();
+            vi.useRealTimers();
+        }
+    });
+});

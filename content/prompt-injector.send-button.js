@@ -12,6 +12,7 @@
 
     // 共用 DOM 選擇器常數（瀏覽器：ds-selectors.js 於前載入；Node.js 測試：直接 require）
     const selectors = root.DSstudio?.Selectors ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     /**

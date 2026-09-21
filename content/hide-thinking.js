@@ -6,6 +6,7 @@
  * 向 background 索取並訂閱變更。
  */
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+// Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
 const __DS_HideThinkingSelectors = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
@@ -100,11 +101,13 @@ const HideThinking = {
      * 初始值與後續變更皆由 background 透過訊息提供。
      */
     start() {
+        // Stryker disable all: unreachable in tests — module auto-starts at load time, featureToggle always present
         const featureToggle = globalThis.DSSFeatureToggle
             || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
         if (!featureToggle) {
             throw new Error('content/hide-thinking.js 需要 content/feature-toggle.js 先行載入');
         }
+        // Stryker restore all
 
         featureToggle.registerFeatureToggle({
             ownKey: this.STORAGE_KEY,

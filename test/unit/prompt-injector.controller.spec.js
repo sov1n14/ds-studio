@@ -23,6 +23,7 @@ import '../../content/prompt-injector.controller.js';
 import {
     makeMobileSendButton,
     makeEditSendButtonInContainer,
+    makeEditSendButtonStandalone,
     mountInDocument,
     dispatchClick,
     dispatchPointerdown,
@@ -277,6 +278,15 @@ describe('injectPrefix re-injection', () => {
 
         expect(ta.value).toBe('<user-input>\nhello\n</user-input>');
     });
+
+    it('treats the entire value as raw text when </user-input> is not at string end (dollar anchor)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const ta = makeTextarea('<user-input>\nhello\n</user-input>\ntrailing');
+
+        injectPrefix(ta);
+
+        expect(ta.value).toContain('trailing');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -456,6 +466,52 @@ describe('send interception via click', () => {
             '<system-reminder>\nGLOBAL\n</system-reminder>\n\n<user-input>\nedit message\n</user-input>'
         );
     });
+
+
+    it('clicks the send button in the rAF callback after click interception', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { button, svg } = mountComposer('hello');
+        const clickSpy = vi.spyOn(button, 'click');
+        dispatchClick(svg);
+        flushRaf();
+        expect(clickSpy).toHaveBeenCalled();
+        clickSpy.mockRestore();
+    });
+
+    it('does not crash when click target has no send button ancestor', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const plain = document.createElement('div');
+        document.body.appendChild(plain);
+        expect(() => dispatchClick(plain)).not.toThrow();
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('does not crash when click handler finds no textarea for an edit send button', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { button, span } = makeEditSendButtonStandalone('');
+        cleanup = mountInDocument(button);
+
+        expect(() => dispatchClick(span)).not.toThrow();
+    });
+
+    it('treats whitespace-only textarea as empty for click handler text detection', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('   ');
+
+        const ev = dispatchClick(svg);
+
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).not.toBe('   ');
+    });
+
+    it('marks chat creation attempt for empty-textarea click with enabled send button', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { svg } = mountComposer('');
+
+        dispatchClick(svg);
+
+        expect(state.markCalls).toBe(1);
+    });
 });
 
 describe('send interception via Enter', () => {
@@ -575,5 +631,58 @@ describe('send interception via Enter', () => {
 
         expect(ev.defaultPrevented).toBe(false);
         expect(textarea.value).toBe('hello');
+    });
+
+    it('ignores non-Enter keys entirely', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+
+        const ev = new KeyboardEvent('keydown', {
+            key: 'a', code: 'KeyA',
+            bubbles: true, cancelable: true,
+        });
+        textarea.dispatchEvent(ev);
+
+        expect(ev.defaultPrevented).toBe(false);
+        expect(textarea.value).toBe('hello');
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('does not inject when a non-textarea element has focus', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const div = document.createElement('div');
+        div.tabIndex = 0;
+        document.body.appendChild(div);
+        div.focus();
+
+        const ev = new KeyboardEvent('keydown', {
+            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+            bubbles: true, cancelable: true,
+        });
+        div.dispatchEvent(ev);
+
+        expect(ev.defaultPrevented).toBe(false);
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('treats whitespace-only textarea as empty for Enter handler (trim detection)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('   ');
+
+        const ev = dispatchEnter(textarea);
+
+        // With trim: whitespace = empty, attachment-only path injects prefix-only
+        // Without trim: whitespace = non-empty, injectPrefix inner trim catches it and returns false
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).not.toBe('   ');
+    });
+
+    it('marks chat creation attempt for empty textarea with enabled send button on Enter', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('');
+
+        dispatchEnter(textarea);
+
+        expect(state.markCalls).toBe(1);
     });
 });

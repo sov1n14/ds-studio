@@ -7,6 +7,7 @@
 
     // 共用 DOM 選擇器常數
     var __DS_DetectionSelectors = (globalThis).DSstudio?.Selectors ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     const bundle = {

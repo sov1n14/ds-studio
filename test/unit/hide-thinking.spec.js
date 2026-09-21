@@ -185,6 +185,13 @@ describe('HideThinking', () => {
             // No crash expected, no click expected
             expect(() => HideThinking.tryCollapseButton(container)).not.toThrow();
         });
+
+        it('sets dataset.htCollapsed to exactly the string "1" after collapsing', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            HideThinking.tryCollapseButton(container);
+            expect(container.dataset.htCollapsed).toBe('1');
+        });
     });
 
     describe('applyToExisting()', () => {
@@ -224,6 +231,69 @@ describe('HideThinking', () => {
             HideThinking.scanRoot(container);
             const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
             expect(header.click).toHaveBeenCalledOnce();
+        });
+
+        it('does not treat root as a container when root lacks the container class', () => {
+            const root = document.createElement('div');
+            const thinkContent = document.createElement('div');
+            thinkContent.className = 'ds-think-content';
+            const header = document.createElement('div');
+            header.className = THINK_HEADER_TOGGLE_CLASS;
+            header.click = vi.fn();
+            root.appendChild(header);
+            root.appendChild(thinkContent);
+            document.body.appendChild(root);
+
+            HideThinking.scanRoot(root);
+
+            expect(header.click).not.toHaveBeenCalled();
+            expect(root.dataset.htCollapsed).toBeUndefined();
+        });
+    });
+
+    describe('restoreAll()', () => {
+        it('removes the data-ht-collapsed attribute from elements', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            HideThinking.tryCollapseButton(container);
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(true);
+
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            header.click.mockClear();
+
+            HideThinking.restoreAll();
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(false);
+        });
+
+        it('does not click header for elements disconnected during iteration', () => {
+            const container1 = createExpandedContainer();
+            const container2 = createExpandedContainer();
+            document.body.appendChild(container1);
+            document.body.appendChild(container2);
+
+            HideThinking.tryCollapseButton(container1);
+            HideThinking.tryCollapseButton(container2);
+
+            const header1 = container1.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            const header2 = container2.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            header1.click.mockClear();
+            header2.click.mockClear();
+
+            header1.click.mockImplementation(() => container2.remove());
+
+            HideThinking.restoreAll();
+
+            expect(header1.click).toHaveBeenCalledOnce();
+            expect(header2.click).not.toHaveBeenCalled();
+        });
+
+        it('does not throw when a marked container has no header child', () => {
+            const container = document.createElement('div');
+            container.setAttribute('data-ht-collapsed', '1');
+            document.body.appendChild(container);
+
+            expect(() => HideThinking.restoreAll()).not.toThrow();
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(false);
         });
     });
 
@@ -304,6 +374,77 @@ describe('HideThinking', () => {
 
             // This new container SHOULD be clicked because it was added to the DOM
             expect(anotherContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+        });
+
+        it('sets enabled to true when enable() is called from disabled state', () => {
+            expect(HideThinking.enabled).toBe(false);
+            HideThinking.enable();
+            expect(HideThinking.enabled).toBe(true);
+        });
+
+        it('does not create a second observer when _startObserver is called again', () => {
+            HideThinking.enable();
+            const firstObserver = HideThinking._observer;
+            HideThinking._startObserver();
+            expect(HideThinking._observer).toBe(firstObserver);
+        });
+
+        it('observer skips scanRoot when enabled is set to false without stopping observer', async () => {
+            HideThinking.enable();
+            HideThinking.enabled = false;
+
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            expect(header.click).not.toHaveBeenCalled();
+        });
+
+        it('observer does not process text nodes as elements', async () => {
+            HideThinking.enable();
+            const scanRootSpy = vi.spyOn(HideThinking, 'scanRoot');
+            scanRootSpy.mockClear();
+
+            document.body.appendChild(document.createTextNode('just text'));
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(scanRootSpy).not.toHaveBeenCalled();
+            scanRootSpy.mockRestore();
+        });
+
+        it('observer fires callback when a child element is added (childList: true)', async () => {
+            HideThinking.enable();
+            const spy = vi.spyOn(HideThinking, 'scanRoot');
+            spy.mockClear();
+
+            const el = document.createElement('div');
+            document.body.appendChild(el);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(spy).toHaveBeenCalled();
+            spy.mockRestore();
+        });
+
+        it('does not throw when _stopObserver is called with no active observer', () => {
+            expect(HideThinking._observer).toBeNull();
+            expect(() => HideThinking._stopObserver()).not.toThrow();
+        });
+
+        it('disable() is a no-op when already disabled, leaving marked elements untouched', () => {
+            HideThinking.enable();
+            HideThinking.disable();
+            expect(HideThinking.enabled).toBe(false);
+
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            container.setAttribute('data-ht-collapsed', '1');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+
+            HideThinking.disable();
+
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(true);
+            expect(header.click).not.toHaveBeenCalled();
         });
     });
 

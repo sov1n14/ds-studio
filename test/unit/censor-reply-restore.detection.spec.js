@@ -390,3 +390,42 @@ describe('CensorReplyRestore — mutant-killing boundary tests', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Mutant-killing: _getToolbarGroup toolbar condition (kills toolbar → false on line 27)
+// ---------------------------------------------------------------------------
+
+describe('CensorReplyRestore — _getToolbarGroup toolbar condition mutant killer', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('returns the primary toolbar when it matches MESSAGE_TOOLBAR_SELECTOR but has fewer than 5 icon buttons', () => {
+        // The primary path (line 27) finds the toolbar via MESSAGE_TOOLBAR_SELECTOR (.ds-flex._965abe9).
+        // The fallback path (lines 31-34) requires >= 5 icon buttons in any .ds-flex.
+        // By giving the toolbar only 3 buttons, the fallback would NOT find it.
+        // With real code: primary selector finds it, if (toolbar) → return toolbar ✓
+        // With mutant (if (false)): primary skipped, fallback scans, 3 buttons < 5 → returns null ✗
+        const container = document.createElement('div');
+        container.setAttribute('data-virtual-list-item-key', 'asst-toolbar-mutant');
+
+        const msgEl = document.createElement('div');
+        msgEl.className = 'ds-message _63c77b1';
+        container.appendChild(msgEl);
+
+        // Toolbar matches primary selector but has only 3 icon buttons
+        const toolbar = document.createElement('div');
+        toolbar.className = 'ds-flex _965abe9';
+        for (let i = 0; i < 3; i++) {
+            const btn = document.createElement('div');
+            btn.setAttribute('role', 'button');
+            btn.className = 'ds-button ds-button--icon';
+            toolbar.appendChild(btn);
+        }
+        container.appendChild(toolbar);
+        document.body.appendChild(container);
+
+        const result = CensorReplyRestore._getToolbarGroup(msgEl);
+        expect(result).toBe(toolbar);
+    });
+});

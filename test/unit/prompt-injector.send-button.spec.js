@@ -495,3 +495,83 @@ describe('resolveTextareaForButton (edit path) — findTextareaNearButton edge c
         expect(SB.resolveTextareaForButton(button, true)).toBe(globalEmptyTa);
     });
 });
+
+
+// ---------------------------------------------------------------------------
+// Mutant-killing tests — findTextareaNearButton & resolveTextareaForButton
+// ---------------------------------------------------------------------------
+
+describe('findTextareaNearButton — null button guard (kills ?. to . mutant on line 87)', () => {
+    it('returns a global fallback textarea when button is null instead of throwing', () => {
+        const globalTa = makeTextarea('global text');
+        cleanup = mountInDocument(globalTa);
+
+        expect(() => SB.resolveTextareaForButton(null, true)).not.toThrow();
+        const result = SB.resolveTextareaForButton(null, true);
+        expect(result).toBe(globalTa);
+    });
+});
+
+describe('findTextareaNearButton — no-textarea ancestor (kills ta to true mutant on line 92)', () => {
+    it('skips ancestors with no textarea child without throwing', () => {
+        const outerDiv = document.createElement('div');
+        const innerDiv = document.createElement('div');
+        const ta = makeTextarea('found me');
+        const { button } = makeEditSendButtonStandalone();
+
+        outerDiv.appendChild(ta);
+        outerDiv.appendChild(innerDiv);
+        innerDiv.appendChild(button);
+        cleanup = mountInDocument(outerDiv);
+        clearFocus();
+
+        // With real code: innerDiv has no textarea, ta=null, skip. outerDiv has textarea, return it.
+        // With mutant (ta->true): innerDiv has no textarea, ta=null treated as truthy,
+        //   null.value.trim() throws TypeError
+        expect(() => SB.resolveTextareaForButton(button, true)).not.toThrow();
+        expect(SB.resolveTextareaForButton(button, true)).toBe(ta);
+    });
+});
+
+describe('findTextareaNearButton — trim on global fallback (kills .trim() removal on line 100)', () => {
+    it('treats a whitespace-only global textarea as empty in the global fallback path', () => {
+        const container = document.createElement('div');
+        const walkUpEmptyTa = makeTextarea('');
+        const { button } = makeEditSendButtonStandalone();
+        container.appendChild(walkUpEmptyTa);
+        container.appendChild(button);
+
+        const globalWhitespaceTa = makeTextarea('   ');
+        cleanup = mountInDocument(globalWhitespaceTa, container);
+        clearFocus();
+
+        // With trim: globalWhitespaceTa.value.trim() === '' -> not non-empty
+        //   return firstEmptyTextarea (walkUpEmptyTa) || globalFallbackTextarea
+        //   return walkUpEmptyTa
+        // Without trim (mutant): '   ' !== '' -> non-empty -> return globalWhitespaceTa
+        expect(SB.resolveTextareaForButton(button, true)).toBe(walkUpEmptyTa);
+    });
+});
+
+describe('resolveTextareaForButton — activeElement null guard (kills ?. to . mutant on line 115)', () => {
+    it('does not throw when document.activeElement is null', () => {
+        const ta = makeTextarea('some text');
+        const { button } = makeEditSendButtonStandalone();
+        cleanup = mountInDocument(ta, button);
+
+        const origDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'activeElement') ||
+                               Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'activeElement');
+        Object.defineProperty(document, 'activeElement', { value: null, configurable: true });
+
+        try {
+            expect(() => SB.resolveTextareaForButton(button, true)).not.toThrow();
+            expect(SB.resolveTextareaForButton(button, true)).toBe(ta);
+        } finally {
+            if (origDescriptor) {
+                Object.defineProperty(document, 'activeElement', origDescriptor);
+            } else {
+                delete document.activeElement;
+            }
+        }
+    });
+});

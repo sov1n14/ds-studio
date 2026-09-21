@@ -225,4 +225,51 @@ describe('GoToTop: non-overflowing scroll container (short conversation)', () =>
         expect(result.reason).toBe('anchor_not_found');
     }, 30000);
 
+
+    // -- Line 65: scrollContainer === document.scrollingElement -> false
+    it('sets _scrollContainer to null when re-probed container is document.scrollingElement', async () => {
+        vi.useFakeTimers();
+        try {
+            GoToTop._scrollContainer = null;
+            GoToTop._isLocked = false;
+            const se = document.scrollingElement || document.documentElement;
+            vi.spyOn(GoToTop, '_findScrollContainer').mockReturnValue(se);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(document.createElement('div'));
+            vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(true);
+            const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+            await vi.advanceTimersByTimeAsync(5000);
+            const result = await promise;
+            expect(GoToTop._scrollContainer).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    // -- Lines 72-73: no_container path (NoCoverage)
+    it('resolves { success: false, reason: no_container } when scroll container is null after re-probe', async () => {
+        vi.useFakeTimers();
+        try {
+            GoToTop._scrollContainer = null;
+            GoToTop._isLocked = false;
+            vi.spyOn(GoToTop, '_findScrollContainer').mockReturnValue(null);
+            vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
+            const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+            await vi.advanceTimersByTimeAsync(100);
+            const result = await promise;
+            expect(result).toEqual({ success: false, reason: 'no_container' });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('no_container result has exact shape { success: false, reason: no_container }', async () => {
+        GoToTop._scrollContainer = null;
+        GoToTop._isLocked = false;
+        vi.spyOn(GoToTop, '_findScrollContainer').mockReturnValue(null);
+        vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
+        const result = await GoToTop.scrollToTopAndWait();
+        expect(result.success).toBe(false);
+        expect(result.reason).toBe('no_container');
+        expect(Object.keys(result).sort()).toEqual(['reason', 'success']);
+    });
 });

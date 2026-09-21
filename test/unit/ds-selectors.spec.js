@@ -42,3 +42,26 @@ describe('DSSelectors — export shape', () => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// Mutant-killing: IIFE body → {} (line 13) and EDIT_SEND_BUTTON_VARIANT_CLASSES → [] (line 280)
+// ---------------------------------------------------------------------------
+
+describe('DSSelectors — IIFE body produces non-empty exports (kills BlockStatement → {} mutant on line 13)', () => {
+    it('exports a non-empty object with expected selector properties', () => {
+        expect(Object.keys(S).length).toBeGreaterThan(0);
+        expect(S).toHaveProperty('SEND_BUTTON_ROLE_SELECTOR');
+        expect(S).toHaveProperty('SIDEBAR_WRAPPER_SELECTOR');
+        expect(S).toHaveProperty('MESSAGE_SELECTOR');
+        expect(S).toHaveProperty('INPUT_TEXTAREA_SELECTOR');
+    });
+});
+
+describe('DSSelectors — EDIT_SEND_BUTTON_VARIANT_CLASSES content (kills [] mutant on line 280)', () => {
+    it('contains exactly 2 entries: ds-button--primary and ds-button--filled', () => {
+        const classes = S.EDIT_SEND_BUTTON_VARIANT_CLASSES;
+        expect(classes).toHaveLength(2);
+        expect(classes).toContain('ds-button--primary');
+        expect(classes).toContain('ds-button--filled');
+    });
+});

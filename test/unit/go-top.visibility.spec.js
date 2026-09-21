@@ -469,5 +469,153 @@ describe('GoToTop', () => {
             }
         });
 
+
+    describe('scrollToTopAndWait mutant killers', () => {
+
+        // -- Line 27: && -> ||
+        it('does not abort when _isLocked is false even if _scrollReject is truthy', async () => {
+            vi.useFakeTimers();
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+                // Set _scrollReject to truthy but _isLocked to false
+                GoToTop._isLocked = false;
+                GoToTop._scrollReject = () => {};
+                let settledResult;
+                GoToTop.scrollToTopAndWait({ timeout: 10000 }).then(
+                    (r) => { settledResult = r; },
+                    (e) => { settledResult = e; }
+                );
+                // Advance timers to let the scroll complete
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+                // With && -> ||, this would abort (return undefined) instead of scrolling
+                expect(settledResult).toEqual({ success: true });
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        // -- Lines 88-90: cleanup observer disconnect and timer clear
+        it('cleanup disconnects observer and clears mutation timer', async () => {
+            vi.useFakeTimers();
+            let disconnectCalled = false;
+            const OrigMO = globalThis.MutationObserver;
+            globalThis.MutationObserver = class {
+                constructor(cb) {}
+                observe() {}
+                disconnect() { disconnectCalled = true; }
+            };
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+                const promise = GoToTop.scrollToTopAndWait({ timeout: 10000 });
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+                await promise;
+                expect(disconnectCalled).toBe(true);
+            } finally {
+                globalThis.MutationObserver = OrigMO;
+                vi.useRealTimers();
+            }
+        });
+
+        // -- Line 90: clearTimeout in cleanup
+        it('cleanup clears pending mutation timer', async () => {
+            vi.useFakeTimers();
+            const OrigMO = globalThis.MutationObserver;
+            globalThis.MutationObserver = class {
+                constructor(cb) {}
+                observe() {}
+                disconnect() {}
+            };
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(false);
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: -1000, bottom: -900, height: 100 }));
+                const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 2);
+                const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+                GoToTop.scrollToTopAndWait();
+                await expect(promise).rejects.toEqual({ success: false, reason: 'stopped-by-user' });
+                expect(clearSpy).toHaveBeenCalled();
+                clearSpy.mockRestore();
+            } finally {
+                globalThis.MutationObserver = OrigMO;
+                vi.useRealTimers();
+            }
+        });
+
+        // -- Line 100: _evaluateVisibility() -> ;
+        it('cleanup calls _evaluateVisibility', async () => {
+            vi.useFakeTimers();
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+                const evSpy = vi.spyOn(GoToTop, '_evaluateVisibility');
+                const promise = GoToTop.scrollToTopAndWait({ timeout: 10000 });
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+                await promise;
+                expect(evSpy).toHaveBeenCalled();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        // -- Line 162: isAborted in scheduleNext
+        it('no scheduling after abort (scheduleNext isAborted guard)', async () => {
+            vi.useFakeTimers();
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: -1000, bottom: -900, height: 100 }));
+                vi.spyOn(GoToTop, '_isAtTop').mockReturnValue(false);
+                const firstPromise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 3);
+                const stSpy = vi.spyOn(globalThis, 'setTimeout');
+                GoToTop.scrollToTopAndWait();
+                await expect(firstPromise).rejects.toEqual({ success: false, reason: 'stopped-by-user' });
+                stSpy.mockClear();
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 10);
+                expect(stSpy).not.toHaveBeenCalled();
+                stSpy.mockRestore();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        // -- Line 171: true -> false (isAborted flag set)
+        it('abort sets isAborted flag correctly', async () => {
+            vi.useFakeTimers();
+            try {
+                const container = createScrollContainer();
+                let _st = 500;
+                Object.defineProperty(container, 'scrollTop', {
+                    get: () => _st,
+                    set: (v) => { _st = Math.max(0, v); },
+                    configurable: true,
+                });
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: -1000, bottom: -900, height: 100 }));
+                const firstPromise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL);
+                GoToTop._onRouteChange();
+                await expect(firstPromise).rejects.toEqual({ success: false, reason: 'aborted' });
+                _st = 777;
+                await vi.advanceTimersByTimeAsync(GoToTop.ANCHOR_POLL_INTERVAL * 5);
+                expect(container.scrollTop).toBe(777);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+    });
     });
 });

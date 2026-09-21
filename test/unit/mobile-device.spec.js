@@ -108,3 +108,17 @@ describe('isMobileDevice() — maxTouchPoints boundary (kills > 0 → > 1 mutant
         expect(isMobileDevice()).toBe(true);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Mutant-killing: IIFE body → {} (line 9)
+// ---------------------------------------------------------------------------
+
+describe('content/mobile-device.js — IIFE body produces exports (kills BlockStatement → {} mutant on line 9)', () => {
+    it('isMobileDevice is a callable function, not undefined', () => {
+        // If the IIFE body were {}, globalThis.DSSMobileDevice would never be assigned,
+        // and isMobileDevice would be undefined.
+        const mod = require('../../content/mobile-device.js');
+        expect(mod).toBeDefined();
+        expect(mod.isMobileDevice).toBeTypeOf('function');
+    });
+});
