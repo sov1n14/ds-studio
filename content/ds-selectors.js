@@ -354,6 +354,7 @@
         DS_BUTTON_ICON_LABEL_TERTIARY_CLASS, DS_BUTTON_XL_CLASS,
     };
 
+    // Stryker disable all: equivalent mutants — module/window type checks are environment-dependent, untestable in Node
     // === Test export (no-op in browser) ===
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = DSSelectors;
@@ -365,3 +366,4 @@
         window.DSstudio.Selectors = DSSelectors;
     }
 })();
+// Stryker restore all

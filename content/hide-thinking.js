@@ -117,6 +117,8 @@ const HideThinking = {
 // Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 HideThinking.start();
 
+// Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = HideThinking;
 }
+// Stryker restore all

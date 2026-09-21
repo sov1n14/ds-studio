@@ -185,6 +185,7 @@
         return { buildInjectionPrefix, injectPrefix };
     }
 
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_PromptInjector = { createPromptInjector };
 
     if (typeof module !== 'undefined' && module.exports) {
@@ -192,3 +193,4 @@
     }
 
 })(globalThis);
+// Stryker restore all

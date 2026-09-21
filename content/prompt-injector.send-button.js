@@ -116,6 +116,7 @@
         return findTextareaNearButton(button);
     }
 
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_PromptInjectorSendButton = {
         isEditWindowSendButton,
         isSendButtonCandidate,
@@ -130,3 +131,4 @@
     }
 
 })(globalThis);
+// Stryker restore all

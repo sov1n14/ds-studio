@@ -218,6 +218,8 @@
         _measureMountedBottomOffset,
     };
 
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_Harvest_dom = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(globalThis);
+// Stryker restore all

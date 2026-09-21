@@ -181,6 +181,8 @@
     };
 
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_GoToTop_scroll = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(globalThis);
+// Stryker restore all

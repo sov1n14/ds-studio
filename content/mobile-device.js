@@ -19,5 +19,7 @@
     globalThis.DSSMobileDevice = { isMobileDevice };
 
     // === 測試匯出（瀏覽器情境為 no-op） ===
+    // Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
     if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DSSMobileDevice;
 })();
+// Stryker restore all

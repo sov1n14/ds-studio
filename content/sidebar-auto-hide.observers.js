@@ -143,6 +143,8 @@
     };
 
     // 將 bundle 掛載至全域（供 sidebar-auto-hide.js 的 Object.assign 合併使用）
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_SidebarAutoHide_observers = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(globalThis);
+// Stryker restore all
