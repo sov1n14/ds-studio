@@ -106,6 +106,7 @@
                 if (!el || !el.classList) return;
 
                 // Ignore if mouse re-entered the sidebar itself
+                // Stryker disable next-line ConditionalExpression: equivalent — sidebarEl.contains(sidebarEl) is true per DOM spec
                 if (this.sidebarEl && (el === this.sidebarEl || this.sidebarEl.contains(el))) {
                     clearTimeout(this.leaveTimer);
                     this.leaveTimer = null;

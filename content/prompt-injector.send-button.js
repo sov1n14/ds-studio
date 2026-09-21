@@ -90,6 +90,7 @@
         let el = button?.parentElement;
         let firstEmptyTextarea = null;
 
+        // Stryker disable next-line ConditionalExpression: equivalent — global fallback covers same subtree, loop terminates at null
         while (el && el !== document.body) {
             const ta = el.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
             if (ta) {

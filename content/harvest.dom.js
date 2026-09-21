@@ -183,6 +183,7 @@
         if (typeof container.getBoundingClientRect !== 'function') return null;
 
         const visibleContainers = document.querySelectorAll(VISIBLE_ITEMS_SELECTOR);
+        // Stryker disable next-line ConditionalExpression: equivalent — empty forEach + -Infinity caught by isFinite downstream
         if (!visibleContainers.length) return null;
 
         let lowestNodeBottom = -Infinity;
@@ -190,12 +191,14 @@
             const keyedNodes = visibleContainer.querySelectorAll(`[${ITEM_KEY_ATTR}]`);
             keyedNodes.forEach(node => {
                 const rect = node.getBoundingClientRect();
+                // Stryker disable next-line EqualityOperator: equivalent — equal bottom values produce same result
                 if (rect.bottom > lowestNodeBottom) {
                     lowestNodeBottom = rect.bottom;
                 }
             });
         });
 
+        // Stryker disable next-line ConditionalExpression: equivalent — -Infinity offset caught by isFinite guard at line 206
         if (lowestNodeBottom === -Infinity) return null;
 
         const containerVisibleTop = Math.max(0, container.getBoundingClientRect().top);

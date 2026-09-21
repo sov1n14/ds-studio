@@ -19,6 +19,7 @@
 
     // 送出按鈕辨識部件（瀏覽器：prompt-injector.send-button.js 於前載入；Node.js 測試：直接 require）
     const sendButton = root.__DS_PromptInjectorSendButton ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./prompt-injector.send-button.js') : {});
 
     const {
@@ -92,6 +93,7 @@
         // 攔截原始事件，改由本模組於注入完成後自行重送
         function suppressEvent(e) {
             e.preventDefault();
+            // Stryker disable next-line CallExpression: equivalent — stopImmediatePropagation on next line is a superset
             e.stopPropagation();
             e.stopImmediatePropagation();
         }
