@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.33.26](changelog/v4.md#43326---2026-09-21) | Fixed attachment-only prompt injection regression (`querySelector` → `querySelectorAll` to iterate all candidate buttons); fixed click path triple-event cascade causing double injection (`isInjecting` flag set synchronously) |
 | [4.33.25](changelog/v4.md#43325---2026-09-21) | Add 4 selector constants and centralize production code selector sources |
 | [4.33.24](changelog/v4.md#43324---2026-09-21) | Add 12 selector constants and unify test file selector sources |
 | [4.33.23](changelog/v4.md#43323---2026-09-21) | Add reason property to scroll failure results |

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.33.26](changelog/v4.md#43326---2026-09-21) | 修正純附件送出時 prompt injection 未觸發（`querySelector` → `querySelectorAll` 遍歷所有候選按鈕）；修正點擊路徑三事件連鎖導致重複注入（`isInjecting` 旗標同步設定） |
 | [4.33.25](changelog/v4.md#43325---2026-09-21) | 新增 4 個選擇器常數並統一產品程式碼的選擇器來源 |
 | [4.33.24](changelog/v4.md#43324---2026-09-21) | 新增 12 個選擇器常數並統一測試檔案的選擇器來源 |
 | [4.33.23](changelog/v4.md#43323---2026-09-21) | 補充捲動失敗回傳 reason 屬性 |
