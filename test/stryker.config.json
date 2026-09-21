@@ -17,5 +17,5 @@
   "concurrency": 10,
   "reporters": ["clear-text", "html"],
   "htmlReporter": { "fileName": "test/reports/mutation.html" },
-  "thresholds": { "high": 80, "low": 60, "break": 68 }
+  "thresholds": { "high": 80, "low": 60, "break": 90 }
 }
