@@ -179,6 +179,8 @@
                 if (!injectPrefix(textarea, isSendableWithoutText)) return;
                 if (!hasText) ctx.markChatCreationAttempt();
 
+                // 同步設定注入旗標，防止同一次實體點擊的後續事件（mousedown/click）重複注入
+                ctx.setIsInjecting(true);
                 suppressEvent(e);
                 redispatchClick(button, textarea, isEditSendButton);
             }, { capture: true });

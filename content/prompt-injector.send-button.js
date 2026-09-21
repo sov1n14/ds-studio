@@ -69,8 +69,10 @@
 
         let el = textarea.parentElement;
         while (el && el !== document.body) {
-            const candidate = el.querySelector(selectors.SEND_BUTTON_ROLE_SELECTOR);
-            if (candidate && isSendButtonCandidate(candidate)) return candidate;
+            // 遍歷所有候選按鈕，避免附件按鈕排在送出按鈕前導致 querySelector 只找到附件按鈕
+            for (const candidate of el.querySelectorAll(selectors.SEND_BUTTON_ROLE_SELECTOR)) {
+                if (isSendButtonCandidate(candidate)) return candidate;
+            }
             el = el.parentElement;
         }
         return null;

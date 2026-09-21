@@ -363,3 +363,132 @@ describe('Send interception: attachment button must not trigger injection', func
         expect(ev.defaultPrevented).toBe(true);
     });
 });
+
+
+// ---------------------------------------------------------------------------
+// Bug regression: findSendButtonForTextarea returns null when attachment
+// button precedes send button in DOM order (Enter path)
+// ---------------------------------------------------------------------------
+
+describe('Regression: Enter path — attachment button preceding send button in DOM', function () {
+    var cleanup;
+
+    beforeEach(function () {
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
+        contentScript.state.isShowSystemTime = false;
+    });
+
+    afterEach(function () {
+        if (cleanup) { cleanup(); cleanup = null; }
+    });
+
+    it('BUG-1: Enter on empty textarea finds the send button even when attachment button comes first in DOM order', function () {
+        // Build a composer area where the attachment button (also div.ds-button[role=button])
+        // precedes the send button in DOM order — matching the real DeepSeek layout.
+        var container = document.createElement('div');
+        var textarea = document.createElement('textarea');
+        textarea.value = '';
+        container.appendChild(textarea);
+
+        var actionsRow = document.createElement('div');
+        actionsRow.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
+
+        // Attachment button: matches div.ds-button[role="button"] but has NO send icon SVG
+        var attachBtn = document.createElement('div');
+        attachBtn.setAttribute('role', 'button');
+        attachBtn.className = 'ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25';
+        var attachIconWrap = document.createElement('div');
+        attachIconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+        var attachIconDiv = document.createElement('div');
+        attachIconDiv.className = 'ds-icon';
+        var attachSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        var attachPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        // Paperclip icon — does NOT start with M8.3125
+        attachPath.setAttribute('d', 'M5.5498 9.75V5H6.9502V9.75');
+        attachSvg.appendChild(attachPath);
+        attachIconDiv.appendChild(attachSvg);
+        attachIconWrap.appendChild(attachIconDiv);
+        attachBtn.appendChild(attachIconWrap);
+
+        // Send button: matches div.ds-button[role="button"] AND has the send icon SVG
+        var sendWrapper = document.createElement('div');
+        sendWrapper.style.width = 'fit-content';
+        var sendBtn = document.createElement('div');
+        sendBtn.setAttribute('role', 'button');
+        sendBtn.className = 'ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b';
+        var sendIconWrap = document.createElement('div');
+        sendIconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+        var sendSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        var sendPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        sendPath.setAttribute('d', 'M8.3125 0L16.625 8.3125L8.3125 16.625');
+        sendSvg.appendChild(sendPath);
+        sendIconWrap.appendChild(sendSvg);
+        sendBtn.appendChild(sendIconWrap);
+        sendWrapper.appendChild(sendBtn);
+
+        // Attachment button FIRST, then send button — this is the bug trigger
+        actionsRow.appendChild(attachBtn);
+        actionsRow.appendChild(sendWrapper);
+        container.appendChild(actionsRow);
+
+        cleanup = mountInDocument(container);
+        textarea.focus();
+
+        var ev = dispatchEnterKeydown(textarea);
+
+        // Expected: injection occurs (prefix injected into textarea)
+        // Actual (bug): findSendButtonForTextarea returns null because querySelector
+        // always finds the attachment button first, which fails isSendButtonCandidate
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).toBe('<system-reminder>\nsys\n</system-reminder>');
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// Bug regression: triple event cascade (pointerdown + mousedown + click)
+// causes double injection on attachment-only sends
+// ---------------------------------------------------------------------------
+
+describe('Regression: Click path — triple event cascade corrupts attachment-only injection', function () {
+    var cleanup;
+
+    beforeEach(function () {
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
+        contentScript.state.isShowSystemTime = false;
+    });
+
+    afterEach(function () {
+        if (cleanup) { cleanup(); cleanup = null; }
+    });
+
+    it('BUG-2: pointerdown + mousedown + click on send button with empty textarea injects the prefix exactly once', function () {
+        var buttonInfo = makeSendButton({ disabled: false });
+        var area = makeInputArea('', buttonInfo);
+        cleanup = mountInDocument(area.container);
+
+        // A physical click fires pointerdown, mousedown, click synchronously.
+        // The isInjecting guard only activates during rAF, so all three events
+        // run their handler before any rAF callback fires.
+        var ev1 = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
+        buttonInfo.svg.dispatchEvent(ev1);
+
+        var ev2 = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        buttonInfo.svg.dispatchEvent(ev2);
+
+        var ev3 = new MouseEvent('click', { bubbles: true, cancelable: true });
+        buttonInfo.svg.dispatchEvent(ev3);
+
+        // The prefix should appear exactly once — not duplicated or wrapped
+        var expectedPrefix = '<system-reminder>\nsys\n</system-reminder>';
+        expect(area.textarea.value).toBe(expectedPrefix);
+
+        // Verify no double-wrapping: <user-input> must NOT appear
+        // (attachment-only sends don't wrap in <user-input>)
+        expect(area.textarea.value).not.toContain('<user-input>');
+    });
+});
