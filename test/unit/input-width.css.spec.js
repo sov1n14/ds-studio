@@ -63,7 +63,7 @@ describe('InputWidth logic (8.2.x, 9.x scenarios)', () => {
             const css = InputWidth.getCSS(60);
             expect(css).toContain('._871cbca');
             expect(css).toContain(DSSelectors.FLOATING_BUTTON_BAR_SELECTOR);
-            expect(css).toContain('._77cefa5._3d616d3');
+            expect(css).toContain(DSSelectors.INPUT_COMPOSER_WRAPPER_SELECTOR);
         });
 
         it('enforces !important on each property', () => {

@@ -13,6 +13,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/settings-message-constants.js';
+const DSSelectors = require('../../content/ds-selectors.js');
+const FALLBACK_CLASSES = DSSelectors.RETRY_BUTTON_FALLBACK_SELECTOR.replace(/\./g, ' ').trim();
 
 const MASTER_KEY = 'isEnabled';
 const UNRELATED_KEY = 'dsHideThinking';
@@ -22,7 +24,7 @@ const UNRELATED_KEY = 'dsHideThinking';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RETRY_MARKUP =
-    '<div role="button" class="ds-button ds-button--warning ds-button--filled ds-button--circle ds-button--xs ds-button--icon-relative-m a3b9bd76 _76a2310" tabindex="0"></div>';
+    `<div role="button" class="ds-button ds-button--warning ds-button--filled ds-button--circle ds-button--xs ds-button--icon-relative-m ${FALLBACK_CLASSES}" tabindex="0"></div>`;
 
 function addRetryButton() {
     document.body.innerHTML = RETRY_MARKUP;
@@ -33,7 +35,7 @@ function addFallbackOnlyButton() {
     // Only the hashed classes are present — the primary semantic selector
     // (.ds-button--warning.ds-button--circle.ds-button--xs) must not match.
     const el = document.createElement('div');
-    el.className = 'a3b9bd76 _76a2310';
+    el.className = FALLBACK_CLASSES;
     document.body.appendChild(el);
     return el;
 }

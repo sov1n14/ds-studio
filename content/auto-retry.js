@@ -9,12 +9,16 @@
  *     無獨立功能開關。
  *   - 選擇器採 fallback chain：語意 ds-* class 優先，hash class 為備援。
  */
+
+// 共用 DOM 選擇器常數
+const __DS_AutoRetrySelectors = (globalThis).DSstudio?.Selectors ||
+    (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 const AutoRetry = {
     // === 常數 ===
     // 主要選擇器：語意化的 ds-* class（穩定層）
     RETRY_SELECTOR: '.ds-button--warning.ds-button--circle.ds-button--xs',
     // 備援選擇器：hash class，來源見 to-do/samples/retry-button.html
-    RETRY_SELECTOR_FALLBACK: '.a3b9bd76._76a2310',
+    RETRY_SELECTOR_FALLBACK: __DS_AutoRetrySelectors.RETRY_BUTTON_FALLBACK_SELECTOR,
     CLICK_INTERVAL_MS: 1000,
 
     // === 狀態 ===

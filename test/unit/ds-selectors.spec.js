@@ -29,8 +29,8 @@ describe('DSSelectors — composite values', () => {
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 71 keys', () => {
-        expect(Object.keys(S)).toHaveLength(71);
+    it('exports exactly 87 keys', () => {
+        expect(Object.keys(S)).toHaveLength(87);
     });
     it('every value is a string except EDIT_SEND_BUTTON_VARIANT_CLASSES', () => {
         for (const [key, value] of Object.entries(S)) {

@@ -45,8 +45,8 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
             const html = build().children[0].innerHTML;
             expect(html).toContain('font-size: 14px');
         });
-        it('_5ab5d64 wrapper', () => {
-            expect(build().querySelector('._5ab5d64')).not.toBeNull();
+        it('THINK_HEADER_ICON_ROW_CLASS wrapper', () => {
+            expect(build().querySelector(`.${selectors.THINK_HEADER_ICON_ROW_CLASS}`)).not.toBeNull();
         });
         it('_5255ff8 _4d41763 span', () => {
             const span = build().querySelector(selectors.THINK_STATUS_SELECTOR);
