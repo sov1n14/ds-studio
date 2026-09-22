@@ -50,6 +50,7 @@ ds-studio/
 │   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
 │   ├── temporary-chat-fiber-delete.js * ─  React Fiber-based conversation deletion integration (web accessible)
 │   ├── invalidation-toast.js    ─  Extension context invalidation toast with refresh button (v4.33.16)
+│   ├── invalidation-watcher.js  ─  Periodic extension context validity check, shows refresh toast once on first failure (v4.34.0)
 │   ├── temporary-chat-heartbeat.js      ─  Lease heartbeat for the tracked temporary conversation (v4.31.1)
 │   ├── temporary-chat-sidebar-hide.js   ─  Hides queued temporary conversations from the DeepSeek sidebar (v4.31.1)
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
@@ -165,15 +166,12 @@ ds-studio/
 │   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
 │   ├── message-constants.js          ─  跨層訊息類型與 URL 常數合併檔
-│   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants（stub，已合併至 message-constants.js）
-│   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)（stub，已合併至 message-constants.js）
 │   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
 │   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
 │   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
-│   ├── url-constants.js        ─  URL pattern matching constants（stub，已合併至 message-constants.js）
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
 │   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
 │   ├── i18n.locales.en.js      ─  en string dictionary, pure data

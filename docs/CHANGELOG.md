@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.34.0](changelog/v4.md#4340---2026-09-23) | 新增 `invalidation-watcher.js` 每 30 秒檢查擴充功能 context，失效時主動顯示一次重新整理提示；移除三個 re-export stub 常數檔，改由 `utils/message-constants.js` 匯入 |
+| [4.33.31](changelog/v4.md#43331---2026-09-23) | 修正導航目的地為相對路徑時 `new URL()` 拋出 `TypeError: Invalid URL`，改為直接傳入 `extractUuidFromUrl` |
 | [4.33.29](changelog/v4.md#43329---2026-09-22) | 恢復行動版首頁清理模組（`mobile-homepage-cleanup.js`）與 `HOMEPAGE_MOBILE_CLEANUP_SELECTOR`——v4.33.20 因選擇器探測誤判移除，經確認選擇器仍有效後恢復 |
 | [4.33.28](changelog/v4.md#43328---2026-09-22) | 修正 `redispatchClick` rAF 回調 early return 未重設 `isInjecting` 旗標導致 prompt injection 永久失效 |
 | [4.33.27](changelog/v4.md#43327---2026-09-22) | `isSendButtonCandidate` 送出按鈕識別升級為三層式策略，新增結構性降級路徑 |

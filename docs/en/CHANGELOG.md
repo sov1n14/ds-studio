@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Summary |
 |-|-|
+| [4.34.0](changelog/v4.md#4340---2026-09-23) | Added `invalidation-watcher.js` checking extension context every 30s and proactively showing the refresh toast once on invalidation; removed three re-export stub constant files, consumers import from `utils/message-constants.js` |
+| [4.33.31](changelog/v4.md#43331---2026-09-23) | Fixed `TypeError: Invalid URL` from `new URL()` when the navigation destination is a relative path; now passes it directly to `extractUuidFromUrl` |
 | [4.33.29](changelog/v4.md#43329---2026-09-22) | Restored mobile homepage cleanup module (`mobile-homepage-cleanup.js`) and `HOMEPAGE_MOBILE_CLEANUP_SELECTOR` — removed in v4.33.20 due to false-negative selector probe, restored after confirming selector is still valid |
 | [4.33.28](changelog/v4.md#43328---2026-09-22) | Fixed `redispatchClick` rAF callback early return not resetting `isInjecting` flag, permanently disabling prompt injection |
 | [4.33.27](changelog/v4.md#43327---2026-09-22) | `isSendButtonCandidate` send button identification upgraded to three-tier strategy with structural fallback |
