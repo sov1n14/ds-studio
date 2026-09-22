@@ -11,6 +11,11 @@
     const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
     const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
+    const DS_BUTTON_FLOATING = __DSSelectors.DS_BUTTON_FLOATING_CLASS;
+    const DS_BUTTON_CIRCLE = __DSSelectors.DS_BUTTON_CIRCLE_CLASS;
+    const DS_BUTTON_PRIMARY = __DSSelectors.DS_BUTTON_PRIMARY_CLASS;
+    const DS_BUTTON_FILLED = __DSSelectors.DS_BUTTON_FILLED_CLASS;
+    const BUTTON_DISABLED = __DSSelectors.BUTTON_DISABLED_CLASS;
 
     const bundle = {
         // ─────────────────────────────
@@ -160,18 +165,18 @@
         _getNativeButton() {
             const result = this._querySelectorWithFallback([
                 this.NATIVE_BTN_SELECTOR,
-                FLOATING_BAR + ' .ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                FLOATING_BAR + ' [role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)',
-                FLOATING_BAR + ' [role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)',
+                FLOATING_BAR + ' .' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + ':not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + ':not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].' + DS_BUTTON_FLOATING + '[class*="' + DS_BUTTON_CIRCLE + '"]:not(.dsw-gotop)',
             ]);
             if (!result) return null;
 
             // 後驗證：若匹配來自降級選擇器（非 _0706cde），確認確實為 floating 按鈕
             if (!result.classList.contains(GO_TOP_NATIVE_BUTTON_CLASS)) {
-                if (!result.classList.contains('ds-button--floating') ||
-                    result.classList.contains('ds-button--primary') ||
-                    result.classList.contains('ds-button--filled') ||
-                    result.classList.contains('ds-button--disabled')) {
+                if (!result.classList.contains(DS_BUTTON_FLOATING) ||
+                    result.classList.contains(DS_BUTTON_PRIMARY) ||
+                    result.classList.contains(DS_BUTTON_FILLED) ||
+                    result.classList.contains(BUTTON_DISABLED)) {
                     return null;
                 }
             }

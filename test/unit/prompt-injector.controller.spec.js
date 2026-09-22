@@ -375,6 +375,35 @@ describe('send interception via click', () => {
         expect(state.isInjecting).toBe(false);
     });
 
+    it('resets the injecting flag when rAF callback finds an empty textarea (React cleared input)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+
+        dispatchClick(svg);
+
+        // Simulate React re-render clearing the textarea before rAF fires
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        nativeSetter.call(textarea, '');
+
+        flushRaf();
+
+        expect(state.isInjecting).toBe(false);
+    });
+
+    it('resets the injecting flag when textarea is removed from DOM before rAF fires', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+
+        dispatchClick(svg);
+
+        // Simulate textarea being removed from DOM (querySelector returns null)
+        textarea.parentNode.removeChild(textarea);
+
+        flushRaf();
+
+        expect(state.isInjecting).toBe(false);
+    });
+
     it('does nothing while an injection is already in flight', () => {
         resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', isInjecting: true });
         const { textarea, svg } = mountComposer('hello');
@@ -450,6 +479,20 @@ describe('send interception via click', () => {
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
         nativeSetter.call(textarea, '');
         flushRaf();
+        expect(clickSpy).not.toHaveBeenCalled();
+        clickSpy.mockRestore();
+    });
+
+
+    it('resets the injecting flag when rAF callback finds whitespace-only textarea', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, button, svg } = mountComposer('hello');
+        const clickSpy = vi.spyOn(button, 'click');
+        dispatchClick(svg);
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        nativeSetter.call(textarea, '   ');
+        flushRaf();
+        expect(state.isInjecting).toBe(false);
         expect(clickSpy).not.toHaveBeenCalled();
         clickSpy.mockRestore();
     });

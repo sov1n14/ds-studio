@@ -55,9 +55,6 @@
     /** 新版設計的工具列圖示按鈕 */
     const ICON_BUTTON_ROLE_SELECTOR = '[role="button"].ds-button.ds-button--icon';
 
-    /** 工具列圖示按鈕（與 ICON_BUTTON_ROLE_SELECTOR 相同，保留供消費端引用） */
-    const ICON_BUTTON_ANY_SELECTOR = ICON_BUTTON_ROLE_SELECTOR;
-
 
     /** DeepSeek 通用 flex 列（工具列降級掃描） */
     const FLEX_ROW_SELECTOR = '.ds-flex';
@@ -212,6 +209,11 @@
     /** 被賦予計算後 max-height 的容器 */
     const EDIT_BOX_HEIGHT_CONTAINER_SELECTOR = '._646a522';
 
+    // ── Mobile Homepage Cleanup ──
+
+    /** 行動裝置首頁「下载应用」元素的雜湊 class */
+    const HOMEPAGE_MOBILE_CLEANUP_SELECTOR = '._9579690';
+
     // ── 虛擬列表 ──
 
     /** 僅以雜湊定位的虛擬列表容器（範圍較 VIRTUAL_LIST_SELECTOR 廣，故獨立保留） */
@@ -276,8 +278,17 @@
     /** 搜尋圖示的 SVG path 起始字串（語言無關的定位基準） */
     const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
 
+    /** 浮動按鈕 */
+    const DS_BUTTON_FLOATING_CLASS = 'ds-button--floating';
+    /** 圓形按鈕 */
+    const DS_BUTTON_CIRCLE_CLASS = 'ds-button--circle';
+    /** 主要按鈕 */
+    const DS_BUTTON_PRIMARY_CLASS = 'ds-button--primary';
+    /** 實心按鈕 */
+    const DS_BUTTON_FILLED_CLASS = 'ds-button--filled';
+
     /** 編輯視窗「傳送」按鈕的變體 class（取消鈕為 outlined 變體，故不符） */
-    const EDIT_SEND_BUTTON_VARIANT_CLASSES = ['ds-button--primary', 'ds-button--filled'];
+    const EDIT_SEND_BUTTON_VARIANT_CLASSES = [DS_BUTTON_PRIMARY_CLASS, DS_BUTTON_FILLED_CLASS];
 
     /** 按鈕的文字內容標籤（純圖示按鈕不具備此節點） */
     const BUTTON_CONTENT_SELECTOR = 'span.ds-button__content';
@@ -296,7 +307,7 @@
 
 
     // ---------------------------------------------------------------
-    //  按鈕變體 class（mobile-sidebar-swipe 等模組共用）
+    //  按鈕變體 class（mobile-sidebar-swipe、go-top 等模組共用）
     // ---------------------------------------------------------------
 
     /** 膠囊型按鈕 */
@@ -316,7 +327,7 @@
         MARKDOWN_CLASS, MARKDOWN_SELECTOR,
         THINK_CONTENT_CLASS, THINK_CONTENT_SELECTOR,
         ASSISTANT_MAIN_CONTENT_SELECTOR, MARKDOWN_CITE_SELECTOR,
-        ICON_BUTTON_ROLE_SELECTOR, ICON_BUTTON_ANY_SELECTOR,
+        ICON_BUTTON_ROLE_SELECTOR,
         FLEX_ROW_SELECTOR,
         INPUT_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
         TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR, RETRY_BUTTON_FALLBACK_SELECTOR,
@@ -335,7 +346,7 @@
         MESSAGE_TOOLBAR_SELECTOR, THINK_STATUS_SELECTOR,
         THINK_REFERENCE_LABEL_SELECTOR, THINK_REFERENCE_LINK_SELECTOR,
         EDIT_MESSAGE_BUTTON_CLASS,
-        EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR,
+        EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR, HOMEPAGE_MOBILE_CLEANUP_SELECTOR,
         VIRTUAL_LIST_CONTAINER_SELECTOR,
         SIDEBAR_WRAPPER_SELECTOR, SIDEBAR_INNER_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
         SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_DATE_LABEL_CLASS, SIDEBAR_CHAT_LINK_SELECTOR,
@@ -352,6 +363,7 @@
         EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS, STRAY_BUTTON_CLASS,
         DS_BUTTON_CAPSULE_CLASS, DS_BUTTON_ICON_LABEL_PRIMARY_CLASS,
         DS_BUTTON_ICON_LABEL_TERTIARY_CLASS, DS_BUTTON_XL_CLASS,
+        DS_BUTTON_FLOATING_CLASS, DS_BUTTON_CIRCLE_CLASS, DS_BUTTON_PRIMARY_CLASS, DS_BUTTON_FILLED_CLASS,
     };
 
     // Stryker disable all: equivalent mutants — module/window type checks are environment-dependent, untestable in Node

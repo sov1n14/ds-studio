@@ -320,3 +320,28 @@ export function dispatchClick(target) {
     target.dispatchEvent(ev);
     return ev;
 }
+
+/**
+ * Composer send button whose SVG path has CHANGED (DeepSeek updated the icon)
+ * but still carries the primary+filled+circle variant classes.
+ * Exercises the structural fallback in isSendButtonCandidate.
+ *
+ * Structure mirrors makeMobileSendButton but with a different SVG path d.
+ * Returns { button, svg }
+ */
+export function makeSendButtonWithChangedIcon() {
+    const button = document.createElement('div');
+    button.className = COMPOSER_SEND_CLASSES;
+    button.setAttribute('role', 'button');
+
+    const iconWrapper = document.createElement('div');
+    iconWrapper.className = 'ds-button__icon ds-button__icon--last-child';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M99.999 0 L10 10');
+    svg.appendChild(path);
+    iconWrapper.appendChild(svg);
+    button.appendChild(iconWrapper);
+
+    return { button, svg };
+}

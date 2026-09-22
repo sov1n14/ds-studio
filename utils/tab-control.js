@@ -52,7 +52,7 @@ async function sendToTab(tabId, message) {
     try {
         return await chrome.tabs.sendMessage(tabId, message);
     } catch (err) {
-        console.error('[DSS] tab-control.sendToTab:', err);
+        console.debug('[DSS] tab-control.sendToTab:', err);
         return undefined;
     }
 }

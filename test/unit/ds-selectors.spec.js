@@ -1,4 +1,4 @@
-/**
+﻿/**
  * content/ds-selectors.js — value contract tests.
  * Composite derivation and export shape only; literal-value pins removed (tautological).
  */
@@ -11,9 +11,6 @@ beforeAll(() => {
 });
 
 describe('DSSelectors — composite values', () => {
-    it('ICON_BUTTON_ANY_SELECTOR equals ICON_BUTTON_ROLE_SELECTOR (simplified after dead .ds-icon-button removal)', () => {
-        expect(S.ICON_BUTTON_ANY_SELECTOR).toBe(S.ICON_BUTTON_ROLE_SELECTOR);
-    });
     it('THINK_BLOCK_SELECTOR is dot-prefixed THINK_BLOCK_CLASS', () => {
         expect(S.THINK_BLOCK_SELECTOR).toBe('.' + S.THINK_BLOCK_CLASS);
     });
@@ -29,8 +26,8 @@ describe('DSSelectors — composite values', () => {
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 87 keys', () => {
-        expect(Object.keys(S)).toHaveLength(87);
+    it('exports exactly 91 keys', () => {
+        expect(Object.keys(S)).toHaveLength(91);
     });
     it('every value is a string except EDIT_SEND_BUTTON_VARIANT_CLASSES', () => {
         for (const [key, value] of Object.entries(S)) {

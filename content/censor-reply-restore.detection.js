@@ -30,7 +30,7 @@
                 // 後備方案：尋找容器中任何有 5 個以上 icon buttons 的 .ds-flex
                 const allFlex = container.querySelectorAll(__DS_DetectionSelectors.FLEX_ROW_SELECTOR);
                 for (let i = 0; i < allFlex.length; i++) {
-                    if (allFlex[i].querySelectorAll(__DS_DetectionSelectors.ICON_BUTTON_ANY_SELECTOR).length >= 5) return allFlex[i];
+                    if (allFlex[i].querySelectorAll(__DS_DetectionSelectors.ICON_BUTTON_ROLE_SELECTOR).length >= 5) return allFlex[i];
                 }
             }
 

@@ -14,7 +14,7 @@
  * selector string is asserted.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../content/ds-selectors.js';
 const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/prompt-injector.send-button.js';
@@ -30,6 +30,7 @@ import {
     makeEditSendButtonStandalone,
     mountInDocument,
     makeAttachmentButtonInActionsRow,
+    makeSendButtonWithChangedIcon,
 } from '../helpers/send-button-fixtures.js';
 
 const SB = globalThis.__DS_PromptInjectorSendButton;
@@ -573,5 +574,46 @@ describe('resolveTextareaForButton — activeElement null guard (kills ?. to . m
                 delete document.activeElement;
             }
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// isSendButtonCandidate — structural fallback
+// ---------------------------------------------------------------------------
+
+describe('isSendButtonCandidate — structural fallback', () => {
+    it('accepts send button via structural fallback when SVG path changes', () => {
+        const { button } = makeSendButtonWithChangedIcon();
+        cleanup = mountInDocument(button);
+        expect(SB.isSendButtonCandidate(button)).toBe(true);
+    });
+
+    it('logs a warning when structural fallback matches', () => {
+        const { button } = makeSendButtonWithChangedIcon();
+        cleanup = mountInDocument(button);
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            SB.isSendButtonCandidate(button);
+            expect(warnSpy).toHaveBeenCalledOnce();
+            expect(warnSpy.mock.calls[0][0]).toContain('structural fallback');
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
+
+    // Test 3 (attachment button rejection) already covered at line ~109:
+    // 'rejects the attachment (paperclip) button even though it sits in a bf38813a row'
+
+    it('rejects generic SVG button without variant classes', () => {
+        const button = document.createElement('div');
+        button.className = 'ds-button ds-button--icon';
+        button.setAttribute('role', 'button');
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M0 0 L5 5');
+        svg.appendChild(path);
+        button.appendChild(svg);
+        cleanup = mountInDocument(button);
+        expect(SB.isSendButtonCandidate(button)).toBe(false);
     });
 });
