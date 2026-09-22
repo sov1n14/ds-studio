@@ -163,9 +163,28 @@ describe("render -- dropdown update", () => {
     beforeEach(() => { spyStorageManager(); ctx = makeCtx(); overlay = createPresetOverlay(ctx); target = mountOverlay(overlay); });
     afterEach(() => { teardown(overlay, target); restoreStorageManager(); });
 
-    it("updates the dropdown options", () => { const presets = [{ id: "p1", name: "Preset 1" }]; const spy = vi.spyOn(overlay.dropdown, "setOptions"); overlay.render(presets, "p1"); expect(spy).toHaveBeenCalledWith(presets); });
-    it("sets the active value", () => { const spy = vi.spyOn(overlay.dropdown, "setValue"); overlay.render([], "p1"); expect(spy).toHaveBeenCalledWith("p1"); });
-    it("defaults activeId to empty string when falsy", () => { const spy = vi.spyOn(overlay.dropdown, "setValue"); overlay.render([], null); expect(spy).toHaveBeenCalledWith(""); });
+    it("updates the dropdown options", () => {
+        const presets = [{ id: "p1", name: "Preset 1" }];
+        overlay.render(presets, "p1");
+        const options = overlay.dropdown.menu.querySelectorAll(".dss-preset-option");
+        expect(options.length).toBe(presets.length + 1);
+        const p1Option = overlay.dropdown.menu.querySelector('li[data-value="p1"]');
+        expect(p1Option).not.toBeNull();
+        expect(p1Option.textContent).toBe("Preset 1");
+    });
+    it("sets the active value", () => {
+        const presets = [{ id: "p1", name: "Preset 1" }];
+        overlay.render(presets, "p1");
+        const p1Option = overlay.dropdown.menu.querySelector('li[data-value="p1"]');
+        expect(p1Option.getAttribute("aria-selected")).toBe("true");
+    });
+    it("defaults activeId to empty string when falsy", () => {
+        const presets = [{ id: "p1", name: "Preset 1" }];
+        overlay.render(presets, null);
+        const p1Option = overlay.dropdown.menu.querySelector('li[data-value="p1"]');
+        expect(p1Option.getAttribute("aria-selected")).toBe("false");
+        expect(overlay.dropdown.label.classList.contains("dss-preset-label--placeholder")).toBe(true);
+    });
     it("is a no-op when dropdown is null", () => { overlay.dropdown = null; expect(() => overlay.render([], "p1")).not.toThrow(); });
     it("calls reposition", () => { overlay.reposition = vi.fn(); overlay.render([], "p1"); expect(overlay.reposition).toHaveBeenCalled(); });
 });
