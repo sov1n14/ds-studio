@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.33.29](changelog/v4.md#43329---2026-09-22) | 恢復行動版首頁清理模組（`mobile-homepage-cleanup.js`）與 `HOMEPAGE_MOBILE_CLEANUP_SELECTOR`——v4.33.20 因選擇器探測誤判移除，經確認選擇器仍有效後恢復 |
+| [4.33.28](changelog/v4.md#43328---2026-09-22) | 修正 `redispatchClick` rAF 回調 early return 未重設 `isInjecting` 旗標導致 prompt injection 永久失效 |
+| [4.33.27](changelog/v4.md#43327---2026-09-22) | `isSendButtonCandidate` 送出按鈕識別升級為三層式策略，新增結構性降級路徑 |
 | [4.33.26](changelog/v4.md#43326---2026-09-21) | 修正純附件送出時 prompt injection 未觸發（`querySelector` → `querySelectorAll` 遍歷所有候選按鈕）；修正點擊路徑三事件連鎖導致重複注入（`isInjecting` 旗標同步設定） |
 | [4.33.25](changelog/v4.md#43325---2026-09-21) | 新增 4 個選擇器常數並統一產品程式碼的選擇器來源 |
 | [4.33.24](changelog/v4.md#43324---2026-09-21) | 新增 12 個選擇器常數並統一測試檔案的選擇器來源 |

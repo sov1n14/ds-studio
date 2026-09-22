@@ -20,4 +20,4 @@ tools/test_auth.txt
 tools/node_modules/
 tools/.pw-profile/
 tools/captures/
-tools/screenshots
+tools/screenshots/

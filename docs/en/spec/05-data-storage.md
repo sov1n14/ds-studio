@@ -57,7 +57,7 @@
 ### DOM Selectors
 
 - **Input Area**: The `textarea` element in the DeepSeek chat interface.
-- **Send Button**: A `div` element with CSS class `div.ds-button[role="button"]`, containing an SVG with a path starting with `M8.3125`.
+- **Send Button**: A `div` element with CSS class `div.ds-button[role="button"]`. Three-tier identification: (1) SVG path prefix `M8.3125` (primary); (2) contains `svg` with `ds-button--primary` + `ds-button--filled` variant classes (structural fallback); (3) edit-window send button via `isEditWindowSendButton`.
 - **Message Container**: `.ds-virtual-list-visible-items .ds-message`, for enumerating conversation turns.
 - **Markdown Content**: `.ds-markdown`, for AI response content.
 - **Thinking Process**: `.ds-think-content`, for AI reasoning content.
