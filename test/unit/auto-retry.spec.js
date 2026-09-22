@@ -12,7 +12,7 @@
  * bound to that test's chrome stubs.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 const DSSelectors = require('../../content/ds-selectors.js');
 const FALLBACK_CLASSES = DSSelectors.RETRY_BUTTON_FALLBACK_SELECTOR.replace(/\./g, ' ').trim();
 

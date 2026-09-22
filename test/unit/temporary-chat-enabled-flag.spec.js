@@ -14,7 +14,7 @@
  * which value.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 // Mounts DSS_TEMP_CHAT_* on globalThis before the module under test reads them,
 // matching temporary-chat-sidebar-hide.spec.js. The module reads
 // globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY directly (no hardcoded fallback).

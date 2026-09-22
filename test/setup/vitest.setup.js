@@ -23,17 +23,9 @@ await globalThis.dsI18n.init();
 // stubbing __DS_Logger per-spec since this file has no other side effects.
 import '../../utils/logger.js';
 
-// globalThis.DSS_SETTINGS_MSG is read at call time by content/feature-toggle.js
-// (message type strings for GET_SETTINGS / SETTINGS_CHANGED). Preload it so any
-// spec that loads a toggle-gated content module gets the real constants instead
-// of a TypeError inside the toggle's initial settings read.
-import '../../utils/settings-message-constants.js';
-// utils/url-constants.js mounts DSS_TAB_URL onto globalThis. It MUST load
-// before utils/tab-control.js (preloaded indirectly by specs that import it) so
-// the tab query URL constant is available at call time.
-import '../../utils/url-constants.js';
-// utils/message-constants.js mounts DSS_CONTENT_MSG onto globalThis. Preload it
-// so specs referencing content-script messaging constants don't hit ReferenceError.
+// utils/message-constants.js mounts DSS_TAB_URL, DSS_EDITOR_WINDOW,
+// DSS_SETTINGS_MSG, and DSS_CONTENT_MSG onto globalThis. Preload it so specs
+// referencing any cross-layer constant don't hit ReferenceError.
 import '../../utils/message-constants.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────

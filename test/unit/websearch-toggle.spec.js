@@ -15,7 +15,7 @@
  * not be invoked twice on one instance, or its one-shot would arm twice.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import "../../utils/settings-message-constants.js";
+import "../../utils/message-constants.js";
 import "../../utils/storage-manager.js";
 import StorageManager from "../../utils/storage-manager.js";
 import DSSelectors from "../../content/ds-selectors.js";

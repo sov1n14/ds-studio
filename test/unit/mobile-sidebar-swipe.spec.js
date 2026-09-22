@@ -13,7 +13,7 @@
  * their observable consequence is asserted: does a swipe click the button?
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 
 const MASTER_KEY = 'isEnabled';
 const UNRELATED_KEY = 'isHideThinkingEnabled';

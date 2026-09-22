@@ -18,7 +18,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import '../../utils/temporary-chat-constants.js';
 import StorageManager from '../../utils/storage-manager.js';
 import { resetStorageOnChangedListeners } from '../setup/vitest.setup.js';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 import '../../background/settings-routes.js';
 
 const MSG = () => globalThis.DSS_SETTINGS_MSG;

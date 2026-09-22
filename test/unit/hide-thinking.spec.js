@@ -11,7 +11,7 @@
  * import) bound to that test's stubs -- same pattern as width-feature.spec.js.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 import '../../content/ds-selectors.js';
 const { THINK_BLOCK_CLASS, THINK_HEADER_TOGGLE_CLASS } = require('../../content/ds-selectors.js');
 import '../../utils/storage-manager.js';

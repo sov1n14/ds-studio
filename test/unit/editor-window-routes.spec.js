@@ -31,7 +31,7 @@ beforeAll(async () => {
         .mockImplementation((fn) => { captured.push(fn); });
 
     // Dynamic import: a static import is hoisted above the spy above.
-    await import('../../utils/editor-window-constants.js');
+    await import('../../utils/message-constants.js');
     await import('../../background/editor-window-routes.js');
     globalThis.DSSEditorWindowRoutes.install();
 
