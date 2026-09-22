@@ -150,7 +150,7 @@
 
             // 標記新建立的臨時對話：有待定旗標且目的地是對話頁面
             if (state.isPendingCreate && readEnabledFlag()) {
-                const destinationUuid = extractUuidFromUrl(new URL(destinationUrl).pathname);
+                const destinationUuid = extractUuidFromUrl(destinationUrl);
                 if (destinationUuid) {
                     tracking.trackUuid(destinationUuid);
                 }
