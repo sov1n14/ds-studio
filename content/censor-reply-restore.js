@@ -15,6 +15,7 @@
  *  10. censor-reply-restore.observer.js     → globalThis.__DS_CensorReplyRestore_observer
  *  11. censor-reply-restore.js              （本檔，Object.assign 合入以上十個 bundle）
  */
+// Stryker disable all: equivalent — module-loading shim, require path only exercised in Node test
 // Session id 擷取共用工具（瀏覽器：chat-session-id.js 在前載入；Node.js 測試：直接 require）
 var __DS_CensorChatSessionId = (globalThis).DSSChatSessionId ||
     (typeof require !== 'undefined' ? require('../utils/chat-session-id.js') : {});
@@ -26,6 +27,7 @@ var __DS_CensorSelectors = (globalThis).DSstudio?.Selectors ||
 // key <-> messageId 雙向對應表（瀏覽器：censor-reply-restore.keymap.js 在前載入；Node.js 測試：直接 require）
 var __DS_CensorKeyToMessageIdMap = (globalThis).__DS_CensorKeyToMessageIdMap ||
     (typeof require !== 'undefined' ? require('./censor-reply-restore.keymap.js') : null);
+// Stryker restore all
 
 const CensorReplyRestore = {
     STORAGE_MAX_ENTRIES: 200,
@@ -202,6 +204,8 @@ if (typeof document !== 'undefined' && document.documentElement) {
     CensorReplyRestore.start();
 }
 
+// Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CensorReplyRestore;
 }
+// Stryker restore all

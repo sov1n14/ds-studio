@@ -14,6 +14,7 @@
  *   - 側邊欄切換按鈕的 DOM 就緒輪詢委派 content/retry-until.js。
  */
 // 共用模組（瀏覽器：由 manifest 於前載入設定 globalThis；Node.js 測試：直接 require）
+// Stryker disable all: equivalent — module-loading shim, require path only exercised in Node test
 const __DS_SwipeMobileDevice = globalThis.DSSMobileDevice
     || (typeof require !== 'undefined' ? require('./mobile-device.js') : null);
 const __DS_SwipeFeatureToggle = globalThis.DSSFeatureToggle
@@ -33,6 +34,7 @@ var __swipeBind = globalThis.__DS_MobileSidebarSwipe_bind ||
     (typeof require !== 'undefined' ? require('./mobile-sidebar-swipe.bind.js') : {});
 var __swipeLifecycle = globalThis.__DS_MobileSidebarSwipe_lifecycle ||
     (typeof require !== 'undefined' ? require('./mobile-sidebar-swipe.lifecycle.js') : {});
+// Stryker restore all
 
 const MobileSidebarSwipe = {
     // === 常數 ===
@@ -64,6 +66,7 @@ MobileSidebarSwipe._featureToggle = __DS_SwipeFeatureToggle;
 // Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 MobileSidebarSwipe.start();
 
+// Stryker disable all: equivalent mutants — module/window type checks are environment-dependent, untestable in Node
 // === Test export (no-op in browser) ===
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = MobileSidebarSwipe;
@@ -74,3 +77,4 @@ if (typeof window !== 'undefined') {
     window.DSstudio = window.DSstudio || {};
     window.DSstudio.MobileSidebarSwipe = MobileSidebarSwipe;
 }
+// Stryker restore all

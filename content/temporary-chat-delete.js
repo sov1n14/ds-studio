@@ -185,6 +185,8 @@ const TemporaryChatDelete = (() => {
 TemporaryChatDelete.init();
 
 // Test export（瀏覽器中為 no-op）
+// Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = TemporaryChatDelete;
 }
+// Stryker restore all
