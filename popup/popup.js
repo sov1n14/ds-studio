@@ -1,3 +1,4 @@
+// 334 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
 /**
  * DS studio — Popup Controller（入口）
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、

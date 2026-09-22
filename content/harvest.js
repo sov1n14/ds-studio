@@ -1,3 +1,4 @@
+// 299 lines: incremental scroll-harvest orchestrator — the capture loop, scroll control, abort handling, and policy delegation form one linear async pipeline; splitting the loop body from its setup would obscure the sequential flow and shared capturedMap state
 /**
  * DS studio — Harvest Module
  * 負責從虛擬化列表中增量捲動擷取完整對話訊息。

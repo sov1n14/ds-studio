@@ -16,6 +16,10 @@ describe('GoToTop render-combined mutant killers', () => {
     afterEach(() => { vi.useRealTimers(); });
 
     describe('_iconSvg', () => {
+        // These coordinates are author-controlled constants (the icon's path mirrored
+        // vertically from the original DOM element), not CSS selectors that rotate with
+        // DeepSeek's UI, so asserting exact values catches accidental corruption of the
+        // authored path rather than being a tautological transcription of the implementation.
         it('contains all SVG path segments', () => {
             const svg = GoToTop._iconSvg();
             expect(svg).toContain('M11.8486 5.5');

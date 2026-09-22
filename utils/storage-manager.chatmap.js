@@ -1,3 +1,4 @@
+// 331 lines: cohesive chatPresetMap chunked storage operations — mutate/bind/unbind/prune share internal queue serialization and chunk-index cache; splitting would duplicate cache coordination or require cross-file locking
 /**
  * DS Studio — StorageManager ChatPresetMap 分塊讀寫方法群組
  * 負責 chatPresetMap 的 mutate/bind/unbind 操作與分塊存取。

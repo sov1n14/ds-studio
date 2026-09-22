@@ -1,3 +1,4 @@
+// 314 lines: single preset overlay controller — lifecycle (mount/unmount), positioning, resize observation, and select-change handling share tightly coupled DOM refs and overlay instance state; splitting would require passing the same mutable instance across files
 /**
  * DS Studio — PresetOverlay Controller
  * 取代 content-script.overlay.js，整合自訂 dropdown 元件、定位計算、ResizeObserver。

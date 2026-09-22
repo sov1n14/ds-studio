@@ -1,3 +1,4 @@
+// 381 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *
@@ -10,6 +11,7 @@
  */
 
 // Stryker disable StringLiteral: 純常數模組，選擇器字串的變異只能用逐字比對來殺，屬反模式（tautological assertion）
+// NOTE: SVG path data in go-top.render.combined.js is a distinct case from selectors here — selectors rotate as DeepSeek updates its UI, while SVG paths are stable author-controlled values (the go-top icon was mirrored vertically from the original DOM element). The Stryker disable on selectors does not extend a blanket exemption to SVG paths; those are tested by coordinate assertions in the mutant-killer spec.
 (function () {
     'use strict';
 

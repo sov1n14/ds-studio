@@ -1,3 +1,4 @@
+// 271 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、

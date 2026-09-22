@@ -1,3 +1,4 @@
+// 309 lines: cohesive sync-conflict resolution and retry pipeline — detect/resolve/retry/syncNow share raw-storage reads and merge logic; splitting would duplicate storage snapshot handling or require passing large intermediate objects between files
 /**
  * DS Studio — StorageManager 雲端同步方法群組
  * 負責同步衝突解決、同步狀態查詢與重試。
