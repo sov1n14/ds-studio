@@ -1,3 +1,4 @@
+// 259 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -209,6 +210,12 @@ initSettings().catch(e => {
 // 防禦性參照避免載入順序缺失時拋錯；沿用 sidebar-auto-hide.js 的自啟動模式）
 globalThis.TemporaryChatSidebarHide?.init();
 
+
+// 擴充情境失效監視器：無條件啟動，定期檢查情境有效性
+globalThis.DSSInvalidationWatcher?.create({
+    isValid: isExtensionContextValid,
+    showToast: () => globalThis.DSSInvalidationToast?.show(),
+})?.start();
 // Popup 訊息監聽
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === DSS_CONTENT_MSG.EXPORT_MARKDOWN) {
