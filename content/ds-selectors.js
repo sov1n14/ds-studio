@@ -1,4 +1,4 @@
-// 383 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
+// 393 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *
@@ -76,8 +76,17 @@
     /** 浮動／下拉的定位根容器 */
     const FLOATING_POSITION_WRAPPER_SELECTOR = '.ds-floating-position-wrapper';
 
+    /** 重試按鈕主要選擇器（語意 ds-* class） */
+    const RETRY_BUTTON_SELECTOR = '.ds-button--warning.ds-button--circle.ds-button--xs';
+
     /** 重試按鈕備援選擇器（hash class） */
     const RETRY_BUTTON_FALLBACK_SELECTOR = '.a3b9bd76._76a2310';
+
+    /** 繼續生成按鈕主要選擇器（hash 容器下的 ds-button） */
+    const CONTINUE_BUTTON_SELECTOR = '._8e85838 > .ds-button[role="button"]';
+
+    /** 繼續生成按鈕備援選擇器（hash class） */
+    const CONTINUE_BUTTON_FALLBACK_SELECTOR = '._6eef0b0';
 
 
     /** 程式碼區塊容器 class（以 includes 比對） */
@@ -332,7 +341,8 @@
         ICON_BUTTON_ROLE_SELECTOR,
         FLEX_ROW_SELECTOR,
         INPUT_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
-        TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR, RETRY_BUTTON_FALLBACK_SELECTOR,
+        TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR,
+        RETRY_BUTTON_SELECTOR, RETRY_BUTTON_FALLBACK_SELECTOR, CONTINUE_BUTTON_SELECTOR, CONTINUE_BUTTON_FALLBACK_SELECTOR,
         WEBSEARCH_TOGGLE_CLASS, WEBSEARCH_LABEL_CLASS,
         FLOATING_POSITION_WRAPPER_SELECTOR, CODE_BLOCK_CLASS,
         THINK_BLOCK_CLASS, THINK_BLOCK_SELECTOR,

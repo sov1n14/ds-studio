@@ -24,6 +24,8 @@
     sidebarAutoHideLabel: '側邊欄自動隱藏（保留 60px hover 展開）',
     hideThinkingLabel: '隱藏思考過程',
     autoExpandMessagesLabel: '自動展開訊息',
+    autoRetryLabel: '自動重試',
+    autoContinueLabel: '自動繼續生成',
     preventAutoScrollLabel: '防止自動回滾',
     websearchToggleLabel: '連網搜索',
     websearchOnLabel: '開啟',

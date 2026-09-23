@@ -10,7 +10,7 @@
 |-|-|-|
 | **UI Adjustment Modules** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, AutoExpandMessages, WebSearchToggle, GoToTop, Mobile Sidebar Swipe (bidirectional) | [→ content-ui.md](content-ui.md) |
 | **Navigation & Interface Modules** | SPA Navigation, Overlay Preset Selector, Empty Preset, Toast | [→ content-navigation.md](content-navigation.md) |
-| **User Interaction Modules** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup, AutoRetry | [→ content-interaction.md](content-interaction.md) |
+| **User Interaction Modules** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup, AutoRetry (auto retry / auto continue) | [→ content-interaction.md](content-interaction.md) |
 | **Interaction Restore Modules** | Censor Reply Restore (JS + CSS: `keymap`/`markdown`/`dom` (with `dom.resolve`/`dom.inject`/`dom.scan` three sub-packages)/`thinkblock`/`storage`/`detection`/`observer` method packages + entry file; MAIN world `sse-parser.js`/`censor-xhr-hook.js` injected via `main-world-injector.js`) | [→ spec/04-features.md](../../spec/04-features.md) (Chinese) |
 | **Temporary Conversation Modules** | Temporary Conversation (`utils/temporary-chat-constants.js`, `temporary-chat-enabled-flag.js`, `temporary-chat-toggle.js`, `temporary-chat-toggle.ui.js` + `.css`, `temporary-chat-delete-api.js`, `temporary-chat-delete.tracking.js`, `temporary-chat-delete.coordinator.js`, `temporary-chat-delete.handlers.js`, `temporary-chat-delete.js`; `background/pending-store.js` loaded by the service worker via `importScripts`) | [→ spec/04-features.md](../../spec/04-features.md) (Chinese) |
 | **Export Tool Modules** | Scroll-and-Harvest Markdown export engine | [→ EXPORT.md](EXPORT.md) |

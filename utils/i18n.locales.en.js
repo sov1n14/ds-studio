@@ -24,6 +24,8 @@
     sidebarAutoHideLabel: 'Auto-hide Sidebar (60px on hover to expand)',
     hideThinkingLabel: 'Collapse Thinking Process',
     autoExpandMessagesLabel: 'Auto-expand messages',
+    autoRetryLabel: 'Auto retry',
+    autoContinueLabel: 'Auto continue generating',
     preventAutoScrollLabel: 'Prevent Auto-Scroll',
     websearchToggleLabel: 'Web Search',
     websearchOnLabel: 'On',

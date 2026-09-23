@@ -167,3 +167,39 @@ Features 卡片中的核取方塊（`#showSystemTimeToggle`）控制此設定。
 ### 總開關感知
 
 `isEnabled` 為 `false` 時，`injectPrefix()` 提早回傳 `false`——不論 `isShowSystemTime` 為何，都不會加上系統時間。popup 中的開關也會被 `applyMasterSwitchUI()` 停用。
+
+## 自動重試與自動繼續生成 (AutoRetry)
+
+`content/auto-retry.js` 以單一 `setTimeout` 鏈同時處理「重試」與「繼續生成」兩顆按鈕。
+
+### Storage 鍵
+
+- `isAutoRetryEnabled`（boolean，預設 `false`）——`KEYS.AUTO_RETRY`，閘控重試按鈕。
+- `isAutoContinueEnabled`（boolean，預設 `false`）——`KEYS.AUTO_CONTINUE`，閘控繼續生成按鈕。
+
+### Popup 開關
+
+Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊分別經 `StorageManager.saveAutoRetry()` / `saveAutoContinue()` 寫入；兩者皆屬感知總開關的子控制項，並由 `popup/popup.live-sync.js` 即時反映 storage 變更。
+
+### 閘控 (registerFeatureToggle)
+
+`start()` 對 `BUTTONS` 中的每顆按鈕各呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，因此每顆按鈕在「總開關 `isEnabled` 且自身鍵」皆開啟時才算閘門開啟。`enable(name)` / `disable(name)` 維護 `_openGates` 集合；本模組不直接讀取 storage。
+
+### 輪次迴圈
+
+- 任何時刻至多一個計時器（`_timer`）。`_openGates` 由空轉為非空時，`_scheduleRound()` 以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`，0–3000ms、100ms 級距的均勻隨機值）排定下一輪。
+- `_runRound()` 對每個閘門開啟的按鈕依序嘗試其選擇器，找到即點擊一次，接著以新的隨機延遲排下一輪；不設點擊上限。輪次內拋出的錯誤會被記錄，下一輪照常排定。
+- `_openGates` 清空時 `_stopTimer()` 清除計時器，全關期間沒有任何計時器執行。
+
+### 按鈕定位
+
+僅以 `content/ds-selectors.js` 的選擇器定位，不比對按鈕文字；主要選擇器命中時不嘗試備援。
+
+| 按鈕 | 主要 | 備援 |
+|-|-|-|
+| 重試 | `RETRY_BUTTON_SELECTOR`（`.ds-button--warning.ds-button--circle.ds-button--xs`） | `RETRY_BUTTON_FALLBACK_SELECTOR`（`.a3b9bd76._76a2310`） |
+| 繼續生成 | `CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`） | `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`） |
+
+### 載入順序
+
+manifest 中 `content/auto-click.delay.js` 先於 `content/auto-retry.js` 載入；`start()` 在 `DSSFeatureToggle` 或 `DSSAutoClickDelay` 缺席時拋出具名的載入順序錯誤。

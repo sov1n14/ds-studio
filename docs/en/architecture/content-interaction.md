@@ -167,3 +167,39 @@ The timestamp is captured once at injection time (not at page load), so each mes
 ### Master Switch Awareness
 
 When `isEnabled` is `false`, `injectPrefix()` returns `false` early — the system time is never prepended regardless of `isShowSystemTime`. The toggle in the popup is also disabled by `applyMasterSwitchUI()`.
+
+## Auto Retry and Auto Continue (AutoRetry)
+
+`content/auto-retry.js` drives both the retry button and the continue-generating button from a single `setTimeout` chain.
+
+### Storage Keys
+
+- `isAutoRetryEnabled` (boolean, default `false`) — `KEYS.AUTO_RETRY`, gates the retry button.
+- `isAutoContinueEnabled` (boolean, default `false`) — `KEYS.AUTO_CONTINUE`, gates the continue button.
+
+### Popup Toggles
+
+The `#autoRetryToggle` and `#autoContinueToggle` checkboxes in the Features card write through `StorageManager.saveAutoRetry()` / `saveAutoContinue()`. Both are master-switch-aware sub-controls, and `popup/popup.live-sync.js` reflects storage changes to them live.
+
+### Gating (registerFeatureToggle)
+
+`start()` calls `registerFeatureToggle({ ownKey, onEnable, onDisable })` once per entry in `BUTTONS`, so each button's gate is open only when the master switch `isEnabled` and its own key are both on. `enable(name)` / `disable(name)` maintain the `_openGates` set; the module does not read storage directly.
+
+### Round Loop
+
+- At most one timer (`_timer`) exists at any time. When `_openGates` goes from empty to non-empty, `_scheduleRound()` schedules the next round with `DSSAutoClickDelay.nextDelayMs()` (`content/auto-click.delay.js`, a uniform random value of 0–3000ms in 100ms steps).
+- `_runRound()` tries each open button's selectors in order, clicks the first match once, then schedules the next round with a fresh random delay; there is no click cap. An error thrown inside a round is logged and the next round is still scheduled.
+- When `_openGates` becomes empty, `_stopTimer()` clears the timer, so no timer runs while every toggle is off.
+
+### Button Location
+
+Buttons are located only through the selectors in `content/ds-selectors.js`, never by button text; the fallback is tried only when the primary selector finds nothing.
+
+| Button | Primary | Fallback |
+|-|-|-|
+| Retry | `RETRY_BUTTON_SELECTOR` (`.ds-button--warning.ds-button--circle.ds-button--xs`) | `RETRY_BUTTON_FALLBACK_SELECTOR` (`.a3b9bd76._76a2310`) |
+| Continue generating | `CONTINUE_BUTTON_SELECTOR` (`._8e85838 > .ds-button[role="button"]`) | `CONTINUE_BUTTON_FALLBACK_SELECTOR` (`._6eef0b0`) |
+
+### Load Order
+
+In the manifest, `content/auto-click.delay.js` loads before `content/auto-retry.js`; `start()` throws a named load-order error when `DSSFeatureToggle` or `DSSAutoClickDelay` is absent.

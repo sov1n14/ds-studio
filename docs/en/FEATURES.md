@@ -11,7 +11,7 @@
 - [UI Adjustment Features](#ui-adjustment-features)
 - [Back to Top Button](#back-to-top-button)
 - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
-- [Auto Retry](#auto-retry)
+- [Auto Retry and Auto Continue](#auto-retry-and-auto-continue)
 - [Exporting Conversations](#exporting-conversations)
 - [Quote Reply](#quote-reply)
 - [Edit Message Cleanup](#edit-message-cleanup)
@@ -185,14 +185,20 @@ This feature only works on mobile devices and requires no configuration:
 - **Compatibility**: The trigger area deliberately avoids the screen edges to prevent conflicts with Chrome Android's system back gesture.
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle.
 
-## Auto Retry
+## Auto Retry and Auto Continue
 
-When a DeepSeek response fails (e.g. "The server is busy. Please try again later.") and a retry button appears, the extension clicks it for you:
+The popup menu's **Features** card provides two independent toggles, both off by default:
 
-- **Detection**: Polls the page once per second for the retry button; clicks it once whenever it is present.
-- **Retry Count**: Unlimited. As long as the button remains on screen, it retries once per second until a response is produced and the button disappears.
-- **Selector Strategy**: Primarily targets DeepSeek's semantic classes `.ds-button--warning.ds-button--circle.ds-button--xs`, with the hashed classes `.a3b9bd76._76a2310` as a fallback, reducing the chance of breakage when DeepSeek ships a front-end change.
-- **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle. When the master switch is off, the polling timer is stopped entirely and consumes no resources.
+| Toggle | Storage key | Description |
+|-|-|-|
+| **Auto retry** | `isAutoRetryEnabled` | When a DeepSeek response fails (e.g. "The server is busy. Please try again later.") and a retry button appears, the extension clicks it for you |
+| **Auto continue generating** | `isAutoContinueEnabled` | When a DeepSeek reply stops and a **Continue** button appears, the extension clicks it for you |
+
+- **Round Cadence**: While at least one toggle is on, the extension works in rounds — each round waits a random delay between 0 and 3 seconds in 0.1-second steps, then clicks each enabled button that is currently on the page once, and then schedules the next round with a fresh random delay.
+- **Click Count**: Unlimited. As long as a button remains on screen, every round clicks it again until it disappears.
+- **Button Location**: Buttons are located by CSS selectors only, never by button text, so the interface language does not matter. The retry button uses the semantic classes `.ds-button--warning.ds-button--circle.ds-button--xs` with the hashed classes `.a3b9bd76._76a2310` as a fallback; the continue button uses `._8e85838 > .ds-button[role="button"]` with `._6eef0b0` as a fallback.
+- **Master Switch Linkage**: Both toggles are controlled by the master switch. When the master switch is off, or both toggles are off, the round timer is stopped entirely and consumes no resources.
+- **Sync and Backup**: Like the other feature toggles, both states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
 
 ## Exporting Conversations
 
@@ -286,6 +292,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - Auto-hide sidebar
 - Collapse thinking process
 - Auto expand messages
+- Auto retry and auto continue generating
 - Prevent auto-scroll
 - Web search toggle
 - System time injection

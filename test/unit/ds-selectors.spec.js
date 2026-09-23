@@ -26,8 +26,8 @@ describe('DSSelectors — composite values', () => {
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 91 keys', () => {
-        expect(Object.keys(S)).toHaveLength(91);
+    it('exports exactly 94 keys', () => {
+        expect(Object.keys(S)).toHaveLength(94);
     });
     it('every value is a string except EDIT_SEND_BUTTON_VARIANT_CLASSES', () => {
         for (const [key, value] of Object.entries(S)) {
@@ -51,6 +51,9 @@ describe('DSSelectors — IIFE body produces non-empty exports (kills BlockState
         expect(S).toHaveProperty('SIDEBAR_WRAPPER_SELECTOR');
         expect(S).toHaveProperty('MESSAGE_SELECTOR');
         expect(S).toHaveProperty('INPUT_TEXTAREA_SELECTOR');
+        expect(S).toHaveProperty('RETRY_BUTTON_SELECTOR');
+        expect(S).toHaveProperty('CONTINUE_BUTTON_SELECTOR');
+        expect(S).toHaveProperty('CONTINUE_BUTTON_FALLBACK_SELECTOR');
     });
 });
 

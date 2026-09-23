@@ -1,4 +1,4 @@
-<!-- 339 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
+<!-- 351 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -151,6 +151,18 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="preventAutoScrollToggle">
                         <label for="preventAutoScrollToggle" data-i18n="preventAutoScrollLabel">防止自動回滾</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoRetryToggle">
+                        <label for="autoRetryToggle" data-i18n="autoRetryLabel">自動重試</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoContinueToggle">
+                        <label for="autoContinueToggle" data-i18n="autoContinueLabel">自動繼續生成</label>
                     </div>
                 </div>
                 <div class="input-group">

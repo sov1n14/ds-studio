@@ -182,3 +182,13 @@
   - **變更廣播**：同一個 `install()` 註冊 `chrome.storage.onChanged`，受監看鍵變更時以 `{ type: DSS_SETTINGS_CHANGED, area, changes }` 原樣轉發給所有 `*://chat.deepseek.com/*` 分頁。受監看範圍為：`local` 區的任一 `StorageManager.KEYS` 值、額外的 `dss-temporary-chat-enabled`，以及不分區的 `dsPreset_` / `chatPresetMap_` 前綴鍵。個別分頁送出失敗即略過，不影響其餘分頁。
 - **content 端共用管線**（`content/feature-toggle.js`）：`registerFeatureToggle({ ownKey, onEnable, onDisable })` 登記一項功能，向 background 索取 `isEnabled` 與該功能自身鍵，生效條件為「總開關 !== `false` 且自身鍵 !== `false`」（未儲存視為開啟）。全體功能共用單一 `chrome.runtime.onMessage` 監聽器，於第一次註冊時才掛上；僅在生效狀態真正轉換時才呼叫回呼，且單一回呼拋錯不中斷其他功能。初始讀取失敗時將 `masterValue` 釘為 `false`，讓功能維持休眠而非在設定未知下啟用。回傳的 `unregister()` 可重複呼叫。目前以 `ownKey: null`（僅跟隨總開關）註冊者包含 `content/go-top.js` 與 `content/quote-reply.js`。
 - **臨時對話啟用旗標**（`content/temporary-chat-enabled-flag.js`）：因其開關獨立於總開關，直接使用同一組訊息而不經 `registerFeatureToggle` —— `initFromStorage()` 以 `DSS_GET_SETTINGS` 取 `dss-temporary-chat-enabled`，`write()` 以 `DSS_SET_SETTINGS` 落盤（先更新記憶體快取，呼叫端在 await 前即可讀到新值），`startSync()` 以 `DSS_SETTINGS_CHANGED` 收斂並通知訂閱者。僅 boolean `true` 視為啟用，`'true'` 等真值字串一律為停用。
+
+## 24. 自動重試與自動繼續生成 (Auto Retry and Auto Continue) — v4.35.0
+
+- **開關位置**：彈出選單「Features」卡片中的 `#autoRetryToggle`（自動重試）與 `#autoContinueToggle`（自動繼續生成）兩個核取方塊，彼此獨立。
+- **儲存鍵**：`isAutoRetryEnabled`、`isAutoContinueEnabled`（布林值，預設皆為 `false`）。兩者與其他功能開關同樣經 `StorageManager` 寫入並同步、納入 JSON 備份與還原（設定欄位 `autoRetry`、`autoContinue`），popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
+- **閘控**：`content/auto-retry.js` 對兩顆按鈕各以自身鍵呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，每顆按鈕僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。
+- **輪次**：任一按鈕生效時，以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`）取得 0–3 秒、0.1 秒級距的均勻隨機延遲；延遲到期後，對每顆生效且存在於頁面的按鈕各點擊一次（每輪每顆至多一次），再以新的隨機延遲排下一輪。不設點擊上限。
+- **計時器**：任何時刻至多一個計時器；兩顆按鈕皆未生效時清除計時器，不執行任何輪次。
+- **按鈕定位**：僅以 `content/ds-selectors.js` 的選擇器定位，絕不以按鈕文字定位；主要選擇器命中時不嘗試備援。重試：`RETRY_BUTTON_SELECTOR`，備援 `RETRY_BUTTON_FALLBACK_SELECTOR`。繼續生成：`CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`），備援 `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`）。
+- **實作位置**：`content/auto-retry.js`（manifest 中緊接 `content/auto-click.delay.js` 之後載入）。`start()` 於模組載入時自動呼叫。

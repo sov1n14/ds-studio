@@ -85,6 +85,8 @@ function makeDom(overrides = {}) {
         inputWidthValue: makeSpan('70%'),
         inputWidthSliderContainer: makeDiv(),
         preventAutoScrollToggle: makeCheckbox(false),
+        autoRetryToggle: makeCheckbox(false),
+        autoContinueToggle: makeCheckbox(false),
         websearchRadios: makeWebsearchRadios(),
         ...overrides,
     };
@@ -203,6 +205,8 @@ describe('createLiveSyncListener — simple toggle keys', () => {
         ['HIDE_THINKING', 'hideThinkingToggle'],
         ['PREVENT_AUTO_SCROLL', 'preventAutoScrollToggle'],
         ['AUTO_EXPAND_MESSAGES', 'autoExpandMessagesToggle'],
+        ['AUTO_RETRY', 'autoRetryToggle'],
+        ['AUTO_CONTINUE', 'autoContinueToggle'],
     ];
 
     it.each(cases)('updates %s -> dom.%s checkbox', (keyName, domField) => {

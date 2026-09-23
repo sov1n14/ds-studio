@@ -262,3 +262,59 @@ describe('restoreSettings - chatPresetMap merge end-state', () => {
         expect((await client.getSettings()).activePresetId).not.toBe('should-be-skipped');
     });
 });
+
+/**
+ * autoRetry / autoContinue backup restore, asserted on the getSettings() end-state. Requirement: a backup carrying autoRetry / autoContinue restores them; a backup lacking them leaves the current values untouched (same convention as hideThinking).
+ */
+describe('restoreSettings - autoRetry / autoContinue end-state', () => {
+    beforeEach(() => {
+        chrome.storage.local.store = {};
+        chrome.storage.sync.store = {};
+        vi.restoreAllMocks();
+    });
+
+    it('restores autoRetry=true and autoContinue=true from a backup', async () => {
+        await StorageManager.restoreSettings({ autoRetry: true, autoContinue: true }, false);
+        const settings = await StorageManager.getSettings();
+        expect(settings.autoRetry).toBe(true);
+        expect(settings.autoContinue).toBe(true);
+    });
+
+    it('restores each field independently (autoRetry only)', async () => {
+        await StorageManager.restoreSettings({ autoRetry: true }, false);
+        const settings = await StorageManager.getSettings();
+        expect(settings.autoRetry).toBe(true);
+        expect(settings.autoContinue).toBe(false);
+    });
+
+    it('restores an explicit false over a current true', async () => {
+        await StorageManager._set({ [K.AUTO_RETRY]: true, [K.AUTO_CONTINUE]: true });
+        await StorageManager.restoreSettings({ autoRetry: false, autoContinue: false }, false);
+        const settings = await StorageManager.getSettings();
+        expect(settings.autoRetry).toBe(false);
+        expect(settings.autoContinue).toBe(false);
+    });
+
+    it('a backup lacking both fields leaves the current true values untouched', async () => {
+        await StorageManager._set({ [K.AUTO_RETRY]: true, [K.AUTO_CONTINUE]: true });
+        await StorageManager.restoreSettings({ hideThinking: true }, false);
+        const settings = await StorageManager.getSettings();
+        expect(settings.hideThinking).toBe(true);
+        expect(settings.autoRetry).toBe(true);
+        expect(settings.autoContinue).toBe(true);
+    });
+
+    it('a backup lacking both fields on a fresh install leaves the false defaults', async () => {
+        await StorageManager.restoreSettings({ hideThinking: true }, false);
+        const settings = await StorageManager.getSettings();
+        expect(settings.autoRetry).toBe(false);
+        expect(settings.autoContinue).toBe(false);
+    });
+
+    it('mergePresetsOnly=true does not restore them', async () => {
+        await StorageManager.restoreSettings({ autoRetry: true, autoContinue: true }, true);
+        const settings = await StorageManager.getSettings();
+        expect(settings.autoRetry).toBe(false);
+        expect(settings.autoContinue).toBe(false);
+    });
+});
