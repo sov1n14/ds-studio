@@ -51,7 +51,7 @@ The width the overlay occupies hugs the **widest** candidate label rather than t
 
 Because `getNaturalWidth()` sits on the placement path that the settle loop runs every animation frame, the measurer caches its result per dropdown instance and only recomputes when the inputs change: the cache is invalidated in `setOptions()` (option data rebuilt) and in `updateLocale()` (placeholder text changed). A per-frame remeasure would rewrite the label text N times and force N reflows every frame.
 
-> Before v4.2.x this control was a native `<select>` sized by the browser to its widest `<option>` (`min-width: 80px; max-width: 200px`, no `width`). When it became a custom combobox that native content-hugging was lost and never reintroduced — the measurement only ever read the single visible label — so the width sat at the 200px cap. `pickNaturalWidth()` restores the original behavior explicitly.
+> Measuring every candidate gives the custom combobox the same content-hugging a native `<select>` gets from its widest `<option>` (`min-width: 80px; max-width: 200px`), so the trigger width stays the same whichever option is selected.
 
 **Lifecycle**:
 1. `start(presets, activeId, enable)` — called from `initSettings()` after `setupNavigationDetection()`. Injects overlay styles, sets up the DOM observer, finds and mounts to the title bar, renders the preset list, and sets initial visibility based on the `enable` parameter (tied to the master switch `isEnabled`).
@@ -62,9 +62,9 @@ Because `getNaturalWidth()` sits on the placement path that the settle loop runs
 
 #### Which Preset Id the Overlay Displays (v4.18.1)
 
-`findAndMount()` used to compute the id to render with a hardcoded ternary — `currentChatUuid ? (chatPresetMap[currentChatUuid] || '') : ''`. The `else` branch was a literal empty string, so it never consulted `pendingPresetId` or `pinnedPresetId`. Since React replaces the title bar when the user starts a new conversation by clicking inside the page, that remount deterministically overwrote whatever `handleChatChange()` had just pushed in through `updateActiveId()` — the pinned default only survived a full page refresh (where `initSettings()` seeds the render from the persisted `activePresetId` and the title bar is never replaced) or the first sent message (where a UUID now exists, so the ternary takes the correct branch).
+React replaces the title bar when the user starts a new conversation by clicking inside the page, so every remount re-renders the overlay. For a chat without a UUID, `findAndMount()` must therefore consult `pendingPresetId` and `pinnedPresetId`; rendering a literal `''` there would overwrite whatever `handleChatChange()` just pushed in through `updateActiveId()`, and the pinned default would survive only a full page refresh or the first sent message.
 
-That decision now lives in the pure module `content/preset-id.resolver.js`:
+That decision lives in the pure module `content/preset-id.resolver.js`:
 
     resolveOverlayPresetId({ chatUuid, chatPresetMap, pendingPresetId, pinnedPresetId, presets })
 
@@ -74,7 +74,7 @@ That decision now lives in the pure module `content/preset-id.resolver.js`:
 
 The controller reads the live pending id through an optional `ctx.getPendingPresetId()` getter supplied by `content/content-script.js`, and takes `pinnedPresetId` and the presets array from the `getSettings()` call `findAndMount()` already performs — no second storage read. An absent getter degrades to `undefined`, which the resolver correctly reads as "nothing chosen yet".
 
-> Preserving the three-valued signal requires `??`, not `||`. Both `onSelectChange()` in the controller and the `ACTIVE_PRESET_CHANGED` handler in `content-script.js` previously wrote `id || null`, and `'' || null` is `null` — which collapsed "the user explicitly chose empty" into "nothing chosen yet" and let the pinned default reappear over an explicit choice on the next remount.
+> Preserving the three-valued signal requires `??`, not `||`. Both `onSelectChange()` in the controller and the `ACTIVE_PRESET_CHANGED` handler in `content-script.js` write `id ?? null`: `'' || null` is `null`, which would collapse "the user explicitly chose empty" into "nothing chosen yet" and let the pinned default reappear over an explicit choice on the next remount.
 
 **Bidirectional Sync**:
 - **Overlay → Popup**: `onSelectChange(newId)` calls `StorageManager.saveActivePresetId(newId)`. On a chat with a UUID it optimistically publishes the new `chatPresetMap` in memory and persists it through the service worker with `StorageManager.bindChatToPreset(uuid, newId)` (or `unbindChat(uuid)` when the empty option is chosen), then adopts the stored map. When that write is rejected, it re-reads the stored map, rolls the overlay back to the stored binding with `updateActiveId(storedId)`, and calls `saveActivePresetId(storedId)` so the failed choice does not stay persisted as `activePresetId`; the displayed preset and the injected result stay in agreement. Without a UUID it sets `pendingPresetId` instead. The popup reads these values from storage on open.
