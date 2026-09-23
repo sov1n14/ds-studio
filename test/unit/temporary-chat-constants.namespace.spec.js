@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 /**
  * POST-REFACTOR contract: temporary-chat-constants publishes a single
  * namespace object `globalThis.DSS_TEMP_CHAT` instead of spreading
- * ~25 bare names onto globalThis.
+ * ~27 bare names onto globalThis.
  *
  * The module is already loaded by vitest.setup.js, so globalThis.DSS_TEMP_CHAT
  * is populated before any test runs. Dynamic re-import is a no-op (module cache).
@@ -16,9 +16,9 @@ describe('temporary-chat-constants namespace (post-refactor)', () => {
         expect(globalThis.DSS_TEMP_CHAT).not.toBeNull();
     });
 
-    it('namespace contains all 25 constant keys', () => {
+    it('namespace contains all 27 constant keys', () => {
         const keys = Object.keys(globalThis.DSS_TEMP_CHAT);
-        expect(keys).toHaveLength(25);
+        expect(keys).toHaveLength(27);
     });
 
     it('spot-check: storage and event keys have correct values', () => {
@@ -26,6 +26,7 @@ describe('temporary-chat-constants namespace (post-refactor)', () => {
         expect(ns.DSS_TEMP_CHAT_STORAGE_KEY).toBe('dss-temporary-chat-enabled');
         expect(ns.DSS_TEMP_CHAT_CHANGED_EVENT).toBe('dss-temporary-chat-changed');
         expect(ns.DSS_TEMP_CHAT_UUID_KEY).toBe('dss-temporary-chat-uuid');
+        expect(ns.DSS_DEVICE_ID_KEY).toBe('dss-device-id');
     });
 
     it('spot-check: message type constants have correct values', () => {
@@ -39,5 +40,6 @@ describe('temporary-chat-constants namespace (post-refactor)', () => {
         const ns = globalThis.DSS_TEMP_CHAT;
         expect(ns.LEASE_TTL_MS).toBe(600000);
         expect(ns.HEARTBEAT_INTERVAL_MS).toBe(60000);
+        expect(ns.FOREIGN_LEASE_TTL_MS).toBe(86400000); // 24 hours
     });
 });

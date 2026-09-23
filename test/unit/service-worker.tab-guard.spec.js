@@ -1,182 +1,82 @@
 /**
- * service-worker.js — tab-query guard for in-use conversations (RED-phase spec).
+ * background/service-worker.js — tab guard for in-use conversations, asserted on end state.
  *
- * Before deleting an expired-lease item, remediatePendingDeletes should query
- * all DeepSeek tabs and skip deletion (refreshing the lease instead) for any
- * item whose chatUuid matches a currently-open tab URL.
+ * An expired-lease entry whose chatUuid is open in a local DeepSeek tab must not be deleted; its lease is refreshed instead and that refresh must be what ends up persisted. A tabs.query failure fails open. A successful delete removes the entry's seen-change observation key.
  *
- * Also asserts cleanup of observation keys on successful delete.
- *
- * Assertions derived from requirements only; implementation NOT read.
+ * Real background/pending-store.js and real background/service-worker.js share the in-memory chrome.storage fixture (deep-copy get/set). Mocked trust boundaries only: chrome.storage.onChanged registration, chrome.tabs, chrome.alarms (Map-backed), fetch. StorageManager and the route installers are stubbed because they are off the sweep path.
  */
-import '../../utils/deepseek-api.js';
-import '../../utils/temporary-chat-constants.js';
-import '../../background/service-worker-constants.js';
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
+import { NOW, expired, settle, seedQueue, readQueue, fetchedUuids, installServiceWorkerHarness } from '../helpers/service-worker-harness.js';
+import { describe, it, expect } from 'vitest';
 
-const RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
-const PENDING_SYNC_KEY = globalThis.DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY;
-const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
-const NOW = 1700000000000;
+installServiceWorkerHarness();
 
-function flushMicrotasks() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
-}
-async function flushAll(times = 5) {
-    for (let i = 0; i < times; i++) await flushMicrotasks();
+const SEEN = globalThis.DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX;
+const tabFor = (uuid, id = 1) => ({ id, url: 'https://chat.deepseek.com/a/chat/s/' + uuid });
+
+async function startupSweep() {
+    chrome.runtime.onStartup.callListeners();
+    await settle();
 }
 
-function fetchedUuids() {
-    return globalThis.fetch.mock.calls.map((c) => JSON.parse(c[1].body).chat_session_id);
-}
+describe('tab guard: skip deletion when a local tab is viewing the conversation', () => {
+    it('TG-1: expired entry open in a tab is not deleted and ends queued with a refreshed lease and unchanged attemptCount', async () => {
+        await seedQueue([expired('abc-123')]);
+        chrome.tabs.query.mockResolvedValue([tabFor('abc-123')]);
 
-function savedQueue() {
-    const calls = store.savePendingDeletes.mock.calls;
-    return calls.length ? calls[calls.length - 1][0] : undefined;
-}
+        await startupSweep();
 
-let store;
-
-const realIsLeaseExpired = (entry, now, lastSeenChange) =>
-    !Number.isFinite(lastSeenChange) || now - lastSeenChange > LEASE_TTL_MS;
-
-const expired = (uuid, extra = {}) => ({
-    chatUuid: uuid,
-    attemptCount: 0,
-    lastActiveAt: NOW - (LEASE_TTL_MS + 1),
-    ...extra,
-});
-
-beforeAll(async () => {
-    globalThis.importScripts = vi.fn();
-    globalThis.StorageManager = {
-        isSyncedWithCloud: vi.fn().mockResolvedValue(true),
-        retrySync: vi.fn(),
-    };
-    store = makePendingStoreMock();
-    store.isLeaseExpired = realIsLeaseExpired;
-    store.refreshLease = vi.fn().mockResolvedValue(undefined);
-    store.releaseLease = vi.fn().mockResolvedValue(undefined);
-    store.recordLeaseObservation = vi.fn(async (_uuid, lastActiveAt) => lastActiveAt);
-    globalThis.TemporaryChatPendingStore = store;
-    globalThis.DSSSettingsRoutes = { install: vi.fn() };
-    globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
-    globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
-    globalThis.fetch = vi.fn();
-
-    await import('../../background/service-worker.js');
-});
-
-beforeEach(() => {
-    vi.spyOn(Date, 'now').mockReturnValue(NOW);
-    store.getPendingDeletes.mockReset().mockResolvedValue([]);
-    store.savePendingDeletes.mockReset().mockResolvedValue(undefined);
-    store.getOpenUuids.mockReset().mockResolvedValue([]);
-    store.clearOpenUuids.mockReset().mockResolvedValue(undefined);
-    store.getLastAuthToken.mockReset().mockResolvedValue('Bearer tok');
-    store.refreshLease.mockReset().mockResolvedValue(undefined);
-    store.releaseLease.mockReset().mockResolvedValue(undefined);
-    store.recordLeaseObservation.mockReset().mockImplementation(async (_uuid, lastActiveAt) => lastActiveAt);
-    store.isLeaseExpired = realIsLeaseExpired;
-    globalThis.StorageManager.isSyncedWithCloud.mockReset().mockResolvedValue(true);
-    globalThis.StorageManager.retrySync.mockReset();
-    globalThis.fetch.mockReset().mockResolvedValue({ ok: true });
-    chrome.alarms.create.mockClear?.();
-    chrome.alarms.clear.mockClear?.();
-    chrome.tabs.query.mockReset().mockResolvedValue([]);
-});
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
-
-describe('tab-query guard: skip deletion when a local tab is viewing the conversation', () => {
-    it('TG-1: tab with matching UUID skips deletion and refreshes lease instead', async () => {
-        store.getPendingDeletes.mockResolvedValue([expired('abc-123')]);
-        chrome.tabs.query.mockResolvedValue([
-            { url: 'https://chat.deepseek.com/a/chat/s/abc-123' },
-        ]);
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        // performDeleteFetch should NOT have been called for abc-123
         expect(fetchedUuids()).not.toContain('abc-123');
-        // refreshLease should have been called as proxy heartbeat
-        expect(store.refreshLease).toHaveBeenCalledWith('abc-123');
-        // item remains in queue unchanged (no attemptCount increment)
-        const queue = savedQueue();
-        expect(queue).toBeDefined();
-        expect(queue).toEqual([expect.objectContaining({ chatUuid: 'abc-123', attemptCount: 0 })]);
+        expect(await readQueue()).toEqual([{ chatUuid: 'abc-123', attemptCount: 0, lastActiveAt: NOW }]);
     });
 
-    it('TG-2: tab with different UUID does not prevent deletion', async () => {
-        store.getPendingDeletes.mockResolvedValue([expired('abc-123')]);
-        chrome.tabs.query.mockResolvedValue([
-            { url: 'https://chat.deepseek.com/a/chat/s/different-uuid' },
-        ]);
+    it('TG-2: a tab on a different conversation does not protect the entry', async () => {
+        await seedQueue([expired('abc-123')]);
+        chrome.tabs.query.mockResolvedValue([tabFor('def-456')]);
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
+        await startupSweep();
 
-        // chrome.tabs.query MUST have been called (new behavior)
-        expect(chrome.tabs.query).toHaveBeenCalledWith({ url: '*://chat.deepseek.com/*' });
-        expect(fetchedUuids()).toContain('abc-123');
+        expect(fetchedUuids()).toEqual(['abc-123']);
+        expect(await readQueue()).toEqual([]);
     });
 
-    it('TG-3: no DeepSeek tabs -- normal deletion proceeds', async () => {
-        store.getPendingDeletes.mockResolvedValue([expired('abc-123')]);
-        chrome.tabs.query.mockResolvedValue([]);
+    it('TG-3: no DeepSeek tabs -> normal deletion proceeds', async () => {
+        await seedQueue([expired('abc-123')]);
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
+        await startupSweep();
 
-        // chrome.tabs.query MUST have been called (new behavior)
-        expect(chrome.tabs.query).toHaveBeenCalledWith({ url: '*://chat.deepseek.com/*' });
-        expect(fetchedUuids()).toContain('abc-123');
+        expect(fetchedUuids()).toEqual(['abc-123']);
+        expect(await readQueue()).toEqual([]);
     });
 
-    it('TG-4: multiple items, one protected by tab — only unprotected item deleted', async () => {
-        store.getPendingDeletes.mockResolvedValue([expired('aaa-aaa'), expired('bbb-bbb')]);
-        chrome.tabs.query.mockResolvedValue([
-            { url: 'https://chat.deepseek.com/a/chat/s/aaa-aaa' },
-        ]);
+    it('TG-4: of two expired entries only the unguarded one is deleted; the guarded one persists with its refreshed lease', async () => {
+        await seedQueue([expired('aaa-aaa'), expired('bbb-bbb')]);
+        chrome.tabs.query.mockResolvedValue([tabFor('aaa-aaa')]);
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
+        await startupSweep();
 
-        // aaa-aaa should be skipped (tab-guarded) and refreshed
-        expect(fetchedUuids()).not.toContain('aaa-aaa');
-        expect(store.refreshLease).toHaveBeenCalledWith('aaa-aaa');
-        // bbb-bbb should be deleted normally
-        expect(fetchedUuids()).toContain('bbb-bbb');
+        expect(fetchedUuids()).toEqual(['bbb-bbb']);
+        expect(await readQueue()).toEqual([{ chatUuid: 'aaa-aaa', attemptCount: 0, lastActiveAt: NOW }]);
     });
 
-    it('TG-5: chrome.tabs.query failure degrades gracefully -- deletion proceeds', async () => {
-        store.getPendingDeletes.mockResolvedValue([expired('abc-123')]);
+    it('TG-5: tabs.query rejection fails open -> deletion proceeds', async () => {
+        await seedQueue([expired('abc-123')]);
         chrome.tabs.query.mockRejectedValue(new Error('tabs API unavailable'));
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
+        await startupSweep();
 
-        // chrome.tabs.query MUST have been called (new behavior)
-        expect(chrome.tabs.query).toHaveBeenCalledWith({ url: '*://chat.deepseek.com/*' });
-        // fail-open: deletion should proceed despite tabs API failure
-        expect(fetchedUuids()).toContain('abc-123');
+        expect(fetchedUuids()).toEqual(['abc-123']);
+        expect(await readQueue()).toEqual([]);
     });
 });
 
-describe('cleanup of observation key on successful delete', () => {
-    it('TG-6: successful delete removes the dss-last-seen-change:<uuid> local storage key', async () => {
-        const removeSpy = vi.spyOn(chrome.storage.local, 'remove');
-        store.getPendingDeletes.mockResolvedValue([expired('del-uuid')]);
-        chrome.tabs.query.mockResolvedValue([]);
-        globalThis.fetch.mockResolvedValue({ ok: true });
+describe('observation key cleanup on successful delete', () => {
+    it('TG-6: after a successful delete the dss-last-seen-change:<uuid> key is gone from local storage', async () => {
+        await chrome.storage.local.set({ [SEEN + 'del-uuid']: { lastActiveAt: 0, observedAt: NOW - 1 } });
+        await seedQueue([expired('del-uuid')]);
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
+        await startupSweep();
 
-        expect(removeSpy).toHaveBeenCalledWith('dss-last-seen-change:del-uuid');
+        expect(fetchedUuids()).toEqual(['del-uuid']);
+        expect(await chrome.storage.local.get(SEEN + 'del-uuid')).toEqual({});
     });
 });

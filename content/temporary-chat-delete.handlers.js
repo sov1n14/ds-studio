@@ -106,9 +106,6 @@
          * @param {NavigateEvent} event
          */
         function handleNavigationEvent(event) {
-            // 擴充功能 context 已失效時直接跳出，避免後續 chrome API 呼叫擲出
-            if (!chrome.runtime?.id) return;
-
             const destinationUrl = event.destination?.url || '';
 
             // 匯出對話時 <a download> 點擊會觸發 navigate 事件，但使用者並未離開頁面。
@@ -127,6 +124,10 @@
             // 若也武裝此旗標，會在真正離開至外部網站時卡住不消耗，導致刪除被錯誤跳過。
             state.suppressNextUnloadDelete = isReload || state.isKeyboardRefresh;
             state.isKeyboardRefresh = false;
+
+            // 擴充功能 context 已失效時跳出刪除與追蹤分支，避免後續 chrome API 呼叫擲出。
+            // 刷新偵測必須在此之前完成：失效後的刷新仍需武裝 beforeunload 抑制旗標，否則會誤刪。
+            if (!chrome.runtime?.id) return;
 
             const fromUuid = extractUuidFromUrl();
 
@@ -170,6 +171,14 @@
         }
 
         /**
+         * 失效 toast 發出的「刻意刷新」事件：武裝 beforeunload 抑制旗標。
+         * toast 的 location.reload() 不保證先觸發 navigate 事件，故需此獨立通道。
+         */
+        function handleIntentionalReload() {
+            state.suppressNextUnloadDelete = true;
+        }
+
+        /**
          * beforeunload 處理器：涵蓋分頁關閉與 Navigation API 未處理的完整頁面導航。
          * keepalive=true 確保分頁關閉後請求仍能送出。
          */
@@ -210,6 +219,7 @@
             handleWindowMessage,
             handleNavigationEvent,
             handleRefreshKeydown,
+            handleIntentionalReload,
             handleBeforeUnload,
             handleToggleChanged,
         };

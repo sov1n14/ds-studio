@@ -105,6 +105,7 @@
 | `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | (v4.6.2) Authoritative timestamp for prompt group ordering, used to determine which side's order is newer during cross-device merge. |
 | `promptPresets` | `PromptPreset[]` | — | *Retired in v1.7.0*: previously used to store all prompt groups as an array; replaced by `dsPresetIndex` + `dsPreset_<id>`. |
 | `restored_messages` | object | {} | Restored censor reply records, containing message_id, fragments, etc. (local only, max 200 entries). |
+| `dss-device-id` | string | — | This device's id (local only, never synced; outside `StorageManager.KEYS`). Created once with `crypto.randomUUID()` by the service worker when the device first queues a temporary conversation for deletion, and written to that entry's `ownerDeviceId`. The remediation sweep uses it to tell own entries (`LEASE_TTL_MS`, 10 minutes) from entries owned by another device or by none (explicit release or `FOREIGN_LEASE_TTL_MS`, 24 hours). |
 
 ### Implementation Details
 

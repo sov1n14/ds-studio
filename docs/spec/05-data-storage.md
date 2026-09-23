@@ -105,6 +105,7 @@
 | `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | （v4.6.2）提示詞組排序的權威時間戳，用於跨裝置合併時決定哪一端的排序較新。 |
 | `promptPresets` | `PromptPreset[]` | — | *已於 v1.7.0 退役*：v1.7.0 之前用於儲存所有提示詞組的陣列，已被 `dsPresetIndex` + `dsPreset_<id>` 取代。 |
 | `restored_messages` | object | {} | 已復原的審查回覆記錄，含 message_id、fragments 等（僅本地端，最多 200 筆）。 |
+| `dss-device-id` | string | — | 本機裝置 ID（僅本地端，絕不同步；不在 `StorageManager.KEYS` 內）。service worker 首次新增臨時對話待刪項目時以 `crypto.randomUUID()` 建立一次，寫入該項目的 `ownerDeviceId`。補救掃描以此區分本機項目（`LEASE_TTL_MS`，10 分鐘）與其他裝置或無擁有者的項目（須明確釋放或等待 `FOREIGN_LEASE_TTL_MS`，24 小時）。 |
 
 ### 實作細節
 

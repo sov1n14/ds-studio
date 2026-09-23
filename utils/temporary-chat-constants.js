@@ -34,12 +34,14 @@ const DSS_HISTORY_NAV_TYPE = 'DSS_HISTORY_NAV';
 // window.postMessage type：MAIN world XHR hook 完成一段 SSE 片段組裝後回傳給 ISOLATED world
 const DSS_FRAGMENT_COMPLETE_TYPE = 'DSS_FRAGMENT_COMPLETE';
 
-// chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt}>
+// chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt, ownerDeviceId}>
 const DSS_PENDING_DELETES_SYNC_KEY = 'dss-pending-deletes-sync';
 // chrome.storage.local：本機最近有效 bearer token（絕不同步）
 const DSS_LAST_AUTH_TOKEN_KEY = 'dss-last-auth-token';
 // chrome.storage.local：本機開啟中臨時對話 UUID 集合 string[]
 const DSS_OPEN_TEMP_UUIDS_KEY = 'dss-open-temp-uuids';
+// chrome.storage.local：本機裝置 ID（首次新增待刪項目時以 crypto.randomUUID() 產生，絕不同步）
+const DSS_DEVICE_ID_KEY = 'dss-device-id';
 // content→SW：SPA 導航刪除失敗且情境存活時請 SW 排程重試 alarm
 const DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE = 'DSS_SCHEDULE_DELETE_RETRY';
 
@@ -66,6 +68,8 @@ const DSS_LAST_SEEN_CHANGE_KEY_PREFIX = 'dss-last-seen-change:';
 
 // 待刪佇列 lease 存活時間（毫秒）：now-lastActiveAt 超過此值即視為過期，可由其他裝置接手
 const LEASE_TTL_MS = 600000;
+// 非本機建立（含無擁有者的舊版）項目的 lease 存活時間（毫秒）：未明確釋放者須過期超過此值才刪除
+const FOREIGN_LEASE_TTL_MS = 24 * 60 * 60 * 1000;
 // 待刪佇列 lease 心跳間隔（毫秒）：擁有裝置定期 refreshLease 續約的週期
 const HEARTBEAT_INTERVAL_MS = 60000;
 
@@ -83,6 +87,7 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_PENDING_DELETES_SYNC_KEY,
     DSS_LAST_AUTH_TOKEN_KEY,
     DSS_OPEN_TEMP_UUIDS_KEY,
+    DSS_DEVICE_ID_KEY,
     DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE,
     DSS_MSG_TRACK_FOR_DELETION,
     DSS_MSG_REMOVE_PENDING_DELETE,
@@ -94,6 +99,7 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_MSG_PENDING_UUIDS_CHANGED,
     DSS_LAST_SEEN_CHANGE_KEY_PREFIX,
     LEASE_TTL_MS,
+    FOREIGN_LEASE_TTL_MS,
     HEARTBEAT_INTERVAL_MS,
 };
 

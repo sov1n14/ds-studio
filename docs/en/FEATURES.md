@@ -103,6 +103,7 @@ On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control
   - Typing a different URL in the address bar, clicking an external link, closing the tab, or closing the browser.
 - **Scenarios that do NOT trigger deletion**:
   - Page refresh (F5, the refresh button, Ctrl+R / Cmd+R).
+  - After the extension is updated or reloaded, clicking the "Refresh" button on the on-page "DS Studio has been updated" toast to reload the page (v4.34.2). Closing the tab instead still deletes the temporary conversation.
   - Navigating to the current URL (typing the current URL in the address bar and pressing Enter, which is equivalent to re-entering the page).
   - Entering or leaving a non-temporary history conversation.
 - **Independent operation**: This feature is not controlled by the master switch (top-right); it is independently controlled by its own homepage toggle.
@@ -112,9 +113,11 @@ On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control
 When a temporary conversation is being used in a tab, the extension automatically maintains a lease for that conversation, preventing remediation mechanisms on other devices from deleting it while it is still in use:
 
 - **Heartbeat renewal**: An immediate heartbeat is sent when tracking begins, followed by automatic renewals every 1 minute. The heartbeat is sent from the content script to the background service worker, which updates the lease timestamp for that conversation in the pending-delete queue.
-- **Lease TTL**: 10 minutes. Any device's remediation deletion process checks whether the lease has expired before processing a pending-delete item — deletion is performed only when the lease has gone unrenewed for more than 10 minutes. The TTL is set generously to absorb `chrome.storage.sync` propagation delay, background tab timer throttling, and cross-device clock skew.
+- **Lease TTL**: Any device's remediation deletion process checks whether the lease has expired before processing a pending-delete item, and the expiry threshold depends on the owner device. The device that created the pending-delete item applies 10 minutes: deletion is performed only when the lease has gone unrenewed for more than 10 minutes. The 10 minutes are set generously to absorb `chrome.storage.sync` propagation delay, background tab timer throttling, and cross-device clock skew.
+- **Owner device rule (v4.34.2)**: Each device generates a random device ID the first time it registers a pending-delete item, stores it only in its own `chrome.storage.local` (never synced), and writes it to the item's `ownerDeviceId`. Other devices (and items with no recorded owner) delete the conversation only after the lease is explicitly released or has gone unrenewed for more than 24 hours. Reason: a device left idle elsewhere (for example an office computer on the same account) cannot know whether you still have the conversation open on this device, and must not delete it while you are using it.
 - **Tab unfreeze catch-up**: When the tab transitions from background to foreground (`visibilitychange`, `pageshow`), an immediate heartbeat is sent to prevent the lease from expiring due to browser timer throttling.
-- **Natural stop**: When the tab is closed, crashes, or is forcefully terminated, the heartbeat stops naturally and the lease expires on its own — no device identifier is needed.
+- **Natural stop**: When the tab is closed, crashes, or is forcefully terminated, the heartbeat stops naturally and the lease expires on its own.
+- **Tab guard**: During a remediation scan, if a local tab is still showing the conversation, the scan keeps the conversation and renews its lease regardless of lease expiry.
 - **Restored tab hand-off (v4.33.2)**: When a tab restored by Chrome's "continue where you left off" navigates away from a tracked temporary conversation and no auth token was captured in this page session, the extension hands the deletion to the background service worker, which completes it within the next retry cycle.
 
 ### Privacy Guarantee

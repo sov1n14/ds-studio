@@ -58,6 +58,8 @@
         });
         btn.addEventListener('click', (e) => {
             e.preventDefault();
+            // 通知臨時對話刪除模組這是刻意刷新（不依賴已失效的 chrome API 或 Navigation API）
+            window.dispatchEvent(new CustomEvent('dss-intentional-reload'));
             location.reload();
         });
         toast.appendChild(btn);

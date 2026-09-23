@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.34.2](changelog/v4.md#4342---2026-09-24) | 失效提示的「重新整理」不再刪除臨時對話，關閉分頁仍會刪除；補救掃描於互斥鎖內只套用本輪結果，不再覆蓋掃描期間的續約；佇列項目記錄 `ownerDeviceId`，其他裝置建立的項目未明確釋放時須閒置 24 小時才刪除 |
 | [4.34.1](changelog/v4.md#4341---2026-09-23) | `isExtensionContextValid()` 將缺失或空的 `chrome.runtime.id` 視為失效，失效監看器因此顯示重新整理提示；臨時對話心跳的同步拋錯與非同步 rejection 一致處理：context 失效時停止心跳並顯示一次提示，其餘錯誤心跳以原 uuid 續行，不再以 `null` uuid 發送；臨時對話開關 `navigate` 監聽器以目前頁面解析 `destination.url`，網址為空、缺失或無法解析時維持開關列不變 |
 | [4.34.0](changelog/v4.md#4340---2026-09-23) | 新增 `invalidation-watcher.js` 每 30 秒檢查擴充功能 context，失效時主動顯示一次重新整理提示；移除三個 re-export stub 常數檔，改由 `utils/message-constants.js` 匯入 |
 | [4.33.31](changelog/v4.md#43331---2026-09-23) | 修正導航目的地為相對路徑時 `new URL()` 拋出 `TypeError: Invalid URL`，改為直接傳入 `extractUuidFromUrl` |

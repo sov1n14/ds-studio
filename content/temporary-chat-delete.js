@@ -85,6 +85,8 @@ const TemporaryChatDelete = (() => {
 
         window.addEventListener('message', handlers.handleWindowMessage);
         window.addEventListener('beforeunload', handlers.handleBeforeUnload);
+        // 失效 toast 刷新前發出（content/invalidation-toast.js），用以抑制 beforeunload 刪除
+        window.addEventListener('dss-intentional-reload', handlers.handleIntentionalReload);
 
         if (typeof window.navigation !== 'undefined') {
             window.navigation.addEventListener('navigate', handlers.handleNavigationEvent);
@@ -103,6 +105,7 @@ const TemporaryChatDelete = (() => {
 
         window.removeEventListener('message', handlers.handleWindowMessage);
         window.removeEventListener('beforeunload', handlers.handleBeforeUnload);
+        window.removeEventListener('dss-intentional-reload', handlers.handleIntentionalReload);
 
         if (typeof window.navigation !== 'undefined') {
             window.navigation.removeEventListener('navigate', handlers.handleNavigationEvent);

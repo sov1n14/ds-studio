@@ -19,7 +19,7 @@ DS studio（以下稱「本擴充功能」）致力於保護您的隱私。本�
 用於儲存您的設定、提示詞組與擴充功能資料。
 
 - **`chrome.storage.local`** — 儲存提示詞組內容、UI 調整偏好、審查回覆恢復記錄與操作狀態。這些資料不會離開您的裝置。此外，最近一次擷取到的 DeepSeek 登入權杖（`dss-last-auth-token`）也僅儲存於此——**此權杖永遠不會同步，只留在擷取到它的那台裝置上**，用於在瀏覽器重新啟動時補刪殘留的臨時對話。
-- **`chrome.storage.sync`** — 儲存提示詞組名稱、啟用/停用開關與非敏感性設定，並包含「臨時對話待刪佇列」（`dss-pending-deletes-sync`）。此佇列僅記錄**非敏感性**的對話代號與重試次數（`chatUuid`、`attemptCount`），**不含任何權杖或對話內容**，作為跨裝置補救刪除的單一事實來源，讓您在其他登入同一 Chrome 帳戶的裝置上也能清除意外殘留的臨時對話。這些資料會透過您的 Google 帳戶在 Chrome 瀏覽器之間同步。開發者無法存取這些資料。
+- **`chrome.storage.sync`** — 儲存提示詞組名稱、啟用/停用開關與非敏感性設定，並包含「臨時對話待刪佇列」（`dss-pending-deletes-sync`）。此佇列僅記錄**非敏感性**的對話代號、重試次數、租約時戳與擁有裝置代號（`chatUuid`、`attemptCount`、`lastActiveAt`、`ownerDeviceId`），**不含任何權杖或對話內容**。`ownerDeviceId` 是擴充功能產生的隨機識別碼，不含任何個人資訊；裝置 ID 本身僅存於本機 `chrome.storage.local`（`dss-device-id`），永不同步。此佇列作為跨裝置補救刪除的單一事實來源，讓您在其他登入同一 Chrome 帳戶的裝置上也能清除意外殘留的臨時對話。這些資料會透過您的 Google 帳戶在 Chrome 瀏覽器之間同步。開發者無法存取這些資料。
 
 ### `activeTab`
 
@@ -52,7 +52,8 @@ DS studio（以下稱「本擴充功能」）致力於保護您的隱私。本�
 
 為了讓「臨時對話」功能在分頁/瀏覽器被直接關閉、甚至電腦被強制關機的情況下仍能盡力清除殘留對話，本擴充功能採用以下資料處理方式：
 
-- **待刪佇列（`chrome.storage.sync`，鍵值 `dss-pending-deletes-sync`）** — 僅記錄非敏感性的 `chatUuid`（對話代號）與 `attemptCount`（重試次數），供任一登入同一 Chrome 帳戶的裝置在下次啟動時讀取並補刪。
+- **待刪佇列（`chrome.storage.sync`，鍵值 `dss-pending-deletes-sync`）** — 僅記錄非敏感性的 `chatUuid`（對話代號）、`attemptCount`（重試次數）、`lastActiveAt`（租約時戳）與 `ownerDeviceId`（建立該項目之裝置的隨機識別碼），供任一登入同一 Chrome 帳戶的裝置在下次啟動時讀取並補刪。`ownerDeviceId` 不含個人資訊、權杖或對話內容，僅用於讓其他裝置辨識項目並非自己建立，從而延長等待時間、避免刪除您仍在另一台裝置上開著的對話。
+- **裝置 ID（`chrome.storage.local`，鍵值 `dss-device-id`）** — 首次登記待刪項目時以隨機值產生一次，僅儲存於本機，永不同步。
 - **登入權杖（`chrome.storage.local`，鍵值 `dss-last-auth-token`）** — 僅儲存於本機，**從不透過 `chrome.storage.sync` 同步或傳送至任何裝置**。補救刪除一律使用「執行補救的那台裝置自己擷取到的權杖」，而非跨裝置傳遞權杖。
 - **裝置本機的開啟中對話清單（`chrome.storage.local`，鍵值前綴 `dss-open-temp-uuid:`，每個對話各一把鍵；僅本機儲存）** — 記錄目前這台裝置正在開啟中的臨時對話，確保跨裝置同步觸發的補救掃描**永遠不會刪除您正在使用中的對話**。v4.15.1 起改為每對話一把獨立鍵；舊版的單一陣列鍵 `dss-open-temp-uuids` 僅供讀取相容，不再寫入。
 

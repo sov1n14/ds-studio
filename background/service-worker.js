@@ -74,7 +74,10 @@ async function scheduleRetryAlarm(pendingItems) {
 /**
  * 補救待刪佇列：讀取 sync 佇列，以本機 token 逐筆刪除，僅確認成功才移除。
  * 租約未過期的項目（本機仍活躍的對話）一律跳過並原封保留於佇列。
+ * 本機建立的項目適用 LEASE_TTL_MS；其他裝置建立或無擁有者的項目適用 FOREIGN_LEASE_TTL_MS（已釋放者仍立即可刪）。
  * 失敗項目永不丟棄，僅累加 attemptCount 並保留原始 lastActiveAt。
+ * 寫回僅套用本輪差量（於 store 互斥鎖內重讀最新佇列），不以開頭快照覆寫，
+ * 以免蓋掉掃描期間的續約或新增項目。
  */
 async function remediatePendingDeletes() {
     const pending = await TemporaryChatPendingStore.getPendingDeletes();
@@ -96,25 +99,22 @@ async function remediatePendingDeletes() {
         }
     } catch { /* fail-open：tabs.query 失敗時以空集合繼續 */ }
 
+    // 每輪掃描自 storage.local 重讀本機裝置 ID，用以區分本機與外來項目
+    const localDeviceId = await TemporaryChatPendingStore.getLocalDeviceId();
     const now = Date.now();
-    const stillPending = [];
-    let hasChanged = false;
-    let hasTabGuarded = false;
+    const deletedUuids = [];
+    const failedUuids = [];
 
     for (const item of pending) {
         // 觀察並記錄 lastActiveAt 變更時間點，取得本機觀察時間戳
         const lastSeenChange = await TemporaryChatPendingStore.recordLeaseObservation(item.chatUuid, item.lastActiveAt);
         // 租約未過期 → 本機仍活躍，跳過並原封保留
-        if (!TemporaryChatPendingStore.isLeaseExpired(item, now, lastSeenChange)) {
-            stillPending.push(item);
-            continue;
-        }
+        const ttlMs = TemporaryChatPendingStore.resolveLeaseTtl(item, localDeviceId);
+        if (!TemporaryChatPendingStore.isLeaseExpired(item, now, lastSeenChange, ttlMs)) continue;
 
-        // 分頁防護：使用者正在檢視此對話 → 跳過刪除，代為續約，原封保留
+        // 分頁防護：使用者正在檢視此對話 → 跳過刪除，代為續約（refreshLease 自行於鎖內寫入）
         if (localTabUuids.has(item.chatUuid)) {
             await TemporaryChatPendingStore.refreshLease(item.chatUuid);
-            stillPending.push(item);
-            hasTabGuarded = true;
             continue;
         }
 
@@ -122,17 +122,15 @@ async function remediatePendingDeletes() {
         if (isOk) {
             // 刪除成功 → 清除觀察紀錄 key
             try { await chrome.storage.local.remove(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX + item.chatUuid); } catch {}
-            hasChanged = true;
+            deletedUuids.push(item.chatUuid);
             continue;
         }
 
         // 失敗 → 累加嘗試次數，保留原始 lastActiveAt，永不丟棄
-        const nextCount = (item.attemptCount ?? 0) + 1;
-        stillPending.push({ ...item, attemptCount: nextCount });
-        hasChanged = true;
+        failedUuids.push(item.chatUuid);
     }
 
-    if (hasChanged || hasTabGuarded) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
+    const stillPending = await TemporaryChatPendingStore.applySweepResult({ deletedUuids, failedUuids });
     await scheduleRetryAlarm(stillPending);
 
     // 掃除孤兒 seen-change key：僅保留仍在佇列中的 UUID
