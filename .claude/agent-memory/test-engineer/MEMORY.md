@@ -1,3 +1,95 @@
+# Test Engineer Memory
+
+- [Service Worker Test Harness](sw-test-harness.md) — real pending-store + captured onChanged + Map alarms bootstrap for SW sweep specs; revert-check recipe
+- [Stryker Dry Run Timeout](stryker-dry-run-timeout.md) — default 5min too short for 3000+ tests, use --dryRunTimeoutMinutes 15.
+- [Sidebar Hide Group Collapse](sidebar-hide-group-collapse.md) — group hides instead of anchor when all anchors queued; use multi-anchor groups in tests.
+- [Stryker scoped run](reference_stryker_scoped_run.md) — CLI recipe, load-time mutants need fresh import, happy-dom capture-removal quirk
+- [Bash heredoc long files](pitfall_bash_heredoc_long_files.md) — heredocs over ~100 lines fail with matching-quote EOF; write specs in 50-100 line cat >> chunks
+- [Temp-chat event harness](reference_temp_chat_event_harness.md) — drive temporary-chat-delete via real navigate/beforeunload listeners, fetch-only mock
+- [Storage mock clone semantics](pitfall_storage_mock_shared_references.md) — fixture used to share references (masked lost updates); now clones since 2026-09-24, verify
+- [Chat-map writer harness](reference_chat_map_writer_harness.md) — existsSync + createRequire for missing modules, fresh SM instances, which scenarios catch old code; scratch mutants must be .cjs
+- [isFrozen(undefined) is true](pitfall_isfrozen_undefined.md) — guard frozen-constant tests with a typeof object check or they pass vacuously
+- [Git Bash /tmp vs node](pitfall_tmp_path_node_vs_bash.md) — use cygpath -w for vitest JSON report paths read back by node
+- [Interleave before next write](reference_interleave_before_next_write.md) — harness hook injecting a concurrent SW commit before a caller's write-back; assert hasTripped
+- [Settings relay for content scenarios](reference_settings_relay_content_scenario.md) — relay storage.onChanged to DSS_SETTINGS_CHANGED; bare sendMessage mock fails all chat-map writes
+- [Fixture notify swallows throws](pitfall_fixture_notify_swallows.md) — fire via setup onChanged.callListeners when asserting a listener throw does not escape
 - [Long heredoc failure](feedback_long_heredoc.md) — split Bash-written files into ~100-line chunks
 - [Auto-click harness](project_auto_click_harness.md) — shared harness for auto-retry loop specs; fake timers before load
 - [Scratch scripts via stdin](feedback_scratch_scripts.md) — removal cmds hook-blocked, use node stdin; stryker config runs from repo root
+- [Popup HTML real DOM](reference_popup_html_real_dom.md) — build popup DOM from popup.html for applySettingsToDom / bindToggles specs; strip link and script tags first or happy-dom fetches localhost:3000
+- [Bash tool quoting](bash-tool-quoting.md) — heredoc breaks when the body contains backticks; use sed + plain heredoc appends
+- [Chunked chatPresetMap](chunked_chatPresetMap.md) — storage-manager chunked map test design, module-level state bleed, idempotent migration bug
+- [Code-testing-policy location](code-testing-policy-location.md) — the skill lives in global ~/.claude/skills/, not the repo path directives cite
+- [ds-studio harness layout](ds-studio-harness.md) — no root package.json; vitest harness and node_modules live under test/
+- [Environment quoting pitfalls](environment-quoting-pitfalls.md) — Git-Bash mangles backslash sequences in Bash tool commands; dead python stub
+- [No hard-wrap hook](feedback_no-hard-wrap-hook.md) — write hook blocks hard-wrapped comment paragraphs; one line per comment paragraph
+- [Spy strategy for internal objects](feedback_spy_strategy.md) — vi.spyOn on exports cannot intercept quote-reply.js internal calls; observe DOM/state instead
+- [GoToTop PAS coordination red](gotop-pas-coordination-red.md) — red tests for scrollToTopAndWait save-restore with PreventAutoScroll; when a no-op baseline needs mutation proof
+- [GoToTop scrollBy probe repair](gotop-scrollby-probe-repair.md) — 4 tests coupled to scrollBy broke on the scrollTop=0 jump redesign; probe the guarantee, not the mechanism
+- [GoToTop scroll engine red](gotop-scroll-engine-red.md) — stateful-container mocking that stays mechanism-agnostic across scrollBy-stepping vs scrollTop-jump
+- [GoToTop teardown bugs](gotop-teardown-bugs.md) — two confirmed disable()/teardown bugs with red tests observed failing
+- [Harvest export tests](harvest_export_tests.md) — harvest.js, prevent-auto-scroll-bridge.js, exportConversationToMarkdown patterns; Blob capture, scrollTop setter trap
+- [IIFE load side-effect sandbox](iife-load-side-effect-sandbox.md) — spec utils/*.js IIFE load side effects without polluting globals vitest.setup.js preloads
+- [Fixture reset masks removed fields](pitfall_fixture_masked_fields.md) — shared reset helper assigning module fields keeps assertions green after the field is deleted; grep helpers
+- [happy-dom localStorage leak](pitfall_happydom_localstorage_leak.md) — localStorage persists across tests in a file; i18n specs removeItem('ds_studio_locale') before _reset()+init()
+- [Injected scripts in happy-dom](pitfall_injected_scripts.md) — MAIN-world script injection pitfalls: self-removing tags, chrome-extension: fetch noise
+- [Loader wiring masked by setup](pitfall_loader_wiring_masked_by_setup.md) — vitest.setup.js preloads globals, hiding missing script tags in popup.html / editor.html
+- [Mutation restore via byte copy](pitfall_mutation_restore_git_checkout.md) — restore mutation-check files from a byte copy, never git checkout (destroys uncommitted spec edits)
+- [Broadcast spec flakiness](pitfall-broadcast-specs.md) — global beforeEach storage clear emits its own onChanged event
+- [Censor reply restore v2.8.11](project_censor_reply_restore_v2811_tests.md) — session-scoped key tests; hex-only session ID gotcha
+- [Censor reply restore v2.8.9](project_censor_reply_restore_v289_tests.md) — message-id resolution lookup order, _storedRecordsApplied guard, post-refresh restore gaps
+- [Censor XHR hook v2.9](project_censor_xhr_hook_v290_tests.md) — edit_message endpoint tests; vm sandbox pattern for IIFE hooks
+- [Constant mirror redundancy](project_constant_mirror_redundancy_test.md) — decide whether a test asserting a constant equals its own literal is deleted or kept
+- [Content-script broadcast bootstrap](project_content_script_broadcast_bootstrap.md) — wait for bootstrap and deliver setting changes via runtime.onMessage, not storage.onChanged
+- [Cross-context cache bugs](project_cross_context_cache_bugs.md) — seven cache-null / stale-snapshot bugs in chunked chatPresetMap concurrency (v2.5.2), all fixed
+- [Edit-message cleanup it.each collapse](project_edit_message_cleanup_iteach_collapse.md) — 34 tests collapsed into 11 it.each blocks, zero test-count change
+- [Edit-message cleanup tests](project_edit_message_cleanup_tests.md) — 62 tests after the computeDynamicMaxHeight + applyMaxHeightAdjustments refactor
+- [forceSyncBtn removal cleanup](project_forcesyncbtn_removal_cleanup.md) — describe renamed in popup.sync-write-quota.spec.js; it tests retrySync() directly
+- [GoToTop suite split](project_gotop_test_suite_split_2026_07_26.md) — go-top.spec.js split into seven spec files plus shared fixtures; current file map
+- [GoToTop timer flakiness](project_gotop_timer_flakiness.md) — uncancelled setTimeout polling throws "document is not defined" after teardown; pre-existing, orthogonal to pass/fail
+- [GoToTop v2.8.6 tests](project_gotop_v2_8_6_tests.md) — element reuse transitions, strict _isAtTop, flaky timeout fix
+- [GoToTop v2.9 gating toggle](project_gotop_v2_9_gating_toggle.md) — injection gating and scroll toggle test updates and what to watch
+- [GoToTop v2.9 tests aligned](project_gotop_v2_9_tests_aligned.md) — tests already matched rebuilt go-top.js; one index bug fix needed
+- [happy-dom environment limits](project_happydom_environment_limits.md) — AbortController teardown, HTMLDialogElement, MutationObserver under fake timers (resolved workaround)
+- [Hide-thinking DOM](project_hide_thinking_dom.md) — real DeepSeek container/header/content structure for hide-thinking tests
+- [jest-chrome removal](project_jest_chrome_removal.md) — replaced by hand-rolled vi.fn() chrome mock in vitest.setup.js; API surface actually used
+- [Messaging spec harness](project_messaging_spec_harness.md) — spec DSS_GET_SETTINGS / DSS_SETTINGS_CHANGED consumers; fresh-module load per test, auto-start double-registration trap
+- [Mutation proof method](project_mutation_proof_method.md) — prove a migrated assertion is non-vacuous when the original never ran under a failing case
+- [Order meta guard red](project_order_meta_guard_red_2026-07-26.md) — retrySync() pushes pending dsPresetOrderMeta with no newer-wins comparison
+- [Orphan test cleanup](project_orphan_test_cleanup_2026-07-25.md) — method to delete orphaned test files without losing unique coverage
+- [Popup live sync tests](project_popup_live_sync_tests.md) — createLiveSyncListener() and its wiring block in popup.js
+- [Popup refactor v3.0.0 tests](project_popup_refactor_v300_tests.md) — new and fixed files; migration-push defaults gotcha
+- [Popup toggle factory conventions](project_popup_toggle_factory_conventions.md) — popup factory modules share one ctx accessor convention and eval()-based test loading
+- [Preset delete-all tests](project_preset_delete_all_tests.md) — preset-item-renderer, custom-select delete-all wiring, requestDeleteAllPresets(), i18n keys
+- [Preset DOM resolvers tests](project_preset_dom_resolvers_tests.md) — 16 tests for preset-overlay.controller.js title/button selection via reposition()
+- [Preset dropdown tests](project_preset_dropdown_tests.md) — position and component specs, plus vitest.setup.js overlay wiring fix
+- [Preset position v2 tests](project_preset_position_v2_tests.md) — computePlacement rewrite: windowWidth branching, no minWidth floor, hidden flag
+- [Preset position v4.2.1 rounding](project_preset_position_v421_rounding.md) — Math.round in computePlacement; EXPECTED_CENTER_LEFT 374; idempotency test
+- [Prompt injector specs](project_prompt_injector_specs.md) — send-button/controller spec wiring after the P6/P14 split and shared send-button fixture
+- [Red phase probe vs HEAD](project_red_phase_probe_vs_head.md) — observe red against HEAD via a temp probe spec importing a git-shown copy of the old code
+- [Restored messages B2 wrapper](project_restored_messages_b2_wrapper.md) — getRestoredMessages() returns the raw chrome.storage get() wrapper, not the unwrapped map
+- [Sidebar auto-hide coverage](project_sidebar_auto_hide_coverage.md) — coverage status snapshot as of 2026-06-01; BDD scenarios in test_case.md Feature 6
+- [Sidebar auto-hide tests](project_sidebar-auto-hide-tests.md) — patterns, pitfalls, and structure used when creating the spec
+- [Sync order meta tests](project_sync_order_meta_tests.md) — PRESET_ORDER_META, mergePresets 4-param, retrySync stale-push prevention, _detectSyncConflict auto vs manual
+- [syncNow persist gap](project_syncnow_persist_gap.md) — syncNow() does not persist remote-newer overwrites to chrome.storage.local
+- [syncNow unparked push OK](project_syncnow_unparked_push_ok.md) — never-parked local-newer preset is pushed via retrySync()'s trailing resolveSyncConflict()
+- [Tab/window control red](project_tab_window_control_red.md) — RED contracts for tab-control.js and window-control.js; dual-route stub trick for the window singleton
+- [Temp-chat constants unwired](project_temp_chat_constants_unwired.md) — temporary-chat-constants.js has no importer; consumers re-declare literals
+- [Temporary chat tests](project_temporary_chat_tests.md) — Navigation API delete, SPA toggle, create-detection; uuid-regex gotcha
+- [Temporary chat v2 tests](project_temporary_chat_v2_tests.md) — storage.session mock, IIFE closure spy limits, retry timer patterns
+- [Test framework](project_test_framework.md) — setup, runner commands, file placement, established patterns
+- [GoToTop harness addendum](project_test_harness.md) — addEventListener mocking in go-top.enable.spec.js beforeEach blocks observing scroll-listener teardown
+- [Feature-toggle migration red suite](project_toggle_migration.md) — as of 2026-08-22 ~42 known failures confined to toggle-migration families, not regressions
+- [Tombstone object shape tests](project_tombstone_object_shape_tests.md) — tombstone entry changed to {ts, deleted}; tests rewritten, clearPresetTombstones fix
+- [Tombstone sync tests](project_tombstone_sync_tests.md) — v4.8.x deletion sync tests; vitest.setup.js tombstones.js preload gap fixed
+- [WebSearch default normalization](project_websearch_default_normalization.md) — only getSettings() normalizes legacy "default"; DSS_GET_SETTINGS key route does not
+- [WebSearch toggle fix state](project_websearch_toggle_generic_fix_state.md) — as of 2026-08-17 the generic-candidates fix sat uncommitted in the working tree
+- [Red phase runner](red-phase-runner.md) — new spec for a missing module yields collection-level red with zero tests; report expected test count
+- [Session tooling quirks](session-tooling-quirks.md) — Edit/Write disabled in subagent sessions; Bash heredocs fail above ~8KB per command
+- [Spec file line endings](spec-file-line-endings.md) — spec files use CRLF; scripted string edits must handle \r\n
+- [Temp-chat delete negative assertions](temp-chat-delete-negative-assertions.md) — "does NOT delete" must assert DSS_FIBER_DELETE_SESSION postMessage plus surviving tracked state
+- [Testing harness quirks](testing-harness-quirks.md) — happy-dom supports pushState + PopStateEvent for real SPA routes; GoToTop has no observer field to assert
+- [Vitest dynamic import red](vitest_dynamic_import_red.md) — dynamic import() resolves at transform time, so a missing module fails the suite at collection
+- [Vitest harness pitfalls](vitest_harness_pitfalls.md) — runner cwd, shared chrome mock onChanged echo, ESM hoisting vs spec-local chrome mocks
+- [Vitest fake timers pitfalls](vitest-fake-timers-pitfalls.md) — storage mock deadlock, MutationObserver flakiness and dropped delivery under fake timers
+- [Vitest invocation](vitest-invocation.md) — package.json lives in test/, not repo root
