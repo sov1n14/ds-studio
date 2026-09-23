@@ -24,6 +24,6 @@ Rewrote `test/unit/preset-position.spec.js` (40 tests) and updated `test/unit/pr
 
 **`preset-overlay.resolvers.js` added to `vitest.setup.js`** so the global `__DS_PresetOverlayResolvers` is populated before controller loads.
 
-**Why:** See [[preset-dropdown-tests]] for prior preset overlay test context.
+**Why:** See [[project_preset_dropdown_tests]] for prior preset overlay test context.
 
 **How to apply:** When editing computePlacement or reposition tests, always provide `windowWidth` explicitly to select the correct branch deterministically.
