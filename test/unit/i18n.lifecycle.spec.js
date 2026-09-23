@@ -15,7 +15,8 @@
  * gets a private, instrumented environment and never touches the shared
  * globalThis.dsI18n that test/setup/vitest.setup.js preloads for the suite.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { getStorageOnChangedListenerCount, resetStorageOnChangedListeners } from '../setup/vitest.setup.js';
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -40,35 +41,28 @@ function makeLocalStorage(initial) {
     };
 }
 
+/** The shared chrome mock from test/setup/vitest.setup.js (in-memory storage fixture, copy semantics), seeded with `syncData` and instrumented with spies. `calls` counts sync.get / onChanged.addListener made after seeding; listenerCount() is the number of live onChanged listeners; fire() simulates a storage change from another context via the setup's onChanged.callListeners (listener exceptions propagate, as a raw dispatch would). */
 function makeChrome(syncData) {
-    const data = Object.assign({}, syncData);
-    const calls = { get: 0, set: 0, addListener: 0 };
-    const listeners = [];
+    if (syncData) chrome.storage.sync.set(syncData); // the fixture stores synchronously; the promise only signals completion
+    const spies = {
+        get: vi.spyOn(chrome.storage.sync, 'get'),
+        addListener: vi.spyOn(chrome.storage.onChanged, 'addListener'),
+    };
+    const calls = {};
+    for (const [name, spy] of Object.entries(spies)) Object.defineProperty(calls, name, { get: () => spy.mock.calls.length });
     return {
+        ...chrome,
         calls,
-        data,
-        // Live (still-registered) listeners: lets a test tell "re-registered one
-        // listener" apart from "leaked a second, stale listener".
-        listeners,
-        storage: {
-            sync: {
-                async get(key) {
-                    calls.get++;
-                    return Object.prototype.hasOwnProperty.call(data, key) ? { [key]: data[key] } : {};
-                },
-                async set(obj) { calls.set++; Object.assign(data, obj); },
-            },
-            onChanged: {
-                addListener(fn) { calls.addListener++; listeners.push(fn); },
-                removeListener(fn) {
-                    const i = listeners.indexOf(fn);
-                    if (i !== -1) listeners.splice(i, 1);
-                },
-            },
-        },
-        fire(changes, area) { listeners.slice().forEach((l) => l(changes, area)); },
+        listenerCount: getStorageOnChangedListenerCount,
+        fire: (changes, area) => chrome.storage.onChanged.callListeners(changes, area),
     };
 }
+
+// Each test's i18n instance registers on the shared onChanged; drop them so no test sees another's listener.
+afterEach(() => {
+    resetStorageOnChangedListeners();
+    vi.restoreAllMocks();
+});
 
 function loadI18n(env) {
     const fakeGlobal = { __DS_I18N_Locales: globalThis.__DS_I18N_Locales };
@@ -419,16 +413,16 @@ describe('U2 -- dsI18n._reset() clears the listener-installed guard', () => {
         // Asserted as a whole lifecycle on purpose: checking only the count
         // after the second init() would pass vacuously in a world where the
         // listener is installed at module-load time and never re-registered.
-        expect(chrome.listeners.length, 'no live listener before init()').toBe(0);
+        expect(chrome.listenerCount(), 'no live listener before init()').toBe(0);
 
         await i18n.init();
-        expect(chrome.listeners.length, 'init() installs one listener').toBe(1);
+        expect(chrome.listenerCount(), 'init() installs one listener').toBe(1);
 
         i18n._reset();
         await i18n.init();
 
         expect(
-            chrome.listeners.length,
+            chrome.listenerCount(),
             '_reset() then init() must leave exactly one live listener, not a stale extra'
         ).toBe(1);
     });

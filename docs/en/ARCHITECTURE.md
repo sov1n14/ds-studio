@@ -107,6 +107,7 @@ ds-studio/
 │   ├── pending-store.js        ─  Pending-delete queue storage layer (importScripts only, not a content script)
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
+│   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG routes: puts the service worker's StorageManager in chat-map writer mode, validates each op, applies it in one FIFO queue
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
@@ -149,20 +150,22 @@ ds-studio/
 │       ├── editor.render.js ─  Editor UI rendering bundle
 │       └── editor.storage.js ─  Editor storage read/write bundle
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
-│   ├── storage-manager.js   ─  Entry: storage API, getSettings (v4.0.0 split; initialize() moved out in v4.7.3)
-│   ├── storage-manager.keys.js          ─  Storage key names, defaults, error classes, pure helpers
-│   ├── storage-manager.chunk-lock.js    ─  ChatPresetMap chunked read/write + cross-context advisory lock bundle (v4.11.3 merge of chunking.js + lock.js)
-│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write logic
-│   ├── storage-manager.sync.js          ─  Cloud sync / conflict bundle, incl. syncNow() entry point (absorbed syncnow.js in v4.11.3)
+│   ├── storage-manager.js   ─  Entry: StorageManager object, chat-map writer flag, per-context FIFO write queue, bundle mixin
+│   ├── storage-manager.keys.js          ─  Storage key names, defaults, ChatMapDispatchError, _buildNextMeta
+│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write, remote-wins write-back to local
+│   ├── storage-manager.sync.js          ─  Sync conflict detection / resolveSyncConflict (skips chat-map keys), sync status, syncNow() entry point
+│   ├── storage-manager.sync.retry.js    ─  retrySync(): per-key guarded re-push of dsLocalAuth; parked chat-map keys go to the service worker as one REPUBLISH_PARKED op
 │   ├── storage-manager.restore.js       ─  Backup restore logic (extracted from sync.js)
 │   ├── storage-manager.tombstone.js     ─  Deletion tombstone management bundle
 │   ├── storage-manager.preset-merge.js  ─  Dual-side preset array merge logic bundle
 │   ├── storage-manager.preset-recency.js ─  Preset recency determination, push guard, global prompt enabled resolution bundle
-│   ├── storage-manager.presets.js       ─  Preset CRUD & chat-binding bundle, incl. deletion-tombstone merge/prune (absorbed tombstones.js in v4.11.3)
-│   ├── storage-manager.chatmap.diff.js  ─  ChatPresetMap diff computation & application bundle
-│   ├── storage-manager.chatmap.js       ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
+│   ├── storage-manager.presets.js       ─  Preset CRUD bundle: savePromptPresets / saveOnePromptPreset
+│   ├── storage-manager.chatmap.diff.js  ─  ChatPresetMap pure diff computation & chunk placement bundle
+│   ├── storage-manager.chatmap.ops.js   ─  DSSChatMapOps: pure validate / apply for DSS_CHAT_MAP_MSG ops
+│   ├── storage-manager.chatmap.js       ─  Single-writer engine (service worker only): applyChatMapOp, mutateChatPresetMap, chunked commit; getChatPresetMap for every context
+│   ├── storage-manager.chatmap.client.js ─  Public binding API + dispatch: direct engine call in the service worker, chrome.runtime.sendMessage to it elsewhere
 │   ├── storage-manager.local.js         ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
-│   ├── storage-manager.init.js          ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
+│   ├── storage-manager.init.js          ─  initialize(): defaults, migrations, first-sync conflict detection; dispatches legacy chat-map migration + orphan prune
 │   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
 │   ├── message-constants.js          ─  Cross-layer message type and URL constants (merged)
@@ -228,7 +231,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 - **System time injection**: When `isEnabled` is false, `isShowSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
-- **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0) `isGlobalPromptEnabled` is no longer a straight mirror of one storage key — it is resolved per navigation from the active preset's own `globalPromptEnabled` field, falling back to the legacy device-level key when no preset is active. Subordination to the master switch is unchanged.
+- **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0; displayed-preset rule v4.34.3) `isGlobalPromptEnabled` follows the preset the floating overlay displays: `ChatBinding.resolveDisplayedGlobalPromptEnabled(settings)` resolves that preset with `resolveActivePresetIdFrom()` (chat binding in `chatPresetMap` → `pendingPresetId` → `pinnedPresetId`) and reads its own `globalPromptEnabled` field; with no displayed preset, the legacy device-level `globalPromptEnabled` key decides. It is recomputed on navigation, on preset, `activePresetId`, chat-map chunk, or legacy-key storage changes, and on `ACTIVE_PRESET_CHANGED`, so the display matches the result that will be injected. It stays subordinate to the master switch.
 
 ### WebSearch Toggle Locator (v4.20.1)
 
@@ -343,7 +346,7 @@ sequenceDiagram
     Storage-->>Popup: If mismatch → syncConflictPending=true
     Popup->>Popup: Show "Cloud Sync Conflict" Modal
     Popup->>Storage: resolveSyncConflict() → mergePresets()
-    Storage-->>Popup: Write merged result, clear conflict flag
+    Storage-->>Popup: Write merged result (chat-map keys skipped, written only by the service worker), clear conflict flag
 
     Note over Popup,Content: Normal Flow — Prompt Operations
     Popup->>Popup: Modal.prompt/confirm for prompt CRUD
@@ -354,7 +357,7 @@ sequenceDiagram
 
     Note over Content: Overlay In-Page Prompt Group Switching
     Content->>Content: PresetOverlay.onSelectChange(newId)
-    Content->>Storage: saveActivePresetId / bindChatToPreset
+    Content->>Storage: saveActivePresetId / bindChatToPreset (via the service worker single writer)
     Storage-->>Popup: (read on next open)
     Storage-->>Content: onChanged (ACTIVE_PRESET_ID / PRESET_INDEX)
     Content->>Content: PresetOverlay.render() / updateActiveId()

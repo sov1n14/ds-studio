@@ -1,42 +1,38 @@
 /**
- * Kills Stryker mutant: storage-manager.restore.js line 32
+ * Kills Stryker mutant: storage-manager.restore.js chatPresetMap guard
  * Mutator: ConditionalExpression — `if (importedSettings.chatPresetMap)` → `if (true)`
  *
- * Requirement: when restoring settings from an imported backup that does NOT
- * include a chatPresetMap (undefined / null / missing key), the restore
- * function MUST skip chatPresetMap processing entirely — it must not corrupt,
- * clear, or replace the existing chatPresetMap already in storage.
+ * Requirement: when restoring settings from an imported backup that does NOT include a chatPresetMap (undefined / null / missing key), restoreSettings MUST skip chatPresetMap processing entirely: it resolves and the stored chatPresetMap is left exactly as it was.
+ *
+ * Real client + SW writer through background/chat-map-routes.js (test/helpers/chat-map-writer-harness.js); assertions read durable storage.sync end-state. Under the mutant the client dispatches a MERGE with a null/undefined payload, which the SW rejects, so restoreSettings rejects.
  */
-import { describe, it, expect } from 'vitest';
-import StorageManager from '../../utils/storage-manager.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createChatMapWriterHarness, restoreChromeBoundaries, within } from '../helpers/chat-map-writer-harness.js';
+
+let h;
+let client;
+
+beforeEach(async () => {
+    h = await createChatMapWriterHarness({ clientCount: 1 });
+    [client] = h.clients;
+});
+
+afterEach(() => {
+    restoreChromeBoundaries();
+    vi.restoreAllMocks();
+});
 
 describe('restoreSettings — chatPresetMap guard (mutant kill)', () => {
-    it('preserves existing chatPresetMap when imported data omits chatPresetMap entirely', async () => {
-        // Seed an existing binding
-        await StorageManager.bindChatToPreset('chat-aaa', 'preset-111');
+    it.each([
+        ['omits chatPresetMap entirely', { chatWidth: 50 }],
+        ['has chatPresetMap as undefined', { chatPresetMap: undefined, chatWidth: 50 }],
+        ['has chatPresetMap as null', { chatPresetMap: null, chatWidth: 50 }],
+    ])('preserves existing chatPresetMap when imported data %s', async (_label, imported) => {
+        await client.bindChatToPreset('chat-aaa', 'preset-111');
 
-        // Restore settings that do NOT include chatPresetMap
-        await StorageManager.restoreSettings({ chatWidth: 50 }, false);
+        await expect(within(client.restoreSettings(imported, false), 3000, 'restoreSettings')).resolves.not.toThrow();
 
-        const settings = await StorageManager.getSettings();
-        expect(settings.chatPresetMap).toEqual({ 'chat-aaa': 'preset-111' });
-    });
-
-    it('preserves existing chatPresetMap when imported data has chatPresetMap as undefined', async () => {
-        await StorageManager.bindChatToPreset('chat-bbb', 'preset-222');
-
-        await StorageManager.restoreSettings({ chatPresetMap: undefined, chatWidth: 50 }, false);
-
-        const settings = await StorageManager.getSettings();
-        expect(settings.chatPresetMap).toEqual({ 'chat-bbb': 'preset-222' });
-    });
-
-    it('preserves existing chatPresetMap when imported data has chatPresetMap as null', async () => {
-        await StorageManager.bindChatToPreset('chat-ccc', 'preset-333');
-
-        await StorageManager.restoreSettings({ chatPresetMap: null, chatWidth: 50 }, false);
-
-        const settings = await StorageManager.getSettings();
-        expect(settings.chatPresetMap).toEqual({ 'chat-ccc': 'preset-333' });
+        expect((await h.readStored()).map).toEqual({ 'chat-aaa': 'preset-111' });
+        expect((await client.getSettings()).chatPresetMap).toEqual({ 'chat-aaa': 'preset-111' });
     });
 });

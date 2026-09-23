@@ -1,41 +1,21 @@
 /**
  * DS studio v2.5.2 — Storage Manager（入口檔）
  * Wrapper for Chrome Storage API with Sync support and Local fallback.
- *
- * 載入順序（manifest.json / popup.html / editor.html 必須依此順序）：
- *   1. storage-manager.keys.js
- *   2. storage-manager.chunk-lock.js
- *   3. storage-manager.rw.js
- *   4. storage-manager.sync.js
- *   5. storage-manager.presets.js
- *   6. storage-manager.chatmap.js
- *   7. storage-manager.local.js
- *   8. storage-manager.init.js
- *   9. storage-manager.setters.js
- *  10. storage-manager.settings-read.js
- *  11. storage-manager.js  （本檔）
  */
 
 const StorageManager = {
 
     /**
-     * chatPresetMap 分塊索引快取。Map<uuid, chunkIdx> | null 表示需重新載入。
-     * 由 bundle 方法透過 this._chunkIndexCache 存取。
+     * 是否為 chatPresetMap 唯一寫入者（service worker）。非寫入者呼叫 mutateChatPresetMap 一律拒絕。
      */
-    _chunkIndexCache: null,
+    _isChatMapWriter: false,
 
     /**
-     * chatPresetMap meta 快取。{ version, chunkCount, chunkSizes[] } | null 表示需重新載入。
-     * 由 bundle 方法透過 this._metaCache 存取。
+     * 將本 context 設為 chatPresetMap 唯一寫入者；僅 service worker 應呼叫。
      */
-    _metaCache: null,
-
-    /**
-     * 本 context 已註冊的 chunk 快取失效監聽器。initialize() 重複執行時，
-     * _installChunkCacheInvalidator() 依此參照先移除舊監聽器再註冊，維持恰好一個。
-     */
-    _chunkCacheInvalidator: null,
-
+    enableChatMapWriterMode() {
+        this._isChatMapWriter = true;
+    },
 
     /**
      * 內部 promise-chain 寫入佇列，用於序列化 chatPresetMap 的寫入操作，
@@ -91,14 +71,15 @@ const StorageManager = {
     Object.assign(StorageManager,
         root.__DS_StorageManager_keys      || {},
         root.__DS_StorageManager_rw        || {},
-        root.__DS_StorageManager_chunklock || {},
         root.__DS_StorageManager_sync      || {},
+        root.__DS_StorageManager_sync_retry || {},
         root.__DS_StorageManager_presets   || {},
         root.__DS_StorageManager_tombstone      || {},
         root.__DS_StorageManager_preset_merge   || {},
         root.__DS_StorageManager_preset_recency  || {},
         root.__DS_StorageManager_chatmap_diff || {},
         root.__DS_StorageManager_chatmap   || {},
+        root.__DS_StorageManager_chatmap_client || {},
         root.__DS_StorageManager_local     || {},
         root.__DS_StorageManager_init      || {},
         root.__DS_StorageManager_setters   || {},

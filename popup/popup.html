@@ -1,4 +1,4 @@
-<!-- 336 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
+<!-- 339 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -295,16 +295,18 @@
     <script src="../utils/tab-control.js"></script>
     <script src="../utils/window-control.js"></script>
     <script src="../utils/storage-manager.keys.js"></script>
-    <script src="../utils/storage-manager.chunk-lock.js"></script>
     <script src="../utils/storage-manager.rw.js"></script>
     <script src="../utils/storage-manager.sync.js"></script>
+    <script src="../utils/storage-manager.sync.retry.js"></script>
     <script src="../utils/storage-manager.restore.js"></script>
     <script src="../utils/storage-manager.tombstone.js"></script>
     <script src="../utils/storage-manager.preset-merge.js"></script>
     <script src="../utils/storage-manager.preset-recency.js"></script>
     <script src="../utils/storage-manager.presets.js"></script>
     <script src="../utils/storage-manager.chatmap.diff.js"></script>
+    <script src="../utils/storage-manager.chatmap.ops.js"></script>
     <script src="../utils/storage-manager.chatmap.js"></script>
+    <script src="../utils/storage-manager.chatmap.client.js"></script>
     <script src="../utils/storage-manager.local.js"></script>
     <script src="../utils/storage-manager.init.js"></script>
     <script src="../utils/storage-manager.setters.js"></script>

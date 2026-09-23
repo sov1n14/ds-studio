@@ -1,28 +1,32 @@
 /**
- * Targeted mutant-killer tests for utils/storage-manager.chatmap.js.
- * Kills survived mutants in queue, chunk cache, and multi-chunk lock paths.
+ * Targeted mutant-killer tests for utils/storage-manager.chatmap.js and .chatmap.diff.js (writer-mode engine).
+ * Every instance is fresh (vi.resetModules) and switched to writer mode; assertions are on chrome.storage end-state or resolved values.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import StorageManager from '../../utils/storage-manager.js';
 
 const LARGE_VALUE = (i) => 'D'.repeat(200) + String(i);
+const byteLen = (o) => new TextEncoder().encode(JSON.stringify(o)).length;
+
+async function loadWriter() {
+    vi.resetModules();
+    const mod = await import('../../utils/storage-manager.js');
+    const sm = mod.default ?? mod;
+    sm.enableChatMapWriterMode();
+    return sm;
+}
 
 describe('mutateChatPresetMap single-chunk diff path', () => {
     let SM;
-    beforeEach(async () => {
-        vi.resetModules();
-        const mod = await import('../../utils/storage-manager.js');
-        SM = mod.default ?? mod;
-    });
+    beforeEach(async () => { SM = await loadWriter(); });
 
-    it('single-chunk change updates value and cache', async () => {
+    it('single-chunk change updates value', async () => {
         await SM.bindChatToPreset('uuid-x', 'old-val');
         await SM.mutateChatPresetMap(m => { m['uuid-x'] = 'new-val'; });
         const map = await SM.getChatPresetMap();
         expect(map['uuid-x']).toBe('new-val');
     });
 
-    it('single-chunk delete removes key from map and cache', async () => {
+    it('single-chunk delete removes key from map', async () => {
         await SM.bindChatToPreset('uuid-del', 'val');
         await SM.bindChatToPreset('uuid-keep', 'val2');
         await SM.mutateChatPresetMap(m => { delete m['uuid-del']; });
@@ -38,47 +42,34 @@ describe('mutateChatPresetMap single-chunk diff path', () => {
         expect(map['uuid-new']).toBe('new-val');
         expect(map['uuid-exist']).toBe('val');
     });
-
-    it('_chunkIndexCache initialized when null on single-chunk path', async () => {
-        await SM.bindChatToPreset('uuid-1', 'val-1');
-        SM._chunkIndexCache = null;
-        await SM.mutateChatPresetMap(m => { m['uuid-1'] = 'val-updated'; });
-        const map = await SM.getChatPresetMap();
-        expect(map['uuid-1']).toBe('val-updated');
-    });
 });
 
-describe('mutateChatPresetMap multi-chunk lock path', () => {
+describe('mutateChatPresetMap multi-chunk path', () => {
     let SM;
-    beforeEach(async () => {
-        vi.resetModules();
-        const mod = await import('../../utils/storage-manager.js');
-        SM = mod.default ?? mod;
-    });
+    beforeEach(async () => { SM = await loadWriter(); });
 
-    it('noop inside lock does not bump version', async () => {
+    it('no-op on a multi-chunk map does not bump version', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['mc-' + i] = LARGE_VALUE(i); });
         const metaBefore = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta;
+        expect(metaBefore.chunkCount, 'precondition: multi-chunk').toBeGreaterThan(1);
         await SM.mutateChatPresetMap(() => {});
         const metaAfter = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta;
         expect(metaAfter.version).toBe(metaBefore.version);
     }, { timeout: 30000 });
 
-    it('removes trailing empty chunks after mutate (multi-chunk path)', async () => {
+    it('removes trailing empty chunks after a mutate that also modifies chunk 0', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['trim-' + i] = LARGE_VALUE(i); });
         const syncBefore = await chrome.storage.sync.get(null);
         const countBefore = syncBefore.chatPresetMapMeta.chunkCount;
-        // Delete from last chunk AND modify another to force multi-chunk path
-        const lastChunk = syncBefore['chatPresetMap_' + (countBefore - 1)];
-        const firstChunk = syncBefore['chatPresetMap_0'];
-        const lastKeys = Object.keys(lastChunk);
-        const firstKey = Object.keys(firstChunk)[0];
+        const lastKeys = Object.keys(syncBefore['chatPresetMap_' + (countBefore - 1)]);
+        const firstKey = Object.keys(syncBefore['chatPresetMap_0'])[0];
         await SM.mutateChatPresetMap(m => {
             for (const k of lastKeys) delete m[k];
             m[firstKey] = 'modified-value';
         });
         const syncAfter = await chrome.storage.sync.get(null);
         expect(syncAfter.chatPresetMapMeta.chunkCount).toBeLessThan(countBefore);
+        expect(syncAfter['chatPresetMap_0'][firstKey]).toBe('modified-value');
     }, { timeout: 30000 });
 
     it('cleans up orphaned chunk keys on shrink', async () => {
@@ -101,44 +92,83 @@ describe('mutateChatPresetMap multi-chunk lock path', () => {
         for (let i = 0; i < meta.chunkCount; i++) expect(syncData['chatPresetMap_' + i]).toBeDefined();
     }, { timeout: 30000 });
 
-    it('rebuilds cache after multi-chunk write', async () => {
+    it('a rebind after a multi-chunk add+delete updates the new key; the deleted key stays gone', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 40; i++) m['rb-' + i] = LARGE_VALUE(i); });
-        await SM.mutateChatPresetMap(m => { m['rb-new'] = 'new-val'; delete m['rb-000']; });
+        await SM.mutateChatPresetMap(m => { m['rb-new'] = 'new-val'; delete m['rb-0']; });
         await SM.bindChatToPreset('rb-new', 'updated-val');
         const map = await SM.getChatPresetMap();
         expect(map['rb-new']).toBe('updated-val');
-        expect(map['rb-000']).toBeUndefined();
+        expect(map['rb-0']).toBeUndefined();
+        expect(Object.keys(map)).toHaveLength(40);
     }, { timeout: 30000 });
 
-    it('writes meta when hasChanges is true', async () => {
+    it('a committed change on a multi-chunk map persists and bumps meta.version by 1', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['wr-' + i] = LARGE_VALUE(i); });
-        const setSpy = vi.spyOn(SM, '_set');
-        await SM.mutateChatPresetMap(m => { m['wr-000'] = 'changed'; });
-        expect(setSpy).toHaveBeenCalled();
-        const writeKeys = setSpy.mock.calls.flatMap(c => Object.keys(c[0]));
-        expect(writeKeys).toContain('chatPresetMapMeta');
+        const versionBefore = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta.version;
+        await SM.mutateChatPresetMap(m => { m['wr-0'] = 'changed'; });
+        const meta = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta;
+        expect(meta.version).toBe(versionBefore + 1);
+        expect((await SM.getChatPresetMap())['wr-0']).toBe('changed');
     }, { timeout: 30000 });
 
-    it('recalculates chunk sizes for modified chunks', async () => {
+    it('meta.chunkSizes equals the real byte size of every persisted chunk after a shrink-in-place', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['sz-' + i] = LARGE_VALUE(i); });
         await SM.mutateChatPresetMap(m => { for (const k of Object.keys(m)) m[k] = 'x'; });
         const syncData = await chrome.storage.sync.get(null);
         const meta = syncData.chatPresetMapMeta;
+        expect(meta.chunkSizes).toHaveLength(meta.chunkCount);
         for (let i = 0; i < meta.chunkCount; i++) {
             const chunk = syncData['chatPresetMap_' + i];
             expect(chunk).toBeDefined();
             expect(Object.keys(chunk).length).toBeGreaterThan(0);
+            expect(meta.chunkSizes[i], `chunkSizes[${i}]`).toBe(byteLen(chunk));
         }
     }, { timeout: 30000 });
 });
 
+describe('chunk-content edges (no trust in meta, no duplicate survivors)', () => {
+    let SM;
+    beforeEach(async () => { SM = await loadWriter(); });
+
+    it('unbinding a uuid present in two chunks removes it from both', async () => {
+        const c0 = { dup: 'p-old', a: 'p1' };
+        const c1 = { dup: 'p-new', b: 'p2' };
+        await chrome.storage.sync.set({
+            chatPresetMapMeta: { version: 3, chunkCount: 2, chunkSizes: [byteLen(c0), byteLen(c1)] },
+            chatPresetMap_0: c0,
+            chatPresetMap_1: c1,
+        });
+
+        await SM.unbindChat('dup');
+
+        const after = await chrome.storage.sync.get(null);
+        expect(after.chatPresetMap_0, 'chunk 0 still holds the duplicate').toEqual({ a: 'p1' });
+        expect(after.chatPresetMap_1, 'chunk 1 still holds the duplicate').toEqual({ b: 'p2' });
+        expect(await SM.getChatPresetMap()).toEqual({ a: 'p1', b: 'p2' });
+    });
+
+    it('placement measures the real chunk size, not a stale meta.chunkSizes that claims the chunk is empty', async () => {
+        const limit = SM.CHUNK_SOFT_LIMIT_BYTES;
+        const full = { full0: 'F'.repeat(limit - 200) };
+        await chrome.storage.sync.set({
+            chatPresetMapMeta: { version: 3, chunkCount: 1, chunkSizes: [0] },
+            chatPresetMap_0: full,
+        });
+
+        const long = 'P'.repeat(500);
+        await SM.bindChatToPreset('n', long);
+
+        const after = await chrome.storage.sync.get(null);
+        expect(after.chatPresetMap_0, 'new entry was packed into a full chunk').toEqual(full);
+        expect(after.chatPresetMap_1).toEqual({ n: long });
+        expect(after.chatPresetMapMeta.chunkCount).toBe(2);
+        expect(after.chatPresetMapMeta.chunkSizes).toEqual([byteLen(full), byteLen({ n: long })]);
+    });
+});
+
 describe('bindChatToPreset edge cases', () => {
     let SM;
-    beforeEach(async () => {
-        vi.resetModules();
-        const mod = await import('../../utils/storage-manager.js');
-        SM = mod.default ?? mod;
-    });
+    beforeEach(async () => { SM = await loadWriter(); });
 
     it('returns true for new bind', async () => {
         expect(await SM.bindChatToPreset('uuid-ret', 'a')).toBe(true);
@@ -181,11 +211,7 @@ describe('bindChatToPreset edge cases', () => {
 
 describe('unbindChat edge cases', () => {
     let SM;
-    beforeEach(async () => {
-        vi.resetModules();
-        const mod = await import('../../utils/storage-manager.js');
-        SM = mod.default ?? mod;
-    });
+    beforeEach(async () => { SM = await loadWriter(); });
 
     it('returns true when uuid does not exist', async () => {
         expect(await SM.unbindChat('nonexistent')).toBe(true);
@@ -237,68 +263,22 @@ describe('unbindChat edge cases', () => {
         expect(metaAfter.chunkSizes).toHaveLength(metaAfter.chunkCount);
     }, { timeout: 30000 });
 
-    it('non-trailing unbind does not acquire lock', async () => {
-        await SM.bindChatToPreset('uuid-a', 'a');
-        await SM.bindChatToPreset('uuid-b', 'b');
-        await SM.bindChatToPreset('uuid-c', 'c');
-        const spy = vi.spyOn(SM, '_safeGet');
-        await SM.unbindChat('uuid-a');
-        const lockKey = StorageManager.CHAT_PRESET_MAP_LOCK_KEY;
-        const lockGets = spy.mock.calls.filter(
-            ([area, keys]) => area === 'local' && (Array.isArray(keys) ? keys : [keys]).includes(lockKey),
-        );
-        expect(lockGets).toHaveLength(0);
-        const map = await SM.getChatPresetMap();
-        expect(map['uuid-a']).toBeUndefined();
-    });
-
-    it('trailing unbind calls _safeRemove on both sync and local', async () => {
+    it('emptying the trailing chunk removes its key from both sync and local', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 40; i++) m['orpc-' + i] = LARGE_VALUE(i); });
         const syncBefore = await chrome.storage.sync.get(null);
         const countBefore = syncBefore.chatPresetMapMeta.chunkCount;
         expect(countBefore).toBeGreaterThan(1);
-        const lastChunk = syncBefore['chatPresetMap_' + (countBefore - 1)];
-        const spy = vi.spyOn(SM, '_safeRemove');
-        for (const uuid of Object.keys(lastChunk)) await SM.unbindChat(uuid);
-        const syncCalls = spy.mock.calls.filter(([area]) => area === 'sync');
-        const localCalls = spy.mock.calls.filter(([area]) => area === 'local');
-        expect(syncCalls.length).toBeGreaterThan(0);
-        expect(localCalls.length).toBeGreaterThan(0);
+        const lastKey = 'chatPresetMap_' + (countBefore - 1);
+        expect((await chrome.storage.local.get(lastKey))[lastKey], 'precondition: local mirror holds the trailing chunk').toBeDefined();
+        for (const uuid of Object.keys(syncBefore[lastKey])) await SM.unbindChat(uuid);
+        expect((await chrome.storage.sync.get(lastKey))[lastKey], 'sync orphan').toBeUndefined();
+        expect((await chrome.storage.local.get(lastKey))[lastKey], 'local orphan').toBeUndefined();
     }, { timeout: 30000 });
-});
-
-describe('pruneOrphanChatBindings edge cases', () => {
-    let SM;
-    beforeEach(async () => {
-        vi.resetModules();
-        const mod = await import('../../utils/storage-manager.js');
-        SM = mod.default ?? mod;
-    });
-
-    it('null validPresetIds removes all bindings', async () => {
-        await SM.bindChatToPreset('uuid-prune', 'a');
-        await SM.pruneOrphanChatBindings(null);
-        const map = await SM.getChatPresetMap();
-        expect(map['uuid-prune']).toBeUndefined();
-    });
-
-    it('preserves entries with falsy presetId', async () => {
-        await SM.bindChatToPreset('uuid-falsy', '');
-        await SM.bindChatToPreset('uuid-valid', 'a');
-        await SM.pruneOrphanChatBindings(['a']);
-        const map = await SM.getChatPresetMap();
-        expect(map['uuid-falsy']).toBe('');
-        expect(map['uuid-valid']).toBe('a');
-    });
 });
 
 describe('getChatPresetMap serialization', () => {
     let SM;
-    beforeEach(async () => {
-        vi.resetModules();
-        const mod = await import('../../utils/storage-manager.js');
-        SM = mod.default ?? mod;
-    });
+    beforeEach(async () => { SM = await loadWriter(); });
 
     it('returns empty object with no bindings', async () => {
         expect(await SM.getChatPresetMap()).toEqual({});

@@ -28,12 +28,9 @@
                 await this.clearPresetTombstones(importedPresetIds);
             }
 
-            // 透過 mutateChatPresetMap 將匯入的 chatPresetMap 合併至現有資料
+            // 交由 service worker 將匯入的 chatPresetMap 合併至現有資料
             if (importedSettings.chatPresetMap) {
-                await this.mutateChatPresetMap(map => ({
-                    ...map,
-                    ...importedSettings.chatPresetMap
-                }));
+                await this.mergeChatPresetBindings(importedSettings.chatPresetMap);
             }
 
             // 其餘設定直接覆寫，除非 mergePresetsOnly 為 true

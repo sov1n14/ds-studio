@@ -5,8 +5,9 @@
  * the mergePresetsOnly branch, the presets/chatPresetMap guards, and the
  * empty-updates short-circuit.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
+import { createChatMapWriterHarness, restoreChromeBoundaries } from '../helpers/chat-map-writer-harness.js';
 
 const K = StorageManager.KEYS;
 
@@ -114,14 +115,6 @@ describe('restoreSettings - field-level guard coverage', () => {
             expect(saveSpy).toHaveBeenCalledTimes(1);
         });
 
-        it('still processes chatPresetMap when mergePresetsOnly is true', async () => {
-            const mutateSpy = vi.spyOn(StorageManager, 'mutateChatPresetMap').mockResolvedValue();
-            await StorageManager.restoreSettings({
-                chatPresetMap: { c1: 'p1' },
-                activePresetId: 'should-be-skipped',
-            }, true);
-            expect(mutateSpy).toHaveBeenCalledTimes(1);
-        });
     });
 
     describe('empty import object', () => {
@@ -175,34 +168,6 @@ describe('restoreSettings - field-level guard coverage', () => {
         });
     });
 
-    describe('chatPresetMap handling', () => {
-        it('merge function spreads existing then imported', async () => {
-            const mutateSpy = vi.spyOn(StorageManager, 'mutateChatPresetMap')
-                .mockImplementation(async (fn) => fn({}));
-            await StorageManager.restoreSettings({
-                chatPresetMap: { 'chat-new': 'preset-new' }
-            }, false);
-            expect(mutateSpy).toHaveBeenCalledTimes(1);
-            const mergeFn = mutateSpy.mock.calls[0][0];
-            const merged = mergeFn({ 'chat-existing': 'preset-existing' });
-            expect(merged).toEqual({
-                'chat-existing': 'preset-existing',
-                'chat-new': 'preset-new',
-            });
-        });
-
-        it('imported keys overwrite existing keys', async () => {
-            const mutateSpy = vi.spyOn(StorageManager, 'mutateChatPresetMap')
-                .mockImplementation(async (fn) => fn({}));
-            await StorageManager.restoreSettings({
-                chatPresetMap: { 'chat-1': 'new-preset' }
-            }, false);
-            const mergeFn = mutateSpy.mock.calls[0][0];
-            const merged = mergeFn({ 'chat-1': 'old-preset' });
-            expect(merged['chat-1']).toBe('new-preset');
-        });
-    });
-
     describe('local-only fields are not restored', () => {
         it('does not restore isEnabled even when present', async () => {
             const spy = vi.spyOn(StorageManager, '_set');
@@ -239,26 +204,6 @@ describe('restoreSettings - field-level guard coverage', () => {
         });
     });
 
-    describe('chatPresetMap false-guard (mutant kill)', () => {
-        it('does NOT call mutateChatPresetMap when chatPresetMap is absent', async () => {
-            const mutateSpy = vi.spyOn(StorageManager, 'mutateChatPresetMap').mockResolvedValue();
-            await StorageManager.restoreSettings({ chatWidth: 50 }, false);
-            expect(mutateSpy).not.toHaveBeenCalled();
-        });
-
-        it('does NOT call mutateChatPresetMap when chatPresetMap is undefined', async () => {
-            const mutateSpy = vi.spyOn(StorageManager, 'mutateChatPresetMap').mockResolvedValue();
-            await StorageManager.restoreSettings({ chatPresetMap: undefined, chatWidth: 50 }, false);
-            expect(mutateSpy).not.toHaveBeenCalled();
-        });
-
-        it('does NOT call mutateChatPresetMap when chatPresetMap is null', async () => {
-            const mutateSpy = vi.spyOn(StorageManager, 'mutateChatPresetMap').mockResolvedValue();
-            await StorageManager.restoreSettings({ chatPresetMap: null, chatWidth: 50 }, false);
-            expect(mutateSpy).not.toHaveBeenCalled();
-        });
-    });
-
     describe('return value', () => {
         it('returns the result of _set when updates exist', async () => {
             const sentinel = { ok: true };
@@ -271,5 +216,49 @@ describe('restoreSettings - field-level guard coverage', () => {
             const result = await StorageManager.restoreSettings({}, false);
             expect(result).toBeUndefined();
         });
+    });
+});
+
+/**
+ * chatPresetMap import under the single-writer design. Requirement: an imported chatPresetMap is merged into the stored map (existing bindings kept, imported uuids win on conflict), also when mergePresetsOnly is true. Real client + SW writer via test/helpers/chat-map-writer-harness.js; assertions read the durable storage.sync end-state.
+ */
+describe('restoreSettings - chatPresetMap merge end-state', () => {
+    let h;
+    let client;
+
+    beforeEach(async () => {
+        h = await createChatMapWriterHarness({ clientCount: 1 });
+        [client] = h.clients;
+    });
+
+    afterEach(() => {
+        restoreChromeBoundaries();
+        vi.restoreAllMocks();
+    });
+
+    it('keeps existing bindings and adds the imported ones', async () => {
+        await client.bindChatToPreset('chat-existing', 'preset-existing');
+        await client.restoreSettings({ chatPresetMap: { 'chat-new': 'preset-new' } }, false);
+        expect((await h.readStored()).map).toEqual({
+            'chat-existing': 'preset-existing',
+            'chat-new': 'preset-new',
+        });
+    });
+
+    it('imported keys overwrite existing keys', async () => {
+        await client.bindChatToPreset('chat-1', 'old-preset');
+        await client.bindChatToPreset('chat-2', 'kept-preset');
+        await client.restoreSettings({ chatPresetMap: { 'chat-1': 'new-preset' } }, false);
+        expect((await h.readStored()).map).toEqual({ 'chat-1': 'new-preset', 'chat-2': 'kept-preset' });
+    });
+
+    it('still merges chatPresetMap when mergePresetsOnly is true, while skipping individual settings', async () => {
+        await client.bindChatToPreset('chat-existing', 'preset-existing');
+        await client.restoreSettings({
+            chatPresetMap: { c1: 'p1' },
+            activePresetId: 'should-be-skipped',
+        }, true);
+        expect((await h.readStored()).map).toEqual({ 'chat-existing': 'preset-existing', c1: 'p1' });
+        expect((await client.getSettings()).activePresetId).not.toBe('should-be-skipped');
     });
 });

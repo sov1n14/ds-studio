@@ -25,6 +25,17 @@
         SETTINGS_CHANGED: 'DSS_SETTINGS_CHANGED',
     };
 
+    // chat-map 單一寫入者訊息型別常數（凍結，避免消費端改寫）
+    globalThis.DSS_CHAT_MAP_MSG = Object.freeze({
+        BIND: 'DSS_CHAT_MAP_BIND',
+        UNBIND: 'DSS_CHAT_MAP_UNBIND',
+        UNBIND_PRESETS: 'DSS_CHAT_MAP_UNBIND_PRESETS',
+        PRUNE_ORPHANS: 'DSS_CHAT_MAP_PRUNE_ORPHANS',
+        MERGE: 'DSS_CHAT_MAP_MERGE',
+        MIGRATE_LEGACY: 'DSS_CHAT_MAP_MIGRATE_LEGACY',
+        REPUBLISH_PARKED: 'DSS_CHAT_MAP_REPUBLISH_PARKED',
+    });
+
     // 跨層內容腳本訊息型別常數
     globalThis.DSS_CONTENT_MSG = {
         ACTIVE_PRESET_CHANGED: 'ACTIVE_PRESET_CHANGED',
@@ -39,6 +50,7 @@
             DSS_TAB_URL: globalThis.DSS_TAB_URL,
             DSS_EDITOR_WINDOW: globalThis.DSS_EDITOR_WINDOW,
             DSS_SETTINGS_MSG: globalThis.DSS_SETTINGS_MSG,
+            DSS_CHAT_MAP_MSG: globalThis.DSS_CHAT_MAP_MSG,
             DSS_CONTENT_MSG: globalThis.DSS_CONTENT_MSG,
         };
     }

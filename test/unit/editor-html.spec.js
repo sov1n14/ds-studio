@@ -1,69 +1,67 @@
 /**
- * Structural test for popup/editor/editor.html — verifies correct script tag order. This test reads the actual HTML file and asserts that all required script dependencies are loaded in the correct sequence, particularly that i18n.js is included between messaging.js and editor.js (Bug 3 fix).
+ * Load-order contract for popup/editor/editor.html (classic scripts, so order is the dependency graph). Expected order: logger and debounce first; every utils/storage-manager.* part, then the storage-manager.js entry that mixes them in; message constants and tab control; the i18n locales then i18n.js; the shared popup helpers; the editor parts; editor.js last. The storage-manager part sequence must also be identical to the one declared by manifest.json, popup/popup.html and background/service-worker.js, so the editor never assembles the bundle differently from the other contexts. (storage-manager.loader-contract.spec.js only checks presence and part-before-entry; this spec pins the full editor order.)
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const htmlPath = path.resolve(__dirname, '../../popup/editor/editor.html');
-const html = fs.readFileSync(htmlPath, 'utf-8');
-const scriptSrcs = [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map(m => m[1]);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf-8');
+const htmlSrcs = (rel) => [...read(rel).matchAll(/<script\s+src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+const scriptSrcs = htmlSrcs('popup/editor/editor.html');
 
-describe('editor.html script tag structure', () => {
-    it('has exactly 30 script tags', () => {
-        expect(scriptSrcs).toHaveLength(30);
+/** Ordered storage-manager file names (parts and entry) from any list of loader paths. */
+const storageManagerSequence = (paths) => paths.map((p) => p.match(/(storage-manager(?:\.[\w-]+)*\.js)$/)?.[1]).filter(Boolean);
+
+const SM_PARTS = [
+    'keys', 'rw', 'sync', 'sync.retry', 'restore', 'tombstone', 'preset-merge', 'preset-recency', 'presets',
+    'chatmap.diff', 'chatmap.ops', 'chatmap', 'chatmap.client', 'local', 'init', 'setters', 'settings-read',
+].map((p) => `storage-manager.${p}.js`);
+
+const EXPECTED = [
+    '../../utils/logger.js',
+    '../../utils/debounce.js',
+    ...SM_PARTS.map((f) => `../../utils/${f}`),
+    '../../utils/storage-manager.js',
+    '../../utils/message-constants.js',
+    '../../utils/tab-control.js',
+    '../../utils/i18n.locales.zhTW.js',
+    '../../utils/i18n.locales.en.js',
+    '../../utils/i18n.locales.js',
+    '../../utils/i18n.js',
+    '../popup.i18n-apply.js',
+    '../popup.preset-domain.js',
+    'editor.parse.js',
+    'editor.render.js',
+    'editor.storage.js',
+    'editor.js',
+];
+
+describe('editor.html script load order', () => {
+    it('declares exactly the expected scripts in the expected order', () => {
+        expect(scriptSrcs).toEqual(EXPECTED);
+    });
+
+    it('every storage-manager part on disk loads before the storage-manager.js entry', () => {
+        const onDisk = fs.readdirSync(path.join(ROOT, 'utils')).filter((f) => /^storage-manager\..+\.js$/.test(f)).sort();
+        expect([...SM_PARTS].sort(), 'SM_PARTS must list every utils/storage-manager.*.js file').toEqual(onDisk);
+        const entryIdx = scriptSrcs.indexOf('../../utils/storage-manager.js');
+        expect(entryIdx).toBeGreaterThan(0);
+        for (const part of onDisk) {
+            const idx = scriptSrcs.indexOf(`../../utils/${part}`);
+            expect(idx, `${part} must load before storage-manager.js`).toBeGreaterThanOrEqual(0);
+            expect(idx, `${part} must load before storage-manager.js`).toBeLessThan(entryIdx);
+        }
     });
 
     it.each([
-        ['logger.js first', 0, '../../utils/logger.js'],
-        ['debounce.js second', 1, '../../utils/debounce.js'],
-        ['storage-manager.keys.js third', 2, '../../utils/storage-manager.keys.js'],
-        ['storage-manager.chunk-lock.js fourth', 3, '../../utils/storage-manager.chunk-lock.js'],
-        ['storage-manager.rw.js fifth', 4, '../../utils/storage-manager.rw.js'],
-        ['storage-manager.sync.js sixth', 5, '../../utils/storage-manager.sync.js'],
-        ['storage-manager.restore.js seventh', 6, '../../utils/storage-manager.restore.js'],
-        ['storage-manager.tombstone.js eighth', 7, '../../utils/storage-manager.tombstone.js'],
-        ['storage-manager.preset-merge.js ninth', 8, '../../utils/storage-manager.preset-merge.js'],
-        ['storage-manager.preset-recency.js tenth', 9, '../../utils/storage-manager.preset-recency.js'],
-        ['storage-manager.presets.js eleventh', 10, '../../utils/storage-manager.presets.js'],
-        ['storage-manager.chatmap.diff.js twelfth', 11, '../../utils/storage-manager.chatmap.diff.js'],
-        ['storage-manager.chatmap.js thirteenth', 12, '../../utils/storage-manager.chatmap.js'],
-        ['storage-manager.local.js fourteenth', 13, '../../utils/storage-manager.local.js'],
-        ['storage-manager.init.js fifteenth', 14, '../../utils/storage-manager.init.js'],
-        ['storage-manager.setters.js sixteenth', 15, '../../utils/storage-manager.setters.js'],
-        ['storage-manager.settings-read.js seventeenth', 16, '../../utils/storage-manager.settings-read.js'],
-        ['storage-manager.js eighteenth', 17, '../../utils/storage-manager.js'],
-        ['message-constants.js nineteenth', 18, '../../utils/message-constants.js'],
-        ['tab-control.js twentieth', 19, '../../utils/tab-control.js'],
-        ['i18n.locales.zhTW.js twenty-first', 20, '../../utils/i18n.locales.zhTW.js'],
-        ['i18n.locales.en.js twenty-second', 21, '../../utils/i18n.locales.en.js'],
-        ['i18n.locales.js twenty-third', 22, '../../utils/i18n.locales.js'],
-        ['i18n.js twenty-fourth', 23, '../../utils/i18n.js'],
-        ['popup.i18n-apply.js twenty-fifth', 24, '../popup.i18n-apply.js'],
-        ['popup.preset-domain.js twenty-sixth', 25, '../popup.preset-domain.js'],
-        ['editor.parse.js twenty-seventh', 26, 'editor.parse.js'],
-        ['editor.render.js twenty-eighth', 27, 'editor.render.js'],
-        ['editor.storage.js twenty-ninth', 28, 'editor.storage.js'],
-        ['editor.js last (thirtieth)', 29, 'editor.js'],
-    ])('loads %s', (_label, index, expected) => {
-        expect(scriptSrcs[index]).toBe(expected);
-    });
-
-    it('ensures logger.js loads before the storage-manager bundle', () => {
-        const loggerIdx = scriptSrcs.indexOf('../../utils/logger.js');
-        const smFirstIdx = scriptSrcs.indexOf('../../utils/storage-manager.keys.js');
-        expect(loggerIdx).toBeGreaterThanOrEqual(0);
-        expect(loggerIdx).toBeLessThan(smFirstIdx);
-    });
-
-    it('ensures i18n.js appears after tab-control.js and before editor.js (positional invariant)', () => {
-        const tabCtrlIdx = scriptSrcs.indexOf('../../utils/tab-control.js');
-        const i18nIdx = scriptSrcs.indexOf('../../utils/i18n.js');
-        const edIdx = scriptSrcs.indexOf('editor.js');
-        expect(tabCtrlIdx).toBeGreaterThanOrEqual(0);
-        expect(i18nIdx).toBeGreaterThan(tabCtrlIdx);
-        expect(i18nIdx).toBeLessThan(edIdx);
+        ['manifest.json', () => JSON.parse(read('manifest.json')).content_scripts[0].js],
+        ['popup/popup.html', () => htmlSrcs('popup/popup.html')],
+        ['background/service-worker.js', () => [...read('background/service-worker.js').match(/importScripts\(([\s\S]*?)\);/)[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1])],
+    ])('assembles the storage-manager bundle in the same order as %s', (_name, loaderPaths) => {
+        const editorSeq = storageManagerSequence(scriptSrcs);
+        expect(editorSeq).toEqual([...SM_PARTS, 'storage-manager.js']);
+        expect(storageManagerSequence(loaderPaths())).toEqual(editorSeq);
     });
 });

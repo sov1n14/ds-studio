@@ -1,4 +1,4 @@
-// 260 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 267 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -95,8 +95,12 @@ async function initSettings() {
     // valid selectEl to write into when resolving bound-preset lookups.
     PresetOverlay.start(settings.promptPresets, settings.activePresetId ?? '', settings.isEnabled);
 
-    // 處理初始對話（可能自動選取已綁定的 preset）
-    await ChatBinding.handleChatChange();
+    // 處理初始對話（可能自動選取已綁定的 preset）；失敗僅記錄，不得阻斷下方導覽偵測與監聽器接線
+    try {
+        await ChatBinding.handleChatChange();
+    } catch (err) {
+        console.error('[DSS] content-script 初始對話綁定失敗:', err);
+    }
 
     // SPA 導航偵測：popstate 由狀態機自行掛載，DOM 變動由本檔的單一觀察器扇出。
     // 扇出目標：導覽檢查 + 浮動選單重掛（各自持有自己的去抖動語意）。
@@ -177,7 +181,7 @@ async function applySettingsChanged(changes) {
     // 全域提示詞開關生效值重新解析：目前啟用中的 preset 內容變動（含跨裝置同步）、
     // 切換啟用中的 preset（activePresetId 變動），或 legacy 裝置旗標變動皆須觸發，
     // 否則畫面上的 isGlobalPromptEnabled 會停留在舊值，直到下次頁面重新載入才更新。
-    if (isPresetChanged || isActivePresetIdChanged || changes[KEYS.GLOBAL_PROMPT_ENABLED]) {
+    if (isPresetChanged || isChunkKeyTouched || isActivePresetIdChanged || changes[KEYS.GLOBAL_PROMPT_ENABLED]) {
         await ChatBinding.refreshGlobalPromptEnabled();
     }
 }
@@ -233,6 +237,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         bindingState.pendingPresetId = request.presetId ?? null;
         ChatBinding.updatePromptPrefixFromBinding();
         PresetOverlay.updateActiveId(request.presetId || '');
+        // pending 變更後重新解析開關，避免先到的 activePresetId 廣播以舊 pending 解析
+        ChatBinding.refreshGlobalPromptEnabled()
+            .catch(err => console.error('[DSS] content-script ACTIVE_PRESET_CHANGED 開關重算失敗:', err));
     } else if (request.action === DSS_CONTENT_MSG.GET_PENDING_PRESET) {
         sendResponse({ pendingPresetId: bindingState.pendingPresetId });
     }

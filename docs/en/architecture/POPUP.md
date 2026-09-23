@@ -176,16 +176,18 @@ In `popup.html`, the script tags appear in this order:
 <script src="../utils/tab-control.js"></script>
 <script src="../utils/window-control.js"></script>
 <script src="../utils/storage-manager.keys.js"></script>
-<script src="../utils/storage-manager.chunk-lock.js"></script>
 <script src="../utils/storage-manager.rw.js"></script>
 <script src="../utils/storage-manager.sync.js"></script>
+<script src="../utils/storage-manager.sync.retry.js"></script>
 <script src="../utils/storage-manager.restore.js"></script>
 <script src="../utils/storage-manager.tombstone.js"></script>
 <script src="../utils/storage-manager.preset-merge.js"></script>
 <script src="../utils/storage-manager.preset-recency.js"></script>
 <script src="../utils/storage-manager.presets.js"></script>
 <script src="../utils/storage-manager.chatmap.diff.js"></script>
+<script src="../utils/storage-manager.chatmap.ops.js"></script>
 <script src="../utils/storage-manager.chatmap.js"></script>
+<script src="../utils/storage-manager.chatmap.client.js"></script>
 <script src="../utils/storage-manager.local.js"></script>
 <script src="../utils/storage-manager.init.js"></script>
 <script src="../utils/storage-manager.setters.js"></script>
@@ -216,7 +218,7 @@ In `popup.html`, the script tags appear in this order:
 <script src="popup.js"></script>
 ```
 
-- `utils/logger.js` loads first, providing structured logging, followed by `utils/debounce.js` (`DSSDebounce`), `utils/message-constants.js` (`DSS_TAB_URL`, `DSS_EDITOR_WINDOW`, `DSS_SETTINGS_MSG`, `DSS_CONTENT_MSG`), then the two layer-agnostic helpers `utils/tab-control.js` (`DSSTabControl`) and `utils/window-control.js` (`DSSWindowControl`). The fifteen `storage-manager.*.js` bundles (keys, chunk-lock, rw, sync, restore, tombstone, preset-merge, preset-recency, presets, chatmap.diff, chatmap, local, init, setters, settings-read) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split).
+- `utils/logger.js` loads first, providing structured logging, followed by `utils/debounce.js` (`DSSDebounce`), `utils/message-constants.js` (`DSS_TAB_URL`, `DSS_EDITOR_WINDOW`, `DSS_SETTINGS_MSG`, `DSS_CONTENT_MSG`), then the two layer-agnostic helpers `utils/tab-control.js` (`DSSTabControl`) and `utils/window-control.js` (`DSSWindowControl`). The seventeen `storage-manager.*.js` bundles (keys, rw, sync, sync.retry, restore, tombstone, preset-merge, preset-recency, presets, chatmap.diff, chatmap.ops, chatmap, chatmap.client, local, init, setters, settings-read) load next; each attaches its method group to a `globalThis.__DS_StorageManager_*` key (v4.0.0 split).
 - `utils/storage-manager.settings-read.js` registers `globalThis.__DS_StorageManager_settingsRead`, holding the read side of the settings API: `getSettings()` and `getActivePromptContent()`. `getSettings()` is allowlist-driven rather than key-space-driven — two module-level maps, `SYNCED_SETTINGS_KEYS` (18 entries: `presetIndex`, `activePresetId`, `pinnedPresetId`, `includeThinking`, `includeReferences`, `globalDefaultPrompt`, `sidebarAutoHide`, `hideThinking`, `autoExpandMessages`, `preventAutoScroll`, `websearchToggle`, `isShowSystemTime`, `chatWidth`, `chatWidthEnabled`, `inputWidth`, `inputWidthEnabled`, `syncInitialized`, `syncConflictPending`) and `LOCAL_ONLY_SETTINGS_KEYS` (2 entries: `isEnabled`, `globalPromptEnabled`, read from `chrome.storage.local` without the sync merge path), name every key that may surface. Anything on `StorageManager.KEYS` that is absent from both maps — sync retry bookkeeping, chunk layout metadata, key-prefix constants — is internal detail and never appears in the returned object. `promptPresets` (hydrated from `PRESET_INDEX`) and `chatPresetMap` (chunked, fetched via `getChatPresetMap()`) are appended afterwards, so the returned object carries 22 fields. `websearchToggle` passes through the shared `normalizeWebsearchToggle()` so the legacy `'default'` value resolves consistently on every read path.
 - `storage-manager.js` (entry) loads next and runs `Object.assign(StorageManager, ...)` to merge the bundles before exposing `window.StorageManager`. Both custom-select.js users and popup.js depend on it at runtime.
 
@@ -244,7 +246,7 @@ Five loaders must therefore stay in agreement: `manifest.json` (`content_scripts
 - `popup.locale.js` (v4.3.3) registers `window.__DS_PopupLocale` with `bindLocaleSwitcher()` — see the Language / Locale Switcher section below.
 - `popup.js` (entry) loads last, binding `Modal`/`Toast` and instantiating the manager factories, then calling `window.__DSSCustomSelect.createPresetCustomSelect({...})` inside its `DOMContentLoaded` handler.
 
-The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, `../../utils/debounce.js`, the fifteen `storage-manager.*.js` bundles (keys, chunk-lock, rw, sync, restore, tombstone, preset-merge, preset-recency, presets, chatmap.diff, chatmap, local, init, setters, settings-read), then `../../utils/storage-manager.js`, `../../utils/message-constants.js`, `../../utils/tab-control.js`, `../../utils/i18n.locales.zhTW.js`, `../../utils/i18n.locales.en.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, `../popup.i18n-apply.js`, `../popup.preset-domain.js`, then `editor.parse.js`, `editor.render.js`, `editor.storage.js`, and `editor.js` — 30 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` takes its debounce from the shared `DSSDebounce` global rather than defining one.
+The editor window (`popup/editor/editor.html`) loads `../../utils/logger.js`, `../../utils/debounce.js`, the seventeen `storage-manager.*.js` bundles (keys, rw, sync, sync.retry, restore, tombstone, preset-merge, preset-recency, presets, chatmap.diff, chatmap.ops, chatmap, chatmap.client, local, init, setters, settings-read), then `../../utils/storage-manager.js`, `../../utils/message-constants.js`, `../../utils/tab-control.js`, `../../utils/i18n.locales.zhTW.js`, `../../utils/i18n.locales.en.js`, `../../utils/i18n.locales.js`, `../../utils/i18n.js`, `../popup.i18n-apply.js`, `../popup.preset-domain.js`, then `editor.parse.js`, `editor.render.js`, `editor.storage.js`, and `editor.js` — 32 classic scripts, no inline JS (MV3 CSP-safe). `test/unit/editor-html.spec.js` asserts this exact list and its exact order positionally. `editor.js` takes its debounce from the shared `DSSDebounce` global rather than defining one.
 
 ### Data Flow Integration
 

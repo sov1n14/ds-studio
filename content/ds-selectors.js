@@ -1,4 +1,4 @@
-// 381 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
+// 383 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *

@@ -23,7 +23,7 @@
 - **匯出**：「備份設定（匯出 JSON）」按鈕透過 `StorageManager.getSettings()` 讀取所有設定，序列化為 JSON，以下載方式觸發，檔名為 `ds-studio-backup-YYYYMMDD.json`。
 - **匯入**：「還原設定（匯入 JSON）」按鈕開啟檔案選取器。在選取檔案並經使用者確認後：
   - 提示詞組使用 `mergePresets()` **合併** — 相同 ID 保留較新的 `updatedAt`，新 ID 附加於後。
-  - `chatPresetMap` 透過展開合併（本地端基底 + 匯入新增）。
+  - `chatPresetMap` 以 `mergeChatPresetBindings()` 交由 service worker 展開合併（現有綁定為基底，同 uuid 以匯入值為準）。
   - UI 設定（globalDefaultPrompt、includeThinking、includeReferences、側邊欄自動隱藏、寬度）由匯入值**覆寫**。
   - 成功後顯示 Toast，3 秒後重新載入彈出選單。
   - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。（v4.20.0）此處指的是裝置層級的 `globalPromptEnabled` 鍵；各提示詞組自身的 `globalPromptEnabled` 欄位屬於提示詞組資料，隨 `mergePresets()` 一同匯出與匯入。
@@ -36,7 +36,7 @@
 - **自動同步**：所有寫入操作（`_set()`）為安全起見同時寫入同步與本地端儲存空間。
 - **衝突偵測**：首次執行（或升級）時，比較本地端與同步的 `promptPresets`。若兩者不同且同步有資料，則設定 `syncConflictPending = true`，並阻止讀取使用同步資料（僅回傳本地端資料）。
 - **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
-- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／裝置層級 globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決；各提示詞組自身的 `globalPromptEnabled` 欄位則隨提示詞組正常合併，v4.20.0），清除衝突旗標。
+- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／裝置層級 globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決；各提示詞組自身的 `globalPromptEnabled` 欄位則隨提示詞組正常合併，v4.20.0），清除衝突旗標。chat-map 金鑰（`chatPresetMap`、`chatPresetMapMeta`、`chatPresetMap_*`）不在寫回範圍內，只由 service worker 寫入。
 - **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
 - **排序仲裁（v4.11.19）**：`mergePresets()` 除了合併內容，也決定回傳陣列的**順序**，依據是雙方的 `dsPresetOrderMeta`。僅當本機 `orderUpdatedAt` **嚴格大於**雲端時採用本機順序；其餘情況（**含時間戳完全相等**）一律採用雲端的 `order` 陣列。此規則與讀取路徑的 `_pickPresetOrderByRecency()` 是兩套獨立機制，`mergePresets()` 不呼叫後者。
   - 時間戳相等是**常態而非邊界狀況**：單次 `_set()` 先寫 `chrome.storage.sync`，再把同一個物件鏡射到 `chrome.storage.local`，因此任何一次成功儲存後兩側 `orderUpdatedAt` 必然逐位元相同。
@@ -85,8 +85,8 @@
 | `globalDefaultPrompt` | string | `''` | 在所有對話中預先附加至各提示詞組前的全域提示詞。 |
 | `globalPromptEnabled` | boolean | `true` | 全域提示詞是否注入（v3.0.0）。主開關優先權更高。v4.20.0 起降級為 **legacy 回退鍵** —— 僅在無作用中提示詞組時採用，有作用中提示詞組時改以該組自身的 `globalPromptEnabled` 欄位為準（解析邏輯見 `StorageManager.resolveGlobalPromptEnabled()`）。 |
 | `chatPresetMap` | object | `{}` | *已於 v2.4.0 遷移為分塊儲存*：舊版扁平鍵，僅於遷移時讀取，遷移後清理。 |
-| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | （v2.4.0+）分塊索引：版本號（樂觀並發權杖）、分塊數量、各塊位元組大小。 |
-| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | （v2.4.0+）實際資料分塊，每塊 ≤ 7168 bytes，合併後即完整的 chatPresetMap。 |
+| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | （v2.4.0+）分塊索引：版本號（每次提交遞增 1，無變更時不寫入）、分塊數量、各塊位元組大小。僅由 service worker 寫入。 |
+| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | （v2.4.0+）實際資料分塊，每塊 ≤ 7168 bytes，合併後即完整的 chatPresetMap。僅由 service worker 寫入。 |
 | `dsSidebarAutoHide` | boolean | `false` | 側邊欄自動隱藏功能是否啟用。 |
 | `dsChatWidth` | number | `70` | 對話區域寬度百分比（30–100）。 |
 | `dsChatWidthEnabled` | boolean | `false` | 對話區域寬度調整是否啟用。 |
@@ -106,6 +106,20 @@
 | `promptPresets` | `PromptPreset[]` | — | *已於 v1.7.0 退役*：v1.7.0 之前用於儲存所有提示詞組的陣列，已被 `dsPresetIndex` + `dsPreset_<id>` 取代。 |
 | `restored_messages` | object | {} | 已復原的審查回覆記錄，含 message_id、fragments 等（僅本地端，最多 200 筆）。 |
 | `dss-device-id` | string | — | 本機裝置 ID（僅本地端，絕不同步；不在 `StorageManager.KEYS` 內）。service worker 首次新增臨時對話待刪項目時以 `crypto.randomUUID()` 建立一次，寫入該項目的 `ownerDeviceId`。補救掃描以此區分本機項目（`LEASE_TTL_MS`，10 分鐘）與其他裝置或無擁有者的項目（須明確釋放或等待 `FOREIGN_LEASE_TTL_MS`，24 小時）。 |
+
+### Chat-map 訊息（`DSS_CHAT_MAP_MSG`）
+
+`chatPresetMapMeta`、`chatPresetMap_<n>` 與舊版 `chatPresetMap` 只由 service worker 寫入。content script、popup 與編輯器呼叫 `bindChatToPreset`／`unbindChat`／`unbindChatsForPresets`／`mergeChatPresetBindings`／`pruneOrphanChatBindings`／`migrateLegacyChatPresetMap`，各自送出一個 `utils/message-constants.js` 定義的 `DSS_CHAT_MAP_MSG` 操作；`background/chat-map-routes.js` 以 `DSSChatMapOps.validate` 驗證後，於單一 FIFO 佇列依序套用，回覆 `{ ok: true, map }` 或 `{ ok: false, error }`。讀取（`getChatPresetMap`）在各 context 直接讀取 storage。
+
+| 訊息型別 | 酬載 | service worker 的處理 |
+|-|-|-|
+| `DSS_CHAT_MAP_BIND` | `{ uuid, presetId }`（非空字串） | 設定 `uuid → presetId` |
+| `DSS_CHAT_MAP_UNBIND` | `{ uuid }` | 刪除該 uuid 的綁定 |
+| `DSS_CHAT_MAP_UNBIND_PRESETS` | `{ presetIds: string[] }` | 刪除所有指向 `presetIds` 之一的綁定 |
+| `DSS_CHAT_MAP_PRUNE_ORPHANS` | 無 | 刪除 preset id 不在 `dsPresetIndex`（於佇列內讀取最新值）中的綁定；索引為空或不存在時不修剪 |
+| `DSS_CHAT_MAP_MERGE` | `{ entries }`（值皆為字串的純物件） | 將 `entries` 展開覆蓋至 map，同 uuid 以 `entries` 為準 |
+| `DSS_CHAT_MAP_MIGRATE_LEGACY` | 無 | 無 meta 且舊版 `chatPresetMap` 有綁定時寫入分塊與 meta，再自 sync 與 local 移除舊版金鑰；可重複執行 |
+| `DSS_CHAT_MAP_REPUBLISH_PARKED` | `{ keys: string[] }` | 對每個 chat-map 金鑰，將其目前的 local 值推送至 sync（local 無值則自 sync 移除），再自 `dsLocalAuth` 解除擱置；其他金鑰忽略 |
 
 ### 實作細節
 

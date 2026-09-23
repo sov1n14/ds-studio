@@ -7,16 +7,10 @@
 
 // === 錯誤類別（供 instanceof 檢查） ===
 
-class LockAcquireTimeoutError extends Error {
+class ChatMapDispatchError extends Error {
     constructor(message) {
         super(message);
-        this.name = 'LockAcquireTimeoutError';
-    }
-}
-class WriteReconciliationExhaustedError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = 'WriteReconciliationExhaustedError';
+        this.name = 'ChatMapDispatchError';
     }
 }
 
@@ -104,8 +98,7 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
      * Typed error constructors for instanceof checks by callers and tests.
      */
     errors: {
-        LockAcquireTimeoutError,
-        WriteReconciliationExhaustedError,
+        ChatMapDispatchError,
     },
 
     /**

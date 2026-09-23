@@ -1,4 +1,4 @@
-// 358 lines: three render concerns (button, inject, observer) for go-top unified per CA7
+// 359 lines: three render concerns (button, inject, observer) for go-top unified per CA7
 /**
  * DS studio — Go To Top Render Combined
  * 按鈕建構、注入策略、包裝容器 Observer 三合一。

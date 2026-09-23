@@ -18,6 +18,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 import { evalPopupScript, readProjectFile } from '../helpers/popup-script-loader.js';
+import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
 
 const K = StorageManager.KEYS;
 
@@ -511,8 +512,11 @@ describe('createLiveSyncListener — preset list reload', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('createLiveSyncListener — chat preset map reload', () => {
+    // Durable chat-map layout as the SW writer leaves it; the popup is a client and cannot mutate the map directly.
+    const seedStoredMap = (map) => writeChatMapLayout([chrome.storage.sync, chrome.storage.local], K, [map]);
+
     it('reloads chatPresetMap when CHAT_PRESET_MAP_META changes', async () => {
-        await StorageManager.mutateChatPresetMap(() => ({ uuidA: 'p1' }));
+        await seedStoredMap({ uuidA: 'p1' });
 
         const { ctx, state } = buildCtx();
         useVirtualTime();
@@ -525,7 +529,7 @@ describe('createLiveSyncListener — chat preset map reload', () => {
     });
 
     it('reloads chatPresetMap when a chatPresetMap_* chunk key changes', async () => {
-        await StorageManager.mutateChatPresetMap(() => ({ uuidB: 'p2' }));
+        await seedStoredMap({ uuidB: 'p2' });
 
         const { ctx, state } = buildCtx();
         useVirtualTime();

@@ -5,16 +5,18 @@
 importScripts(
     '../utils/logger.js',
     '../utils/storage-manager.keys.js',
-    '../utils/storage-manager.chunk-lock.js',
     '../utils/storage-manager.rw.js',
     '../utils/storage-manager.sync.js',
+    '../utils/storage-manager.sync.retry.js',
     '../utils/storage-manager.restore.js',
     '../utils/storage-manager.tombstone.js',
     '../utils/storage-manager.preset-merge.js',
     '../utils/storage-manager.preset-recency.js',
     '../utils/storage-manager.presets.js',
     '../utils/storage-manager.chatmap.diff.js',
+    '../utils/storage-manager.chatmap.ops.js',
     '../utils/storage-manager.chatmap.js',
+    '../utils/storage-manager.chatmap.client.js',
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',
     '../utils/storage-manager.setters.js',
@@ -27,7 +29,8 @@ importScripts(
     'service-worker-constants.js',
     'settings-routes.js',
     'pending-store-routes.js',
-    'editor-window-routes.js'
+    'editor-window-routes.js',
+    'chat-map-routes.js'
 );
 
 // 註冊設定訊息路由與變更廣播（頂層呼叫，確保 worker 重啟後仍存活）
@@ -38,6 +41,9 @@ DSSPendingStoreRoutes.install();
 
 // 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSEditorWindowRoutes.install();
+
+// 註冊 chat→preset 綁定表路由，並使本 worker 的 StorageManager 成為唯一寫入者（頂層呼叫，確保 worker 重啟後仍存活）
+DSSChatMapRoutes.install({ storageManager: StorageManager });
 
 // 指數退避上限（分鐘）
 const BACKOFF_CAP_MINUTES = 30;

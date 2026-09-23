@@ -23,7 +23,7 @@
 - **Export**: The "Backup Settings (Export JSON)" button reads all settings via `StorageManager.getSettings()`, serializes to JSON, and triggers a download with the filename `ds-studio-backup-YYYYMMDD.json`.
 - **Import**: The "Restore Settings (Import JSON)" button opens a file picker. After file selection and user confirmation:
   - Prompt groups use `mergePresets()` to **merge** — same ID retains the newer `updatedAt`, new IDs are appended.
-  - `chatPresetMap` is merged via spread (local base + imported additions).
+  - `chatPresetMap` is merged by the service worker via `mergeChatPresetBindings()` (existing bindings as the base; the imported value wins per uuid).
   - UI settings (globalDefaultPrompt, includeThinking, includeReferences, sidebar auto-hide, widths) are **overwritten** by the import values.
   - On success, a toast is shown and the popup menu reloads after 3 seconds.
   - (v4.7.3) `isEnabled` / `globalPromptEnabled` are device-level local-only toggles; importing a backup **must not overwrite** the current device's toggle state, preventing a disabled extension from being accidentally enabled by an import. (v4.20.0) This refers to the device-level `globalPromptEnabled` key; each prompt group's own `globalPromptEnabled` field belongs to the prompt group data and is exported/imported along with `mergePresets()`.
@@ -36,7 +36,7 @@
 - **Auto Sync**: All write operations (`_set()`) write to both sync and local storage as a safety measure.
 - **Conflict Detection**: On first run (or upgrade), the local and sync `promptPresets` are compared. If they differ and sync has data, `syncConflictPending = true` is set and reading from sync data is blocked (only local data is returned).
 - **Conflict Resolution UI**: When `syncConflictPending` is true, opening the popup menu displays a "Cloud Sync Conflict" dialog with a "Merge Sync" button.
-- **Resolution Logic**: `StorageManager.resolveSyncConflict()` reads from both storage areas, merges prompt groups via `mergePresets()`, overwrites UI settings with the cloud version (except `isEnabled` / device-level `globalPromptEnabled` — both are device-level local toggles and do not participate in sync conflict resolution; each prompt group's own `globalPromptEnabled` field merges normally with the prompt group, v4.20.0), and clears the conflict flag.
+- **Resolution Logic**: `StorageManager.resolveSyncConflict()` reads from both storage areas, merges prompt groups via `mergePresets()`, overwrites UI settings with the cloud version (except `isEnabled` / device-level `globalPromptEnabled` — both are device-level local toggles and do not participate in sync conflict resolution; each prompt group's own `globalPromptEnabled` field merges normally with the prompt group, v4.20.0), and clears the conflict flag. Chat-map keys (`chatPresetMap`, `chatPresetMapMeta`, `chatPresetMap_*`) are outside the write-back set; only the service worker writes them.
 - **Smart Merge**: `mergePresets()` uses a Map keyed by prompt group `id`. For each ID, the prompt group with the newer `updatedAt` is retained. New IDs are appended. This prevents data loss when both sides independently modify prompt groups.
 - **Sort Arbitration (v4.11.19)**: `mergePresets()` also determines the **order** of the returned array, based on both sides' `dsPresetOrderMeta`. The local order is adopted only when the local `orderUpdatedAt` is **strictly greater than** the cloud's; in all other cases (**including exactly equal timestamps**), the cloud's `order` array is used. This rule and the read path's `_pickPresetOrderByRecency()` are two independent mechanisms; `mergePresets()` does not call the latter.
   - Equal timestamps are **the norm, not an edge case**: a single `_set()` writes to `chrome.storage.sync` first, then mirrors the same object to `chrome.storage.local`, so after any successful save, both sides' `orderUpdatedAt` are necessarily bit-identical.
@@ -85,8 +85,8 @@
 | `globalDefaultPrompt` | string | `''` | Global prompt prepended to all prompt groups across all conversations. |
 | `globalPromptEnabled` | boolean | `true` | Whether the global prompt is injected (v3.0.0). The master switch has higher priority. Since v4.20.0, demoted to a **legacy fallback key** — used only when no active prompt group exists; when an active prompt group exists, that group's own `globalPromptEnabled` field takes precedence (resolution logic in `StorageManager.resolveGlobalPromptEnabled()`). |
 | `chatPresetMap` | object | `{}` | *Migrated to chunked storage in v2.4.0*: old flat key, read only during migration, cleaned up after migration. |
-| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | (v2.4.0+) Chunk index: version number (optimistic concurrency token), chunk count, per-chunk byte sizes. |
-| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | (v2.4.0+) Actual data chunks, each ≤ 7168 bytes; when merged, they form the complete chatPresetMap. |
+| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | (v2.4.0+) Chunk index: version number (incremented by 1 on every commit; no write when nothing changes), chunk count, per-chunk byte sizes. Written only by the service worker. |
+| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | (v2.4.0+) Actual data chunks, each ≤ 7168 bytes; when merged, they form the complete chatPresetMap. Written only by the service worker. |
 | `dsSidebarAutoHide` | boolean | `false` | Whether the sidebar auto-hide feature is enabled. |
 | `dsChatWidth` | number | `70` | Conversation area width percentage (30–100). |
 | `dsChatWidthEnabled` | boolean | `false` | Whether conversation area width adjustment is enabled. |
@@ -106,6 +106,20 @@
 | `promptPresets` | `PromptPreset[]` | — | *Retired in v1.7.0*: previously used to store all prompt groups as an array; replaced by `dsPresetIndex` + `dsPreset_<id>`. |
 | `restored_messages` | object | {} | Restored censor reply records, containing message_id, fragments, etc. (local only, max 200 entries). |
 | `dss-device-id` | string | — | This device's id (local only, never synced; outside `StorageManager.KEYS`). Created once with `crypto.randomUUID()` by the service worker when the device first queues a temporary conversation for deletion, and written to that entry's `ownerDeviceId`. The remediation sweep uses it to tell own entries (`LEASE_TTL_MS`, 10 minutes) from entries owned by another device or by none (explicit release or `FOREIGN_LEASE_TTL_MS`, 24 hours). |
+
+### Chat-Map Messages (`DSS_CHAT_MAP_MSG`)
+
+`chatPresetMapMeta`, `chatPresetMap_<n>`, and the legacy `chatPresetMap` are written only by the service worker. The content script, popup, and editor call `bindChatToPreset`/`unbindChat`/`unbindChatsForPresets`/`mergeChatPresetBindings`/`pruneOrphanChatBindings`/`migrateLegacyChatPresetMap`, each of which sends one `DSS_CHAT_MAP_MSG` op defined in `utils/message-constants.js`; `background/chat-map-routes.js` validates it with `DSSChatMapOps.validate`, applies ops in order in one FIFO queue, and replies `{ ok: true, map }` or `{ ok: false, error }`. Reads (`getChatPresetMap`) read storage directly in each context.
+
+| Message type | Payload | Effect in the service worker |
+|-|-|-|
+| `DSS_CHAT_MAP_BIND` | `{ uuid, presetId }` (non-empty strings) | Set `uuid → presetId` |
+| `DSS_CHAT_MAP_UNBIND` | `{ uuid }` | Delete the uuid's binding |
+| `DSS_CHAT_MAP_UNBIND_PRESETS` | `{ presetIds: string[] }` | Delete every binding that points to one of `presetIds` |
+| `DSS_CHAT_MAP_PRUNE_ORPHANS` | none | Delete bindings whose preset id is absent from `dsPresetIndex` (latest value, read inside the queue); an empty or missing index prunes nothing |
+| `DSS_CHAT_MAP_MERGE` | `{ entries }` (plain object, string values) | Spread `entries` over the map; `entries` wins per uuid |
+| `DSS_CHAT_MAP_MIGRATE_LEGACY` | none | When no meta exists and the legacy `chatPresetMap` has bindings, write chunks and meta, then delete the legacy key from sync and local; safe to re-run |
+| `DSS_CHAT_MAP_REPUBLISH_PARKED` | `{ keys: string[] }` | For each chat-map key, push its current local value to sync (or delete it from sync when local has none), then unpark it from `dsLocalAuth`; other keys are ignored |
 
 ### Implementation Details
 

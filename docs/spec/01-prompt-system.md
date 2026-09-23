@@ -79,7 +79,7 @@
 - **範圍**：透過獨立編輯視窗（鉛筆按鈕 → `editor.html?target=global`）編輯的多行文字。若非空值且全域提示詞開關開啟，該文字會在所有對話中預先附加至各提示詞組之前。
 - **編輯入口**（v3.0.0）：彈出選單 Global Prompt 卡片中「全域提示詞」文字右側的鉛筆按鈕（`#editGlobalPromptBtn`，樣式與新增提示詞組的 `+` 按鈕一致），點擊開啟 1280×720 獨立編輯視窗，維持自動儲存。
 - **專屬注入開關**（v3.0.0，改為逐提示詞組獨立 v4.20.0）：卡片右緣的 `#globalPromptToggle` 開關（外觀與主開關相同，與上方主開關垂直對齊）。開啟時注入全域提示詞；關閉時不注入。v4.20.0 起此開關為**每個提示詞組各自獨立**的屬性，儲存於該組的 `globalPromptEnabled` 欄位，隨提示詞組一同跨裝置同步；切換提示詞組時開關會重新反映該組自己的設定。UI 未新增元件，沿用同一個 `#globalPromptToggle`。
-- **生效值解析**（v4.20.0）：由 `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)` 決定 —— 有作用中的提示詞組時取該組的 `globalPromptEnabled`，欄位缺漏（既有資料升級）時視為 `true`；無作用中的提示詞組（空白選項模式、對話未綁定）時回退至保留的裝置層級 `globalPromptEnabled` 鍵。新建提示詞組一律明確帶入 `globalPromptEnabled: true`。
+- **生效值解析**（v4.20.0；依顯示中的提示詞組 v4.34.3）：開關生效值以頁面浮動選單**顯示中的提示詞組**為準，確保顯示與實際注入結果一致。`ChatBinding.resolveDisplayedGlobalPromptEnabled(settings)` 以 `resolveActivePresetIdFrom()` 解析顯示中的提示詞組（對話綁定表 `chatPresetMap` → `pendingPresetId` → `pinnedPresetId`），再交由 `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)` 決定 —— 有顯示中的提示詞組時取該組的 `globalPromptEnabled`，欄位缺漏（既有資料升級）時視為 `true`；無顯示中的提示詞組（空白選項模式、對話未綁定）時由保留的裝置層級 `globalPromptEnabled` 鍵決定。導覽、提示詞組內容、`activePresetId`、綁定表 chunk 金鑰或 legacy 鍵變動，以及收到 `ACTIVE_PRESET_CHANGED` 時皆重新計算。新建提示詞組一律明確帶入 `globalPromptEnabled: true`。
 - **導覽時重新解析**（v4.20.0）：SPA 導覽不觸發 `chrome.storage.onChanged`，故 `handleChatChange()` 在每一條分支（已綁定、綁定失效、自動綁定、未綁定的既有對話、全新對話）都會重新解析生效值，避免沿用上一個對話殘留的開關狀態。生效提示詞組 id 由 `resolveOverlayPresetId()` 統一解析，與浮動選單共用同一份優先序規則。
 - **刪除連動**（v4.20.0）：刪除單一提示詞組或一鍵刪除全部時，若 `activePresetId` 因此清空，開關會立即重新渲染為裝置層級回退值，不會停留在已刪除那一組的狀態。
 - **優先權**：主開關（`isEnabled`）優先權最高 — 主開關關閉時，無論 `globalPromptEnabled` 狀態為何，全域提示詞一律不注入（由 `injectPrefix()` 的 early return 保證）。
