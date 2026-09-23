@@ -55,7 +55,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
         await SM.mutateChatPresetMap(() => {});
         const metaAfter = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta;
         expect(metaAfter.version).toBe(metaBefore.version);
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('removes trailing empty chunks after a mutate that also modifies chunk 0', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['trim-' + i] = LARGE_VALUE(i); });
@@ -70,7 +70,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
         const syncAfter = await chrome.storage.sync.get(null);
         expect(syncAfter.chatPresetMapMeta.chunkCount).toBeLessThan(countBefore);
         expect(syncAfter['chatPresetMap_0'][firstKey]).toBe('modified-value');
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('cleans up orphaned chunk keys on shrink', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['orp-' + i] = LARGE_VALUE(i); });
@@ -81,7 +81,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
         const syncAfter = await chrome.storage.sync.get(null);
         expect(syncAfter.chatPresetMapMeta.chunkCount).toBe(1);
         for (let i = 1; i < countBefore; i++) expect(syncAfter['chatPresetMap_' + i]).toBeUndefined();
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('writes new chunks beyond original chunkCount', async () => {
         await SM.bindChatToPreset('seed-1', 'val');
@@ -90,7 +90,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
         const meta = syncData.chatPresetMapMeta;
         expect(meta.chunkCount).toBeGreaterThan(1);
         for (let i = 0; i < meta.chunkCount; i++) expect(syncData['chatPresetMap_' + i]).toBeDefined();
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('a rebind after a multi-chunk add+delete updates the new key; the deleted key stays gone', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 40; i++) m['rb-' + i] = LARGE_VALUE(i); });
@@ -100,7 +100,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
         expect(map['rb-new']).toBe('updated-val');
         expect(map['rb-0']).toBeUndefined();
         expect(Object.keys(map)).toHaveLength(40);
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('a committed change on a multi-chunk map persists and bumps meta.version by 1', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['wr-' + i] = LARGE_VALUE(i); });
@@ -109,7 +109,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
         const meta = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta;
         expect(meta.version).toBe(versionBefore + 1);
         expect((await SM.getChatPresetMap())['wr-0']).toBe('changed');
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('meta.chunkSizes equals the real byte size of every persisted chunk after a shrink-in-place', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['sz-' + i] = LARGE_VALUE(i); });
@@ -123,7 +123,7 @@ describe('mutateChatPresetMap multi-chunk path', () => {
             expect(Object.keys(chunk).length).toBeGreaterThan(0);
             expect(meta.chunkSizes[i], `chunkSizes[${i}]`).toBe(byteLen(chunk));
         }
-    }, { timeout: 30000 });
+    }, 30000);
 });
 
 describe('chunk-content edges (no trust in meta, no duplicate survivors)', () => {
@@ -192,7 +192,7 @@ describe('bindChatToPreset edge cases', () => {
         await SM.mutateChatPresetMap(m => { for (let i = 35; i < 70; i++) m['full-' + i] = LARGE_VALUE(i); });
         const countAfter = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta.chunkCount;
         expect(countAfter).toBeGreaterThan(countBefore);
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('in-place update persists new value', async () => {
         await SM.bindChatToPreset('uuid-upd', 'preset-a');
@@ -251,7 +251,7 @@ describe('unbindChat edge cases', () => {
         for (let i = syncAfter.chatPresetMapMeta.chunkCount; i < countBefore; i++) {
             expect(syncAfter['chatPresetMap_' + i]).toBeUndefined();
         }
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('chunkSizes length matches chunkCount after cascade', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 80; i++) m['sl-' + i] = LARGE_VALUE(i); });
@@ -261,7 +261,7 @@ describe('unbindChat edge cases', () => {
         for (const uuid of Object.keys(lastChunk)) await SM.unbindChat(uuid);
         const metaAfter = (await chrome.storage.sync.get('chatPresetMapMeta')).chatPresetMapMeta;
         expect(metaAfter.chunkSizes).toHaveLength(metaAfter.chunkCount);
-    }, { timeout: 30000 });
+    }, 30000);
 
     it('emptying the trailing chunk removes its key from both sync and local', async () => {
         await SM.mutateChatPresetMap(m => { for (let i = 0; i < 40; i++) m['orpc-' + i] = LARGE_VALUE(i); });
@@ -273,7 +273,7 @@ describe('unbindChat edge cases', () => {
         for (const uuid of Object.keys(syncBefore[lastKey])) await SM.unbindChat(uuid);
         expect((await chrome.storage.sync.get(lastKey))[lastKey], 'sync orphan').toBeUndefined();
         expect((await chrome.storage.local.get(lastKey))[lastKey], 'local orphan').toBeUndefined();
-    }, { timeout: 30000 });
+    }, 30000);
 });
 
 describe('getChatPresetMap serialization', () => {
