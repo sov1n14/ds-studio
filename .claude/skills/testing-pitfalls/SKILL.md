@@ -1,20 +1,29 @@
 ---
 name: testing-pitfalls
-description: Read when writing or reviewing a test — especially DOM fixtures, mocks, and regression tests for bug fixes. Triggers - creating a test fixture or DOM mock, reviewing why a test suite passed while a bug shipped, adding sibling/neighboring elements to a test's DOM setup, writing a test for code that uses `querySelector` or any first-match DOM API. Not for test methodology (verification-testing-policy) or code design (coding-principles).
+description: Read before writing, editing, or reviewing any test in this project — unit test, spec, fixture, DOM mock, `chrome.storage` test double — every time, before starting. Also when recording a new lesson after a test failed its purpose - passed while a bug shipped, tautological, or masked by a fixture or mock. Not for test methodology (verification-testing-policy) or code design (coding-principles).
 ---
 
 # Testing Pitfalls
 
-Lessons from real bugs that shipped under green tests. Each entry records a failure pattern, why existing tests missed it, and the rule that prevents recurrence.
+Lessons from real bugs that shipped under green tests. Consulting them before each test keeps the project from repeating a failure it already paid for.
 
-Review the checklist when writing or reviewing any test fixture.
+## How to Use
 
-## Checklist
+1. **Glance** — before writing, editing, or reviewing any test, read the index below.
+2. **Match** — judge whether any entry is strongly related to the test at hand.
+3. **Open** — for each match, read its reference file and apply its Rule and Check to the test.
 
-### 1. DOM Fixture Completeness
+## Index
 
-**Lesson from**: v4.33.18 → v4.33.26 — `findSendButtonForTextarea` regression. `querySelector` returns the first DOM-order match. The attachment button matched the same selector as the send button and appeared first in the real DOM. Tests passed because the fixture only contained the send button — no attachment button to expose the ordering conflict.
+| Pitfall | Relevant when your test … | Reference |
+|-|-|-|
+| DOM Fixture Completeness | builds a DOM fixture for code using `querySelector` or any first-match API, where sibling elements could match the same selector | [dom-fixture-completeness.md](references/dom-fixture-completeness.md) |
+| Boundary Test Doubles Must Copy | fakes `chrome.storage`, messaging, IndexedDB, or any in-memory store, or asserts a read-modify-write / lost-update outcome, or simulates a boundary error such as `chrome.runtime.lastError` | [boundary-doubles-must-copy.md](references/boundary-doubles-must-copy.md) |
+| Red For the Right Reason | fails because its target is not implemented yet, or loads its target through a runtime `import()`, `require`, or other dynamic loader | [red-for-the-right-reason.md](references/red-for-the-right-reason.md) |
 
-**Rule**: Test fixtures for a UI region MUST include all interactive sibling elements present in the real page, not just the element under test. When code uses `querySelector` or any first-match API, omitting siblings that match the same selector hides ordering-dependent bugs.
+## Adding a New Lesson
 
-**Check**: Before finalizing a DOM fixture, compare against real page structure (`to-do/samples/` for HTML snapshots). Every element matching the selector under test must appear in the fixture, in real DOM order.
+Record a lesson when a test failed its purpose — it passed while a bug shipped, asserted a tautology, or a fixture or mock masked the defect.
+
+1. Create `references/<kebab-case-name>.md` with an H1 title and three paragraphs: **Lesson from** (the bug, the version or function, why the tests missed it), **Rule** (what every future test MUST do), **Check** (the concrete step that verifies the rule before trusting the test).
+2. Add one row to the index: pitfall name, a one-clause "relevant when your test …" trigger, and a relative link to the new file.
