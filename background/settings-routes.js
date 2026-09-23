@@ -7,7 +7,7 @@
  *   2. chrome.storage.onChanged：受監看鍵變更時廣播 DSS_SETTINGS_CHANGED 給
  *      chat.deepseek.com 的所有分頁。
  *
- * 相依：utils/settings-message-constants.js、utils/storage-manager.js 需先載入。
+ * 相依：utils/message-constants.js、utils/storage-manager.js 需先載入。
  */
 (function () {
     'use strict';

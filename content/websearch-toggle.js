@@ -185,7 +185,7 @@ const WebSearchToggle = {
         try {
             const { messageTypes, featureToggle } = this._resolveDeps();
             if (!messageTypes || !featureToggle) {
-                throw new Error('content/websearch-toggle.js 需要 utils/settings-message-constants.js 與 content/feature-toggle.js 先行載入');
+                throw new Error('content/websearch-toggle.js 需要 utils/message-constants.js 與 content/feature-toggle.js 先行載入');
             }
 
             this._setupSettingsListener();

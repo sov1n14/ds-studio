@@ -1,9 +1,7 @@
 /**
  * DS studio — 臨時對話啟用旗標
  * 單一職責：集中管理啟用旗標的記憶體快取、讀寫與跨情境同步。
- * 設定不由本層直讀儲存區：初始值以 DSS_GET_SETTINGS 向 background 索取、
- * 寫入以 DSS_SET_SETTINGS 交由 background 落盤、變更則透過 background 廣播的
- * DSS_SETTINGS_CHANGED 收斂；DSS_SETTINGS_MSG 由 utils/settings-message-constants.js 於前載入提供。
+ * 設定不由本層直讀儲存區：初始值以 DSS_GET_SETTINGS 向 background 索取、寫入以 DSS_SET_SETTINGS 交由 background 落盤、變更則透過 background 廣播的 DSS_SETTINGS_CHANGED 收斂；DSS_SETTINGS_MSG 由 utils/message-constants.js 於前載入提供。
  * 常數由 temporary-chat-constants.js 在前載入提供（classic script，無 ESM import）。
  * 無載入期副作用：呼叫端須自行呼叫 initFromStorage() 與 startSync()。
  */

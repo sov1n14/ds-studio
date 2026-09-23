@@ -1,9 +1,7 @@
 /**
  * DS studio — 訊息與 URL 常數合併檔（utils/message-constants.js）
  *
- * 合併自 url-constants.js、editor-window-constants.js、settings-message-constants.js。
- * 層級無關的 classic script：以顯式 globalThis 指派公開常數，
- * 避免多處硬編碼重複字串。除該指派外無任何載入期副作用。
+ * 層級無關的 classic script：以顯式 globalThis 指派公開常數，避免多處硬編碼重複字串。除該指派外無任何載入期副作用。
  */
 (function () {
     'use strict';

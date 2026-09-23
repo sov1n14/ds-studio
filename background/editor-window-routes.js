@@ -7,7 +7,7 @@
  * 視窗並移除對應的 storage key（單一 id 關閉失敗不阻擋另一個 id 的處理）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
- * 相依：utils/editor-window-constants.js 需先載入。
+ * 相依：utils/message-constants.js 需先載入。
  */
 (function () {
     'use strict';
@@ -15,7 +15,7 @@
     /** 於呼叫時解析訊息常數，缺失即拋出並指名修法。 */
     function resolveConstants() {
         const constants = globalThis.DSS_EDITOR_WINDOW;
-        if (!constants) throw new Error('[DSS] editor-window-routes 需要 utils/editor-window-constants.js 先行載入');
+        if (!constants) throw new Error('[DSS] editor-window-routes 需要 utils/message-constants.js 先行載入');
         return constants;
     }
 

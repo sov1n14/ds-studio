@@ -3,7 +3,7 @@
  *
  * 單一職責：集中處理「總開關 + 各功能自身開關」的初始取值、變更廣播與啟停轉換。
  * 生效條件：總開關 isEnabled !== false 且該功能自身鍵 !== false（未儲存視為開啟）。
- * 初始設定向 background 索取；DSS_SETTINGS_MSG 由 utils/settings-message-constants.js 於前載入提供。
+ * 初始設定向 background 索取；DSS_SETTINGS_MSG 由 utils/message-constants.js 於前載入提供。
  * 全體功能共用單一 chrome.runtime.onMessage 監聽器，於第一次註冊時才掛上。
  * 無載入期副作用：載入僅完成 globalThis 指派，不註冊任何監聽器。
  */
