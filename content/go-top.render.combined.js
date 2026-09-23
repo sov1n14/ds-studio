@@ -14,7 +14,7 @@
     const bundle = {
         // ── Button ──────────────────────────────────────────────
 
-        // SVG path 為本擴充功能自行設計的常量（垂直翻轉原生圖示），非來自 DeepSeek DOM 的 CSS 選擇器，不隨上游 UI 更新而變動。
+        // SVG path 資料逐字複製自 DeepSeek 原生箭頭圖示，朝上方向由 transform:scaleY(-1) 翻轉而來；此副本由本擴充功能自行持有，屬作者控制的穩定常量，不受上游選擇器輪換影響。
         _iconSvg() {
             return [
                 '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"',

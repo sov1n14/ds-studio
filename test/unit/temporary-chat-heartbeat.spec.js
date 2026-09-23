@@ -154,7 +154,7 @@ describe("start — resilient to a failing sendMessage", () => {
     it("does not throw out of the timer and keeps ticking after a rejection", async () => {
         sendMessage.mockReset();
         sendMessage
-            .mockRejectedValueOnce(new Error("Extension context invalidated"))
+            .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
             .mockResolvedValue(undefined);
 
         expect(() => heartbeat.start("uuid-1")).not.toThrow();

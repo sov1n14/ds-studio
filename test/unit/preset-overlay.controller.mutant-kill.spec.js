@@ -53,6 +53,30 @@ function teardown(overlay, target) {
     if (overlay) overlay.unmount();
     if (target && target.parentNode) target.parentNode.removeChild(target);
 }
+
+// happy-dom's rAF is async and the settle loop reschedules itself every frame, so capture frames and flush only the ones queued by the action under test.
+function captureFrames() {
+    const queue = [];
+    vi.stubGlobal("requestAnimationFrame", (fn) => { queue.push(fn); return queue.length; });
+    return { flush() { queue.splice(0).forEach(fn => fn()); } };
+}
+
+// Layout is a trust boundary in happy-dom (all rects are zero): give the header a 500px-wide rect and wipe the mount-time placement so a fresh placement write is observable.
+const CONTAINER_WIDTH = 500;
+function primeLayout(overlay, target) {
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({ left: 0, right: CONTAINER_WIDTH, width: CONTAINER_WIDTH, top: 0, bottom: 40, height: 40, x: 0, y: 0 });
+    const style = overlay.wrapperEl.style;
+    style.left = ""; style.width = ""; style.transform = "";
+}
+
+// Desktop width (>= 768px): the dropdown is centred horizontally in the header container.
+function expectCentredInContainer(overlay) {
+    const style = overlay.wrapperEl.style;
+    const width = parseFloat(style.width);
+    expect(width, "placement width written").toBeGreaterThan(0);
+    expect(parseFloat(style.left), "left centres the dropdown in the container").toBe(Math.round((CONTAINER_WIDTH - width) / 2));
+    expect(style.transform).toBe("translateY(-50%)");
+}
 // -- buildDOM -----------------------------------------------------------------
 
 describe("buildDOM -- dropdown creation", () => {
@@ -77,7 +101,6 @@ describe("buildDOM -- dropdown creation", () => {
 
     it("creates a dropdown whose onChange triggers onSelectChange", () => {
         overlay.buildDOM();
-        overlay.reposition = vi.fn();
         overlay.onSelectChange("");
         expect(ctx.updatePromptPrefixFromBinding).toHaveBeenCalled();
     });
@@ -161,7 +184,7 @@ describe("unmount -- cleanup", () => {
 describe("render -- dropdown update", () => {
     let overlay, ctx, target;
     beforeEach(() => { spyStorageManager(); ctx = makeCtx(); overlay = createPresetOverlay(ctx); target = mountOverlay(overlay); });
-    afterEach(() => { teardown(overlay, target); restoreStorageManager(); });
+    afterEach(() => { teardown(overlay, target); restoreStorageManager(); vi.unstubAllGlobals(); });
 
     it("updates the dropdown options", () => {
         const presets = [{ id: "p1", name: "Preset 1" }];
@@ -186,7 +209,13 @@ describe("render -- dropdown update", () => {
         expect(overlay.dropdown.label.classList.contains("dss-preset-label--placeholder")).toBe(true);
     });
     it("is a no-op when dropdown is null", () => { overlay.dropdown = null; expect(() => overlay.render([], "p1")).not.toThrow(); });
-    it("calls reposition", () => { overlay.reposition = vi.fn(); overlay.render([], "p1"); expect(overlay.reposition).toHaveBeenCalled(); });
+    it("repositions the dropdown within the header", () => {
+        const frames = captureFrames();
+        primeLayout(overlay, target);
+        overlay.render([{ id: "p1", name: "Preset 1" }], "p1");
+        frames.flush();
+        expectCentredInContainer(overlay);
+    });
 });
 
 // -- updateActiveId -----------------------------------------------------------
@@ -194,11 +223,35 @@ describe("render -- dropdown update", () => {
 describe("updateActiveId", () => {
     let overlay, ctx, target;
     beforeEach(() => { spyStorageManager(); ctx = makeCtx(); overlay = createPresetOverlay(ctx); target = mountOverlay(overlay); });
-    afterEach(() => { teardown(overlay, target); restoreStorageManager(); });
+    afterEach(() => { teardown(overlay, target); restoreStorageManager(); vi.unstubAllGlobals(); });
 
-    it("sets the dropdown value", () => { const spy = vi.spyOn(overlay.dropdown, "setValue"); overlay.updateActiveId("p2"); expect(spy).toHaveBeenCalledWith("p2"); });
-    it("defaults to empty string for falsy id", () => { const spy = vi.spyOn(overlay.dropdown, "setValue"); overlay.updateActiveId(null); expect(spy).toHaveBeenCalledWith(""); });
-    it("calls reposition", () => { overlay.reposition = vi.fn(); overlay.updateActiveId("p2"); expect(overlay.reposition).toHaveBeenCalled(); });
+    const PRESETS = [{ id: "p1", name: "Preset 1" }, { id: "p2", name: "Preset 2" }];
+    const option = (id) => overlay.dropdown.menu.querySelector(`li[data-value="${id}"]`);
+
+    it("shows the given preset as selected", () => {
+        overlay.render(PRESETS, "p1");
+        overlay.updateActiveId("p2");
+        expect(option("p2").getAttribute("aria-selected")).toBe("true");
+        expect(option("p1").getAttribute("aria-selected")).toBe("false");
+        expect(overlay.dropdown.label.textContent).toBe("Preset 2");
+        expect(overlay.dropdown.label.classList.contains("dss-preset-label--placeholder")).toBe(false);
+    });
+    it("falls back to the empty option and placeholder label for a falsy id", () => {
+        overlay.render(PRESETS, "p1");
+        overlay.updateActiveId(null);
+        expect(option("").getAttribute("aria-selected")).toBe("true");
+        expect(option("p1").getAttribute("aria-selected")).toBe("false");
+        expect(option("p2").getAttribute("aria-selected")).toBe("false");
+        expect(overlay.dropdown.label.classList.contains("dss-preset-label--placeholder")).toBe(true);
+    });
+    it("repositions the dropdown within the header", () => {
+        overlay.render(PRESETS, "p1");
+        const frames = captureFrames();
+        primeLayout(overlay, target);
+        overlay.updateActiveId("p2");
+        frames.flush();
+        expectCentredInContainer(overlay);
+    });
     it("is a no-op when dropdown is null", () => { overlay.dropdown = null; expect(() => overlay.updateActiveId("p2")).not.toThrow(); });
 });
 // -- setVisible ---------------------------------------------------------------
@@ -206,11 +259,27 @@ describe("updateActiveId", () => {
 describe("setVisible", () => {
     let overlay, ctx, target;
     beforeEach(() => { spyStorageManager(); ctx = makeCtx(); overlay = createPresetOverlay(ctx); target = mountOverlay(overlay); });
-    afterEach(() => { teardown(overlay, target); restoreStorageManager(); });
+    afterEach(() => { teardown(overlay, target); restoreStorageManager(); vi.unstubAllGlobals(); });
 
     it("setVisible(false) hides the wrapper", () => { overlay.setVisible(false); expect(overlay.wrapperEl.style.display).toBe("none"); });
     it("setVisible(true) shows the wrapper", () => { overlay.setVisible(false); overlay.setVisible(true); expect(overlay.wrapperEl.style.display).toBe(""); });
-    it("setVisible(true) calls reposition", () => { overlay.reposition = vi.fn(); overlay.setVisible(true); expect(overlay.reposition).toHaveBeenCalled(); });
+    it("setVisible(true) repositions the dropdown within the header", () => {
+        overlay.setVisible(false);
+        const frames = captureFrames();
+        primeLayout(overlay, target);
+        overlay.setVisible(true);
+        frames.flush();
+        expectCentredInContainer(overlay);
+    });
+    it("setVisible(false) leaves the placement untouched", () => {
+        const frames = captureFrames();
+        primeLayout(overlay, target);
+        overlay.setVisible(false);
+        frames.flush();
+        const style = overlay.wrapperEl.style;
+        expect([style.left, style.width, style.transform]).toEqual(["", "", ""]);
+    });
+    // Kept as a call assertion: mutant "if (enabled)" -> "if (true)" is unobservable in the DOM because reposition() itself bails on display:none; this is the only guard against a wasted placement pass while hidden.
     it("setVisible(false) does NOT call reposition", () => { overlay.reposition = vi.fn(); overlay.setVisible(false); expect(overlay.reposition).not.toHaveBeenCalled(); });
     it("is a no-op when wrapperEl is null", () => { overlay.wrapperEl = null; expect(() => overlay.setVisible(true)).not.toThrow(); });
 });
@@ -253,7 +322,7 @@ describe("startSettle", () => {
 
 describe("onSelectChange -- pending path", () => {
     let overlay, ctx, target;
-    beforeEach(() => { spyStorageManager(); ctx = makeCtx({ getCurrentChatUuid: vi.fn(() => null) }); overlay = createPresetOverlay(ctx); target = mountOverlay(overlay); overlay.reposition = vi.fn(); });
+    beforeEach(() => { spyStorageManager(); ctx = makeCtx({ getCurrentChatUuid: vi.fn(() => null) }); overlay = createPresetOverlay(ctx); target = mountOverlay(overlay); });
     afterEach(() => { teardown(overlay, target); restoreStorageManager(); });
 
     it("sets pendingPresetId to the selected id", () => { overlay.onSelectChange("preset-X"); expect(ctx.setPendingPresetId).toHaveBeenCalledWith("preset-X"); });
@@ -273,7 +342,6 @@ describe("onSelectChange -- bind path map", () => {
         ctx = makeCtx({ getCurrentChatUuid: vi.fn(() => "uuid-1"), getChatPresetMap: vi.fn(() => existingMap) });
         overlay = createPresetOverlay(ctx);
         target = mountOverlay(overlay);
-        overlay.reposition = vi.fn();
     });
     afterEach(() => { teardown(overlay, target); restoreStorageManager(); });
 
@@ -412,7 +480,6 @@ describe("dependency injection fallbacks", () => {
         const ctx = makeCtx({ storageManager: customStorage });
         const overlay = createPresetOverlay(ctx);
         const target = mountOverlay(overlay);
-        overlay.reposition = vi.fn();
         overlay.onSelectChange("p1");
         expect(customStorage.saveActivePresetId).toHaveBeenCalledWith("p1");
         teardown(overlay, target);

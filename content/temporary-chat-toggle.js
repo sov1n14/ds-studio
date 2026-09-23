@@ -126,7 +126,15 @@ const TemporaryChatToggle = (() => {
 
         if (typeof window !== 'undefined' && window.navigation) {
             window.navigation.addEventListener('navigate', (event) => {
-                const newPathname = new URL(event.destination.url).pathname;
+                // 相對網址以目前頁面為基準解析；空值或無法解析時維持切換列狀態不變
+                const destinationUrl = event.destination?.url;
+                if (!destinationUrl) return;
+                let newPathname;
+                try {
+                    newPathname = new URL(destinationUrl, window.location.href).pathname;
+                } catch {
+                    return;
+                }
                 const oldPathname = window.location.pathname;
                 handleNavigation(newPathname, oldPathname);
             });

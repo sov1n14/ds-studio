@@ -1,11 +1,7 @@
 /**
- * Red-phase test: handleNavigationEvent crashes on relative destination URLs.
+ * Regression tests for the fix landed in 93851ec (content/temporary-chat-delete.handlers.js): the pending-create branch of handleNavigationEvent passes destinationUrl straight to extractUuidFromUrl instead of wrapping it in `new URL()`.
  *
- * Bug: line 153 wraps destinationUrl in `new URL()` which throws TypeError
- * on relative paths like `/a/chat/s/<uuid>`. The extractUuidFromUrl helper
- * already handles relative paths via regex, so the `new URL()` is unnecessary.
- *
- * This test MUST FAIL against the current (buggy) code.
+ * Pre-fix, `new URL(destinationUrl)` threw TypeError for relative paths such as `/a/chat/s/<uuid>` and for an empty or missing destination url. Both suites below fail against the pre-fix handlers file and pass against the fix.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
@@ -100,5 +96,29 @@ describe('handleNavigationEvent: relative destination URL', () => {
 
         // Assert: the UUID was tracked (trackedTemporaryUuid is set by trackUuid)
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID);
+    });
+});
+
+describe('handleNavigationEvent: empty or missing destination URL', () => {
+    beforeEach(() => {
+        resetState();
+        settingsStore = {};
+        installSettingsRoute();
+        // Current page is NOT a tracked conversation, so control reaches the pending-create branch
+        setPathname('/');
+        globalThis.TemporaryChatEnabledFlag.__setCache(true);
+        TemporaryChatDelete.state.isPendingCreate = true;
+    });
+
+    afterEach(() => {
+        TemporaryChatDelete.detachListeners();
+    });
+
+    it.each([
+        ['destination is {}', { destination: {}, navigationType: 'push' }],
+        ['destination.url is an empty string', { destination: { url: '' }, navigationType: 'push' }],
+    ])('does not throw and tracks no UUID when %s', (_label, event) => {
+        expect(() => TemporaryChatDelete.handleNavigationEvent(event)).not.toThrow();
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
     });
 });

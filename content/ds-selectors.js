@@ -11,7 +11,7 @@
  */
 
 // Stryker disable StringLiteral: 純常數模組，選擇器字串的變異只能用逐字比對來殺，屬反模式（tautological assertion）
-// NOTE: SVG path data in go-top.render.combined.js is a distinct case from selectors here — selectors rotate as DeepSeek updates its UI, while SVG paths are stable author-controlled values (the go-top icon was mirrored vertically from the original DOM element). The Stryker disable on selectors does not extend a blanket exemption to SVG paths; those are tested by coordinate assertions in the mutant-killer spec.
+// NOTE: SVG path data in go-top.render.combined.js is a distinct case from selectors here — selectors rotate as DeepSeek updates its UI, while SVG paths are stable author-controlled values (the go-top path data is copied verbatim from DeepSeek's native chevron icon and flipped upward at render time via transform:scaleY(-1)). The Stryker disable on selectors does not extend a blanket exemption to SVG paths; those are tested by coordinate assertions in the mutant-killer spec.
 (function () {
     'use strict';
 

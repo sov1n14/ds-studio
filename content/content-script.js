@@ -1,4 +1,4 @@
-// 259 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 260 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -23,11 +23,11 @@ var downloadMarkdown             = __DSExport.downloadMarkdown;
 var formatSystemTime             = __DSExport.formatSystemTime;
 var formatTimezoneOffset         = __DSExport.formatTimezoneOffset;
 
-// Extension 狀態檢查
+// Extension 狀態檢查：情境失效時 chrome.runtime.id 變為 undefined（或讀取即拋錯）
 function isExtensionContextValid() {
     try {
-        chrome.runtime.id;
-        return true;
+        const id = chrome.runtime?.id;
+        return typeof id === 'string' && id.length > 0;
     } catch {
         return false;
     }
@@ -255,5 +255,6 @@ if (typeof module !== 'undefined' && module.exports) {
         formatSystemTime,
         formatTimezoneOffset,
         PresetOverlay,
+        isExtensionContextValid,
     };
 }

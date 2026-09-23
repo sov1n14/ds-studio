@@ -240,6 +240,42 @@ describe('MK-H -- Navigation API navigate event triggers row removal', () => {
     });
 });
 
+// Red-phase: the navigate listener parses event.destination.url with `new URL()` unguarded. An empty or missing url is not a navigation the toggle can classify, so the listener MUST NOT throw and MUST leave the injected row untouched. A relative path is a real destination resolved against the current page (same contract as temporary-chat-delete.relative-url.spec.js), so it MUST behave exactly like the equivalent absolute URL in MK-H1 / MK-H2.
+describe('MK-H -- navigate event with an unparseable or relative destination url', () => {
+    let originalNavigation;
+    beforeEach(() => { document.body.innerHTML = ''; originalNavigation = window.navigation; });
+    afterEach(() => { if (originalNavigation === undefined) { delete window.navigation; } else { window.navigation = originalNavigation; } });
+    /** Inject the row on / with a fake Navigation API, then return its navigate listeners. */
+    async function setupOnHomepage() {
+        const navListeners = [];
+        window.navigation = { addEventListener: (type, fn) => { if (type === 'navigate') navListeners.push(fn); }, removeEventListener: () => {} };
+        window.history.replaceState({}, '', '/');
+        createAnchorInDOM();
+        await loadToggle({ [IS_ENABLED_KEY]: true });
+        await vi.waitFor(() => { expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull(); });
+        expect(navListeners.length).toBeGreaterThan(0);
+        return navListeners;
+    }
+    it.each([
+        ['destination.url is an empty string', { destination: { url: '' } }],
+        ['destination.url is missing', { destination: {} }],
+        ['destination is missing', {}],
+        ['destination.url does not parse even with a base', { destination: { url: 'http://[' } }],
+    ])('MK-H3: %s -- listener does not throw and the row stays', async (_label, event) => {
+        const navListeners = await setupOnHomepage();
+        navListeners.forEach((fn) => expect(() => fn(event)).not.toThrow());
+        expect(document.getElementById('dss-temp-chat-toggle-row')).not.toBeNull();
+    });
+    it.each([
+        ['/a/chat/s/uuid', 'removed (mirrors MK-H1)', false],
+        ['/', 'kept (mirrors MK-H2)', true],
+    ])('MK-H4: relative destination.url %s -- listener does not throw and the row is %s', async (url, _label, rowStays) => {
+        const navListeners = await setupOnHomepage();
+        navListeners.forEach((fn) => expect(() => fn({ destination: { url } })).not.toThrow());
+        expect(document.getElementById('dss-temp-chat-toggle-row') !== null).toBe(rowStays);
+    });
+});
+
 describe('MK-I -- init starts the MutationObserver', () => {
     beforeEach(() => { document.body.innerHTML = ''; });
     it('MK-I1: anchor added after init gets a row injected via observer', async () => {
