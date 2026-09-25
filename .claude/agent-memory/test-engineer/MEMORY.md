@@ -3,7 +3,7 @@
 - [Service Worker Test Harness](sw-test-harness.md) — real pending-store + captured onChanged + Map alarms bootstrap for SW sweep specs; revert-check recipe
 - [Stryker Dry Run Timeout](stryker-dry-run-timeout.md) — default 5min too short for 3000+ tests, use --dryRunTimeoutMinutes 15.
 - [Sidebar Hide Group Collapse](sidebar-hide-group-collapse.md) — group hides instead of anchor when all anchors queued; use multi-anchor groups in tests.
-- [Stryker scoped run](reference_stryker_scoped_run.md) — CLI recipe, load-time mutants need fresh import, happy-dom capture-removal quirk
+- [Stryker scoped run](reference_stryker_scoped_run.md) — CLI recipe, load-time mutants need fresh import, ignoreStatic hybrid coveredBy trap, happy-dom capture quirk
 - [Bash heredoc long files](pitfall_bash_heredoc_long_files.md) — heredocs over ~100 lines fail with matching-quote EOF; write specs in 50-100 line cat >> chunks
 - [Temp-chat event harness](reference_temp_chat_event_harness.md) — drive temporary-chat-delete via real navigate/beforeunload listeners, fetch-only mock
 - [Storage mock clone semantics](pitfall_storage_mock_shared_references.md) — fixture used to share references (masked lost updates); now clones since 2026-09-24, verify
