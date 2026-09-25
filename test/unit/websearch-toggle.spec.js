@@ -58,7 +58,7 @@ const DEEP_THINK_ICON_D =
 function iconHtml(iconPath) {
     return `<div class="ds-toggle-button__icon">
         <div class="ds-icon">
-            <div class="${DSSelectors.WEBSEARCH_TOGGLE_CLASS}" aria-hidden="true">
+            <div class="_46d2264" aria-hidden="true">
                 <div style="width: 14px; height: 14px;">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
                         <defs>
@@ -93,7 +93,7 @@ function makeToggle(pressed, label, iconPath, generic = false) {
     }
     if (label !== null) {
         const labelSpan = document.createElement("span");
-        labelSpan.className = DSSelectors.WEBSEARCH_LABEL_CLASS;
+        labelSpan.className = '_6dbc175';
         labelSpan.textContent = label;
         toggle.appendChild(labelSpan);
     }
