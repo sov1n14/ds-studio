@@ -1,8 +1,8 @@
-# Changelog
+# 版本變更記錄
 
-All notable changes to this project will be documented in this file.
+本專案所有重要變更皆記錄於此檔案。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+格式依循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，版本號遵循 [語意化版本](https://semver.org/spec/v2.0.0.html)（Semantic Versioning）。
 
 ## 版本摘要
 
