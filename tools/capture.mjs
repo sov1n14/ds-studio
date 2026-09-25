@@ -4,11 +4,11 @@
  * runs scenarios, writes HTML + JSON artifacts to tools/captures/.
  *
  * Usage:
- *   node tools/capture.mjs                 # all 11 scenarios
+ *   node tools/capture.mjs                 # all scenarios (desktop groups first, then mobile ones in a relaunched mobile context)
  *   node tools/capture.mjs new-chat        # only named labels
  */
 
-import { chromium } from 'playwright';
+import { chromium, devices } from 'playwright';
 import { createRequire } from 'node:module';
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -19,6 +19,10 @@ import { scenarios } from './scenarios.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CAPTURES_DIR = join(__dirname, 'captures');
 const PROFILE_DIR = join(__dirname, '.pw-profile');
+const LAUNCH_ARGS = ['--disable-blink-features=AutomationControlled'];
+const DESKTOP_CONTEXT = { viewport: { width: 1440, height: 900 } };
+// Mobile UA + hasTouch make content/mobile-device.js isMobileDevice() true; defaultBrowserType is dropped because we always launch chromium.
+const { defaultBrowserType: _unusedBrowserType, ...MOBILE_CONTEXT } = devices['iPhone 13'];
 
 // ── Load real selectors from the extension source ──────────────────
 
@@ -76,7 +80,7 @@ function promptUser(msg) {
   });
 }
 
-async function captureArtifacts(page, label) {
+async function captureArtifacts(page, label, isMobile) {
   mkdirSync(CAPTURES_DIR, { recursive: true });
 
   // 1. Raw HTML
@@ -99,6 +103,7 @@ async function captureArtifacts(page, label) {
   const report = {
     label,
     url: page.url(),
+    mobile: isMobile,
     capturedAt: new Date().toISOString(),
     counts,
   };
@@ -121,7 +126,7 @@ if (toRun.length === 0) {
   process.exit(1);
 }
 
-// Group scenarios that share a page session
+// Group scenarios that share a page session (a group must not mix desktop and mobile scenarios)
 const groups = new Map();
 for (const s of toRun) {
   if (!groups.has(s.group)) groups.set(s.group, []);
@@ -130,43 +135,51 @@ for (const s of toRun) {
 
 console.log(`Running ${toRun.length} scenario(s) in ${groups.size} group(s)...`);
 
-const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-  headless: false,
-  viewport: { width: 1440, height: 900 },
-  args: ['--disable-blink-features=AutomationControlled'],
-});
+// A persistent profile can only be open once, so desktop and mobile groups run as two sequential passes on the same profile.
+async function runPass(passGroups, contextOptions, isMobile) {
+  if (passGroups.length === 0) return;
+  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+    headless: false,
+    ...contextOptions,
+    args: LAUNCH_ARGS,
+  });
 
-try {
-  for (const [groupId, groupScenarios] of groups) {
-    const page = await context.newPage();
-    try {
-      for (const scenario of groupScenarios) {
-        console.log(`\n[${scenario.label}] ${scenario.description}`);
-        let manual = false;
-        try {
-          await scenario.run(page);
-        } catch (err) {
-          console.error(`  ✗ Automation failed: ${err.message}`);
-          console.log(`  → Please manually put the browser into the "${scenario.description}" state.`);
-          await promptUser('  Press Enter when ready to capture...');
-          manual = true;
+  try {
+    for (const groupScenarios of passGroups) {
+      const page = await context.newPage();
+      try {
+        for (const scenario of groupScenarios) {
+          console.log(`\n[${scenario.label}] ${scenario.description}`);
+          let manual = false;
+          try {
+            await scenario.run(page);
+          } catch (err) {
+            console.error(`  ✗ Automation failed: ${err.message}`);
+            console.log(`  → Please manually put the browser into the "${scenario.description}" state.`);
+            await promptUser('  Press Enter when ready to capture...');
+            manual = true;
+          }
+
+          await captureArtifacts(page, scenario.label, isMobile);
+
+          if (manual) {
+            const jsonPath = join(CAPTURES_DIR, `${scenario.label}.json`);
+            const raw = JSON.parse(readFileSync(jsonPath, 'utf-8'));
+            raw.manual = true;
+            writeFileSync(jsonPath, JSON.stringify(raw, null, 2), 'utf-8');
+          }
         }
-
-        await captureArtifacts(page, scenario.label);
-
-        if (manual) {
-          const jsonPath = join(CAPTURES_DIR, `${scenario.label}.json`);
-          const raw = JSON.parse(readFileSync(jsonPath, 'utf-8'));
-          raw.manual = true;
-          writeFileSync(jsonPath, JSON.stringify(raw, null, 2), 'utf-8');
-        }
+      } finally {
+        await page.close();
       }
-    } finally {
-      await page.close();
     }
+  } finally {
+    await context.close();
   }
-} finally {
-  await context.close();
 }
+
+const allGroups = [...groups.values()];
+await runPass(allGroups.filter(g => !g[0].mobile), DESKTOP_CONTEXT, false);
+await runPass(allGroups.filter(g => g[0].mobile), MOBILE_CONTEXT, true);
 
 console.log('\nDone. Artifacts in tools/captures/');

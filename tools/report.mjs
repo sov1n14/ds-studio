@@ -30,7 +30,7 @@ if (files.length === 0) {
 }
 
 const captures = files.map(f => JSON.parse(readFileSync(join(CAPTURES_DIR, f), 'utf-8')));
-const labels = captures.map(c => c.label);
+const labels = captures.map(c => c.mobile ? `${c.label} [mobile]` : c.label);
 
 // Collect all constant names across all captures
 const allKeys = new Set();

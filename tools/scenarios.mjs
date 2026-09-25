@@ -2,6 +2,7 @@
  * Scenario definitions for the capture harness.
  * Each scenario: { label, description, group, run: async (page, helpers) => {} }
  * group: scenarios sharing a group run on the same page session in order.
+ * mobile: true runs the scenario in a mobile-device context (mobile UA + touch) after all desktop groups.
  */
 
 import { createRequire } from 'node:module';
@@ -178,6 +179,20 @@ export const scenarios = [
       await page.goto(DEEPSEEK_URL, { waitUntil: 'networkidle', timeout: 60_000 });
       await waitForTextarea(page);
       await openFirstConversation(page);
+    },
+  },
+
+  // ── Mobile scenarios (run last, in a relaunched mobile-device context) ──
+
+  {
+    label: 'mobile-homepage',
+    description: 'Mobile homepage (/) before submitting',
+    group: 'M',
+    mobile: true,
+    run: async (page) => {
+      await page.goto(DEEPSEEK_URL, { waitUntil: 'networkidle', timeout: 60_000 });
+      await waitForTextarea(page);
+      await page.waitForTimeout(2000);
     },
   },
 ];
