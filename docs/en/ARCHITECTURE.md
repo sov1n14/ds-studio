@@ -64,9 +64,7 @@ ds-studio/
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
 │   ├── censor-reply-restore.keymap.js    ─  Key mapping for censor-reply-restore
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
-│   ├── censor-reply-restore.dom.js       ─  DOM orchestration entry bundle (stub, merged into censor-reply-restore.js)
-│   ├── censor-reply-restore.dom.extract.js ─  Fragment extraction from DOM (stub, merged into censor-reply-restore.dom.resolve.js)
-│   ├── censor-reply-restore.dom.resolve.js ─  DOM element resolution for restored content
+│   ├── censor-reply-restore.dom.resolve.js ─  DOM element resolution and fragment extraction for restored content
 │   ├── censor-reply-restore.dom.inject.js  ─  Restored-content DOM injection
 │   ├── censor-reply-restore.dom.scan.js    ─  DOM scanning for censor events
 │   ├── censor-reply-restore.thinkblock.js  ─  Think-block handling for restored content

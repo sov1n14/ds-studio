@@ -64,9 +64,7 @@ ds-studio/
 │   ├── censor-reply-restore.js  ─  入口：SSE 攔截、observer、偵測（v4.0.0 拆分）
 │   ├── censor-reply-restore.keymap.js    ─  censor-reply-restore 的鍵對照
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML 渲染方法包
-│   ├── censor-reply-restore.dom.js       ─  DOM 協調入口方法包（stub，已合併至 censor-reply-restore.js）
-│   ├── censor-reply-restore.dom.extract.js ─  從 DOM 擷取片段（stub，已合併至 censor-reply-restore.dom.resolve.js）
-│   ├── censor-reply-restore.dom.resolve.js ─  還原內容的 DOM 元素解析
+│   ├── censor-reply-restore.dom.resolve.js ─  還原內容的 DOM 元素解析與片段擷取
 │   ├── censor-reply-restore.dom.inject.js  ─  還原內容的 DOM 注入
 │   ├── censor-reply-restore.dom.scan.js    ─  審查事件的 DOM 掃描
 │   ├── censor-reply-restore.thinkblock.js  ─  還原內容的思考區塊處理

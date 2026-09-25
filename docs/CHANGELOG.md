@@ -10,6 +10,7 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.35.2](changelog/v4.md#4352---2026-09-25) | 刪除自 v4.33.8 起未載入的純註解 stub `censor-reply-restore.dom.js`、`censor-reply-restore.dom.extract.js`；`censor-reply-restore.js` 不再讀取從未設定的 `__DS_CensorReplyRestore_dom_extract`，載入順序註解與 `manifest.json` 一致；對執行期無影響 |
 | [4.35.1](changelog/v4.md#4351---2026-09-25) | 移除未使用的網路搜尋雜湊 class 常數 `WEBSEARCH_TOGGLE_CLASS`、`WEBSEARCH_LABEL_CLASS`（`DSSelectors` 匯出 94 → 92）；網路搜尋開關的定位方式不變；新增 fresh-load spec，`ds-selectors.js` mutation score 達 100% |
 | [4.35.0](changelog/v4.md#4350---2026-09-24) | 「Features」卡片新增「自動重試」與「自動繼續生成」兩個獨立開關（`isAutoRetryEnabled`、`isAutoContinueEnabled`，預設關閉，受主開關連動、同步並納入備份還原）；自動重試改為需手動開啟；兩者共用單一輪次迴圈，每輪等待 0–3 秒（0.1 秒級距）隨機延遲後各點擊至多一次，按鈕僅以選擇器定位 |
 | [4.34.3](changelog/v4.md#4343---2026-09-24) | chat→preset 綁定表改由 service worker 單一寫入，其他 context 以訊息送交操作，並行綁定不再遺失；寫入失敗拋出 `ChatMapDispatchError`，僅未送達時重試一次，10 秒逾時，overlay 寫入失敗時回滾；`resolveSyncConflict`、initialize 遷移推送與 `retrySync` 略過 chat-map 金鑰；修正解除綁定後殘留空 chunk 與 remote-wins 以參考比較；content-script 初始綁定失敗時繼續啟動；全域預設提示詞的納入改依顯示中的提示詞組，頁面內切換失敗時還原 `activePresetId`；移除 `storage-manager.chunk-lock.js` |
