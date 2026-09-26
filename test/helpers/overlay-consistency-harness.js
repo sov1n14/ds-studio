@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import { setPathname } from './set-pathname.js';
-import { writeChatMapLayout, NO_RECEIVER, CONTEXT_INVALIDATED } from './chat-map-writer-harness.js';
+import { writeChatMapLayout, NO_RECEIVER, PORT_CLOSED, CONTEXT_INVALIDATED } from './chat-map-writer-harness.js';
 
 export { contentScript };
 export const overlay = contentScript.PresetOverlay;
@@ -53,7 +53,7 @@ export async function writeStoredMap(next) {
     await writeChatMapLayout([chrome.storage.sync, chrome.storage.local], StorageManager.KEYS, [map]);
 }
 
-// SW chat-map writer doubles (promise-form sendMessage).
+// SW chat-map writer doubles (promise-form sendMessage). 'no response' is real Chrome's promise-form result when the message reaches the SW but no listener calls sendResponse: the promise resolves undefined.
 export const transports = {
     success: async (msg) => {
         const next = { ...map };
@@ -63,6 +63,8 @@ export const transports = {
         return { ok: true, map: { ...next } };
     },
     'rejection (SW unreachable)': () => Promise.reject(new Error(NO_RECEIVER)),
+    'rejection (port closed, not retried)': () => Promise.reject(new Error(PORT_CLOSED)),
+    'no response (resolves undefined)': async () => undefined,
     'synchronous throw (context invalidated)': () => { throw new Error(CONTEXT_INVALIDATED); },
     'writer refusal ({ ok: false })': async () => ({ ok: false, error: 'writer refused' }),
 };

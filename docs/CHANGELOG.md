@@ -10,6 +10,7 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.35.3](changelog/v4.md#4353---2026-09-26) | 點擊「停止生成」不再注入提示詞（主輸入框送出按鈕僅以圖示路徑辨識）；對話中切換提示詞組時下拉選單不再逐次變寬（量測期間標籤 `flex: none`）；綁定失敗回滾時注入前綴隨標籤一起回滾（`updatePromptPrefixFromBinding()` 最後一次呼叫勝出）；潛在問題：觸發器 gap 與原生按鈕 margin-bottom 若為 0px 曾被誤當成預設值（下拉選單會多寬 4px、GoTop 間距會變成 28px），現改為照實採用；目前兩者實測值與預設值相同，畫面無可見差異 |
 | [4.35.2](changelog/v4.md#4352---2026-09-25) | 刪除自 v4.33.8 起未載入的純註解 stub `censor-reply-restore.dom.js`、`censor-reply-restore.dom.extract.js`；`censor-reply-restore.js` 不再讀取從未設定的 `__DS_CensorReplyRestore_dom_extract`，載入順序註解與 `manifest.json` 一致；對執行期無影響 |
 | [4.35.1](changelog/v4.md#4351---2026-09-25) | 移除未使用的網路搜尋雜湊 class 常數 `WEBSEARCH_TOGGLE_CLASS`、`WEBSEARCH_LABEL_CLASS`（`DSSelectors` 匯出 94 → 92）；網路搜尋開關的定位方式不變；新增 fresh-load spec，`ds-selectors.js` mutation score 達 100% |
 | [4.35.0](changelog/v4.md#4350---2026-09-24) | 「Features」卡片新增「自動重試」與「自動繼續生成」兩個獨立開關（`isAutoRetryEnabled`、`isAutoContinueEnabled`，預設關閉，受主開關連動、同步並納入備份還原）；自動重試改為需手動開啟；兩者共用單一輪次迴圈，每輪等待 0–3 秒（0.1 秒級距）隨機延遲後各點擊至多一次，按鈕僅以選擇器定位 |

@@ -1,4 +1,4 @@
-// 270 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 275 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -117,8 +117,12 @@
             }, NEW_CHAT_UUID_WAIT_MS);
         }
 
+        // 每次呼叫遞增；await 後若已有較新的呼叫，捨棄本次結果，確保「最後一次呼叫勝出」。
+        let promptPrefixGeneration = 0;
+
         // 根據當前聊天 UUID 綁定重新計算 promptPrefix；無綁定則清空。
         async function updatePromptPrefixFromBinding() {
+            const generation = ++promptPrefixGeneration;
             // pendingPresetId 僅適用於「尚無 currentChatUuid」的情境（新對話尚未取得 UUID 前的暫存選擇）。
             // 一旦已綁定至具體對話，該對話的綁定狀態必須完全由 chatPresetMap 決定，
             // 避免因其他管道（例如 ACTIVE_PRESET_CHANGED 訊息）殘留的過期 pendingPresetId
@@ -136,6 +140,7 @@
             }
 
             const settings = await StorageManager.getSettings();
+            if (generation !== promptPrefixGeneration) return;
             const preset = settings.promptPresets.find(p => p.id === presetId);
             state.promptPrefix = preset?.content ?? '';
         }

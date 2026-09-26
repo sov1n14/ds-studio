@@ -120,7 +120,9 @@
          */
         _applyStackedOffset(btn, nativeBtn) {
             const nativeStyle = getComputedStyle(nativeBtn);
-            const nativeMarginBottom = parseFloat(nativeStyle.marginBottom) || 20;
+            const parsedMarginBottom = parseFloat(nativeStyle.marginBottom);
+            // 0px 為合法實測值；僅在無法解析（NaN，如 '' / 'auto'）時才用降級值 20
+            const nativeMarginBottom = Number.isFinite(parsedMarginBottom) ? parsedMarginBottom : 20;
             // 原生按鈕新尺寸為 34px（ds-button--m 圓形），降級值同步更新
             const nativeHeight = nativeBtn.offsetHeight || 34;
             btn.style.marginBottom = `${nativeMarginBottom + nativeHeight + this.STACK_GAP_PX}px`;

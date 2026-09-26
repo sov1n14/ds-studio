@@ -14,7 +14,7 @@
  * selector string is asserted.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../content/ds-selectors.js';
 const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/prompt-injector.send-button.js';
@@ -31,6 +31,8 @@ import {
     mountInDocument,
     makeAttachmentButtonInActionsRow,
     makeSendButtonWithChangedIcon,
+    makeStopButton,
+    makeActionsRowWithStopButton,
 } from '../helpers/send-button-fixtures.js';
 
 const SB = globalThis.__DS_PromptInjectorSendButton;
@@ -272,6 +274,19 @@ describe('findSendButtonForTextarea', () => {
         cleanup = mountInDocument(inputArea);
 
         expect(SB.findSendButtonForTextarea(textarea)).toBe(null);
+    });
+
+    it('returns null when the only primary+filled svg button in the composer is the Stop button', () => {
+        const { row, stopButton } = makeActionsRowWithStopButton();
+        const inputArea = document.createElement('div');
+        const textarea = makeTextarea('');
+        inputArea.appendChild(textarea);
+        inputArea.appendChild(row);
+        cleanup = mountInDocument(inputArea);
+
+        const found = SB.findSendButtonForTextarea(textarea);
+        expect(found).not.toBe(stopButton);
+        expect(found).toBe(null);
     });
 
     it('returns null when the input area has no button at all', () => {
@@ -578,31 +593,29 @@ describe('resolveTextareaForButton — activeElement null guard (kills ?. to . m
 });
 
 // ---------------------------------------------------------------------------
-// isSendButtonCandidate — structural fallback
+// isSendButtonCandidate — only the send icon identifies a composer send button
+//
+// The Stop Generating button shares every class and the structure of the composer send button; only the icon differs. A primary+filled svg button whose icon is not the send icon MUST be rejected, otherwise clicking Stop injects the prompt and re-sends.
 // ---------------------------------------------------------------------------
 
-describe('isSendButtonCandidate — structural fallback', () => {
-    it('accepts send button via structural fallback when SVG path changes', () => {
-        const { button } = makeSendButtonWithChangedIcon();
-        cleanup = mountInDocument(button);
-        expect(SB.isSendButtonCandidate(button)).toBe(true);
+describe('isSendButtonCandidate — icon decides, not variant classes', () => {
+    it('rejects the real Stop Generating button', () => {
+        const { wrapper, button } = makeStopButton();
+        cleanup = mountInDocument(wrapper);
+        expect(SB.isSendButtonCandidate(button)).toBe(false);
     });
 
-    it('logs a warning when structural fallback matches', () => {
-        const { button } = makeSendButtonWithChangedIcon();
-        cleanup = mountInDocument(button);
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        try {
-            SB.isSendButtonCandidate(button);
-            expect(warnSpy).toHaveBeenCalledOnce();
-            expect(warnSpy.mock.calls[0][0]).toContain('structural fallback');
-        } finally {
-            warnSpy.mockRestore();
-        }
+    it('rejects the Stop button inside the real actions row next to the attachment button', () => {
+        const { row, stopButton } = makeActionsRowWithStopButton();
+        cleanup = mountInDocument(row);
+        expect(SB.isSendButtonCandidate(stopButton)).toBe(false);
     });
 
-    // Test 3 (attachment button rejection) already covered at line ~109:
-    // 'rejects the attachment (paperclip) button even though it sits in a bf38813a row'
+    it('rejects a primary+filled svg button whose icon is not the send icon', () => {
+        const { button } = makeSendButtonWithChangedIcon();
+        cleanup = mountInDocument(button);
+        expect(SB.isSendButtonCandidate(button)).toBe(false);
+    });
 
     it('rejects generic SVG button without variant classes', () => {
         const button = document.createElement('div');

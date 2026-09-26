@@ -22,6 +22,7 @@ import '../../content/prompt-injector.send-button.js';
 import '../../content/prompt-injector.controller.js';
 import {
     makeMobileSendButton,
+    makeActionsRowWithStopButton,
     makeEditSendButtonInContainer,
     makeEditSendButtonStandalone,
     mountInDocument,
@@ -545,6 +546,23 @@ describe('send interception via click', () => {
 
         expect(ev.defaultPrevented).toBe(true);
         expect(textarea.value).not.toBe('   ');
+    });
+
+    it('lets a click on the Stop button through untouched: no injection, no suppression, no chat-creation mark', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { row, svg } = makeActionsRowWithStopButton();
+        const inputArea = document.createElement('div');
+        const textarea = makeTextarea('');
+        inputArea.appendChild(textarea);
+        inputArea.appendChild(row);
+        cleanup = mountInDocument(inputArea);
+
+        const ev = dispatchClick(svg);
+        flushRaf();
+
+        expect(textarea.value).toBe('');
+        expect(ev.defaultPrevented).toBe(false);
+        expect(state.markCalls).toBe(0);
     });
 
     it('marks chat creation attempt for empty-textarea click with enabled send button', () => {

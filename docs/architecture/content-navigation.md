@@ -47,7 +47,7 @@ Overlay 使用 `content/preset-dropdown.position.js` 計算的三種定位模式
 
 #### 觸發器寬度 (v4.18.1)
 
-Overlay 佔用的寬度貼合**最寬**的候選標籤，而非目前顯示的標籤。`content/preset-dropdown.width.js` 以所有選項名稱加上 placeholder 文字建立候選清單，將每個候選暫時寫入實際的標籤 span 並讀取 `scrollWidth` 來量測（因此量測結果帶有標籤本身計算後的字型），於 `finally` 中還原原始文字，再將寬度交給 `preset-dropdown.position.js` 中的純函式 `pickNaturalWidth()`。該函式回傳 `max(labelWidths) + arrowWidth + paddingLeft + paddingRight + gap`，下限為 `minWidth`（80），且刻意**不設上限**——依可用水平空間設上限的工作留給 `computePlacement()`，它會限制在 `maxWidth`（200）以內，間隙模式下則限制在量測到的間隙以內。
+Overlay 佔用的寬度貼合**最寬**的候選標籤，而非目前顯示的標籤。`content/preset-dropdown.width.js` 以所有選項名稱加上 placeholder 文字建立候選清單，將每個候選暫時寫入實際的標籤 span 並讀取 `scrollWidth` 來量測（因此量測結果帶有標籤本身計算後的字型）。量測期間標籤的 inline `flex` 暫設為 `none`，使 `scrollWidth` 反映文字本身的寬度，而非被 flex 撐開、取決於 overlay 前一次 inline 寬度的盒寬；因此自然寬度固定為最寬選項名稱加上觸發器的固定外框，切換提示詞組不會改變它。於 `finally` 中還原原始文字與 `flex`，再將寬度交給 `preset-dropdown.position.js` 中的純函式 `pickNaturalWidth()`。該函式回傳 `max(labelWidths) + arrowWidth + paddingLeft + paddingRight + gap`（`gap` 取觸發器計算後的值，0px 照實採用，僅在無法解析（如空字串或 `normal`）時以 4px 代替），下限為 `minWidth`（80），且刻意**不設上限**——依可用水平空間設上限的工作留給 `computePlacement()`，它會限制在 `maxWidth`（200）以內，間隙模式下則限制在量測到的間隙以內。
 
 由於 `getNaturalWidth()` 位於穩定迴圈每個 animation frame 都會執行的定位路徑上，量測器會依下拉選單實例快取結果，只在輸入改變時重新計算：快取於 `setOptions()`（選項資料重建）與 `updateLocale()`（placeholder 文字改變）中失效。若每幀重新量測，每一幀都會改寫標籤文字 N 次並強制 N 次 reflow。
 
@@ -77,7 +77,7 @@ controller 經由 `content/content-script.js` 提供的選用 getter `ctx.getPen
 > 保留三值訊號需要使用 `??` 而非 `||`。controller 中的 `onSelectChange()` 與 `content-script.js` 中的 `ACTIVE_PRESET_CHANGED` 處理器都寫入 `id ?? null`：`'' || null` 的結果是 `null`，會把「使用者明確選擇空白」壓縮成「尚未做任何選擇」，使釘選預設值在下一次重新掛載時蓋過明確的選擇重新出現。
 
 **雙向同步**：
-- **Overlay → Popup**：`onSelectChange(newId)` 呼叫 `StorageManager.saveActivePresetId(newId)`。在有 UUID 的對話上，它先樂觀地在記憶體中發布新的 `chatPresetMap`，再透過 service worker 以 `StorageManager.bindChatToPreset(uuid, newId)`（選擇空白選項時為 `unbindChat(uuid)`）持久化，之後採用儲存後的對照表。該寫入被拒絕時，它重新讀取已儲存的對照表，以 `updateActiveId(storedId)` 將 overlay 回滾到已儲存的綁定，並呼叫 `saveActivePresetId(storedId)`，確保失敗的選擇不會以 `activePresetId` 的形式殘留；顯示中的提示詞組與實際注入結果保持一致。沒有 UUID 時則改為設定 `pendingPresetId`。popup 開啟時從 storage 讀取這些值。
+- **Overlay → Popup**：`onSelectChange(newId)` 呼叫 `StorageManager.saveActivePresetId(newId)`。在有 UUID 的對話上，它先樂觀地在記憶體中發布新的 `chatPresetMap`，再透過 service worker 以 `StorageManager.bindChatToPreset(uuid, newId)`（選擇空白選項時為 `unbindChat(uuid)`）持久化，之後採用儲存後的對照表。該寫入被拒絕時（包含 service worker 無回應或回傳 `{ok:false}`），它重新讀取已儲存的對照表，以 `updateActiveId(storedId)` 將 overlay 回滾到已儲存的綁定，重新呼叫 `updatePromptPrefixFromBinding()`，並呼叫 `saveActivePresetId(storedId)`，確保失敗的選擇不會以 `activePresetId` 的形式殘留；顯示中的提示詞組與實際注入結果保持一致。`updatePromptPrefixFromBinding()` 每次呼叫取得一個世代編號，await `StorageManager.getSettings()` 之後若已有較新的呼叫，便捨棄本次結果、不寫入 `state.promptPrefix`（最後一次呼叫勝出），因此樂觀選擇那次較晚完成的重算無法蓋過回滾後的前綴。沒有 UUID 時則改為設定 `pendingPresetId`。popup 開啟時從 storage 讀取這些值。
 - **Popup → Overlay**：popup 送出 `ACTIVE_PRESET_CHANGED` 訊息——內容腳本的處理器呼叫 `PresetOverlay.updateActiveId()`。另外，`ACTIVE_PRESET_ID` 的 `chrome.storage.onChanged` 也會觸發 `updateActiveId()` 作為安全網。
 - **提示詞組清單同步**：`dsPresetIndex` 或任何 `dsPreset_<id>` 鍵變更時，呼叫 `StorageManager.getSettings()`，並由 `PresetOverlay.render()` 重新填入下拉選單。
 

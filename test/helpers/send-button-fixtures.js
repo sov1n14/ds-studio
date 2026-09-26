@@ -298,6 +298,47 @@ export function makeAttachmentButtonInActionsRow() {
     return { row, attachmentButton, sendButton };
 }
 
+/** The d attribute of the real Stop Generating icon, verbatim from to-do/samples/stop-button.html. */
+export const STOP_ICON_PATH_D = 'M2 4.88C2 3.68009 2 3.08013 2.30557 2.65954C2.40426 2.52371 2.52371 2.40426 2.65954 2.30557C3.08013 2 3.68009 2 4.88 2H11.12C12.3199 2 12.9199 2 13.3405 2.30557C13.4763 2.40426 13.5957 2.52371 13.6944 2.65954C14 3.08013 14 3.68009 14 4.88V11.12C14 12.3199 14 12.9199 13.6944 13.3405C13.5957 13.4763 13.4763 13.5957 13.3405 13.6944C12.9199 14 12.3199 14 11.12 14H4.88C3.68009 14 3.08013 14 2.65954 13.6944C2.52371 13.5957 2.40426 13.4763 2.30557 13.3405C2 12.9199 2 12.3199 2 11.12V4.88Z';
+
+/**
+ * Stop Generating button, verbatim per to-do/samples/stop-button.html. Shown in place of the send button while a reply streams; same classes and structure as the composer send button, only the icon path differs.
+ * Returns { wrapper, button, svg }; wrapper is the div[style="width: fit-content;"].
+ */
+export function makeStopButton() {
+    const wrapper = document.createElement('div');
+    wrapper.style.width = 'fit-content';
+
+    const button = document.createElement('div');
+    button.setAttribute('role', 'button');
+    button.className = COMPOSER_SEND_CLASSES;
+    button.style.setProperty('--dsl-button-height', '34px');
+    button.tabIndex = 0;
+
+    const bg = document.createElement('div');
+    bg.className = 'ds-button__background';
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+    const svg = makeIconSvg(STOP_ICON_PATH_D);
+    iconWrap.appendChild(svg);
+    button.appendChild(bg);
+    button.appendChild(iconWrap);
+    wrapper.appendChild(button);
+
+    return { wrapper, button, svg };
+}
+
+/**
+ * Real composer actions row as it looks while a reply streams: attachment button first, then the Stop button where the send button normally sits.
+ * Returns { row, attachmentButton, stopButton, svg }
+ */
+export function makeActionsRowWithStopButton() {
+    const { row, attachmentButton, sendButton } = makeAttachmentButtonInActionsRow();
+    const { button: stopButton, svg } = makeStopButton();
+    sendButton.replaceWith(stopButton);
+    return { row, attachmentButton, stopButton, svg };
+}
+
 /** Attach elements to document.body; returns a cleanup function. */
 export function mountInDocument(...elements) {
     elements.forEach(el => document.body.appendChild(el));
@@ -324,7 +365,7 @@ export function dispatchClick(target) {
 /**
  * Composer send button whose SVG path has CHANGED (DeepSeek updated the icon)
  * but still carries the primary+filled+circle variant classes.
- * Exercises the structural fallback in isSendButtonCandidate.
+ * An unknown icon must be rejected: only the send icon identifies a send button.
  *
  * Structure mirrors makeMobileSendButton but with a different SVG path d.
  * Returns { button, svg }

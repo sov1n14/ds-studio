@@ -6,12 +6,16 @@
  * Cross-module state under test: the overlay (content/preset-overlay.controller.js) writes the global activePresetId; the binding controller (content/chat-binding-controller.js) reads activePresetId back through a DSS_SETTINGS_CHANGED broadcast to decide isGlobalPromptEnabled, and reads chatPresetMap to decide the own-content prefix.
  *
  * Harness (real modules, mocked trust boundaries only): test/helpers/overlay-consistency-harness.js.
+ *
+ * Timing that matters for the unbound-chat cases: the overlay recomputes the prefix optimistically at click time, and that recompute reads settings through chrome.storage (one macrotask per read in the in-memory fake). The immediate transports below return their failure within microtasks, so the rollback settles while the optimistic read is still in flight -- the order observed live.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { GLOBAL, preset, settle, transports, FAILURE_MODES, storedMap, shownLabel, shownValue, clickOption, storedActivePresetId, injected, navigateTo, unrelatedPresetEditArrives, setUpOverlayScenario, openChat } from '../helpers/overlay-consistency-harness.js';
 
 const CHAT_X = '11111111-1111-1111-1111-111111111111';
 const CHAT_Y = '22222222-2222-2222-2222-222222222222';
+// Plays a sendMessage whose promise never settles, so only the client's 10 s send timeout ends the bind.
+const hang = () => new Promise(() => {});
 
 describe('overlay selection vs injected prefix after a chat-map write from the overlay', () => {
     let tearDown;
@@ -108,6 +112,69 @@ describe('overlay selection vs injected prefix after a chat-map write from the o
         expect.soft(text, 'own-content prefix must be A\'s').toContain('PREFIX-A');
         expect.soft(text, 'overlay shows A (globalPromptEnabled: false), so the global default prompt must NOT be injected; the "none" fallback must not apply').not.toContain(GLOBAL);
         expect.soft(await storedActivePresetId(), 'the failed "none" choice must not stay persisted as activePresetId').toBe('preset-A');
+    });
+
+    /** Chat X is open with no stored binding; the overlay shows the placeholder and no preset content drives the injection. */
+    async function openChatXUnbound() {
+        await openChat(`/a/chat/s/${CHAT_X}`, [A, B], {});
+        const placeholder = shownLabel();
+        expect(shownValue(), 'sanity: unbound chat X opens showing no preset').toBe('');
+        expect(injected(), 'sanity: unbound chat X injects no preset content').not.toMatch(/PREFIX-[AB]/);
+        return placeholder;
+    }
+
+    async function expectUnboundChatXShowsAndInjectsNoPreset(placeholder) {
+        expect(storedMap()[CHAT_X], 'the failed bind left chat X unbound').toBeUndefined();
+        expect.soft(shownValue(), 'aria-selected must roll back to no preset').toBe('');
+        expect.soft(shownLabel(), 'overlay label must roll back to the placeholder').toBe(placeholder);
+        const text = injected();
+        expect.soft(text, "overlay shows no preset, so B's content must not be injected").not.toContain('PREFIX-B');
+        expect.soft(text, "no preset shown -> legacy flag (true) decides; B's false flag must not strip the global prompt").toContain(GLOBAL);
+        expect.soft(await storedActivePresetId(), 'the failed choice B must not stay persisted as activePresetId').not.toBe('preset-B');
+    }
+
+    it.each(FAILURE_MODES)('failed bind on an unbound chat (%s): overlay shows the placeholder and nothing of B is injected', async (mode) => {
+        const placeholder = await openChatXUnbound();
+
+        chrome.runtime.sendMessage = vi.fn(transports[mode]);
+        clickOption('preset-B');
+        await settle();
+
+        expect(chrome.runtime.sendMessage, 'guard: the bind must actually have been dispatched').toHaveBeenCalled();
+        await expectUnboundChatXShowsAndInjectsNoPreset(placeholder);
+    });
+
+    it('failed bind on an unbound chat (timeout: sendMessage never settles): after the 10 s client timeout the overlay shows the placeholder and nothing of B is injected', async () => {
+        const placeholder = await openChatXUnbound();
+
+        vi.useFakeTimers();
+        try {
+            chrome.runtime.sendMessage = vi.fn(hang);
+            clickOption('preset-B');
+            await vi.advanceTimersByTimeAsync(11000);
+        } finally {
+            vi.useRealTimers();
+        }
+        await settle();
+
+        expect(chrome.runtime.sendMessage, 'guard: the bind must actually have been dispatched').toHaveBeenCalled();
+        await expectUnboundChatXShowsAndInjectsNoPreset(placeholder);
+    });
+
+    it('control: a successful bind on an unbound chat shows, injects, and persists B', async () => {
+        await openChatXUnbound();
+
+        chrome.runtime.sendMessage = vi.fn(transports.success);
+        clickOption('preset-B');
+        await settle();
+
+        expect(storedMap()[CHAT_X]).toBe('preset-B');
+        expect(shownLabel()).toBe('Bravo');
+        expect(shownValue()).toBe('preset-B');
+        const text = injected();
+        expect(text).toContain('PREFIX-B');
+        expect(text, 'B has globalPromptEnabled: false').not.toContain(GLOBAL);
+        expect(await storedActivePresetId()).toBe('preset-B');
     });
 
     it('control: a successful bind keeps B displayed, injected, and persisted', async () => {

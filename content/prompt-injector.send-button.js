@@ -44,12 +44,6 @@
         // 主要判定：精確 SVG path 前綴比對（最快、最準）
         if (button.querySelector(selectors.SEND_BUTTON_ICON_SELECTOR)) return true;
 
-        // 結構性降級：含 SVG 且具備 primary+filled 變體 = 主輸入框送出按鈕（非附件按鈕）
-        if (button.querySelector('svg') && selectors.EDIT_SEND_BUTTON_VARIANT_CLASSES.every(cls => button.classList.contains(cls))) {
-            console.warn('[DS Studio] Send button matched by structural fallback — SVG icon selector may need update');
-            return true;
-        }
-
         // 編輯視窗送出按鈕（文字標籤，無 SVG 圖示）
         return isEditSendButton === undefined ? isEditWindowSendButton(button) : isEditSendButton;
     }

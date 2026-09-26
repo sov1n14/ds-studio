@@ -206,11 +206,10 @@ ds-studio/
 DeepSeek 的對話介面依賴前端框架（推測為 React），框架在內部追蹤狀態，而非單純讀取 DOM。要注入文字，內容腳本除了修改 `textarea.value`，還須派發會冒泡的 `input` 事件，讓框架在處理最後的 `Enter` 按鍵或滑鼠點擊前辨識到變更。
 
 - **鍵盤攔截**：於 capture 階段監聽 `keydown`。在 textarea 上偵測到 `Enter`（未按 Shift）時，透過原生 HTMLTextAreaElement value setter（繞過 React 覆寫的 setter）注入前綴，再派發 `input` 事件。原事件被攔下，並在 `requestAnimationFrame` 回呼中以程式重新派發 `Enter`，讓 React 狀態有時間提交。
-- **送出按鈕攔截**：於 capture 階段監聽 `pointerdown`、`mousedown` 與 `click`。`isSendButtonCandidate` 以三層策略辨識送出按鈕：
+- **送出按鈕攔截**：於 capture 階段監聽 `pointerdown`、`mousedown` 與 `click`。`isSendButtonCandidate` 以兩層策略辨識送出按鈕：
   1. **主要 — SVG path 前綴**：`svg path[d^="M8.3125"]`（常數 `SEND_BUTTON_ICON_SELECTOR`）— 最快且最精確，涵蓋桌面與行動版版面。
-  2. **結構性降級**：按鈕內含 `svg` 元素，**且**同時帶有 `ds-button--primary` + `ds-button--filled` 兩個 variant class（沿用 `EDIT_SEND_BUTTON_VARIANT_CLASSES`）— 涵蓋 DeepSeek 更換圖示 SVG path 的情況，並以 `console.warn` 記錄以便觀察。
-  3. **編輯視窗**：`isEditWindowSendButton` — 以 variant class + 文字標籤對編輯視窗送出按鈕（無 SVG）做結構檢查。
-  附件按鈕在三層中都會被排除：它的 class 是 `ds-button--iconLabelPrimary` + `ds-button--capsule`，而非 `--primary`/`--filled`。注入後，以 `requestAnimationFrame` 用程式重新觸發使用者原本的點擊。
+  2. **編輯視窗**：`isEditWindowSendButton` — 按鈕同時帶有 `ds-button--primary` + `ds-button--filled` 兩個 variant class（常數 `EDIT_SEND_BUTTON_VARIANT_CLASSES`），**且**含非空的 `span.ds-button__content` 文字標籤（無 SVG）。
+  DeepSeek 的「停止生成」按鈕與送出按鈕帶有完全相同的 class，兩者僅以 SVG path 區分（停止圖示 path 以 `M2 4.88` 開頭），因此主輸入框送出按鈕只以圖示 path 辨識；停止按鈕沒有文字標籤，也不符合編輯視窗層。附件按鈕在兩層中都會被排除：它的 class 是 `ds-button--iconLabelPrimary` + `ds-button--capsule`，而非 `--primary`/`--filled`。注入後，以 `requestAnimationFrame` 用程式重新觸發使用者原本的點擊。
 - **純附件送出（v4.21.1）**：`injectPrefix(textarea, isSendableWithoutText = false)` 接受第二個參數，讓 textarea 為空或僅含空白、但訊息仍可送出（僅附件或圖片、無文字）時也能注入。`isSendableWithoutText` 為 true 時，輸出包含時間戳記行（若系統時間開關為開）以及提示詞組／全域提示詞前綴，並刻意省略 `<user-input>` 包裝 — 沒有使用者文字需要包裝。textarea 為空且旗標為 false 或省略時仍回傳 false，擴充功能停用時的提早回傳仍具最高優先。
   - **送出按鈕狀態訊號**：「空白仍可送出」由 DeepSeek 自己的送出按鈕狀態判定，而非任何文字啟發式。`content/prompt-injector.controller.js` 的新輔助函式：`SEND_BUTTON_SELECTOR`、`isSendButtonCandidate`、`isSendButtonEnabled(button)`（按鈕帶有 `ds-button--disabled`、`aria-disabled="true"` 或 truthy 的 `disabled` 屬性時視為停用），以及 `findSendButtonForTextarea(textarea)`。`ds-button--disabled` 是語意化 BEM class，而非建置雜湊的 CSS-module class 名稱，因此優先用作定位依據。
   - **點擊路徑**：只要被點擊的送出按鈕未停用就注入，即使解析到的 textarea 為空，並沿用既有的 `preventDefault` / `stopPropagation` / `requestAnimationFrame` 合成重點擊流程。`isInjecting` 重入守衛在注入後立即同步設定（在 `redispatchClick` 之前），使同一次實體點擊的後續事件階段（`mousedown` / `click`）不必等待 `requestAnimationFrame` 回呼即被攔下。

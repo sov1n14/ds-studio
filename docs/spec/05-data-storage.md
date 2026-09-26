@@ -57,7 +57,7 @@
 ### DOM 選取
 
 - **輸入區域**：DeepSeek 聊天介面中的 `textarea` 元素。
-- **發送按鈕**：CSS 類別為 `div.ds-button[role="button"]` 的 `div` 元素。三層識別策略：(1) SVG path 前綴 `M8.3125`（主要）；(2) 含 `svg` 且帶 `ds-button--primary` + `ds-button--filled` 變體 class（結構性降級）；(3) 編輯視窗送出按鈕由 `isEditWindowSendButton` 識別。
+- **發送按鈕**：CSS 類別為 `div.ds-button[role="button"]` 的 `div` 元素。兩層識別策略：(1) 主輸入框送出按鈕以 SVG path 前綴 `M8.3125` 識別；(2) 編輯視窗送出按鈕由 `isEditWindowSendButton` 識別（`ds-button--primary` + `ds-button--filled` 變體 class 且含 `span.ds-button__content` 文字標籤）。「停止生成」按鈕與送出按鈕 class 相同，僅以 SVG path 區分（停止圖示 path 以 `M2 4.88` 開頭）。
 - **訊息容器**：`.ds-virtual-list-visible-items .ds-message`，用於列舉對話輪次。
 - **Markdown 內容**：`.ds-markdown`，用於 AI 回應內容。
 - **思考過程**：`.ds-think-content`，用於 AI 推理內容。
