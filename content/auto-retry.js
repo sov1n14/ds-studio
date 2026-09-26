@@ -6,7 +6,8 @@
  *   - 閘控：各按鈕由 content/feature-toggle.js 以「總開關 isEnabled 且自身鍵」決定；
  *     重試為 isAutoRetryEnabled，繼續生成為 isAutoContinueEnabled。本層不直讀儲存區。
  *   - 輪次：任一閘門開啟時，等待 DSSAutoClickDelay.nextDelayMs() 後，
- *     對每個閘門開啟且存在於頁面的按鈕各點擊一次，再以新的隨機延遲排下一輪；無點擊上限。
+ *     對每個閘門開啟且存在於頁面的按鈕各觸發一次，再以新的隨機延遲排下一輪；無點擊上限。
+ *   - 觸發：DeepSeek 的 React onClick 只接受受信任事件，故不呼叫 button.click()，改在按鈕上派送冒泡的 dss:react-click 事件，由 MAIN world 的 content/react-click-bridge.main.js 直接呼叫 React onClick。
  *   - 計時器：任何時刻至多一個；由全關轉為有閘門開啟時以新延遲起跑，全關時清除。
  *   - 定位：僅透過 content/ds-selectors.js 的選擇器（主要優先、備援其次），絕不以按鈕文字定位。
  */
@@ -59,15 +60,16 @@ const AutoRetry = {
     },
 
     /**
-     * 單一輪次：點擊每個閘門開啟且存在的按鈕各一次，再排下一輪。
+     * 單一輪次：觸發每個閘門開啟且存在的按鈕各一次，再排下一輪。
      */
     _runRound() {
         this._timer = null;
         this._openGates.forEach((name) => {
-            // 每顆按鈕各自隔離：一顆點擊拋錯不影響同輪其他按鈕，記錄後仍繼續下一輪
+            // 每顆按鈕各自隔離：一顆觸發拋錯不影響同輪其他按鈕，記錄後仍繼續下一輪
             try {
                 const button = this._findButton(this.BUTTONS[name].selectors);
-                if (button) button.click();
+                // 事件名稱與 content/react-click-bridge.main.js 一致（跨 world 無共用載入器）
+                if (button) button.dispatchEvent(new CustomEvent('dss:react-click', { bubbles: true }));
             } catch (error) {
                 console.error(`[DSS] auto-retry:${name} 按鈕點擊失敗:`, error);
             }

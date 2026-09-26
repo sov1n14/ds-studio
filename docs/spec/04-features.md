@@ -188,7 +188,8 @@
 - **開關位置**：彈出選單「Features」卡片中的 `#autoRetryToggle`（自動重試）與 `#autoContinueToggle`（自動繼續生成）兩個核取方塊，彼此獨立。
 - **儲存鍵**：`isAutoRetryEnabled`、`isAutoContinueEnabled`（布林值，預設皆為 `false`）。兩者與其他功能開關同樣經 `StorageManager` 寫入並同步、納入 JSON 備份與還原（設定欄位 `autoRetry`、`autoContinue`），popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
 - **閘控**：`content/auto-retry.js` 對兩顆按鈕各以自身鍵呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，每顆按鈕僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。
-- **輪次**：任一按鈕生效時，以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`）取得 0–3 秒、0.1 秒級距的均勻隨機延遲；延遲到期後，對每顆生效且存在於頁面的按鈕各點擊一次（每輪每顆至多一次），再以新的隨機延遲排下一輪。不設點擊上限。
+- **輪次**：任一按鈕生效時，以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`）取得 0–3 秒、0.1 秒級距的均勻隨機延遲；延遲到期後，對每顆生效且存在於頁面的按鈕各觸發一次（每輪每顆至多一次），再以新的隨機延遲排下一輪。不設觸發上限。
+- **觸發方式（v4.35.4）**：DeepSeek 按鈕的 React `onClick` 只接受 `nativeEvent.isTrusted === true` 且為 `Event` 實例的事件，isolated world 的不受信任點擊會被忽略。因此 `content/auto-retry.js` 在按鈕上派送冒泡的 `dss:react-click` 自訂事件；由 manifest 以 `"world": "MAIN"` 載入的 `content/react-click-bridge.main.js` 在 `document` 上接收，讀取按鈕 `__reactProps$*` 的 `onClick`，以能通過 `isTrusted` 檢查的合成 `nativeEvent` 直接呼叫；按鈕沒有 React `onClick` 時退回 `el.click()`。橋接以 `window.__dssIsReactClickBridgeInstalled` 旗標作為防禦性防護：同一視窗內腳本被執行兩次時，一次 `dss:react-click` 仍只呼叫一次 `onClick`。
 - **計時器**：任何時刻至多一個計時器；兩顆按鈕皆未生效時清除計時器，不執行任何輪次。
 - **按鈕定位**：僅以 `content/ds-selectors.js` 的選擇器定位，絕不以按鈕文字定位；主要選擇器命中時不嘗試備援。重試：`RETRY_BUTTON_SELECTOR`，備援 `RETRY_BUTTON_FALLBACK_SELECTOR`。繼續生成：`CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`），備援 `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`）。
-- **實作位置**：`content/auto-retry.js`（manifest 中緊接 `content/auto-click.delay.js` 之後載入）。`start()` 於模組載入時自動呼叫。
+- **實作位置**：`content/auto-retry.js`（manifest 中緊接 `content/auto-click.delay.js` 之後載入）。`start()` 於模組載入時自動呼叫。MAIN-world 橋接為 `content/react-click-bridge.main.js`（獨立的 `content_scripts` 項目，`run_at: document_end`）。

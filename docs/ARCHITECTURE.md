@@ -92,7 +92,8 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.lifecycle.js ─  行動裝置滑動的啟用／停用生命週期
 │   ├── auto-expand-messages.js ─  以 MutationObserver 自動點擊收合的展開按鈕（v4.32.0）
 │   ├── auto-click.delay.js    ─  自動點擊輪次的 0–3 秒隨機延遲（0.1 秒級距，v4.35.0）
-│   ├── auto-retry.js          ─  自動重試／自動繼續生成的共用輪次迴圈：各自受開關閘控，每輪隨機延遲後點擊重試與繼續生成按鈕（v4.11.0，v4.35.0 改版）
+│   ├── auto-retry.js          ─  自動重試／自動繼續生成的共用輪次迴圈：各自受開關閘控，每輪隨機延遲後在重試與繼續生成按鈕上派送 dss:react-click 事件（v4.11.0，v4.35.0 改版，v4.35.4 改為事件觸發）
+│   ├── react-click-bridge.main.js ‡ ─  MAIN-world 橋接：收到 dss:react-click 時以能通過 isTrusted 檢查的合成 nativeEvent 呼叫按鈕的 React onClick，無 onClick 時退回 click()（v4.35.4）
 │   ├── editor-window-autoclose.js ─  window focus → 送出 DSS_CLOSE_EDITOR_WINDOWS 訊息，關閉所有開啟中的編輯視窗（v4.29.0）
 │   ├── go-top.css           ─  GoToTop 與匯出 toast 樣式
 │   ├── prevent-auto-scroll-bridge.js  ─  抑制自動捲動的 isolated-world 橋接（含持續模式，v4.12.0）
@@ -190,6 +191,8 @@ ds-studio/
 > `*` = 標記者為 web_accessible_resources，注入至頁面 MAIN world，不受 content script 的 isolated world CSP 限制。
 >
 > `†` = 檔案**不在** `manifest.json` 的 `content_scripts` 清單中；僅由 `background/service-worker.js` 以 `importScripts` 載入，執行情境為 service worker。
+>
+> `‡` = 由 `manifest.json` 的 `content_scripts` 項目以 `"world": "MAIN"` 靜態載入頁面 MAIN world（有別於經 `main-world-injector.js` 注入的 web_accessible_resources 腳本）。
 
 ### 模組化載入順序（v4.0.0）
 

@@ -10,7 +10,7 @@
 |-|-|-|
 | **UI 調整模組** | Sidebar Auto-Hide, Chat Width, Input Width, Hide Thinking, AutoExpandMessages, WebSearchToggle, GoToTop, Mobile Sidebar Swipe | [→ content-ui.md](content-ui.md) |
 | **導航與介面模組** | SPA Navigation, Overlay Preset Selector, Empty Preset, Toast | [→ content-navigation.md](content-navigation.md) |
-| **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup, AutoRetry（自動重試／自動繼續生成） | [→ content-interaction.md](content-interaction.md) |
+| **使用者互動模組** | Quote Reply, PreventAutoScroll, System Time Injection, Edit Message Cleanup, AutoRetry（自動重試／自動繼續生成，含 MAIN-world 的 `content/react-click-bridge.main.js`） | [→ content-interaction.md](content-interaction.md) |
 | **互動復原模組** | Censor Reply Restore（JS + CSS：`keymap`／`markdown`／`dom`（含 `dom.resolve`／`dom.inject`／`dom.scan` 三個子包）／`thinkblock`／`storage`／`detection`／`observer` 方法包 + 入口檔；MAIN world 的 `sse-parser.js`／`censor-xhr-hook.js` 經 `main-world-injector.js` 注入） | [→ spec/04-features.md](../spec/04-features.md) |
 | **臨時對話模組** | Temporary Conversation（`utils/temporary-chat-constants.js`、`temporary-chat-enabled-flag.js`、`temporary-chat-toggle.js`、`temporary-chat-toggle.ui.js` + `.css`、`temporary-chat-delete-api.js`、`temporary-chat-delete.tracking.js`、`temporary-chat-delete.coordinator.js`、`temporary-chat-delete.handlers.js`、`temporary-chat-delete.js`；`background/pending-store.js` 由 service worker 以 `importScripts` 載入） | [→ spec/04-features.md](../spec/04-features.md) |
 | **匯出工具模組** | Scroll-and-Harvest Markdown export engine | [→ EXPORT.md](EXPORT.md) |

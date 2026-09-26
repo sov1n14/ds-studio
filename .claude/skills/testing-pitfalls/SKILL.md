@@ -23,6 +23,7 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 | Layout Measurement Needs a Layout Model | exercises code that reads `scrollWidth`, `offsetWidth`, `clientWidth`, or `getBoundingClientRect`, or writes a measured size back into the element it measures | [layout-measurement-needs-layout-model.md](references/layout-measurement-needs-layout-model.md) |
 | Overlapping Async Writes: Older Resolves Last | exercises state written by more than one in-flight async call, such as an optimistic update followed by a rollback | [overlapping-async-writes.md](references/overlapping-async-writes.md) |
 | Zero Is Not Missing: Fallback Inputs | exercises code that substitutes a default when a parsed or read value is missing, such as a computed-style number where 0 is a legitimate value | [zero-is-not-missing.md](references/zero-is-not-missing.md) |
+| Host-Page Controls: Assert Activation, Not Dispatch | asserts that the extension clicked or triggered a host-page button or control, or builds a fixture for a page element whose handler (React `onClick`, `isTrusted` guard) decides whether to act | [assert-activation-not-dispatch.md](references/assert-activation-not-dispatch.md) |
 
 ## Adding a New Lesson
 

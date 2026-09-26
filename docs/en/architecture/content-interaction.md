@@ -188,7 +188,7 @@ The `#autoRetryToggle` and `#autoContinueToggle` checkboxes in the Features card
 ### Round Loop
 
 - At most one timer (`_timer`) exists at any time. When `_openGates` goes from empty to non-empty, `_scheduleRound()` schedules the next round with `DSSAutoClickDelay.nextDelayMs()` (`content/auto-click.delay.js`, a uniform random value of 0–3000ms in 100ms steps).
-- `_runRound()` tries each open button's selectors in order, clicks the first match once, then schedules the next round with a fresh random delay; there is no click cap. An error thrown inside a round is logged and the next round is still scheduled.
+- `_runRound()` tries each open button's selectors in order and dispatches one bubbling `dss:react-click` custom event on the first match (the [React Click Bridge](#react-click-bridge) performs the actual click), then schedules the next round with a fresh random delay; there is no trigger cap. Each button is isolated in its own try/catch: a thrown error is logged, and the other buttons in the round and the next round still proceed.
 - When `_openGates` becomes empty, `_stopTimer()` clears the timer, so no timer runs while every toggle is off.
 
 ### Button Location
@@ -199,6 +199,17 @@ Buttons are located only through the selectors in `content/ds-selectors.js`, nev
 |-|-|-|
 | Retry | `RETRY_BUTTON_SELECTOR` (`.ds-button--warning.ds-button--circle.ds-button--xs`) | `RETRY_BUTTON_FALLBACK_SELECTOR` (`.a3b9bd76._76a2310`) |
 | Continue generating | `CONTINUE_BUTTON_SELECTOR` (`._8e85838 > .ds-button[role="button"]`) | `CONTINUE_BUTTON_FALLBACK_SELECTOR` (`._6eef0b0`) |
+
+### React Click Bridge
+
+The React `onClick` on DeepSeek's buttons acts only when `e.nativeEvent.isTrusted === true` and `e.nativeEvent instanceof Event`; `element.click()` from an isolated-world content script is an untrusted event and is ignored, and the isolated world cannot read the element's `__reactProps$*` expando. `content/react-click-bridge.main.js` therefore runs in the page's MAIN world:
+
+- **Loading**: statically loaded by its own manifest `content_scripts` entry with `"world": "MAIN"` (unlike the web_accessible_resources scripts injected via `main-world-injector.js`), `matches: ["*://chat.deepseek.com/*"]`, `run_at: document_end`; the static MAIN-world declaration requires Chrome 111 (manifest `minimum_chrome_version`).
+- **Listening**: a self-installing IIFE listens for `dss:react-click` on `document`; `auto-retry.js` and this file each declare the event name (no shared loader across worlds).
+- **Triggering**: reads `onClick` from the target element's own `__reactProps$*` and calls it with a minimal synthetic event: `nativeEvent` is `Object.create(Event.prototype, { isTrusted: { value: true } })` (passing the check above), plus `target` / `currentTarget` and no-op `preventDefault` / `stopPropagation`.
+- **Fallback**: when the element has no React `onClick`, it calls `el.click()`.
+- **Error handling**: the listener body is wrapped in try/catch and logs `console.error('[DSS] react-click-bridge:', err)` when the React `onClick` throws.
+- **Double-evaluation guard**: the `window.__dssIsReactClickBridgeInstalled` flag is a defensive guard: if the script is evaluated twice in the same window, a single listener remains, so one `dss:react-click` leads to one `onClick` call.
 
 ### Load Order
 

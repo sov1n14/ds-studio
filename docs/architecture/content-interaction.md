@@ -188,7 +188,7 @@ Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊�
 ### 輪次迴圈
 
 - 任何時刻至多一個計時器（`_timer`）。`_openGates` 由空轉為非空時，`_scheduleRound()` 以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`，0–3000ms、100ms 級距的均勻隨機值）排定下一輪。
-- `_runRound()` 對每個閘門開啟的按鈕依序嘗試其選擇器，找到即點擊一次，接著以新的隨機延遲排下一輪；不設點擊上限。輪次內拋出的錯誤會被記錄，下一輪照常排定。
+- `_runRound()` 對每個閘門開啟的按鈕依序嘗試其選擇器，找到後在該按鈕上派送一次冒泡的 `dss:react-click` 自訂事件（由 [React 點擊橋接](#react-點擊橋接-react-click-bridge)實際觸發按鈕），接著以新的隨機延遲排下一輪；不設觸發上限。每顆按鈕各自以 try/catch 隔離：拋出的錯誤會被記錄，同輪其他按鈕與下一輪照常進行。
 - `_openGates` 清空時 `_stopTimer()` 清除計時器，全關期間沒有任何計時器執行。
 
 ### 按鈕定位
@@ -199,6 +199,17 @@ Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊�
 |-|-|-|
 | 重試 | `RETRY_BUTTON_SELECTOR`（`.ds-button--warning.ds-button--circle.ds-button--xs`） | `RETRY_BUTTON_FALLBACK_SELECTOR`（`.a3b9bd76._76a2310`） |
 | 繼續生成 | `CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`） | `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`） |
+
+### React 點擊橋接 (React Click Bridge)
+
+DeepSeek 按鈕的 React `onClick` 只在 `e.nativeEvent.isTrusted === true` 且 `e.nativeEvent instanceof Event` 時動作；isolated world 內容腳本的 `element.click()` 屬不受信任事件而被忽略，isolated world 也讀不到元素上的 `__reactProps$*` expando。`content/react-click-bridge.main.js` 因此在頁面 MAIN world 執行：
+
+- **載入方式**：由 manifest 中獨立的 `content_scripts` 項目以 `"world": "MAIN"` 靜態載入（有別於經 `main-world-injector.js` 注入的 web_accessible_resources 腳本），`matches: ["*://chat.deepseek.com/*"]`、`run_at: document_end`；靜態 MAIN world 宣告需要 Chrome 111（manifest `minimum_chrome_version`）。
+- **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js` 與本檔各自宣告（跨 world 無共用載入器）。
+- **觸發**：讀取目標元素自身 `__reactProps$*` 上的 `onClick`，以最小 synthetic event 呼叫：`nativeEvent` 為 `Object.create(Event.prototype, { isTrusted: { value: true } })`（通過上述檢查），另帶 `target` / `currentTarget` 與空實作的 `preventDefault` / `stopPropagation`。
+- **備援**：元素沒有 React `onClick` 時呼叫 `el.click()`。
+- **錯誤處理**：監聽器本體以 try/catch 包覆，React `onClick` 拋錯時以 `console.error('[DSS] react-click-bridge:', err)` 記錄。
+- **重複執行防護**：`window.__dssIsReactClickBridgeInstalled` 旗標為防禦性防護：同一視窗內腳本被執行兩次時仍只有一個監聽器，一次 `dss:react-click` 只呼叫一次 `onClick`。
 
 ### 載入順序
 

@@ -3,9 +3,10 @@
  *
  * Requirements asserted:
  *   A. content/auto-retry.js starts on load and needs content/auto-click.delay.js (globalThis.DSSAutoClickDelay) loaded first. Without it, loading fails with an Error and no round timer is ever scheduled.
- *   B. A round whose button click throws is reported through console.error and does not stop the loop: the next round is still scheduled and clicks again.
+ *   B. A round whose activation attempt throws (the button's dispatchEvent throws) is reported through console.error and does not stop the loop: the next round is still scheduled and activates the button.
  *   C. popup live sync: a storage change removing isAutoRetryEnabled / isAutoContinueEnabled (newValue undefined) shows the setting's default, false, so the checkbox unchecks.
- *   E. With both gates open and both buttons present, a click that throws on one button does not skip the other button in the same round (checked for each button, so iteration order does not matter), and the next round is still scheduled.
+ *   E. With both gates open and both buttons present, an activation attempt that throws on one button does not skip activating the other button in the same round (checked for each button, so iteration order does not matter), the console.error report names the failing button, and the next round is still scheduled.
+ *   "Activated" = the button's React onClick guard accepted the event (harness guardButton); a bare click event is not success.
  *   D. popup toggles: changing #autoRetryToggle / #autoContinueToggle shows the save-status indicator (ctx.showSaveStatus, the popup's injected indicator) after the change is saved.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
@@ -14,7 +15,7 @@ import { evalPopupScript } from '../helpers/popup-script-loader.js';
 import { mountPopupHtml } from '../helpers/popup-master-switch-harness.js';
 import {
     MASTER_KEY, RETRY_KEY, CONTINUE_KEY, R_2500, RETRY_MARKUP, CONTINUE_MARKUP,
-    mount, clickSpy, stubRandom, installChromeRuntime, respondWith, loadAutoClick, settle,
+    mount, guardButton, stubRandom, installChromeRuntime, respondWith, loadAutoClick, settle,
 } from '../helpers/auto-click-harness.js';
 
 const K = StorageManager.KEYS;
@@ -45,7 +46,7 @@ describe('auto-retry.js loaded without auto-click.delay.js', () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         respondWith({ [MASTER_KEY]: true, [RETRY_KEY]: true, [CONTINUE_KEY]: true });
         mount(RETRY_MARKUP);
-        const retry = clickSpy('retry');
+        const retry = guardButton('retry');
         vi.resetModules();
         await import('../../content/feature-toggle.js');
         delete globalThis.DSSAutoClickDelay;
@@ -56,44 +57,53 @@ describe('auto-retry.js loaded without auto-click.delay.js', () => {
         await settle();
         expect(vi.getTimerCount(), 'pending timers after the failed start').toBe(0);
         vi.advanceTimersByTime(30000);
-        expect(retry, 'clicks after the failed start').toHaveBeenCalledTimes(0);
+        expect(retry, 'activations after the failed start').toHaveBeenCalledTimes(0);
     });
 });
 
-// ── B. a throwing click does not kill the loop ──
+/** Make fixture `name`'s dispatchEvent throw on the first `throwTimes` calls, then dispatch normally. Returns the call counter; assert only that it grows, since how many events one activation dispatches is not part of the contract. */
+function throwOnDispatch(name, failure, throwTimes) {
+    const button = document.querySelector(`[data-fixture="${name}"]`);
+    const dispatch = button.dispatchEvent.bind(button);
+    const state = { attempts: 0 };
+    button.dispatchEvent = (event) => {
+        state.attempts += 1;
+        if (state.attempts <= throwTimes) throw failure;
+        return dispatch(event);
+    };
+    return state;
+}
 
-describe('auto-click round whose click throws', () => {
+// ── B. a throwing activation attempt does not kill the loop ──
+
+describe('auto-click round whose activation attempt throws', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         installChromeRuntime();
         stubRandom(R_2500);
     });
 
-    it('reports the error and still runs the next round, which clicks again', async () => {
+    it('reports the error and still runs the next round, which activates the button', async () => {
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         mount(RETRY_MARKUP);
-        const button = document.querySelector('[data-fixture="retry"]');
-        const failure = new Error('click handler blew up');
-        let attempts = 0;
-        button.click = () => {
-            attempts += 1;
-            if (attempts === 1) throw failure;
-        };
+        const activated = guardButton('retry');
+        const failure = new Error('dispatch blew up');
+        const retry = throwOnDispatch('retry', failure, 1);
         await loadAutoClick({ [MASTER_KEY]: true, [RETRY_KEY]: true, [CONTINUE_KEY]: false });
 
-        expect(() => vi.advanceTimersByTime(2500), 'round 1 (click throws) must not escape the timer').not.toThrow();
-        expect(attempts, 'round 1 attempted the click').toBe(1);
+        expect(() => vi.advanceTimersByTime(2500), 'round 1 (attempt throws) must not escape the timer').not.toThrow();
+        expect(retry.attempts, 'round 1 attempted the retry button').toBeGreaterThan(0);
         expect(errorSpy.mock.calls.some((args) => args.includes(failure)), 'the thrown error is reported via console.error').toBe(true);
         expect(vi.getTimerCount(), 'next round scheduled after the failed round').toBe(1);
 
         vi.advanceTimersByTime(2500);
-        expect(attempts, 'round 2 clicked again').toBe(2);
+        expect(activated, 'round 2 activated the retry button').toHaveBeenCalledTimes(1);
     });
 });
 
-// ── E. a throwing click on one button does not skip the other in the same round ──
+// ── E. a throwing attempt on one button does not skip the other in the same round ──
 
-describe('auto-click round with both gates open where one button click throws', () => {
+describe('auto-click round with both gates open where one button activation attempt throws', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         installChromeRuntime();
@@ -104,25 +114,27 @@ describe('auto-click round with both gates open where one button click throws', 
         // [throwing fixture, surviving fixture]
         ['retry', 'continue'],
         ['continue', 'retry'],
-    ])('%s click throws: %s is still clicked in that round, and the next round runs', async (failing, surviving) => {
-        vi.spyOn(console, 'error').mockImplementation(() => {});
+    ])('%s attempt throws: %s is still activated in that round, and the next round runs', async (failing, surviving) => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         mount(RETRY_MARKUP, CONTINUE_MARKUP);
-        const other = clickSpy(surviving);
-        let attempts = 0;
-        document.querySelector(`[data-fixture="${failing}"]`).click = () => {
-            attempts += 1;
-            throw new Error(`${failing} click blew up`);
-        };
+        guardButton(failing);
+        const other = guardButton(surviving);
+        const failure = new Error(`${failing} dispatch blew up`);
+        const broken = throwOnDispatch(failing, failure, Infinity);
         await loadAutoClick({ [MASTER_KEY]: true, [RETRY_KEY]: true, [CONTINUE_KEY]: true });
 
         expect(() => vi.advanceTimersByTime(2500), 'round 1 must not escape the timer').not.toThrow();
-        expect(attempts, `round 1 attempted the ${failing} click`).toBe(1);
-        expect(other, `round 1 clicked ${surviving} despite the ${failing} click throwing`).toHaveBeenCalledTimes(1);
+        const round1Attempts = broken.attempts;
+        expect(round1Attempts, `round 1 attempted the ${failing} button`).toBeGreaterThan(0);
+        expect(other, `round 1 activated ${surviving} despite the ${failing} attempt throwing`).toHaveBeenCalledTimes(1);
+        const reports = errorSpy.mock.calls.filter((args) => args.includes(failure)).map(([message]) => String(message));
+        expect(reports.length, `round 1 reported the ${failing} failure via console.error`).toBeGreaterThan(0);
+        expect(reports.every((message) => message.includes(failing)), `the report names the failing button (${failing}): ${JSON.stringify(reports)}`).toBe(true);
         expect(vi.getTimerCount(), 'next round scheduled after round 1').toBe(1);
 
         vi.advanceTimersByTime(2500);
-        expect(attempts, `round 2 attempted the ${failing} click again`).toBe(2);
-        expect(other, `round 2 clicked ${surviving} again`).toHaveBeenCalledTimes(2);
+        expect(broken.attempts, `round 2 attempted the ${failing} button again`).toBeGreaterThan(round1Attempts);
+        expect(other, `round 2 activated ${surviving} again`).toHaveBeenCalledTimes(2);
     });
 });
 

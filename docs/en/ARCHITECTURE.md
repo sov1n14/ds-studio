@@ -92,7 +92,8 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.lifecycle.js ─  Enable/disable lifecycle for mobile swipe
 │   ├── auto-expand-messages.js ─  MutationObserver-based auto-click of collapsed expand buttons (v4.32.0)
 │   ├── auto-click.delay.js    ─  0–3 s random delay for auto-click rounds, in 0.1 s steps (v4.35.0)
-│   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, clicks the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0)
+│   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, dispatches a dss:react-click event on the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0, event-triggered since v4.35.4)
+│   ├── react-click-bridge.main.js ‡ ─  MAIN-world bridge: on dss:react-click, calls the button's React onClick with a synthetic nativeEvent that passes the isTrusted check, falling back to click() when there is no onClick (v4.35.4)
 │   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
@@ -190,6 +191,8 @@ ds-studio/
 > `*` = Marked entries are web_accessible_resources, injected into the page MAIN world, not subject to the content script's isolated world CSP restrictions.
 >
 > `†` = File is **not** in the `manifest.json` `content_scripts` list; loaded only by `background/service-worker.js` via `importScripts`, executing in the service worker context.
+>
+> `‡` = Statically loaded into the page MAIN world by a `manifest.json` `content_scripts` entry with `"world": "MAIN"` (unlike the web_accessible_resources scripts injected via `main-world-injector.js`).
 
 ### Modular Load Order (v4.0.0)
 

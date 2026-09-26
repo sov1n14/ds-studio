@@ -10,6 +10,7 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.35.4](changelog/v4.md#4354---2026-09-27) | 自動繼續生成與自動重試現在會實際觸發「继续生成」與重試按鈕：DeepSeek 的 React `onClick` 只接受受信任事件，content script 改派送 `dss:react-click`，由新增的 MAIN world bridge `content/react-click-bridge.main.js` 以能通過檢查的合成事件呼叫 React `onClick` |
 | [4.35.3](changelog/v4.md#4353---2026-09-26) | 點擊「停止生成」不再注入提示詞（主輸入框送出按鈕僅以圖示路徑辨識）；對話中切換提示詞組時下拉選單不再逐次變寬（量測期間標籤 `flex: none`）；綁定失敗回滾時注入前綴隨標籤一起回滾（`updatePromptPrefixFromBinding()` 最後一次呼叫勝出）；潛在問題：觸發器 gap 與原生按鈕 margin-bottom 若為 0px 曾被誤當成預設值（下拉選單會多寬 4px、GoTop 間距會變成 28px），現改為照實採用；目前兩者實測值與預設值相同，畫面無可見差異 |
 | [4.35.2](changelog/v4.md#4352---2026-09-25) | 刪除自 v4.33.8 起未載入的純註解 stub `censor-reply-restore.dom.js`、`censor-reply-restore.dom.extract.js`；`censor-reply-restore.js` 不再讀取從未設定的 `__DS_CensorReplyRestore_dom_extract`，載入順序註解與 `manifest.json` 一致；對執行期無影響 |
 | [4.35.1](changelog/v4.md#4351---2026-09-25) | 移除未使用的網路搜尋雜湊 class 常數 `WEBSEARCH_TOGGLE_CLASS`、`WEBSEARCH_LABEL_CLASS`（`DSSelectors` 匯出 94 → 92）；網路搜尋開關的定位方式不變；新增 fresh-load spec，`ds-selectors.js` mutation score 達 100% |

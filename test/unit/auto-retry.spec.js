@@ -4,15 +4,16 @@
  * Requirement:
  *   - Gates: retry = master "isEnabled" ON && "isAutoRetryEnabled" true; continue = master ON && "isAutoContinueEnabled" true. Both own keys default false. Initial values come from DSS_GET_SETTINGS (both own keys requested), changes from DSS_SETTINGS_CHANGED (area 'local').
  *   - Location by window.DSstudio.Selectors only: retry = RETRY_BUTTON_SELECTOR, fallback RETRY_BUTTON_FALLBACK_SELECTOR; continue = CONTINUE_BUTTON_SELECTOR, fallback CONTINUE_BUTTON_FALLBACK_SELECTOR. Never by button text.
- *   - Timing: one setTimeout chain. While any gate is open: wait DSSAutoClickDelay.nextDelayMs() (floor(Math.random() * 31) * 100 ms), click each gated, present button once, schedule the next round with a fresh delay. At most one pending timer. No click cap. All gates closed -> no timer.
+ *   - Timing: one setTimeout chain. While any gate is open: wait DSSAutoClickDelay.nextDelayMs() (floor(Math.random() * 31) * 100 ms), activate each gated, present button once, schedule the next round with a fresh delay. At most one pending timer. No activation cap. All gates closed -> no timer.
+ *   - "Activate" means the button's React onClick guard accepts the event (see guardButton in the harness); a bare click event is not success, because the live buttons ignore untrusted clicks.
  *
- * Math.random is stubbed to pick the delay; fake timers drive the loop.
+ * Math.random is stubbed to pick the delay; fake timers drive the loop. content/react-click-bridge.main.js is loaded by the harness alongside the loop.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     MASTER_KEY, RETRY_KEY, CONTINUE_KEY, R_300, R_1500, R_2500, R_2700,
     selectors, RETRY_MARKUP, CONTINUE_MARKUP, RETRY_FALLBACK_ONLY_MARKUP, CONTINUE_FALLBACK_ONLY_MARKUP, DECOY_MARKUP,
-    mount, clickSpy, stubRandom, installChromeRuntime, requestedKeys, broadcast, changes, loadAutoClick,
+    mount, clickSpy, guardButton, stubRandom, installChromeRuntime, requestedKeys, broadcast, changes, loadAutoClick,
 } from '../helpers/auto-click-harness.js';
 
 const ALL_ON = { [MASTER_KEY]: true, [RETRY_KEY]: true, [CONTINUE_KEY]: true };
@@ -20,7 +21,7 @@ const RETRY_ONLY = { [MASTER_KEY]: true, [RETRY_KEY]: true, [CONTINUE_KEY]: fals
 const CONTINUE_ONLY = { [MASTER_KEY]: true, [RETRY_KEY]: false, [CONTINUE_KEY]: true };
 const FRESH_INSTALL = { [MASTER_KEY]: true, [RETRY_KEY]: false, [CONTINUE_KEY]: false };
 
-/** [retry clicks, continue clicks] */
+/** [retry activations, continue activations] */
 const counts = (retry, cont) => [retry.mock.calls.length, cont.mock.calls.length];
 
 beforeEach(() => {
@@ -80,21 +81,21 @@ describe('initial settings request', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('round timing', () => {
-    it('waits exactly nextDelayMs() before the first click (1500 ms: none at 1499, one at 1500)', async () => {
+    it('waits exactly nextDelayMs() before the first activation (1500 ms: none at 1499, one at 1500)', async () => {
         mount(RETRY_MARKUP);
-        const retry = clickSpy('retry');
+        const retry = guardButton('retry');
         stubRandom(R_1500);
         await loadAutoClick(RETRY_ONLY);
 
         vi.advanceTimersByTime(1499);
-        expect(retry, 'no click before the first delay elapses').toHaveBeenCalledTimes(0);
+        expect(retry, 'no activation before the first delay elapses').toHaveBeenCalledTimes(0);
         vi.advanceTimersByTime(1);
-        expect(retry, 'one click when the first delay elapses').toHaveBeenCalledTimes(1);
+        expect(retry, 'one activation when the first delay elapses').toHaveBeenCalledTimes(1);
     });
 
     it('draws a fresh delay for every round (300 ms, then 2700 ms, then 1500 ms)', async () => {
         mount(RETRY_MARKUP);
-        const retry = clickSpy('retry');
+        const retry = guardButton('retry');
         stubRandom(R_300, R_2700, R_1500);
         await loadAutoClick(RETRY_ONLY);
 
@@ -112,7 +113,7 @@ describe('round timing', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  4. Gating — which buttons a round clicks
+//  4. Gating — which buttons a round activates
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('gating with both buttons present', () => {
@@ -121,12 +122,12 @@ describe('gating with both buttons present', () => {
 
     beforeEach(() => {
         mount(RETRY_MARKUP, CONTINUE_MARKUP);
-        retry = clickSpy('retry');
-        cont = clickSpy('continue');
+        retry = guardButton('retry');
+        cont = guardButton('continue');
         stubRandom(R_2500);
     });
 
-    it('retry-only: clicks retry once per round, never continue', async () => {
+    it('retry-only: activates retry once per round, never continue', async () => {
         await loadAutoClick(RETRY_ONLY);
 
         vi.advanceTimersByTime(5000);
@@ -134,7 +135,7 @@ describe('gating with both buttons present', () => {
         expect(counts(retry, cont), '[retry, continue] after 2 rounds').toEqual([2, 0]);
     });
 
-    it('continue-only: clicks continue once per round, never retry', async () => {
+    it('continue-only: activates continue once per round, never retry', async () => {
         await loadAutoClick(CONTINUE_ONLY);
 
         vi.advanceTimersByTime(5000);
@@ -142,7 +143,7 @@ describe('gating with both buttons present', () => {
         expect(counts(retry, cont), '[retry, continue] after 2 rounds').toEqual([0, 2]);
     });
 
-    it('both on: clicks both in the same round', async () => {
+    it('both on: activates both in the same round', async () => {
         await loadAutoClick(ALL_ON);
 
         vi.advanceTimersByTime(2499);
@@ -151,7 +152,7 @@ describe('gating with both buttons present', () => {
         expect(counts(retry, cont), 't=2500 (round 1)').toEqual([1, 1]);
     });
 
-    it('neither on (fresh install, master on): schedules no timer and clicks nothing', async () => {
+    it('neither on (fresh install, master on): schedules no timer and activates nothing', async () => {
         await loadAutoClick(FRESH_INSTALL);
 
         expect(vi.getTimerCount(), 'pending timers with both gates closed').toBe(0);
@@ -170,14 +171,14 @@ describe('live gate changes', () => {
 
     beforeEach(async () => {
         mount(RETRY_MARKUP, CONTINUE_MARKUP);
-        retry = clickSpy('retry');
-        cont = clickSpy('continue');
+        retry = guardButton('retry');
+        cont = guardButton('continue');
         stubRandom(R_2500);
         await loadAutoClick(ALL_ON);
         vi.advanceTimersByTime(2500);
     });
 
-    it('turning retry off stops retry clicks from the next round; continue keeps going', () => {
+    it('turning retry off stops retry activations from the next round; continue keeps going', () => {
         expect(counts(retry, cont), 'precondition: round 1').toEqual([1, 1]);
 
         broadcast(changes([RETRY_KEY, false, true]));
@@ -226,12 +227,12 @@ describe('single shared loop', () => {
 
     beforeEach(() => {
         mount(RETRY_MARKUP, CONTINUE_MARKUP);
-        retry = clickSpy('retry');
-        cont = clickSpy('continue');
+        retry = guardButton('retry');
+        cont = guardButton('continue');
         stubRandom(R_2500);
     });
 
-    it('with both gates open there is one timer and one click per button per round', async () => {
+    it('with both gates open there is one timer and one activation per button per round', async () => {
         await loadAutoClick(ALL_ON);
 
         expect(vi.getTimerCount(), 'timers with both gates open').toBe(1);
@@ -256,7 +257,7 @@ describe('single shared loop', () => {
         expect(vi.getTimerCount(), 'timers after toggling settles with both on').toBe(1);
 
         vi.advanceTimersByTime(2500);
-        expect(counts(retry, cont), 'clicks in the first round').toEqual([1, 1]);
+        expect(counts(retry, cont), 'activations in the first round').toEqual([1, 1]);
     });
 
     it('repeated identical broadcasts do not add loops', async () => {
@@ -268,7 +269,7 @@ describe('single shared loop', () => {
 
         expect(vi.getTimerCount(), 'timers after 5 identical broadcasts').toBe(1);
         vi.advanceTimersByTime(2500);
-        expect(counts(retry, cont), 'clicks in the first round').toEqual([1, 1]);
+        expect(counts(retry, cont), 'activations in the first round').toEqual([1, 1]);
     });
 });
 
@@ -277,10 +278,10 @@ describe('single shared loop', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('loop persistence', () => {
-    it('keeps clicking a persistent button every round (20 rounds, no cap)', async () => {
+    it('keeps activating a persistent button every round (20 rounds, no cap)', async () => {
         mount(RETRY_MARKUP, CONTINUE_MARKUP);
-        const retry = clickSpy('retry');
-        const cont = clickSpy('continue');
+        const retry = guardButton('retry');
+        const cont = guardButton('continue');
         stubRandom(R_2500);
         await loadAutoClick(ALL_ON);
 
@@ -289,16 +290,18 @@ describe('loop persistence', () => {
         expect(counts(retry, cont)).toEqual([20, 20]);
     });
 
-    it('a round with the gated button absent clicks nothing and the loop continues', async () => {
+    it('a round with the gated button absent activates nothing, reports no error, and the loop continues', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         stubRandom(R_2500);
         await loadAutoClick(CONTINUE_ONLY);
 
         vi.advanceTimersByTime(2500);
+        expect(errorSpy, 'console.error calls after a round with no button on the page').toHaveBeenCalledTimes(0);
         expect(vi.getTimerCount(), 'loop still scheduled after an empty round').toBe(1);
 
         vi.advanceTimersByTime(100);
         mount(CONTINUE_MARKUP);
-        const cont = clickSpy('continue');
+        const cont = guardButton('continue');
         vi.advanceTimersByTime(2399);
         expect(cont, 't=4999').toHaveBeenCalledTimes(0);
         vi.advanceTimersByTime(1);
@@ -318,9 +321,9 @@ describe('button location', () => {
     it.each([
         ['retry', RETRY_FALLBACK_ONLY_MARKUP, RETRY_ONLY],
         ['continue', CONTINUE_FALLBACK_ONLY_MARKUP, CONTINUE_ONLY],
-    ])('clicks a %s button matched only by its fallback selector', async (name, markup, values) => {
+    ])('activates a %s button matched only by its fallback selector', async (name, markup, values) => {
         mount(markup);
-        const fallback = clickSpy(`${name}-fallback`);
+        const fallback = guardButton(`${name}-fallback`);
         await loadAutoClick(values);
 
         vi.advanceTimersByTime(5000);
@@ -333,8 +336,8 @@ describe('button location', () => {
         ['continue', CONTINUE_FALLBACK_ONLY_MARKUP, CONTINUE_MARKUP, CONTINUE_ONLY],
     ])('prefers the %s primary match over an earlier fallback-only element', async (name, fallbackMarkup, markup, values) => {
         mount(fallbackMarkup, markup);
-        const fallback = clickSpy(`${name}-fallback`);
-        const primary = clickSpy(name);
+        const fallback = guardButton(`${name}-fallback`);
+        const primary = guardButton(name);
         await loadAutoClick(values);
 
         vi.advanceTimersByTime(2500);
@@ -351,7 +354,7 @@ describe('button location', () => {
         expect(decoys.map((spy) => spy.mock.calls.length), 'decoy clicks with no real button').toEqual([0, 0, 0]);
 
         document.body.insertAdjacentHTML('beforeend', CONTINUE_MARKUP);
-        const cont = clickSpy('continue');
+        const cont = guardButton('continue');
         vi.advanceTimersByTime(2500);
 
         expect(cont, 'real continue button in the next round').toHaveBeenCalledTimes(1);

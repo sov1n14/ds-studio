@@ -14,7 +14,7 @@
 - [Settings relay for content scenarios](reference_settings_relay_content_scenario.md) — relay storage.onChanged to DSS_SETTINGS_CHANGED; bare sendMessage mock fails all chat-map writes
 - [Fixture notify swallows throws](pitfall_fixture_notify_swallows.md) — fire via setup onChanged.callListeners when asserting a listener throw does not escape
 - [Long heredoc failure](feedback_long_heredoc.md) — split Bash-written files into ~100-line chunks
-- [Auto-click harness](project_auto_click_harness.md) — shared harness for auto-retry loop specs; fake timers before load
+- [Auto-click harness](project_auto_click_harness.md) — auto-retry loop specs; fake timers before load; success = guardButton React activation, not click
 - [Scratch scripts via stdin](feedback_scratch_scripts.md) — removal cmds hook-blocked, use node stdin; stryker config runs from repo root
 - [Popup HTML real DOM](reference_popup_html_real_dom.md) — build popup DOM from popup.html for applySettingsToDom / bindToggles specs; strip link and script tags first or happy-dom fetches localhost:3000
 - [Bash tool quoting](bash-tool-quoting.md) — heredoc breaks when the body contains backticks; use sed + plain heredoc appends

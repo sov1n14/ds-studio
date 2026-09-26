@@ -3,8 +3,12 @@
  *
  * The loop owns no storage access: feature-toggle.js asks background for the initial values (DSS_GET_SETTINGS) and reacts to DSS_SETTINGS_CHANGED broadcasts. Only chrome.runtime is stubbed; feature-toggle.js, auto-click.delay.js, auto-retry.js and ds-selectors.js are the real modules. feature-toggle keeps its registry and onMessage listener in module scope, so every load uses vi.resetModules + dynamic import bound to the current test's chrome stubs.
  *
+ * Success criterion is activation, not a click event. On the live page (observed via DevTools) the retry/continue buttons act only through React's onClick, whose handler requires e.nativeEvent.isTrusted === true && e.nativeEvent instanceof Event; untrusted .click() / synthetic mouse events are ignored. guardButton() models that guard; content/react-click-bridge.main.js (MAIN world in production, same document here) is what lets the loop pass it.
+ *
  * Callers MUST enable fake timers before loadAutoClick(): the loop schedules its first round while the initial GET_SETTINGS settles.
  */
+import fs from 'fs';
+import path from 'path';
 import { vi } from 'vitest';
 import '../../utils/message-constants.js';
 import '../../content/ds-selectors.js';
@@ -49,13 +53,42 @@ export function mount(...parts) {
     document.body.innerHTML = parts.join('');
 }
 
-/** Attach a click spy to the fixture element named `name`. */
-export function clickSpy(name) {
+function fixture(name) {
     const el = document.querySelector(`[data-fixture="${name}"]`);
     if (!el) throw new Error(`fixture element "${name}" is not mounted`);
+    return el;
+}
+
+/** Spy on native click events reaching the fixture element `name`. Success signal only for elements with no React props (bridge fallback); otherwise use it for "never touched" assertions. */
+export function clickSpy(name) {
     const spy = vi.fn();
-    el.addEventListener('click', spy);
+    fixture(name).addEventListener('click', spy);
     return spy;
+}
+
+let reactKeySeq = 0;
+
+/**
+ * Give fixture element `name` the live page's React expandos and guarded onClick. Returns a spy called once per activation — i.e. only when onClick receives an event whose nativeEvent is a trusted Event, as the live handler requires.
+ * A native click is delegated to onClick with the native event as nativeEvent, the way React's root listener does; untrusted clicks are therefore observably ignored. Suffixes avoid Math.random, which the specs stub for the round delay.
+ */
+export function guardButton(name) {
+    const el = fixture(name);
+    const activated = vi.fn();
+    reactKeySeq += 1;
+    const props = {
+        role: 'button',
+        tabIndex: 0,
+        className: el.className,
+        onClick(e) {
+            const nativeEvent = e?.nativeEvent;
+            if (nativeEvent?.isTrusted === true && nativeEvent instanceof Event) activated(e);
+        },
+    };
+    el[`__reactFiber$g${reactKeySeq}`] = { stateNode: el };
+    el[`__reactProps$g${reactKeySeq}`] = props;
+    el.addEventListener('click', (nativeEvent) => props.onClick({ nativeEvent, target: el, currentTarget: el }));
+    return activated;
 }
 
 /** Stub Math.random: each value once in order, the last one for every later call. */
@@ -128,9 +161,33 @@ export function changes(...triples) {
     return Object.fromEntries(triples.map(([key, newValue, oldValue]) => [key, { oldValue, newValue }]));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  MAIN-world click bridge
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const BRIDGE_PATH = 'content/react-click-bridge.main.js';
+const bridgeLoaders = import.meta.glob('../../content/react-click-bridge.main.js');
+let isBridgeLoaded = false;
+
+export function isBridgePresent() {
+    return fs.existsSync(path.resolve(__dirname, '../..', BRIDGE_PATH));
+}
+
+/**
+ * Load the bridge once per spec file. It listens on `document`, which outlives vi.resetModules, so re-importing it per test would stack listeners. While the file does not exist (red phase) this is a no-op and activation assertions fail on their own; a file that exists but is not loadable throws.
+ */
+export async function loadBridge() {
+    if (isBridgeLoaded || !isBridgePresent()) return;
+    const load = Object.values(bridgeLoaders)[0];
+    if (!load) throw new Error(`${BRIDGE_PATH} exists but import.meta.glob did not pick it up — fix the glob in auto-click-harness.js`);
+    await load();
+    isBridgeLoaded = true;
+}
+
 /** Load fresh modules in manifest order; `values` answers the initial GET_SETTINGS when given. */
 export async function loadAutoClick(values) {
     if (values) respondWith(values);
+    await loadBridge();
     vi.resetModules();
     await import('../../content/feature-toggle.js');
     await import('../../content/auto-click.delay.js');
