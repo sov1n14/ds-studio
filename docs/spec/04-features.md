@@ -15,21 +15,23 @@
      - **擷取階段**：Toast 顯示 `正在擷取完整對話… 已擷取 N 則`（N 隨擷取進度動態更新），同時在下方持續顯示警告行 `⚠ 請勿捲動對話記錄，以免擷取失敗`，提醒使用者在擷取期間的手動捲動**不會**被抑制，並可能導致擷取失敗。
      - **取消按鈕**（v4.19.0）：兩個階段的 Toast 皆提供取消按鈕。點擊後最多只會觸發一次取消（按鈕隨即禁用並改顯示「正在取消…」），實際停止發生在下一個擷取步驟邊界，因此需要即時回饋讓使用者知道點擊已生效。由於 Toast 容器為 `pointer-events: none`，按鈕必須個別指定 `pointer-events: auto` 才可點擊。擷取階段的 Toast 每步都會重繪計數，重繪**不得**重新啟用已按下的按鈕，也不得重複掛上事件監聽器。
   3. **滾頂**：呼叫 `GoToTop.scrollToTopAndWait()` 將虛擬列表錨定至位置 0，確保擷取從第一則訊息開始。
+     - v4.33.22：移除 `_findScrollContainer` 三個策略中的 `scrollHeight > clientHeight` 溢出閘門，未溢出容器仍為有效目標
+     - v4.33.23：`scrollToTopAndWait` 失敗時補上 `reason: 'anchor_not_found'` 屬性
   4. **增量滾動擷取**：由上至下逐步捲動頁面，每次捲動後等待虛擬列表渲染新節點，持續收集出現在 DOM 中的訊息節點。去重使用 DeepSeek 虛擬列表渲染器指派的 `data-virtual-list-item-key` 數值屬性作為鍵（`Map<number, Element>`），採「已存在則不覆寫」策略，最終依鍵值遞增排序輸出。
 
-     **自適應步幅**（v4.19.1）：步幅不再是固定的視窗高比例，而是**每一步實測後推導**。實測兩場真實對話得知，虛擬列表固定掛載 **18 個節點**（與訊息高度無關），掛載窗口向上不延伸（overscan 為 0）、向下延伸 3406～4244px。既然已擷取內容的最深處就是最低掛載節點的底緣，只要下一步的新視窗頂不越過該點就不可能漏；`_measureMountedBottomOffset()` 量出該距離，交由 `HarvestPolicy.computeScrollStep()` 取其 70% 作為步幅，下限為視窗高的 25%，量不到時退回視窗高的 90%（即 v4.19.1 之前的固定行為）。
+     **自適應步幅**（v4.19.1）：步幅**每一步實測後推導**，而非固定的視窗高比例。實測兩場真實對話得知，虛擬列表固定掛載 **18 個節點**（與訊息高度無關），掛載窗口向上不延伸（overscan 為 0）、向下延伸 3406～4244px。既然已擷取內容的最深處就是最低掛載節點的底緣，只要下一步的新視窗頂不越過該點就不可能漏；`_measureMountedBottomOffset()` 量出該距離，交由 `HarvestPolicy.computeScrollStep()` 取其 70% 作為步幅，下限為視窗高的 25%，量不到時退回視窗高的 90%。
 
-     **為何非改不可**：掛載窗口是**依項目數**而非依高度決定的，因此固定像素步幅等於在賭訊息長度 —— 一段全是短訊息的區間裡，18 個節點跨越的高度大幅縮水，固定步幅就會捲過從未掛載的內容，而掃描單向不回頭，那些訊息永久遺失。改為實測推導後，訊息長的區段步幅自動放大到 3～4 個視窗，短的區段自動縮小，係數不再是對頁面的斷言而是其結果。實測樣本上步幅由 889px 提升至 3620px／3034px，約減少 3.4～4.1 倍的步數。
+     **為何實測推導**：掛載窗口是**依項目數**而非依高度決定的，因此固定像素步幅等於在賭訊息長度 —— 一段全是短訊息的區間裡，18 個節點跨越的高度大幅縮水，固定步幅就會捲過從未掛載的內容，而掃描單向不回頭，那些訊息永久遺失。實測推導讓訊息長的區段步幅自動放大到 3～4 個視窗，短的區段自動縮小，係數是頁面實測的結果，而非對頁面的斷言。實測樣本上步幅為 3620px／3034px，約為 90% 視窗高退回步幅（889px）的 3.4～4.1 倍。
 
      **已否決的做法**：曾考慮以 `data-virtual-list-item-key` 的序列缺口作為完整性證明，實測後放棄 —— 樣本一的 `distinctDiffs` 為 `[1, 3]`（自然存在的洞），樣本二則完全連續。缺口既然會自然發生，就無法證明漏抓。除非有新證據顯示編號是密集的，否則不要重啟此想法。
-  5. **外力捲動中斷安全網**（v2.6.1 引入，v2.6.2 修正）：擷取迴圈持續監測捲動位置。若偵測到非採集迴圈本身發起的大幅跳躍（例如抑制補丁被繞過，或使用者以滾輪強制捲動），立即以 `scroll_interrupted` 原因中止採集，並將已收集的部分內容匯出；Markdown 檔案末尾附加不完整警告頁尾。確保使用者明確知悉結果不完整。v4.19.0 起，該頁尾改為 `> ⚠️ Export may be incomplete (<N> messages captured): <clause>.`，其中 `<N>` 為實際已擷取則數，`<clause>` 由 `HarvestPolicy.describeIncompleteReason(reason)` 依**實際**原因產生 —— 在此之前，所有中斷原因（含手動捲動中斷）一律被寫成 `scroll-harvest timed out before reaching the end`，形同謊報成因。v2.6.2 修正：先前在每次 DOM 穩定等待結束後，`_expectedScrollTop` 會被誤重設為當前捲動位置，導致等待期間發生的外部捲動跳躍被遮蔽，安全網無法正確觸發；移除該重設後，安全網現可可靠地偵測並回應外部捲動中斷。
+  5. **外力捲動中斷安全網**（v2.6.1）：擷取迴圈持續監測捲動位置。若偵測到非採集迴圈本身發起的大幅跳躍（例如抑制補丁被繞過，或使用者以滾輪強制捲動），立即以 `scroll_interrupted` 原因中止採集，並將已收集的部分內容匯出；Markdown 檔案末尾附加不完整警告頁尾。確保使用者明確知悉結果不完整。頁尾格式為 `> ⚠️ Export may be incomplete (<N> messages captured): <clause>.`（v4.19.0），其中 `<N>` 為實際已擷取則數，`<clause>` 由 `HarvestPolicy.describeIncompleteReason(reason)` 依**實際**原因產生，因此手動捲動中斷、停滯與取消各自回報正確成因。一般捲動步中，`_expectedScrollTop` 在 `scrollBy` 之後、DOM 穩定等待之前設定，等待結束後不重設，因此等待期間發生的外部捲動跳躍會在下一步被偵測到。
   6. **排序與組裝**：擷取完成後，依鍵排序建立最終有序訊息陣列，確保輸出順序與對話順序一致。
   7. **還原捲動位置**：無論擷取成功、逾時或中斷，均無條件還原使用者的原始捲動位置。
-  8. **終止條件：停滯偵測，不設總時限**（v4.19.0 重寫）：迴圈本身不再持有停止決策，每步組出觀測值後交由 `window.DSstudio.HarvestPolicy.decideNextStep()` 裁決並服從結果。**不設任何總時長上限** —— 只要仍在取得進展（已擷取則數增加，或 `scrollHeight` 發生任一方向的變動），無論執行多久都不中止；唯一的時間型停止條件是**連續** 20 秒（`HARVEST_STALL_TIMEOUT_MS`）毫無進展，判定為 `stalled`。
+  8. **終止條件：停滯偵測，不設總時限**（v4.19.0 重寫）：停止決策屬於 `HarvestPolicy` 而非迴圈本身：每步組出觀測值後交由 `window.DSstudio.HarvestPolicy.decideNextStep()` 裁決並服從結果。**不設任何總時長上限** —— 只要仍在取得進展（已擷取則數增加，或 `scrollHeight` 發生任一方向的變動），無論執行多久都不中止；唯一的時間型停止條件是**連續** 20 秒（`HARVEST_STALL_TIMEOUT_MS`）毫無進展，判定為 `stalled`。
 
-     **變更理由**：v4.19.0 之前設有 `HARVEST_TOTAL_TIMEOUT` 120000 ms 硬上限，會靜默截斷長對話 —— 實際案例擷取 500 則後遺失全部最新訊息，僅在檔案末尾留下一行埋沒的警告。該預算是被「空等」耗盡而非「載入」耗盡：每步的 DOM 穩定等待最短成本為 `HARVEST_STABLE_TICKS`(3) × `HARVEST_STABLE_INTERVAL`(150 ms) = 450 ms，即使該步毫無新內容也照付，因此總可捲動距離被硬限制在約 120000 ÷ 450 ≈ 266 步 × 0.9 視窗高 ≈ 240 個視窗高，與對話實際長度無關。**「匯出中斷」與「匯出過慢」是同一個缺陷的兩面**，故一併修正。
+     **為何不設總時限**：總時限是被「空等」耗盡而非「載入」耗盡：每步的 DOM 穩定等待最短成本為 `HARVEST_STABLE_TICKS`(3) × `HARVEST_STABLE_INTERVAL`(100 ms) = 300 ms，即使該步毫無新內容也照付，因此任何總時限都等同於對可捲動距離設下與對話實際長度無關的硬上限，會靜默截斷長對話並遺失最新訊息。停滯偵測只在真正沒有進展時停止，長對話因此能完整擷取。
 
-     **效能取捨**：`HARVEST_STABLE_INTERVAL` 由 150 ms 調降為 100 ms，每步下限自 450 ms 降至 300 ms；但 `HARVEST_STABLE_TICKS` 刻意維持 3，**不得調降**。理由：穩定等待若提早收斂，會在新內容尚未渲染前就捲過該區段，而掃描是單向不回頭的，那些訊息將永久遺失。此處完整性優先於速度。
+     **效能取捨**：`HARVEST_STABLE_INTERVAL` 為 100 ms，每步下限 300 ms；`HARVEST_STABLE_TICKS` 刻意維持 3，**不得調降**。理由：穩定等待若提早收斂，會在新內容尚未渲染前就捲過該區段，而掃描是單向不回頭的，那些訊息將永久遺失。此處完整性優先於速度。
 
   9. **部分匯出永不封鎖**：任何提前停止（`stalled`、`cancelled`、`scroll_interrupted`）皆仍匯出已收集內容，並同時發出兩個訊號：檔案末尾的原因準確警告頁尾，以及頁面上的明顯警告 Toast（`showHarvestToastIncomplete`，10 秒後自動消失）。確保使用者一定能取得檔案而非靜默失敗，且不會誤以為匯出完整。頁內 Toast 之所以必要：僅靠檔尾警告在實務上等同不存在 —— 實際案例中該行落在 12209 行檔案的第 12209 行。
 - **輸出格式**：一份有效的 Markdown (`.md`) 檔案，包含：
@@ -64,13 +66,13 @@
 - **注入格式**：啟用後，在每則訊息前端以 `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`（24 小時制、零補位，含當地時區偏移）格式插入目前系統時間，位於 `<system-reminder>` 區塊（若存在）或 `<user-input>` 區塊之前。範例：`Current Time: 2026/06/14 20:19:32 (UTC+08:00)`。
 - **重複注入處理**：注入邏輯每次皆重新產生時間戳並前置於訊息開頭（無重複防護檢查）。若文字輸入區已含有舊時間戳，將被新時間戳取代。
 - **主開關感知**：當主開關（`isEnabled`）關閉時，此切換會停用（透過 `disabled` 屬性）。
-- **純附件／圖片送出（v4.21.1）**：文字輸入區為空但送出按鈕未停用（僅附加檔案或圖片）時，時間戳同樣會插入——此為提示詞注入邏輯（見 [提示詞系統規格 §2](01-prompt-system.md#2-提示詞注入邏輯)）的一部分，時間戳格式與插入位置本身不變，只是不再要求輸入區必須有文字才觸發。
+- **純附件／圖片送出（v4.21.1）**：文字輸入區為空但送出按鈕未停用（僅附加檔案或圖片）時，時間戳同樣會插入——此為提示詞注入邏輯（見 [提示詞系統規格 §2](01-prompt-system.md#2-提示詞注入邏輯)）的一部分，時間戳格式與插入位置相同，觸發時不要求輸入區有文字。
 
 ## 20. 恢復被審查的回覆 (Censor Reply Restore)
 
 - **目的**：DeepSeek 官方可能以「我暫時無法回答這個問題」等訊息取代原本的模型回覆（內容審查/屏蔽）。此功能從 SSE 串流資料中還原原始 assistant 回覆並顯示於 UI。
 - **串流攔截**：透過 `censor-xhr-hook.js`（注入頁面主 world）monkey-patch `XMLHttpRequest.prototype.send`，以 `INTERCEPTED_ENDPOINTS` 清單（`getMatchedEndpoint()` 純函式比對）攔截 `/api/v0/chat/completion` 與 `/api/v0/chat/edit_message` 兩個端點的 SSE 回應——編輯既有 user 訊息後的重新生成走 `edit_message`，其 SSE 格式與請求欄位名稱（`chat_session_id`、`prompt`）與 `completion` 完全相同；請求中額外的 `message_id` 為被編輯 user 訊息的 ID，刻意忽略，回覆 ID 一律取自 SSE 串流的 `response.message_id`。請求傳送時一併解析 `chat_session_id` 與 `prompt`，攔截 log 會標明命中的端點。回應完成時透過 `window.postMessage` 將 `DSS_FRAGMENT_COMPLETE` 事件傳遞給 extension 的 content script。
-- **審查偵測**：`SseParser.parseLine()`（`content/sse-parser.js`）解析 SSE data 行中的 `CONTENT_FILTER` 狀態。此解析器原為 `censor-reply-restore.js` 的私有方法 `_parseSseEvent()`，抽出為獨立模組後該方法一度留為死碼，已於 v4.11.3 刪除。同時 DOM 層偵測：`_isCensored()` 檢查 assistant 訊息工具列的第 2 與第 5 個按鈕是否同時為 disabled 狀態（審查特徵）。按鈕選取相容新舊設計系統：先以 `.ds-icon-button`（舊版）查詢，無結果時改用 `[role="button"].ds-button.ds-button--icon`（新版）；disabled 判定為「`ds-icon-button--disabled` class 且 `aria-disabled="true"`（舊版）」或「`ds-button--disabled` class（新版，部分 disabled 按鈕無 `aria-disabled` 屬性）」。`_getToolbarGroup()` 主選擇器為 `.ds-flex._965abe9`，後備方案以相同合併選擇器尋找含 5 顆以上按鈕的 `.ds-flex`。
+- **審查偵測**：`SseParser.parseLine()`（`content/sse-parser.js`）解析 SSE data 行中的 `CONTENT_FILTER` 狀態。此解析器原為 `censor-reply-restore.js` 的私有方法 `_parseSseEvent()`，抽出為獨立模組後該方法一度留為死碼，已於 v4.11.3 刪除。同時 DOM 層偵測：`_isCensored()` 檢查 assistant 訊息工具列的第 2 與第 5 個按鈕是否同時為 disabled 狀態（審查特徵）。按鈕選取以 `[role="button"].ds-button.ds-button--icon` 查詢；disabled 判定為 `ds-button--disabled` class（部分 disabled 按鈕無 `aria-disabled` 屬性）。`_getToolbarGroup()` 主選擇器為 `.ds-flex._965abe9`，後備方案以相同合併選擇器尋找含 5 顆以上按鈕的 `.ds-flex`。
 - **儲存記錄**：`_saveFragment()` 將被審查的訊息儲存至 `chrome.storage.local`（`restored_messages` 鍵），包含 `message_id`、`fragments`、`thinking_elapsed_secs`、`chat_session_id`、`prompt_key`（正規化後的 user prompt）。記錄鍵為 session 作用域：`_recordKey(sessionId, messageId)` 產生 `"<session>::<message_id>"`（session 為空值時以 `nosession` 前綴），因為 `message_id` 是每個對話各自的序號，跨對話必然碰撞——所有讀寫（儲存、注入查找、storage 比對）一律使用此複合鍵。最多保留 200 筆記錄（`_evictOldest()`）。
 - **即時恢復**：SSE 事件完成後，`_onFragmentComplete()` 將 `message_id` 推入 `_pendingQueue`，`_tryRestoreMessage()` 在 DOM 出現對應元素時查詢並注入原始內容。
 - **message_id 解析順序**：`_getMessageIdFromElement()` 依序查找 `_keyToMessageId`（執行期快取）→ `_resolveMessageIdFromStorage()`（以 URL session id + 正規化 prompt_key 比對儲存記錄，命中時回寫 `_keyToMessageId`，已被認領的 message_id 會跳過）→ `_pendingQueue.shift()`（僅作最後手段），避免即時 XHR 的佇列 ID 被錯誤指派給較舊的未恢復訊息。每次成功解析會以 `[DV:CensorRestore]` log 標明來源路徑（`map` / `storage` / `queue`）。
@@ -119,8 +121,8 @@
   - `DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED'`（payload `{uuids}`）：background 於佇列變動時推送給各分頁
   - `LEASE_TTL_MS = 600000`（10 分鐘）：租約存續時間
   - `HEARTBEAT_INTERVAL_MS = 60000`（1 分鐘）：心跳續租間隔
-  - 常數以 `Object.assign(globalThis, DSS_TEMP_CHAT_CONSTANTS)` 明確掛上 globalThis：classic script 的 top-level `const` 不會成為 globalThis 屬性，而 service worker 端經 `importScripts` 取用時必須以 `globalThis[name]` 解析。
-- **開關 UI**（`content/temporary-chat-toggle.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
+  - 常數以 `globalThis.DSS_TEMP_CHAT = DSS_TEMP_CHAT_CONSTANTS` 掛上命名空間：classic script 的 top-level `const` 不會成為 globalThis 屬性，而 service worker 端經 `importScripts` 取用時必須以 `globalThis.DSS_TEMP_CHAT.KEY` 解析。
+- **開關 UI**（`content/temporary-chat-toggle.js` + `content/temporary-chat-toggle.ui.js` + `.css`）：僅在 `pathname === '/'` 首頁顯示。文字 14px / weight 500，關閉時 `#f9fafb`、開啟時 `#679efe`；開關軌道開啟時 `#4d6bfe`。樣式選擇器一律以 `.dss-temp-chat-*` 前綴隔離。
   - **SPA 注入／移除**：以 Navigation API `navigate` 事件（並輔以 `popstate` 與 `MutationObserver`）在每次導航重新評估：`pathname === '/'` 時等待 `div.aaff8b8f` 出現後於其下方 38px 注入（以 id 去重），`pathname !== '/'` 時移除開關列。移除僅刪除 DOM 元素，**不更動啟用旗標**（該旗標由 `TemporaryChatEnabledFlag` 持有於 `chrome.storage.local`）；重新注入時依持久化旗標還原視覺。旗標經 background 廣播同步至每個分頁並快取於記憶體，故 `readEnabledFlag()` 得以維持同步呼叫。
   - **診斷日誌**：於 init／navigation／anchor 查詢／注入／移除／observer 偵測斷線等決策點輸出 `[DV:TempChatToggle]` 前綴日誌，供在真實瀏覽器調查「開關偶爾未出現、重整後才出現」之用。
 - **新建偵測與授權擷取**（`content/censor-xhr-hook.js`，主 world）：
@@ -130,27 +132,29 @@
   - `deleteChatSession(chatUuid, { keepalive })`：guard clause 缺 token 或缺 chatUuid 即不送出；以 `fetch` POST 帶 authorization 與 x-client-* 標頭。
   - **標記**：收到 `DSS_CHAT_CREATE_DETECTED` 且開關開啟時設 pending；當 Navigation API `navigate` 落在 `/a/chat/s/<uuid>` 時，將該 UUID 寫入 `DSS_TEMP_CHAT_UUID_KEY` 作為追蹤對象並清除 pending。
   - **離開即刪除**：`navigate` 事件計算離開前的 `fromUuid` 與目的地 URL；當「非刷新」、「非導向同一對話」、`fromUuid` 等於追蹤的臨時 UUID、且已擷取 token 時，刪除並清除追蹤 UUID。
-  - **同網址／重整不刪除（Bug 修正）**：`navigationType === 'reload'` 或目的地 URL 等於目前 URL（含於網址列重按目前對話網址）時不刪除，並設定抑制旗標阻擋後續 `beforeunload` 刪除；另以 F5 / Ctrl+R / Cmd+R 鍵盤偵測為第二層保險。
+  - **同網址／重整不刪除（Bug 修正）**：`navigationType === 'reload'` 或目的地 URL 等於目前 URL（含於網址列重按目前對話網址）時不刪除，並設定抑制旗標阻擋後續 `beforeunload` 刪除；另以 F5 / Ctrl+R / Cmd+R 鍵盤偵測為第二層保險。擴充功能 context 失效後，點擊失效 toast（`content/invalidation-toast.js`）的「重新整理」按鈕同樣保留臨時對話（v4.34.2）：toast 在 `location.reload()` 前先派發 `dss-intentional-reload` window 事件，刪除 handlers 的 `handleIntentionalReload` 據此設定抑制旗標，將下一次卸載標記為刻意刷新；`handleNavigationEvent` 的刷新偵測亦排在 context 失效守衛（`chrome.runtime?.id`）之前，失效後的刷新仍會設定抑制旗標。失效後直接關閉分頁不會設定抑制旗標，`beforeunload` 仍以 `keepalive: true` 刪除臨時對話。
   - **導向同一對話不刪除（Bug 修正，v4.9.1）**：`handleNavigationEvent` 從目的地 URL 擷取 `/a/chat/s/{uuid}` 的 `destUuid`，以 `isSameConversation = destUuid === _trackedTemporaryUuid` 作為守衛。只要導向的是同一追蹤中對話（即使僅 query string 或 hash 不同，如 `?model=v3`、`#msg-42`）即不刪除，取代先前僅比對完整 URL 字串相等的脆弱判定；`extractUuidFromUrl` 相應擴充為可接受選用的完整 URL 參數。此守衛不影響「導向其他頁面仍刪除」與「關閉分頁仍刪除」的既有行為。
+  - v4.33.21：匯出對話時 `<a download>` 點擊會觸發 `navigate` 事件，透過 `event.downloadRequest` 或 `blob:` URL scheme 偵測提前返回，避免誤刪臨時對話
   - `beforeunload`：涵蓋關閉分頁／瀏覽器與整頁導航；當目前 UUID 等於追蹤 UUID、未被抑制、且有 token 時，以 `keepalive: true` 刪除。
 - **生命週期**：監聽於「開關開啟」或「存在追蹤中的臨時 UUID」任一成立時保持掛載；標記新對話僅在開關開啟時進行；刪除已追蹤對話不受開關關閉影響；追蹤對象清空且開關關閉後才卸除監聽。
 - **獨立性**：此功能不受彈出選單右上角主開關連動，僅由首頁開關獨立控制。
 - **兩層式刪除架構（v4.9.0）**：
-  - **Layer 1（即時路徑，content script）**：SPA 導航沿用 Fiber/API 刪除；`beforeunload`（關閉分頁／瀏覽器）改為直接 `fetch(keepalive: true)`，不再經過 Service Worker 中繼，消除 IPC 競態。刪除成功（API 明確回傳成功）才移除待刪項目。
+  - **Layer 1（即時路徑，content script）**：SPA 導航沿用 Fiber/API 刪除；`beforeunload`（關閉分頁／瀏覽器）直接以 `fetch(keepalive: true)` 刪除、不經 Service Worker 中繼，消除 IPC 競態。刪除成功（API 明確回傳成功）才移除待刪項目。
   - **Layer 2（補救路徑，Service Worker，僅 `onStartup` 觸發）**：擴充既有的 `chrome.runtime.onStartup` 監聽器（原用於雲端預設集同步），讀取共用待刪佇列並以本機 `dss-last-auth-token` 逐筆補刪，僅確認成功後才移除項目，失敗則累加 `attemptCount` 並保留供下次補救。
   - **跨裝置單一事實來源**：待刪佇列（`dss-pending-deletes-sync`）僅存在於 `chrome.storage.sync`，不設本機獨立副本；任一登入同一 Chrome 帳戶的裝置皆可用自身的 `dss-last-auth-token` 補刪佇列中的任何項目，無論該項目是否由自己標記。
   - **Sync-Change Safeguard**：`chrome.storage.onChanged`（sync 區域）觸發補救掃描，以緩解 `onStartup` 冷啟動時 `chrome.storage.sync` 尚未完成雲端 hydration 的競態；掃描僅刪除租約已過期的項目（見下方「租約與心跳」），故使用中的對話在任何裝置上都受保護。
   - **開啟中對話護欄的儲存版面（v4.15.1）**：每個開啟中的 UUID 各自佔用一把 `chrome.storage.local` 鍵（前綴 `dss-open-temp-uuid:`），新增只寫自己那把、移除只刪自己那把。舊版將整份清單存於單一陣列鍵 `dss-open-temp-uuids` 並在每次增刪時整份重寫，任一 context 讀到過期快照就會把其他分頁的項目一併算掉，導致使用中的對話失去護欄而被掃描刪除。新版無 read-modify-write，因此不存在此類遺失。舊陣列鍵改為唯讀並在讀取時聯集進來（升級當下仍存活的對話不致失去護欄），`clearOpenUuids()` 會一併清除之。
-  - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid`、`attemptCount` 與租約時戳 `lastActiveAt`。
-  - **儲存權責歸 Service Worker**：`background/pending-store.js` 已不在 `manifest.json` 的 `content_scripts` 清單中，僅由 `background/service-worker.js` 以 `importScripts` 載入，因此 `TemporaryChatPendingStore`（及其全部 `chrome.storage.*` 呼叫）只存在於 worker 情境。content 層改以上述四種訊息請求寫入，本身不再直接觸碰 `chrome.storage`（`chrome-extension-coding-guidelines` §1 層級界線）。
+  - **隱私邊界**：`authToken` 僅存於 `chrome.storage.local`（`dss-last-auth-token`），永不透過 `chrome.storage.sync` 同步；共用佇列僅含非敏感性的 `chatUuid`、`attemptCount`、租約時戳 `lastActiveAt` 與隨機裝置 ID `ownerDeviceId`；裝置 ID 本身僅存於 `chrome.storage.local`（`dss-device-id`）。
+  - **儲存權責歸 Service Worker**：`background/pending-store.js` 位於 `manifest.json` 的 `content_scripts` 清單之外，僅由 `background/service-worker.js` 以 `importScripts` 載入，因此 `TemporaryChatPendingStore`（及其全部 `chrome.storage.*` 呼叫）只存在於 worker 情境。content 層改以上述四種訊息請求寫入，本身不直接觸碰 `chrome.storage`（`chrome-extension-coding-guidelines` §1 層級界線）。
     - **背景端路由**（`background/pending-store-routes.js`）：`install()` 於 service worker 頂層呼叫（確保 worker 重啟後仍存活），註冊單一 `chrome.runtime.onMessage` 監聽器，內含 `type` → 存取層操作對照表。未知型別回傳 `false` 且不回應，讓 worker 內其他監聽器仍能處理；已知型別回傳 `true`，並於 await 完成後回應 `{ ok: true }` 或 `{ ok: false, error }`。相依缺失（存取層或常數未先載入）於解析時即拋出並指名應載入的檔案。
     - **送出端**：`temporary-chat-delete.tracking.js` 送 `DSS_TRACK_FOR_DELETION`；`temporary-chat-delete.coordinator.js` 送兩種移除訊息；`temporary-chat-delete.handlers.js` 送 `DSS_SET_LAST_AUTH_TOKEN`。
 
 - **跨裝置租約與心跳（v4.31.1）**：待刪佇列存於 `chrome.storage.sync`，會傳播到同一 Chrome 帳戶的其他裝置。為了讓「這個對話正被使用中」這項事實對所有裝置可見，佇列項目本身帶有租約時戳。
-  - **佇列項目結構**：`{ chatUuid, attemptCount, lastActiveAt }`，`lastActiveAt` 為 epoch 毫秒的租約時戳。`LEASE_TTL_MS` 訂為寬鬆的 10 分鐘，用以一次吸收 `chrome.storage.sync` 的傳播延遲、背景分頁的計時器節流，以及跨裝置時鐘偏移。
-  - **存取層 API**（`background/pending-store.js`）：`refreshLease(chatUuid)` 續租、`releaseLease(chatUuid)` 將 `lastActiveAt` 歸零、純函式 `isLeaseExpired(entry, now)` 判定過期 —— `lastActiveAt` 非有限數值，或 `now - lastActiveAt > LEASE_TTL_MS` 時視為過期；恰好等於 TTL 仍屬有效。佇列的所有 read-modify-write 皆經由 promise 鏈式互斥閘序列化，多分頁同時送訊息也不會交錯 get/set 而遺失更新。
-  - **補救掃描一律受租約閘控**（`background/service-worker.js`）：`remediatePendingDeletes()` 不再接受參數，只刪除租約已過期的項目；`chrome.runtime.onStartup`、`chrome.runtime.onInstalled`、`dss-delete-retry` 排程與 sync 區的 `chrome.storage.onChanged` 四條路徑皆套用同一道閘。
-  - **心跳**（`content/temporary-chat-heartbeat.js`，發布 `{ start, stop }`）：分頁追蹤中的臨時對話會立即送出一次 `{type: 'DSS_HEARTBEAT', uuid}`，其後每 `HEARTBEAT_INTERVAL_MS` 續送一次，service worker 路由收到後呼叫 `refreshLease`。心跳於 `trackUuid()` 與 sessionStorage 還原路徑啟動，於追蹤結束或監聽卸除時停止。由於它綁定 content script／分頁生命週期，分頁崩潰或被強制結束時心跳自然停止，租約隨之到期，無需任何裝置識別碼。
+  - **佇列項目結構**：`{ chatUuid, attemptCount, lastActiveAt, ownerDeviceId }`，`lastActiveAt` 為 epoch 毫秒的租約時戳，`ownerDeviceId` 為建立該項目之裝置的裝置 ID。`LEASE_TTL_MS` 訂為寬鬆的 10 分鐘，用以一次吸收 `chrome.storage.sync` 的傳播延遲、背景分頁的計時器節流，以及跨裝置時鐘偏移。
+  - **擁有裝置規則（v4.34.2）**：裝置 ID 為 `crypto.randomUUID()` 產生的隨機值，於首次 `addPendingDelete` 時在互斥 job 內建立一次，僅存於 `chrome.storage.local` 的 `dss-device-id`，永不同步。`resolveLeaseTtl(entry, localDeviceId)` 決定門檻：`ownerDeviceId` 等於本機裝置 ID 時套用 `LEASE_TTL_MS`（10 分鐘）；其他裝置建立的項目、無 `ownerDeviceId` 的項目，以及本機裝置 ID 讀取失敗時，一律套用 `FOREIGN_LEASE_TTL_MS`（24 小時），即須等到租約被明確釋放（`lastActiveAt` 為 0）或超過 24 小時未續約才刪除。裝置 ID 寫入失敗時項目以 `ownerDeviceId: null` 登記，對所有裝置皆視為外來項目。理由：閒置在別處的裝置（例如同一帳戶下的辦公室電腦）看不到本裝置的心跳是否仍在進行，僅依 10 分鐘 TTL 就會刪除本裝置仍開著的對話。分頁防護照常適用：本機有分頁顯示該對話時，掃描跳過刪除並呼叫 `refreshLease` 續約。
+  - **存取層 API**（`background/pending-store.js`）：`refreshLease(chatUuid)` 續租、`releaseLease(chatUuid)` 將 `lastActiveAt` 歸零、純函式 `resolveLeaseTtl(entry, localDeviceId)` 依擁有裝置回傳 TTL、純函式 `isLeaseExpired(entry, now, lastSeenChange, ttlMs)` 判定過期 —— `lastActiveAt` 為 0、`lastSeenChange` 非有限數值，或 `now - lastSeenChange > ttlMs` 時視為過期；恰好等於 TTL 仍屬有效。`applySweepResult({ deletedUuids, failedUuids })` 套用補救掃描結果。佇列的所有 read-modify-write 皆經由 promise 鏈式互斥閘序列化，多分頁同時送訊息也不會交錯 get/set 而遺失更新。
+  - **補救掃描一律受租約閘控**（`background/service-worker.js`）：`remediatePendingDeletes()` 不接受參數，只刪除租約已過期的項目；`chrome.runtime.onStartup`、`chrome.runtime.onInstalled`、`dss-delete-retry` 排程與 sync 區的 `chrome.storage.onChanged` 四條路徑皆套用同一道閘。掃描結束後以 `applySweepResult({ deletedUuids, failedUuids })` 寫回（v4.34.2）：於存取層互斥鎖內重讀最新佇列，僅套用本輪各項結果 —— 刪除成功者自佇列剔除，失敗者 `attemptCount + 1` 並保留原 `lastActiveAt`，其餘項目原封保留。掃描期間分頁續約的租約或新增的項目因此得以保留。
+  - **心跳**（`content/temporary-chat-heartbeat.js`，發布 `{ start, stop }`）：分頁追蹤中的臨時對話會立即送出一次 `{type: 'DSS_HEARTBEAT', uuid}`，其後每 `HEARTBEAT_INTERVAL_MS` 續送一次，service worker 路由收到後呼叫 `refreshLease`。心跳於 `trackUuid()` 與 sessionStorage 還原路徑啟動，於追蹤結束或監聽卸除時停止。由於它綁定 content script／分頁生命週期，分頁崩潰或被強制結束時心跳自然停止，租約隨之到期；到期門檻依上方「擁有裝置規則」決定。
   - **快速重啟回收**：`onStartup` 時先將本機開啟集合中且仍在佇列內的每個 UUID 釋放租約，接著清空本機開啟集合，最後才執行補救掃描 —— 本裝置關機前開著的對話因此在重啟後即刻被刪除。
   - **明確釋放租約**：離開流程的即時刪除完全失敗時（Fiber 刪除失敗且 API 後援重試耗盡），coordinator 送出 `DSS_RELEASE_LEASE` 將租約歸零，讓任一裝置立即接手，不必等到 TTL 到期。
   - **租約觀察記錄持久化（v4.33.2）**：`recordLeaseObservation` 將每個 UUID 的觀察以 `{ lastActiveAt, observedAt }` 結構寫入 `chrome.storage.local`（鍵 `dss-last-seen-change:<uuid>`）。每次補救掃描比較儲存的 `lastActiveAt` 與佇列現值：相等時沿用已儲存的 `observedAt`，不同時以 `Date.now()` 寫入新記錄。此機制使租約到期判定在 MV3 service worker 冷啟動後仍正確運作。
@@ -170,7 +174,7 @@
 
 ## 23. 設定讀寫的訊息化（content → background）
 
-一般設定同樣不由 content 層直讀儲存區。型別常數集中於 `utils/settings-message-constants.js`，以 `globalThis.DSS_SETTINGS_MSG` 發布 `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED` 三種型別；content script 與 service worker 載入同一份檔案，兩端皆不硬編碼字串。
+一般設定同樣不由 content 層直讀儲存區。型別常數集中於 `utils/message-constants.js`，以 `globalThis.DSS_SETTINGS_MSG` 發布 `GET_SETTINGS` / `SET_SETTINGS` / `SETTINGS_CHANGED` 三種型別；content script 與 service worker 載入同一份檔案，兩端皆不硬編碼字串。
 
 - **背景端路由**（`background/settings-routes.js`，`install()` 同樣於頂層呼叫）：
   - `DSS_GET_SETTINGS`（`{ keys: string[] }`）：自 `chrome.storage.local` 讀取指定鍵，缺漏者以 `StorageManager.DEFAULTS` 補齊，`dsWebSearchToggle` 經共用的 `normalizeWebsearchToggle()` 校正後回應 `{ ok: true, values }`。keys 非陣列或為空即回 `{ ok: false, error }`。
@@ -178,3 +182,13 @@
   - **變更廣播**：同一個 `install()` 註冊 `chrome.storage.onChanged`，受監看鍵變更時以 `{ type: DSS_SETTINGS_CHANGED, area, changes }` 原樣轉發給所有 `*://chat.deepseek.com/*` 分頁。受監看範圍為：`local` 區的任一 `StorageManager.KEYS` 值、額外的 `dss-temporary-chat-enabled`，以及不分區的 `dsPreset_` / `chatPresetMap_` 前綴鍵。個別分頁送出失敗即略過，不影響其餘分頁。
 - **content 端共用管線**（`content/feature-toggle.js`）：`registerFeatureToggle({ ownKey, onEnable, onDisable })` 登記一項功能，向 background 索取 `isEnabled` 與該功能自身鍵，生效條件為「總開關 !== `false` 且自身鍵 !== `false`」（未儲存視為開啟）。全體功能共用單一 `chrome.runtime.onMessage` 監聽器，於第一次註冊時才掛上；僅在生效狀態真正轉換時才呼叫回呼，且單一回呼拋錯不中斷其他功能。初始讀取失敗時將 `masterValue` 釘為 `false`，讓功能維持休眠而非在設定未知下啟用。回傳的 `unregister()` 可重複呼叫。目前以 `ownKey: null`（僅跟隨總開關）註冊者包含 `content/go-top.js` 與 `content/quote-reply.js`。
 - **臨時對話啟用旗標**（`content/temporary-chat-enabled-flag.js`）：因其開關獨立於總開關，直接使用同一組訊息而不經 `registerFeatureToggle` —— `initFromStorage()` 以 `DSS_GET_SETTINGS` 取 `dss-temporary-chat-enabled`，`write()` 以 `DSS_SET_SETTINGS` 落盤（先更新記憶體快取，呼叫端在 await 前即可讀到新值），`startSync()` 以 `DSS_SETTINGS_CHANGED` 收斂並通知訂閱者。僅 boolean `true` 視為啟用，`'true'` 等真值字串一律為停用。
+
+## 24. 自動重試與自動繼續生成 (Auto Retry and Auto Continue) — v4.35.0
+
+- **開關位置**：彈出選單「Features」卡片中的 `#autoRetryToggle`（自動重試）與 `#autoContinueToggle`（自動繼續生成）兩個核取方塊，彼此獨立。
+- **儲存鍵**：`isAutoRetryEnabled`、`isAutoContinueEnabled`（布林值，預設皆為 `false`）。兩者與其他功能開關同樣經 `StorageManager` 寫入並同步、納入 JSON 備份與還原（設定欄位 `autoRetry`、`autoContinue`），popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
+- **閘控**：`content/auto-retry.js` 對兩顆按鈕各以自身鍵呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，每顆按鈕僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。
+- **輪次**：任一按鈕生效時，以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`）取得 0–3 秒、0.1 秒級距的均勻隨機延遲；延遲到期後，對每顆生效且存在於頁面的按鈕各點擊一次（每輪每顆至多一次），再以新的隨機延遲排下一輪。不設點擊上限。
+- **計時器**：任何時刻至多一個計時器；兩顆按鈕皆未生效時清除計時器，不執行任何輪次。
+- **按鈕定位**：僅以 `content/ds-selectors.js` 的選擇器定位，絕不以按鈕文字定位；主要選擇器命中時不嘗試備援。重試：`RETRY_BUTTON_SELECTOR`，備援 `RETRY_BUTTON_FALLBACK_SELECTOR`。繼續生成：`CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`），備援 `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`）。
+- **實作位置**：`content/auto-retry.js`（manifest 中緊接 `content/auto-click.delay.js` 之後載入）。`start()` 於模組載入時自動呼叫。

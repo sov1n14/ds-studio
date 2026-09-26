@@ -24,12 +24,15 @@
     sidebarAutoHideLabel: 'Auto-hide Sidebar (60px on hover to expand)',
     hideThinkingLabel: 'Collapse Thinking Process',
     autoExpandMessagesLabel: 'Auto-expand messages',
+    autoRetryLabel: 'Auto retry',
+    autoContinueLabel: 'Auto continue generating',
     preventAutoScrollLabel: 'Prevent Auto-Scroll',
     websearchToggleLabel: 'Web Search',
     websearchOnLabel: 'On',
     websearchOffLabel: 'Off',
     chatWidthLabel: 'Conversation Area Width',
     inputWidthLabel: 'Input Box Width',
+    switchLanguageTitle: 'Switch Language',
     narrowLabel: 'Narrow',
     wideLabel: 'Wide',
     requiredIndicator: '* Required',
@@ -185,6 +188,10 @@
 
     // ---- Utils ----
     migratedPresetName: 'My Prompts',
+
+    // ---- Content Script: Invalidation Toast ----
+    'invalidationToast.message': 'DS Studio has been updated. Please refresh the page to continue.',
+    'invalidationToast.refresh': 'Refresh',
   };
 
   root.__DS_I18N_Locales_en = en;

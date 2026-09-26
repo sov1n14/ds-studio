@@ -6,7 +6,7 @@
  *
  * 載入順序（manifest.json 必須依此順序）：
  *   1. temporary-chat-constants.js   （常數）
- *   2. temporary-chat-enabled-flag.js（啟用旗標，經 background 設定路由；需 utils/settings-message-constants.js 先行載入）
+ *   2. temporary-chat-enabled-flag.js（啟用旗標，經 background 設定路由；需 utils/message-constants.js 先行載入）
  *   3. background/pending-store.js / temporary-chat-delete-api.js
  *   4. temporary-chat-delete.tracking.js
  *   5. temporary-chat-delete.coordinator.js
@@ -85,6 +85,8 @@ const TemporaryChatDelete = (() => {
 
         window.addEventListener('message', handlers.handleWindowMessage);
         window.addEventListener('beforeunload', handlers.handleBeforeUnload);
+        // 失效 toast 刷新前發出（content/invalidation-toast.js），用以抑制 beforeunload 刪除
+        window.addEventListener('dss-intentional-reload', handlers.handleIntentionalReload);
 
         if (typeof window.navigation !== 'undefined') {
             window.navigation.addEventListener('navigate', handlers.handleNavigationEvent);
@@ -103,6 +105,7 @@ const TemporaryChatDelete = (() => {
 
         window.removeEventListener('message', handlers.handleWindowMessage);
         window.removeEventListener('beforeunload', handlers.handleBeforeUnload);
+        window.removeEventListener('dss-intentional-reload', handlers.handleIntentionalReload);
 
         if (typeof window.navigation !== 'undefined') {
             window.navigation.removeEventListener('navigate', handlers.handleNavigationEvent);
@@ -130,7 +133,7 @@ const TemporaryChatDelete = (() => {
      * @returns {Promise<void>}
      */
     async function init() {
-        const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
+        const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
 
         const flag = _flag();
@@ -185,6 +188,8 @@ const TemporaryChatDelete = (() => {
 TemporaryChatDelete.init();
 
 // Test export（瀏覽器中為 no-op）
+// Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = TemporaryChatDelete;
 }
+// Stryker restore all

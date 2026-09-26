@@ -12,7 +12,7 @@
 // 與 background/editor-window-routes.js 共用同一份常數 ---
 const __DSEditorWindowConstants = globalThis.DSS_EDITOR_WINDOW;
 if (!__DSEditorWindowConstants) {
-    throw new Error('[DSS] popup.editor-window 需要 utils/editor-window-constants.js 先行載入');
+    throw new Error('[DSS] popup.editor-window 需要 utils/message-constants.js 先行載入');
 }
 const EDITOR_WINDOW_STORAGE_KEYS = __DSEditorWindowConstants.STORAGE_KEYS;
 

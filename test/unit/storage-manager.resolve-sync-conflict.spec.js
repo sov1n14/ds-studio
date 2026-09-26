@@ -291,7 +291,7 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
     // never be written back by reconciliation, in either direction.
     // ----------------------------------------------------------------
     describe('Foreign-key exclusion — keys outside StorageManager.KEYS must not be reconciled', () => {
-        const FOREIGN_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
+        const FOREIGN_KEY = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY;
 
         it('does not write the foreign key to sync or local when local=false, sync=true', async () => {
             await populateDefaults();

@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Ensure the StorageManager global is populated before any test runs.
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 const { createPresetOverlay } = require('../../content/preset-overlay.controller.js');
 
@@ -270,7 +271,7 @@ describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)
         overlay = createPresetOverlay(ctx);
 
         target = document.createElement('div');
-        target.className = '_2be88ba';
+        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         document.body.appendChild(target);
     });
 
@@ -303,7 +304,7 @@ describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)
         // Simulate React replacing the chat title bar: swap in a fresh target element.
         target.parentNode.removeChild(target);
         target = document.createElement('div');
-        target.className = '_2be88ba';
+        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
         document.body.appendChild(target);
 
         overlay.findAndMount();

@@ -33,6 +33,8 @@ async function populateDefaults() {
         [K.SIDEBAR_AUTO_HIDE]: false,
         [K.HIDE_THINKING]: false,
         [K.AUTO_EXPAND_MESSAGES]: false,
+        [K.AUTO_RETRY]: false,
+        [K.AUTO_CONTINUE]: false,
         [K.PREVENT_AUTO_SCROLL]: false,
         [K.WEBSEARCH_TOGGLE]: 'default',
         [K.CHAT_WIDTH]: 70,

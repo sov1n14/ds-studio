@@ -1,3 +1,4 @@
+// 328 lines: single preset overlay controller — lifecycle (mount/unmount), positioning, resize observation, and select-change handling share tightly coupled DOM refs and overlay instance state; splitting would require passing the same mutable instance across files
 /**
  * DS Studio — PresetOverlay Controller
  * 取代 content-script.overlay.js，整合自訂 dropdown 元件、定位計算、ResizeObserver。
@@ -214,14 +215,27 @@
                     }
                     ctx.setChatPresetMap(nextMap);
 
-                    // 實際寫入一律走 StorageManager 的交易式路徑，完成後以儲存結果覆寫記憶體狀態。
+                    // 實際寫入交由 service worker，完成後以儲存結果覆寫記憶體狀態；
+                    // 寫入失敗時重新讀取並重繪，回滾先前的樂觀更新。
                     const persisted = isBinding
                         ? storage.bindChatToPreset(currentChatUuid, newId)
                         : storage.unbindChat(currentChatUuid);
+                    const syncMapFromStorage = () => Promise.resolve(storage.getChatPresetMap())
+                        .then(map => { ctx.setChatPresetMap(map); return map; });
                     Promise.resolve(persisted)
-                        .then(() => storage.getChatPresetMap())
-                        .then(map => { ctx.setChatPresetMap(map); })
-                        .catch(err => console.error('[DSS] preset-overlay onSelectChange: chatPresetMap 持久化失敗:', err));
+                        .then(syncMapFromStorage, err => {
+                            console.error('[DSS] preset-overlay onSelectChange: chatPresetMap 持久化失敗，回滾:', err);
+                            return syncMapFromStorage().then(map => {
+                                const storedId = map?.[currentChatUuid] || '';
+                                this.updateActiveId(storedId);
+                                // 失敗的選擇不得殘留為 activePresetId：還原為儲存中的綁定
+                                return Promise.all([
+                                    storage.saveActivePresetId(storedId),
+                                    ctx.updatePromptPrefixFromBinding(),
+                                ]);
+                            });
+                        })
+                        .catch(err => console.error('[DSS] preset-overlay onSelectChange: chatPresetMap 重新讀取失敗:', err));
                 } else {
                     ctx.setPendingPresetId(newId ?? null);
                 }

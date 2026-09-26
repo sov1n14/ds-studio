@@ -14,7 +14,7 @@
     /** 於呼叫時解析訊息常數，缺失即拋出並指名修法。 */
     function resolveConstants() {
         const constants = globalThis.DSS_EDITOR_WINDOW;
-        if (!constants) throw new Error('[DSS] editor-window-autoclose 需要 utils/editor-window-constants.js 先行載入');
+        if (!constants) throw new Error('[DSS] editor-window-autoclose 需要 utils/message-constants.js 先行載入');
         return constants;
     }
 

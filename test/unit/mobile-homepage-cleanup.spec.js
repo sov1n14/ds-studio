@@ -14,7 +14,7 @@
  * here.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 
 const MASTER_KEY = 'isEnabled';
 const UNRELATED_KEY = 'isHideThinkingEnabled';
@@ -408,5 +408,112 @@ describe('SETTINGS_CHANGED broadcasts', () => {
         await settleObserver();
         expect(targetCount()).toBe(0);
         expect(cleanup.enabled).toBe(true);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  9. Mutant killers — targeted tests for specific Stryker-surviving mutants
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('mutant killers', () => {
+    // Mutant 1: observer callback homepage guard (line ~64)
+    // `if (!this._isHomepage()) return;` → `if (false) return;`
+    // The observer callback must skip removal when not on the homepage.
+    it('observer callback does NOT remove elements when location changes away from homepage', async () => {
+        stubHomepage();
+        cleanup.enable();
+        expect(cleanup.enabled).toBe(true);
+
+        // Move away from homepage while the observer is still running.
+        stubNonHomepage();
+
+        addTargetElements(3);
+        await settleObserver();
+
+        // The homepage guard in the callback should prevent removal.
+        expect(targetCount()).toBe(3);
+    });
+
+    // Mutant 2: observer subtree config (line ~68)
+    // `{ childList: true, subtree: true }` -> `{ childList: true, subtree: false }`
+    // A subtree-only DOM mutation (child added to an existing container, NOT a
+    // direct body child) must still trigger the observer and remove the target.
+    it('observer fires on subtree-only mutations inside an existing container', async () => {
+        stubHomepage();
+        cleanup.enable();
+
+        // Step 1: Add a plain container as a direct body child (no targets).
+        // This fires the observer but there is nothing to remove.
+        const container = document.createElement('div');
+        container.className = 'deep-container';
+        document.body.appendChild(container);
+        await settleObserver();
+        expect(targetCount()).toBe(0);
+
+        // Step 2: Add a target element as a child of the EXISTING container.
+        // This is a subtree-only mutation -- it does NOT add a direct child to
+        // document.body, so an observer with subtree: false will NOT fire.
+        const nested = document.createElement('div');
+        nested.className = TARGET_CLASS;
+        container.appendChild(nested);
+        await settleObserver();
+
+        // With subtree: true the observer fires and _removeTargetElements()
+        // clears it. With subtree: false (mutant) the observer never fires
+        // and the target survives -- failing this assertion.
+        expect(targetCount()).toBe(0);
+    });
+
+    // Mutant 3: enable() idempotency guard (line ~92)
+    // `if (this.enabled) return;` → `if (false) return;`
+    // A second enable() call must not re-run _removeTargetElements().
+    it('second enable() does not re-remove target elements added after first enable()', async () => {
+        stubHomepage();
+        cleanup.enable();
+        expect(cleanup.enabled).toBe(true);
+
+        // Navigate away so the observer callback's homepage guard keeps elements alive.
+        stubNonHomepage();
+
+        addTargetElements(3);
+        await settleObserver();
+        expect(targetCount()).toBe(3);
+
+        // Second enable() — the idempotency guard should skip _removeTargetElements().
+        // Without the guard, enable() would call _removeTargetElements() and nuke them.
+        stubHomepage();
+        cleanup.enable();
+
+        expect(targetCount()).toBe(3);
+    });
+
+    // Mutant 4: destroy() unregister toggle (line ~125)
+    // `this._unregisterToggle();` -> `;`
+    // The actual unregister call is removed but _unregisterToggle is still
+    // nulled, so checking the property is insufficient. Instead, verify that
+    // a subsequent master-switch-on broadcast does NOT re-enable the module.
+    it('destroy() unregisters the toggle listener so a later master-switch-on does not re-enable', async () => {
+        stubMobileTouch();
+        stubHomepage();
+        respondWith({ [MASTER_KEY]: true });
+        await load();
+        expect(cleanup.enabled).toBe(true);
+
+        cleanup.destroy();
+        expect(cleanup.enabled).toBe(false);
+
+        // Add target elements that should survive if the module stays dead.
+        addTargetElements(3);
+
+        // Broadcast master-switch-on -- if unregister was skipped (mutant),
+        // the toggle listener is still alive and will call enable(), which
+        // starts the observer and removes the targets.
+        broadcast(change(MASTER_KEY, true));
+        await settleObserver();
+
+        // With the real code the listener is gone: nothing happens.
+        // With the mutant the listener fires enable() -> targets are removed.
+        expect(cleanup.enabled).toBe(false);
+        expect(targetCount()).toBe(3);
     });
 });

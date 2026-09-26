@@ -12,7 +12,7 @@
  *  - Every subsequent focus event sends again -- no once-only latch.
  *  - A rejected sendMessage promise must not surface as an unhandled
  *    rejection; the module keeps running.
- *  - Calling the focus handler before utils/editor-window-constants.js has
+ *  - Calling the focus handler before utils/message-constants.js has
  *    populated globalThis.DSS_EDITOR_WINDOW throws, naming the missing file.
  *  - Before the module is imported (start() not yet called), a focus event
  *    dispatched on window sends nothing.
@@ -33,7 +33,7 @@ describe('content/editor-window-autoclose', () => {
         window.dispatchEvent(new Event('focus'));
         expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 
-        await import('../../utils/editor-window-constants.js');
+        await import('../../utils/message-constants.js');
         await import('../../content/editor-window-autoclose.js');
 
         window.dispatchEvent(new Event('focus'));

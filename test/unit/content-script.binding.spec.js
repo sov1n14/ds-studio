@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import { createChatBindingController } from '../../content/chat-binding-controller.js';
+import { createChatMapWriterHarness, restoreChromeBoundaries } from '../helpers/chat-map-writer-harness.js';
 
 // These specs drive the binding state machine through its real public surface:
 // the controller factory plus its exported methods (handleChatChange,
@@ -24,11 +25,14 @@ function makeController() {
 const s = () => controller.state;
 
 describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
+    // The controller resolves the bare StorageManager global at call time; point it at a real client
+    // StorageManager whose chat-map writes go through the real SW router (chat-map-writer-harness).
+    const originalStorageManager = window.StorageManager;
+    let h;
+
+    // Stored map as another context left it (durable chunk layout in sync and local).
     async function seedBinding(uuid, presetId) {
-        await StorageManager.mutateChatPresetMap(map => {
-            map[uuid] = presetId;
-            return map;
-        });
+        await h.seedChatMap([{ [uuid]: presetId }]);
     }
 
     async function seedPreset(id, name, content) {
@@ -43,6 +47,8 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
 
     beforeEach(async () => {
         await new Promise(r => setTimeout(r, 0));
+        h = await createChatMapWriterHarness({ clientCount: 1 });
+        window.StorageManager = h.clients[0];
         controller = makeController();
 
         await chrome.storage.local.remove([
@@ -55,6 +61,11 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
         ]);
 
         await seedPreset('p1', 'Helper', 'You are helpful.');
+    });
+
+    afterEach(() => {
+        restoreChromeBoundaries();
+        window.StorageManager = originalStorageManager;
     });
 
     it('handles navigation to a new chat with no UUID (clears state)', async () => {
@@ -84,8 +95,8 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
         expect(s().currentChatUuid).toBe('b0ba0ba0-b0ba-b0ba-b0ba-b0ba0ba0ba0b');
         expect(s().promptPrefix).toBe('');
 
-        const map = await StorageManager.getChatPresetMap();
-        expect(map).not.toHaveProperty('b0ba0ba0-b0ba-b0ba-b0ba-b0ba0ba0ba0b');
+        expect((await h.readStored()).map, 'the stale binding must be removed from durable storage').not.toHaveProperty('b0ba0ba0-b0ba-b0ba-b0ba-b0ba0ba0ba0b');
+        expect(s().chatPresetMap).not.toHaveProperty('b0ba0ba0-b0ba-b0ba-b0ba-b0ba0ba0ba0b');
     });
 
     it('auto-binds pendingPresetId when awaitingNewChatUuid is true (2.4.x)', async () => {
@@ -107,6 +118,8 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
         expect(s().currentChatUuid).toBe('a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5');
         expect(s().awaitingNewChatUuid).toBe(false);
         expect(s().promptPrefix).toBe('You are helpful.');
+        expect((await h.readStored()).map, 'the auto-bind must be persisted by the SW writer').toEqual({ 'a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5': 'p1' });
+        expect(s().chatPresetMap).toEqual({ 'a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5': 'p1' });
     });
 
     it('does NOT auto-bind when awaitingNewChatUuid is false (2.4.x negative)', async () => {
@@ -130,10 +143,7 @@ describe('handleChatChange (2.2.x, 2.3.x, 2.4.x, 2.7.x scenarios)', () => {
             chatPresetMap: { '00000000-0000-0000-0000-000000000000': 'old-preset' },
         });
 
-        await StorageManager.mutateChatPresetMap(map => {
-            map['11111111-1111-1111-1111-111111111111'] = 'p1';
-            return map;
-        });
+        await seedBinding('11111111-1111-1111-1111-111111111111', 'p1');
 
         setPathname('/a/chat/s/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
         await controller.handleChatChange();

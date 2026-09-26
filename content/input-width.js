@@ -52,7 +52,7 @@ const InputWidth = INPUT_WIDTH_FACTORY.create({
 ${column},
 ${column} ${bar},
 ${bar},
-${column} ._77cefa5._3d616d3 {
+${column} ${__DS_InputWidthSelectors.INPUT_COMPOSER_WRAPPER_SELECTOR} {
   max-width: ${vw}vw !important;
   width: min(100%, ${vw}vw) !important;
   margin-left: auto !important;

@@ -8,15 +8,18 @@ DS studio is a **Chrome extension** that enhances the experience of using **[cha
 
 | Category | Feature |
 |-|-|
-| **Prompt System** | Multi-prompt-group management, auto-injection, global default prompt, conversation binding, blank option mode |
+| **Prompt System** | Multi-prompt-group management, auto-injection, global default prompt, conversation binding, blank option mode, dedicated editor window for prompt editing |
 | **Quick Switching** | In-page Overlay dropdown with search filtering and drag-to-reorder, bidirectional sync with popup menu |
-| **UI Adjustments** | Auto-hide sidebar, conversation/input box width adjustment, collapse thinking process, web search toggle, prevent auto-scroll, back-to-top button |
+| **Temporary Conversation** | Auto-delete conversations when leaving, cross-device heartbeat lease protection, sidebar auto-hiding of pending deletions |
+| **UI Adjustments** | Auto-hide sidebar, conversation/input box width adjustment, collapse thinking process, auto expand messages, web search toggle, prevent auto-scroll, back-to-top button |
 | **Conversation Export** | One-click export full conversation as Markdown, with toggle for thinking process and reference links |
 | **Quote Reply** | Select AI reply text and convert it to Markdown blockquote with one click |
 | **System Time Injection** | Automatically append current system time and timezone offset to each message |
 | **Censored Reply Recovery** | Automatically restore original replies censored by DeepSeek from stream data, persists across refreshes |
 | **Cloud Sync** | Cross-device automatic sync of prompt groups and settings, with built-in conflict detection and smart merge |
 | **JSON Backup & Restore** | Full backup and restore of prompt groups, settings, and censored reply recovery records |
+| **Auto Retry and Auto Continue** | Two independent toggles (off by default): automatically click retry when DeepSeek returns a server error, and click continue when a reply stops |
+| **Edit Message Cleanup** | Strips injected prompt wrapper tags when editing a sent message so you see only your original text |
 | **Mobile Support** | Sidebar swipe gesture to solve the lack of quick sidebar switching on mobile |
 
 For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).

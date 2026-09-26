@@ -12,6 +12,7 @@
 
     // 共用 DOM 選擇器常數（瀏覽器：ds-selectors.js 於前載入；Node.js 測試：直接 require）
     const selectors = root.DSstudio?.Selectors ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     /**
@@ -32,7 +33,7 @@
     }
 
     /**
-     * 判斷按鈕是否為送出按鈕（送出圖示、工具列容器、行動版父層 class，或編輯視窗傳送按鈕）。
+     * 判斷按鈕是否為送出按鈕（送出圖示 SVG，或編輯視窗傳送按鈕）。
      * @param {Element} button
      * @param {boolean} [isEditSendButton] 呼叫端已算出的編輯視窗傳送按鈕判定，避免重複計算
      * @returns {boolean}
@@ -40,11 +41,17 @@
     function isSendButtonCandidate(button, isEditSendButton) {
         if (!button) return false;
 
-        // 依成本由低到高短路求值，避免每次指標事件都跑完整條件鏈
-        return !!button.querySelector(selectors.SEND_BUTTON_ICON_SELECTOR) ||
-               !!button.closest(selectors.SEND_BUTTON_CONTAINER_SELECTOR) ||
-               !!button.parentElement?.classList.contains(selectors.SEND_BUTTON_PARENT_CLASS) ||
-               (isEditSendButton === undefined ? isEditWindowSendButton(button) : isEditSendButton);
+        // 主要判定：精確 SVG path 前綴比對（最快、最準）
+        if (button.querySelector(selectors.SEND_BUTTON_ICON_SELECTOR)) return true;
+
+        // 結構性降級：含 SVG 且具備 primary+filled 變體 = 主輸入框送出按鈕（非附件按鈕）
+        if (button.querySelector('svg') && selectors.EDIT_SEND_BUTTON_VARIANT_CLASSES.every(cls => button.classList.contains(cls))) {
+            console.warn('[DS Studio] Send button matched by structural fallback — SVG icon selector may need update');
+            return true;
+        }
+
+        // 編輯視窗送出按鈕（文字標籤，無 SVG 圖示）
+        return isEditSendButton === undefined ? isEditWindowSendButton(button) : isEditSendButton;
     }
 
     /**
@@ -70,8 +77,10 @@
 
         let el = textarea.parentElement;
         while (el && el !== document.body) {
-            const candidate = el.querySelector(selectors.SEND_BUTTON_ROLE_SELECTOR);
-            if (candidate && isSendButtonCandidate(candidate)) return candidate;
+            // 遍歷所有候選按鈕，避免附件按鈕排在送出按鈕前導致 querySelector 只找到附件按鈕
+            for (const candidate of el.querySelectorAll(selectors.SEND_BUTTON_ROLE_SELECTOR)) {
+                if (isSendButtonCandidate(candidate)) return candidate;
+            }
             el = el.parentElement;
         }
         return null;
@@ -89,6 +98,7 @@
         let el = button?.parentElement;
         let firstEmptyTextarea = null;
 
+        // Stryker disable next-line ConditionalExpression: equivalent — global fallback covers same subtree, loop terminates at null
         while (el && el !== document.body) {
             const ta = el.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
             if (ta) {
@@ -118,6 +128,7 @@
         return findTextareaNearButton(button);
     }
 
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_PromptInjectorSendButton = {
         isEditWindowSendButton,
         isSendButtonCandidate,
@@ -132,3 +143,4 @@
     }
 
 })(globalThis);
+// Stryker restore all

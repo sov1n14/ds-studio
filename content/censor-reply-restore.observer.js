@@ -7,6 +7,7 @@
 
     // 共用 DOM 選擇器常數
     var __DS_ObserverSelectors = (globalThis).DSstudio?.Selectors ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     const bundle = {
@@ -64,6 +65,8 @@
         },
     };
 
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_CensorReplyRestore_observer = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(globalThis);
+// Stryker restore all

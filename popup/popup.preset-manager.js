@@ -55,13 +55,7 @@ function createPresetManager(ctx) {
         await ctx.refreshSyncStatus();
 
         const deletedId = current.id;
-        const updatedMap = await ctx.StorageManager.mutateChatPresetMap(map => {
-            for (const uuid of Object.keys(map)) {
-                if (map[uuid] === deletedId) {
-                    delete map[uuid];
-                }
-            }
-        });
+        const updatedMap = await ctx.StorageManager.unbindChatsForPresets([deletedId]);
         ctx.setChatPresetMap(updatedMap);
         await ctx.refreshSyncStatus();
         await ctx.pinManager?.clearPinIfDeleted([deletedId]);
@@ -95,13 +89,7 @@ function createPresetManager(ctx) {
         await ctx.StorageManager.savePromptPresets([]);
         await ctx.refreshSyncStatus();
 
-        const updatedMap = await ctx.StorageManager.mutateChatPresetMap(map => {
-            for (const uuid of Object.keys(map)) {
-                if (deletedIds.has(map[uuid])) {
-                    delete map[uuid];
-                }
-            }
-        });
+        const updatedMap = await ctx.StorageManager.unbindChatsForPresets([...deletedIds]);
         ctx.setChatPresetMap(updatedMap);
         await ctx.refreshSyncStatus();
         await ctx.pinManager?.clearPinIfDeleted([...deletedIds]);
@@ -115,7 +103,7 @@ function createPresetManager(ctx) {
 
     // --- 從內容腳本查詢 pending preset ID ---
     async function getPendingPresetIdFromContentScript(tabId) {
-        const response = await DSSTabControl.sendToTab(tabId, { action: 'GET_PENDING_PRESET' });
+        const response = await DSSTabControl.sendToTab(tabId, { action: DSS_CONTENT_MSG.GET_PENDING_PRESET });
         return response?.pendingPresetId || null;
     }
 

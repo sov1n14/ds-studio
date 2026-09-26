@@ -1,6 +1,6 @@
 /**
  * DS Studio — StorageManager ChatPresetMap diff 方法群組
- * 負責 chatPresetMap 的差異計算與套用。
+ * 負責 chatPresetMap 的差異計算與套用；皆為輸入的純函式，不讀寫 storage、不依賴快取。
  */
 (function (root) {
     'use strict';
@@ -11,13 +11,25 @@
      */
     const CHUNK_SOFT_LIMIT_BYTES = 7168;
 
+    /**
+     * 由各 chunk 內容建立 uuid → chunk 索引；重複出現時以較後的 chunk 為準（與合併讀取的覆寫順序一致）。
+     * @param {Object[]} chunks
+     * @returns {Map<string, number>}
+     */
+    function buildChunkIndex(chunks) {
+        const index = new Map();
+        chunks.forEach((chunk, idx) => {
+            for (const uuid of Object.keys(chunk)) index.set(uuid, idx);
+        });
+        return index;
+    }
+
     const bundle = {
         CHUNK_SOFT_LIMIT_BYTES,
 
         /**
-         * 將 deletedKeys/changedKeys/addedKeys 差異套用至 chunks 工作副本與 meta 工作副本，
-         * 並同步更新 _chunkIndexCache。供 mutateChatPresetMap 的鎖外快速路徑與鎖內路徑共用，
-         * 避免同一段三步驟 diff 邏輯重複兩次。
+         * 將 deletedKeys/changedKeys/addedKeys 差異套用至 chunks 工作副本與 meta 工作副本。
+         * 既有 uuid 留在原 chunk；新 uuid 放入第一個仍有空間的 chunk，皆無空間時附加新 chunk。
          *
          * @param {Object[]} chunks - chunk 陣列的工作副本（將被原地修改）
          * @param {Object} meta - meta 工作副本，chunkSizes/chunkCount 將被原地修改
@@ -29,65 +41,46 @@
          */
         _applyChatPresetMapDiff(chunks, meta, deletedKeys, changedKeys, addedKeys, finalMap) {
             const modifiedChunks = new Set();
+            const index = buildChunkIndex(chunks);
 
-            // 1. 刪除已移除的 uuid
+            // 1. 刪除已移除的 uuid（逐 chunk 清除，避免重複條目在刪除後復現）
             for (const key of deletedKeys) {
-                if (this._chunkIndexCache.has(key)) {
-                    const idx = this._chunkIndexCache.get(key);
-                    if (idx < chunks.length) {
-                        delete chunks[idx][key];
-                        modifiedChunks.add(idx);
-                    }
-                    this._chunkIndexCache.delete(key);
-                }
+                chunks.forEach((chunk, idx) => {
+                    if (!Object.hasOwn(chunk, key)) return;
+                    delete chunk[key];
+                    modifiedChunks.add(idx);
+                });
             }
 
             // 2. 原地更新已變更的 uuid
             for (const key of changedKeys) {
-                if (this._chunkIndexCache.has(key)) {
-                    const idx = this._chunkIndexCache.get(key);
-                    if (idx < chunks.length) {
-                        chunks[idx][key] = finalMap[key];
-                        modifiedChunks.add(idx);
-                    }
-                }
+                if (!index.has(key)) continue;
+                const idx = index.get(key);
+                chunks[idx][key] = finalMap[key];
+                modifiedChunks.add(idx);
             }
 
-            // 3. 新增 uuid：先嘗試填入既有 chunk，否則附加新 chunk
+            // 3. 新增 uuid：先嘗試填入既有 chunk，否則附加新 chunk（以實際內容量測大小，不信任可能過期的 meta）
             for (const key of addedKeys) {
                 const entrySize = this._byteLen({ [key]: finalMap[key] });
-                let isPlaced = false;
+                const targetIdx = chunks.findIndex(chunk => this._byteLen(chunk) + entrySize < CHUNK_SOFT_LIMIT_BYTES);
 
-                for (let i = 0; i < chunks.length; i++) {
-                    const currentSize = i < meta.chunkSizes.length && meta.chunkSizes[i] > 0
-                        ? meta.chunkSizes[i]
-                        : this._byteLen(chunks[i]);
-
-                    if (currentSize + entrySize < CHUNK_SOFT_LIMIT_BYTES) {
-                        chunks[i][key] = finalMap[key];
-                        modifiedChunks.add(i);
-                        meta.chunkSizes[i] = this._byteLen(chunks[i]);
-                        this._chunkIndexCache.set(key, i);
-                        isPlaced = true;
-                        break;
-                    }
-                }
-
-                if (!isPlaced) {
-                    const newIdx = chunks.length;
+                if (targetIdx >= 0) {
+                    chunks[targetIdx][key] = finalMap[key];
+                    modifiedChunks.add(targetIdx);
+                } else {
                     chunks.push({ [key]: finalMap[key] });
-                    meta.chunkSizes.push(this._byteLen(chunks[newIdx]));
-                    meta.chunkCount = newIdx + 1;
-                    modifiedChunks.add(newIdx);
-                    this._chunkIndexCache.set(key, newIdx);
+                    modifiedChunks.add(chunks.length - 1);
                 }
             }
 
+            meta.chunkCount = chunks.length;
+            meta.chunkSizes = chunks.map(chunk => this._byteLen(chunk));
             return modifiedChunks;
         },
 
         /**
-         * 執行 mutator，並將其造成的 map 差異套用至 chunks/meta 的工作副本。涵蓋「快照 → 執行 mutator → 計算 key 差異 → 建立工作副本 → 套用差異」整段流程，供 mutateChatPresetMap 的鎖外快速路徑與鎖內路徑共用。
+         * 執行 mutator 一次，並將其造成的 map 差異套用至 chunks/meta 的工作副本。
          *
          * @param {Function} mutator - 接收當前 map，可原地修改或回傳新 map
          * @param {{ map: Object, metaCopy: Object, chunksByIdx: Object[] }} state - _readAllChunks 的結果
@@ -95,15 +88,11 @@
          */
         async _computeChatPresetMapDiff(mutator, { map, metaCopy, chunksByIdx }) {
             // 在呼叫 mutator 前快照原始 state，因為 mutator 可能原地修改 map
-            const snapshotMap = Object.fromEntries(Object.entries(map));
+            const snapshotMap = { ...map };
 
             const result = await mutator(map);
-            // 重新載入快取：async mutator 的 await 可能觸發 onChanged 導致快取失效
-            await this._ensureChunkCachesLoaded();
-
             const finalMap = result === undefined ? map : result;
 
-            // 使用快照計算差異
             const newKeys = Object.keys(finalMap);
             const deletedKeys = Object.keys(snapshotMap).filter(k => !(k in finalMap));
             const addedKeys = newKeys.filter(k => !(k in snapshotMap));
@@ -113,7 +102,7 @@
                 return { finalMap, deletedKeys, changedKeys, addedKeys, isNoop: true };
             }
 
-            // 建立工作副本並套用差異
+            // 建立工作副本並套用差異；_buildNextMeta 於此遞增版號
             const newChunks = chunksByIdx.map(c => ({ ...c }));
             const newMeta = this._buildNextMeta(metaCopy, {});
             const modifiedChunks = this._applyChatPresetMapDiff(newChunks, newMeta, deletedKeys, changedKeys, addedKeys, finalMap);

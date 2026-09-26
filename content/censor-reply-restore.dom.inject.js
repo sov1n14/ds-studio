@@ -1,6 +1,6 @@
 /**
  * DS studio — Censor Reply Restore :: DOM Inject
- * 復原內容注入子系統。由 censor-reply-restore.dom.js 以 Object.assign 合入。
+ * 復原內容注入子系統。由 censor-reply-restore.js（entry）以 Object.assign 合入。
  */
 (function (root) {
     'use strict';

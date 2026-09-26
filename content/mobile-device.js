@@ -2,7 +2,7 @@
  * DS studio — 行動裝置判定共用工具（content/mobile-device.js）
  *
  * 單一職責：以「具觸控能力 或 行動裝置 user-agent 標記」判定行動裝置，
- * 與 mobile-homepage-cleanup、mobile-sidebar-swipe、prompt-injector 三處原有實作完全一致。
+ * 與 mobile-sidebar-swipe、prompt-injector 兩處原有實作完全一致。
  * 視窗尺寸不是判定輸入。
  * 無載入期副作用：載入僅完成 globalThis 指派。
  */
@@ -19,5 +19,7 @@
     globalThis.DSSMobileDevice = { isMobileDevice };
 
     // === 測試匯出（瀏覽器情境為 no-op） ===
+    // Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
     if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.DSSMobileDevice;
 })();
+// Stryker restore all

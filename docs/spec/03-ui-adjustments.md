@@ -11,14 +11,14 @@
 - **收合行為**：啟用時，側邊欄（`div.dc04ec1d`）在滑鼠離開時收合至 60px 寬度。內部內容（`div.b8812f16.a2f3d50e`）透過負值 `margin-left` 位移，隱藏在收合的容器後方。
 - **展開行為**：滑鼠懸停時，經過 150ms 延遲（進入延遲），側邊欄展開至原始儲存寬度，內部邊距清除。
 - **收合觸發**：滑鼠離開時，經過 400ms 延遲（離開延遲），側邊欄收合回 60px。視窗縮放也會透過防抖（200ms）的調整大小處理器觸發重新收合。
-- **下拉選單感知**：當側邊欄有待處理的收合計時器，且滑鼠進入浮動/下拉式元素（透過類別 `ds-elevated` 或 `.ds-floating-position-wrapper` 偵測），收合計時器會取消，側邊欄保持展開。浮動元素上的 `mouseleave` 監聽器會在使用者移開時觸發收合。此功能透過 `document` 上的捕獲階段 `mouseover` 監聽器（在 `setupHoverZone()` 中）實作，使用 `el.closest()` 支援精確的子元素層級判定，對 React portal 渲染在側邊欄 DOM 階層外的下拉選單具有穩固性。
+- **下拉選單感知**：當側邊欄有待處理的收合計時器，且滑鼠進入浮動/下拉式元素（透過 `.ds-floating-position-wrapper` 偵測），收合計時器會取消，側邊欄保持展開。浮動元素上的 `mouseleave` 監聽器會在使用者移開時觸發收合。此功能透過 `document` 上的捕獲階段 `mouseover` 監聽器（在 `setupHoverZone()` 中）實作，使用 `el.closest()` 支援精確的子元素層級判定，對 React portal 渲染在側邊欄 DOM 階層外的下拉選單具有穩固性。
 - **CSS 轉場**：透過注入的 `<style>` 實現流暢動畫：`transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1)` 及 `transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)`。
 - **溢位處理**：容器設有 `overflow: hidden`，但 DeepSeek 原生收合啟用時除外（此時窄條必須完全可見）。
 - **主開關感知**：當主開關（`isEnabled`）關閉時，無論自身開關狀態為何，模組都會停用。重新開啟時，模組會重新讀取自身開關狀態。
 - **SPA 韌性**：
   - `document.body` 上的 `MutationObserver` 偵測側邊欄 DOM 節點是否被取代（SPA 導航），重新綁定事件並重新收合。
   - 側邊欄專屬的 `MutationObserver` 監控 DeepSeek 的原生收合/展開循環，在需要時重新套用自訂收合狀態。
-- **儲存監聽器**：註冊 `chrome.storage.onChanged` 監聽器，即時監控 `dsSidebarAutoHide` 與 `isEnabled` 的變化，無須重新整理頁面即可啟用/停用。
+- **設定變更監聽**：以 `content/feature-toggle.js` 的 `registerFeatureToggle({ ownKey: 'dsSidebarAutoHide' })` 註冊，經 `chrome.runtime.onMessage` 接收 service worker 廣播的 `DSS_SETTINGS_CHANGED`，即時反映 `dsSidebarAutoHide` 與 `isEnabled` 的變化，無須重新整理頁面即可啟用/停用。
 - **啟動**：從儲存空間讀取 `dsSidebarAutoHide` 與 `isEnabled`，若兩者皆為 true 則啟用。
 
 ## 10. 對話區域寬度調整
@@ -49,10 +49,10 @@
 - **開關位置**：彈出選單「Features」卡片中的 `#autoExpandMessagesToggle` 核取方塊。
 - **儲存鍵**：`dsAutoExpandMessages`（布林值，預設 `false`）。
 - **行為**：啟用時，自動點擊頁面上處於收合狀態的「展開」按鈕，使所有訊息預設展開。收合狀態的判斷依據為展開按鈕圖示帶有 `rotate(180deg)` 的 `transform` 樣式。
-- **防止重複點擊**：已處理過的按鈕以 `data-dss-auto-expanded="1"` 標記，不再重複點擊。
+- **防止重複點擊**：已處理過的按鈕以 `data-dss-auto-expanded="1"` 標記，避免重複點擊。
 - **啟用行為**：呼叫 `enable()` 時，先以 `_scanExisting()` 掃描頁面上所有現存的展開按鈕並逐一處理，再啟動 `MutationObserver` 監聽後續新增節點。
 - **停用行為**：呼叫 `disable()` 時，先一次性掃描頁面上所有展開按鈕容器，對其中處於展開狀態的按鈕逐一點擊以收合，接著移除所有 `data-dss-auto-expanded` 屬性，最後斷開 `MutationObserver`。
-- **安全防護**：點擊展開按鈕前檢查 `isConnected`，防止對已移除節點執行無效點擊。
+- **安全防護**：點擊展開按鈕前檢查 `isConnected`，防止對已脫離 DOM 的節點執行無效點擊。
 - **MutationObserver 策略**：監聽 `document.body`，`childList: true, subtree: true`，對新增節點逐一檢查是否為展開按鈕容器（`.EXPAND_BUTTON_CONTAINER_CLASS`）或其子孫中包含展開按鈕容器。
 - **選擇器**：展開按鈕容器 class 與圖示 class 定義於 `content/ds-selectors.js`（`EXPAND_BUTTON_CONTAINER_CLASS`、`EXPAND_BUTTON_ICON_CLASS`）。
 - **主開關感知**：透過 `content/feature-toggle.js` 的 `registerFeatureToggle` 機制，總開關與自身開關的閘控由 background 訊息路由統一提供，不直接讀取 `chrome.storage`。
@@ -64,10 +64,10 @@
 - **儲存鍵**：`dsHideThinking`（布林值，預設 `false`）。
 - **觀察器設定**：`MutationObserver` 以 `{ childList: true, subtree: true }` 設定掛載於 `document.body`，僅監聽 DOM 節點新增事件。不監聽 `attributes`，因此使用者手動展開思考區塊（修改 CSS class）不會觸發回調，確保展開的區塊不受影響。
 - **兩層搜尋**：回調先在新增節點自身尋找思考區塊容器（`._74c0879`），若未找到則搜尋每個新增節點的子孫節點——處理容器為直接新增節點或深層嵌套兩種情況。
-- **安全防護**：點擊展開按鈕前執行 `isConnected` 與 CSS class 雙重驗證，防止對已移除節點（`isConnected === false`）或已收合狀態（缺少展開 class）的按鈕執行無效點擊。
+- **安全防護**：點擊展開按鈕前執行 `isConnected` 與 CSS class 雙重驗證，防止對已脫離 DOM 的節點（`isConnected === false`）或已收合狀態（缺少展開 class）的按鈕執行無效點擊。
 - **啟用行為**：呼叫 `enable()` 時，先以 `applyToExisting()` 收合頁面上已存在的所有展開思考區塊，再啟動 MutationObserver 監聽後續新增節點。
-- **停用行為**：呼叫 `disable()` 時，斷開 MutationObserver，並自動展開所有先前由本功能收合的思考區塊（依 `data-ht-collapsed` 標記識別），使頁面恢復至功能啟用前的展開狀態。
-- **即時切換**：`chrome.storage.onChanged` 監聽器同時監控 `dsHideThinking` 與 `isEnabled`，使功能可在不重新整理頁面的情況下即時啟用/停用。
+- **停用行為**：呼叫 `disable()` 時，斷開 MutationObserver，並自動展開所有由本功能收合的思考區塊（依 `data-ht-collapsed` 標記識別），使頁面恢復至功能啟用前的展開狀態。
+- **即時切換**：以 `registerFeatureToggle({ ownKey: 'dsHideThinking' })` 註冊，經 service worker 廣播的 `DSS_SETTINGS_CHANGED`（`chrome.runtime.onMessage`）同時反映 `dsHideThinking` 與 `isEnabled`，使功能可在不重新整理頁面的情況下即時啟用/停用。
 - **主開關感知**：當主開關（`isEnabled`）關閉時，無論自身開關狀態為何，模組都會停用。重新開啟時，模組會重新讀取 `dsHideThinking` 狀態。
 - **已知限制**：DeepSeek 使用虛擬列表渲染，捲動時已卸載的 DOM 節點重新掛載視為「新增節點」，因此重新滾回該區塊時思考區塊仍可能再次被自動收合。
 
@@ -75,7 +75,7 @@
 
 - **目的**：在 DeepSeek 對話頁面提供一個「回到頂部」浮動按鈕，外觀與位置仿照原生的「回到底部」(Go Down) 按鈕，點擊後自動將對話捲動至最頂端。此功能**永久啟用**，無獨立開關，完全由擴充功能主開關控制。
 - **外觀規範**：GoToTop 按鈕必須與原生 Go Down 按鈕在外觀上像素級一致（34×34 圓形、邊框、背景、陰影、hover 效果）。實作採用 clone 優先策略——原生按鈕存在時以 `cloneNode(true)` 複製後移除定位 hash class `_0706cde`；原生按鈕不存在時以硬編碼模板重建相同標記（含 `__background` / `__border` / `__icon` 三個子層與 inline CSS 變數）。箭頭以 `transform: scaleY(-1)` 翻轉原生向下箭頭，`fill="currentColor"` 繼承主題顏色。不攜帶網站 hash class `_0706cde` 以避免被網站自身 JS 誤抓。
-- **注入閘控**：按鈕僅在「輸入區包裝容器 `.aaff8b8f` 或原生按鈕 `._0706cde` 已就緒」時才注入；`_tryConnectDom()` 每 500ms 重試一次，最多 120 次（約 60 秒）。逾時仍未就緒則放棄注入、**完全不顯示任何按鈕**（不再有 `position: fixed` 降級浮層）。此設計修復了「直接開啟既有對話時，輸入區尚在渲染、按鈕被錯誤掛載至首個 `.ds-theme` 通知浮層」的競態問題。
+- **注入閘控**：按鈕僅在「輸入區包裝容器 `.aaff8b8f` 或原生按鈕 `._0706cde` 已就緒」時才注入；`_tryConnectDom()` 每 500ms 重試一次，最多 120 次（約 60 秒）。逾時仍未就緒則放棄注入、**完全不顯示任何按鈕**（按鈕只掛載於上述兩個錨點）。閘控的理由：直接開啟既有對話時輸入區可能尚在渲染，若不等待錨點就緒便注入，按鈕會被錯誤掛載至首個 `.ds-theme` 通知浮層。
 - **定位策略**：兩模式依原生按鈕與包裝容器的可用性自動切換，位置自動跟隨版面與視窗變化：
   - **堆疊模式**（原生按鈕存在）：絕對定位於 `.aaff8b8f` 容器內，位於原生按鈕上方 8px（margin-bottom = 原生 margin-bottom + 原生高度 + 8px；預設 62px）。
   - **獨佔模式**（原生按鈕不存在但容器存在）：佔據原生按鈕的標準位置（`position: absolute; bottom: 100%; right: 12px; margin-bottom: 20px`）。
@@ -86,9 +86,9 @@
 - **路由變更**：切換對話時中止進行中的捲動、重設狀態、移除舊按鈕，待 DOM 穩定後經由 `_tryConnectDom()` 閘控重試迴圈重新注入——持續重試至輸入區包裝容器或原生按鈕就緒為止（每 500ms × 最多 120 次），取代舊有的一次性無重試注入，從根本上消除 SPA 路由切換時因 DOM 未就緒而按鈕不顯示的競爭問題。等待 DOM 穩定的計時器 handle 保存於 `_routeChangeTimer`，可由 `disable()` 取消。
 - **停用行為**：呼叫 `disable()` 時必須不留下任何仍會作用於頁面的殘留物——停止三個 observer（DOM、路由、wrapper）、移除 scroll 監聽器與按鈕、清除三個計時器（`_observerTimer`、`_enableRetryTimer`、`_routeChangeTimer`），並**呼叫** `_scrollReject` 以中止進行中的捲動（僅將其設為 null 不會停止捲動迴圈）。`_tryConnectDom()` 進入點的 `if (!this.enabled) return;` 為第二道防線，確保任何漏網的延遲回呼都不會在停用後重新注入按鈕或重啟 observer——停用後才建立的 wrapper observer 不會再被拆除，其自動補回邏輯會使按鈕在使用者重新整理前無法擺脫。
 - **捲動至頂部（可點擊中止）**：`scrollToTopAndWait()` 提供公開 API（供 Markdown 匯出整合），每輪輪詢直接寫入 `scrollContainer.scrollTop = 0` 一次到頂，搭配 MutationObserver 等待延遲載入的舊訊息掛載——虛擬列表若因此長高，收斂計數重置並再跳一次，最長 30 秒逾時。抵達時間僅取決於延遲載入的輪數，與對話長度無關。
-  - **向上一次到頂、向下逐步前進，是刻意的不對稱**：`harvest.js` 的向下擷取迴圈每步只前進 `0.9 * viewportHeight`，因為它必須讓沿途每則訊息都渲染出來並擷取，虛擬列表跳過的內容就是匯出漏掉的內容；`scrollToTopAndWait()` 沒有這個義務，它只需要抵達，路過的一概不要。請勿為了「一致性」把兩者統一。捲動期間按鈕**全程維持可點**（`aria-disabled` 恆為 `"false"`，不再於捲動期間禁用）；若捲動進行中再次點擊，會以 `reason: 'stopped-by-user'` 中止目前捲動於當下位置、**不重新開始**（切換式），再次點擊才會重新捲動。
+  - **向上一次到頂、向下逐步前進，是刻意的不對稱**：`harvest.js` 的向下擷取迴圈每步只前進 `0.9 * viewportHeight`，因為它必須讓沿途每則訊息都渲染出來並擷取，虛擬列表跳過的內容就是匯出漏掉的內容；`scrollToTopAndWait()` 沒有這個義務，它只需要抵達，路過的一概不要。請勿為了「一致性」把兩者統一。捲動期間按鈕**全程維持可點**（`aria-disabled` 恆為 `"false"`）；若捲動進行中再次點擊，會以 `reason: 'stopped-by-user'` 中止目前捲動於當下位置、**不重新開始**（切換式），再次點擊才會重新捲動。
 - **鍵盤與無障礙**：`<div role="button" tabindex="0">`，支援 Enter / Space 鍵盤觸發；`aria-label="回到頂部"`；`aria-disabled` 全程維持 `"false"`。
-- **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
+- **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.combined.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
 
 ## 19. 行動裝置側欄滑動手勢 (Mobile Sidebar Swipe)
 
@@ -110,31 +110,23 @@
   - **展開按鈕**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`；降級路徑包含 5 個備用 class 組合。
   - **收合按鈕**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]`；降級路徑包含 3 個備用 class 組合。
 - **DOM 輪詢**：`_tryConnectDom()` 每 500ms 輪詢一次目標按鈕，最多 60 次（約 30 秒），逾時靜默放棄（不拋錯）。
-- **主開關整合**：完全跟隨擴充功能主開關（`isEnabled`）。透過 `chrome.storage.onChanged` 監聽 `isEnabled` 變化即時啟用/停用，無各別功能切換。
+- **主開關整合**：完全跟隨擴充功能主開關（`isEnabled`）。以不帶 `ownKey` 的 `registerFeatureToggle` 註冊，經 service worker 廣播的 `DSS_SETTINGS_CHANGED`（`chrome.runtime.onMessage`）接收 `isEnabled` 變化即時啟用/停用，無各別功能切換。
 - **生命週期方法**：
-  - `start()`：檢查行動裝置、讀取主開關狀態、設定儲存監聽器、符合條件時啟用。
+  - `start()`：檢查行動裝置，確認後以 `registerFeatureToggle` 註冊主開關閘控（初始值經 `DSS_GET_SETTINGS` 取得），符合條件時啟用。
   - `enable()`：啟動 DOM 輪詢。
   - `disable()`：解除觸控事件監聽、清除輪詢計時器、重設手勢狀態。
-  - `destroy()`：委派給 `disable()`。
+  - `destroy()`：呼叫 `disable()` 並解除 `registerFeatureToggle` 註冊。
 - **實作位置**：`content/mobile-sidebar-swipe.js`（入口）、`content/mobile-sidebar-swipe.button.js`（按鈕查找）、`content/mobile-sidebar-swipe.gesture.js`（手勢處理）、`content/mobile-sidebar-swipe.bind.js`（事件綁定）、`content/mobile-sidebar-swipe.lifecycle.js`（生命週期）；公開 API 掛載於 `window.DSstudio.MobileSidebarSwipe`。
 
-## 20. 行動版首頁清理 (Mobile Homepage Cleanup) — v4.1.0
+## 20. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
 
-- **目的**：在行動版 DeepSeek 首頁自動清理 DOM 元素，優化行動裝置的使用體驗。
-- **實作位置**：`content/mobile-homepage-cleanup.js`。
-- **功能**：自動移除/隱藏特定類別選擇器（`._9579690`）的 DOM 元素。
-- **主開關連動**：完全跟隨擴充功能主開關（`isEnabled`），無獨立開關。
-- **SPA 韌性**：透過 MutationObserver 監控 DOM 變化，在 SPA 導航後重新套用清理邏輯。
-
-## 21. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
-
-- **目的**：讓原本僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為**常駐**。此開關不新增任何攔截機制，只改變既有 `PreventAutoScroll` 補丁的生效期間。
+- **目的**：讓預設僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為**常駐**。此開關不新增任何攔截機制，只改變既有 `PreventAutoScroll` 補丁的生效期間。
 - **開關位置**：彈出選單「Features」卡片中的 `#preventAutoScrollToggle` 核取方塊（v4.32.0 自「UI 調整」卡片移至此處）。
 - **儲存鍵**：`dsPreventAutoScroll`（布林值，預設 `false`）。
 - **常駐狀態的存放位置**：與既有的 `enabled` 旗標並存於同一個隱藏 bridge 元素（`#dss-prevent-auto-scroll-bridge`）的 `dataset` 上，不使用模組層可變狀態。
 - **`disable()` 在常駐模式下為 no-op**：此守衛是必要的，而非防禦性冗餘。該旗標**沒有引用計數**，且 `harvest.js` 在 `finally` 中**無條件**呼叫 `disable()`；若不加守衛，使用者開啟常駐後只要匯出一次 Markdown，保護就會在匯出結束時被靜默關掉。`setPersistent(false)` 則刻意繞過此守衛直接寫入 `dataset`，否則關閉常駐將永遠無法解除保護。
 - **呼叫端零改動**：常駐邏輯完全收斂在共用節流點 `content/prevent-auto-scroll-bridge.js`。`harvest.js` 與 `go-top.scroll.js` 兩個既有呼叫端不需修改 —— go-top 既有的 `wasAlreadyEnabled` 保存還原邏輯在常駐模式下自然短路（`isEnabled()` 恆為真，故它不會 enable 也不會 disable）。
-- **即時切換**：`chrome.storage.onChanged` 監聽器同時監控 `dsPreventAutoScroll` 與 `isEnabled`（僅 `local` 命名空間），可在不重新整理頁面的情況下即時生效。兩個鍵的任一變更都會重新自儲存空間讀取後重算，不快取部分狀態。
+- **即時切換**：`content/prevent-auto-scroll-bridge.js` 以 `registerFeatureToggle({ ownKey: 'dsPreventAutoScroll' })` 註冊，經 service worker 廣播的 `DSS_SETTINGS_CHANGED`（`chrome.runtime.onMessage`，僅處理 `area === 'local'`）同時反映 `dsPreventAutoScroll` 與 `isEnabled`，可在不重新整理頁面的情況下即時生效。任一鍵變更時，以廣播所附的新值更新該鍵，並與另一鍵的最新已知值一起重算生效狀態。
 - **主開關感知**：僅當主開關（`isEnabled`）為真**且** `dsPreventAutoScroll` 為真時才常駐。主開關關閉時常駐一律解除，即使自身開關為開。主開關鍵不存在時視為關閉。
 - **已知取捨（刻意接受，故預設關閉）**：既有 MAIN-world 補丁是 `Element.prototype` 層級的**全域**攔截，只擋**向下**捲動，且**無法區分**程式觸發與使用者觸發（無 `isTrusted`／呼叫堆疊判定）。因此常駐開啟時：
   - DeepSeek 串流回覆的「自動跟隨捲到最新」會一併被擋，需自行向下捲動。
@@ -142,19 +134,18 @@
   - 原生滾輪／觸控板／捲軸拖曳不經這些 JS API，不受影響；但頁面上任何以 JS 呼叫這些 API 實作的「捲到底部」按鈕會被擋。
 - **實作位置**：`content/prevent-auto-scroll-bridge.js`（新增 `setPersistent()` / `isPersistent()` / `start()`，`disable()` 加入守衛）；公開 API 掛載於 `window.DSstudio.PreventAutoScroll`。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。
 
-## 22. 連網搜索 (Web Search) — v4.13.0（v4.17.0 改為一次性進場預設；v4.17.1 設定變更即時同步）
+## 22. 連網搜索 (Web Search) — v4.13.0
 
 - **目的**：讓使用者指定 DeepSeek「智能搜索」切換按鈕的**起始狀態** —— `開啟`（起始為 `aria-pressed="true"`）、`關閉`（起始為 `"false"`）。此設定不新增任何頁面元素，只在每個啟動事件發生時校正既有按鈕一次。
-- **語意（v4.17.0 變更、v4.17.1 擴充）**：此設定是**預設值，不是強制狀態**。每個啟動事件套用一次後即完全放手；使用者之後手動點擊該按鈕的結果會保留下來，擴充功能不再回點，直到下一個啟動事件發生。
-- **啟動事件（v4.17.1 新增 B、C）**：三種事件各自觸發一次套用並重新武裝一次性旗標 —— (A) 內容腳本 `start()` 且主開關為開；(B) `chrome.storage.onChanged` 在 `local` 命名空間帶來 `dsWebSearchToggle` 新值且主開關為開；(C) 主開關由關轉開。這是 v4.17.1 修掉的缺陷：v4.17.0 只有 (A)，`_isSpent` 一旦用掉便永不重置，於是使用者在彈出選單改了設定，已開啟的頁面毫無反應，必須重整才生效。
-- **開關位置**：彈出選單「Features」卡片中的單選群組（v4.32.0 自「UI 調整」卡片移至此處）（`input[name="websearchToggle"]`，兩選項 `開啟` / `關閉`，每個選項以 `.segmented-option` 包裹；圓形 radio 的外觀由 `popup.css` 中 `:is(.locale-option, .segmented-option) input[type="radio"]` 的共用規則提供，與語言切換面板同一份樣式）。`開啟` 為標記中預先勾選者。
-- **儲存鍵**：`dsWebSearchToggle`（字串，`'on'` | `'off'`，預設 `'on'`）。舊版三態的 `'default'` 值已移除；讀取到殘留的 `'default'` 一律當作 `'on'`，不寫回儲存區。
+- **語意（v4.17.0、v4.17.1）**：此設定是**預設值，不是強制狀態**。每個啟動事件套用一次後即完全放手；使用者之後手動點擊該按鈕的結果會保留下來，擴充功能不會回點，直到下一個啟動事件發生。
+- **啟動事件（B、C 為 v4.17.1）**：三種事件各自觸發一次套用並重新武裝一次性旗標 —— (A) 內容腳本 `start()` 且主開關為開；(B) `dsWebSearchToggle` 新值經 `DSS_SETTINGS_CHANGED` 廣播抵達且主開關為開；(C) 主開關由關轉開。(B) 與 (C) 讓使用者在彈出選單改設定或重新開啟主開關時，已開啟的頁面不需重整即立刻套用。
+- **開關位置**：彈出選單「Features」卡片中的單選群組（v4.32.0）（`input[name="websearchToggle"]`，兩選項 `開啟` / `關閉`，每個選項以 `.segmented-option` 包裹；圓形 radio 的外觀由 `popup-locale.css` 中 `:is(.locale-option, .segmented-option) input[type="radio"]` 的共用規則提供，與語言切換面板同一份樣式）。`開啟` 為標記中預先勾選者。
+- **儲存鍵**：`dsWebSearchToggle`（字串，`'on'` | `'off'`，預設 `'on'`）。儲存區殘留的舊值 `'default'` 讀取時視為目前的等價值 `'on'`（`StorageManager.normalizeWebsearchToggle()`），不寫回儲存區；內容腳本端的 `_normalizeMode()` 把 `'off'` 以外的任何值（含未設定）視為 `'on'`。
 - **核心規則 —— 只在狀態不符時點擊**：`aria-pressed` 已等於目標狀態時絕不點擊，因為點擊是切換操作，相符時點擊反而把狀態切換走。狀態判定：`getAttribute('aria-pressed') === 'true'`。目標狀態由公開的 `mode` 屬性導出（`'on'` 對應 `true`）。
-- **一次性機制**：內部 `_isSpent` 旗標標記當前啟動事件的套用是否已用掉。找到按鈕並比對（不論是否需要點擊）後即設為已用掉並中止觀察器。已用掉之後，使用者手動翻轉與頁面重渲染掛上新按鈕都不再觸發點擊；只有新的啟動事件會透過 `_rearm()` 重置旗標，再套用一次，然後同樣放手。
+- **一次性機制**：內部 `_isSpent` 旗標標記當前啟動事件的套用是否已用掉。找到按鈕並比對（不論是否需要點擊）後即設為已用掉並中止觀察器。已用掉之後，使用者手動翻轉與頁面重渲染掛上新按鈕都不會觸發點擊；只有新的啟動事件會透過 `_rearm()` 重置旗標，再套用一次，然後同樣放手。
 - **`_rearm()` 的順序不可調換**：`_rearm()` 依序執行 `disable()`、重置 `_isSpent`、`_recompute()`。`disable()` 的守衛是 `if (!this.enabled) return;`，所以絕不能先把 `enabled` 設為 `false` 再呼叫它 —— 那會讓守衛提前返回，把掛在 `document.body` 上的 `MutationObserver` 留成洩漏。同理，單獨重置 `_isSpent` 也不夠：`enable()` 的守衛是 `if (this.enabled) return;`，前一次套用後 `enabled` 仍為真，會提前返回而不重新套用。
 - **元素辨識（語言無關、雜湊無關）**：實頁有**兩個外觀相同**的 `.ds-toggle-button[aria-pressed]` 元素（深度思考與智能搜索），`document.querySelector` 固定取到第一個（錯的）。`findButton()` 採兩層辨識策略：**第一層**：合併 `.ds-toggle-button[aria-pressed]`（`TOGGLE_BUTTON_SELECTOR`）與 `[aria-pressed="true"], [aria-pressed="false"]`（`TOGGLE_BUTTON_FALLBACK_SELECTOR`）兩組候選（去重），以 `_pickByIcon()` 比對每個候選內 `<path d="...">` 的 `d` 屬性是否以 `SEARCH_ICON_PATH_PREFIX`（`'M7.9995999336'`，定義於 `content/ds-selectors.js`）開頭——搜尋圖示的 SVG path data 前綴在不同語言與建置版本間穩定，不依賴 label 文字或雜湊 class。**第二層（位置備援）**：第一層未命中時，若 `.ds-toggle-button[aria-pressed]` 候選數 ≥ 2，取第二個按鈕（開關群組內深度思考之後即為搜尋）；仍然找不到時回傳 `null`。不使用建置版雜湊類別（`f79352dc` / `_6dbc175` 每次部署會變）。
-- **觀察器僅用於等待按鈕出現**：`MutationObserver` 只掛在 body 的 `childList + subtree`，用途是等按鈕首次出現在 DOM。按鈕本身的 `attributes` / `attributeFilter: ['aria-pressed']` 觀察已移除 —— 那是舊版回點使用者手動翻轉的來源，與一次性語意衝突。套用一次後觀察器即中止，直到下一個啟動事件重新武裝。
-- **點擊節流已移除**：舊版的 `CLICK_COOLDOWN_MS`（500ms）是為了抑制連續強制點擊造成的 ping-pong。一次性模型下每次頁面載入最多點擊一次，該常數與其守衛皆為死碼，已刪除。
-- **主開關感知**：僅當主開關（`isEnabled`）為真時才動作。`chrome.storage.onChanged`（僅 `local` 命名空間）同時監控 `isEnabled` 與 `dsWebSearchToggle`，兩個分支都走 `_rearm()`。套用**尚未**發生時（按鈕還沒出現，或主開關起始為關），變更仍然有效，該次套用會採用當下最新的值。主開關轉為**關**時同樣重新武裝，但緊接的 `_recompute()` 會正確落在 `disable()`：不點擊任何按鈕，並取消待處理的套用與觀察器。
+- **觀察器僅用於等待按鈕出現**：`MutationObserver` 只掛在 body 的 `childList + subtree`，用途是等按鈕首次出現在 DOM。觀察器刻意不監看按鈕本身的 `attributes` / `attributeFilter: ['aria-pressed']` —— 監看它會回點使用者的手動翻轉，與一次性語意衝突。套用一次後觀察器即中止，直到下一個啟動事件重新武裝。
+- **主開關感知**：僅當主開關（`isEnabled`）為真時才動作。`isEnabled` 經 `registerFeatureToggle` 的 `onEnable`／`onDisable` 回呼、`dsWebSearchToggle` 經自身的 `chrome.runtime.onMessage` 監聽器，兩者都由 service worker 廣播的 `DSS_SETTINGS_CHANGED` 驅動（僅處理 `area === 'local'`），兩個分支都走 `_rearm()`。套用**尚未**發生時（按鈕還沒出現，或主開關起始為關），變更仍然有效，該次套用會採用當下最新的值。主開關轉為**關**時同樣重新武裝，但緊接的 `_recompute()` 會正確落在 `disable()`：不點擊任何按鈕，並取消待處理的套用與觀察器。
 - **`disable()` 不還原按鈕狀態**：與 `hide-thinking` 不同，本功能不擁有任何可還原的狀態 —— 停止動作即把按鈕留在現況，不做額外點擊。
 - **實作位置**：`content/websearch-toggle.js`（測試以 `module.exports` 取用）。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。

@@ -12,4 +12,4 @@ metadata:
 
 **Why:** the 2026-08 rewiring silently turned every storage-mutation-driven content-script spec into a `beforeEach` timeout (7 in content-script.global-prompt-resolution.spec.js).
 
-**How to apply:** copy the `waitForContentScriptBootstrap()` + `broadcastSettingsChanged()` helper pair from `test/unit/content-script.global-prompt-resolution.spec.js` or `test/unit/content-script.overlay-selection.spec.js`. Cheap non-vacuity proof for any such spec: `sed` the broadcast line out and re-run — it must fail. See [[pitfall-broadcast-specs]] and [[messaging-spec-harness]].
+**How to apply:** copy the `waitForContentScriptBootstrap()` + `broadcastSettingsChanged()` helper pair from `test/unit/content-script.global-prompt-resolution.spec.js` or `test/unit/content-script.overlay-selection.spec.js`. Cheap non-vacuity proof for any such spec: `sed` the broadcast line out and re-run — it must fail. See [[pitfall-broadcast-specs]] and [[project_messaging_spec_harness]].

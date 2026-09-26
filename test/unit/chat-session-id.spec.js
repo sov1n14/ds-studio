@@ -5,7 +5,7 @@
  * using the same regex `/\/a\/chat\/s\/([a-f0-9-]+)/` and the same
  * `match ? match[1] : null` shape):
  *   - content/censor-reply-restore.js:50-52           (_checkSessionChange)
- *   - content/censor-reply-restore.dom.js:103-105     (_resolveMessageIdFromStorage)
+ *   - content/censor-reply-restore.dom.resolve.js:73 (_resolveMessageIdFromStorage — now reads this._currentSessionId instead of parsing the URL)
  *   - content/content-script.js:167-170               (extractUuidFromUrl)
  *   - content/temporary-chat-delete.tracking.js:82-86 (extractUuidFromUrl — the
  *     only copy that already accepts an optional argument, defaulting to

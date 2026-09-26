@@ -1,3 +1,4 @@
+<!-- 351 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -19,6 +20,13 @@
     <link rel="stylesheet" href="popup-modal.css">
 </head>
 <body>
+    <!-- 共用 SVG 圖標定義 -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+        <symbol id="icon-pencil" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
+            <path d="M10 4 L12 6"/>
+        </symbol>
+    </svg>
     <div class="container">
         <div class="column">
             <!-- 標題卡片：主開關 -->
@@ -47,10 +55,7 @@
                                 title="編輯全域提示詞"
                                 data-i18n="editGlobalPromptTitle"
                                 data-i18n-attr="title">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
-                                <path d="M10 4 L12 6"/>
-                            </svg>
+                            <svg width="14" height="14" aria-hidden="true"><use href="#icon-pencil"/></svg>
                         </button>
                     </div>
                     <!-- 全域提示詞啟用開關，右側對齊與主開關垂直一致 -->
@@ -81,10 +86,7 @@
                             <div class="preset-actions">
                                 <button id="addPresetBtn" class="icon-btn" title="新增提示詞組" data-i18n="addPresetTitle" data-i18n-attr="title">+</button>
                                 <button id="editPresetBtn" class="icon-btn" title="編輯提示詞組內容" data-i18n="editPresetContentTitle" data-i18n-attr="title" disabled>
-                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"/>
-                                        <path d="M10 4 L12 6"/>
-                                    </svg>
+                                    <svg width="14" height="14" aria-hidden="true"><use href="#icon-pencil"/></svg>
                                 </button>
                             </div>
 
@@ -153,6 +155,18 @@
                 </div>
                 <div class="input-group">
                     <div class="checkbox-group">
+                        <input type="checkbox" id="autoRetryToggle">
+                        <label for="autoRetryToggle" data-i18n="autoRetryLabel">自動重試</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoContinueToggle">
+                        <label for="autoContinueToggle" data-i18n="autoContinueLabel">自動繼續生成</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
                         <label data-i18n="websearchToggleLabel">連網搜索</label>
                     </div>
                     <div class="websearch-options">
@@ -174,7 +188,7 @@
                 <div class="card-title-row">
                     <div class="card-title">Export</div>
                     <div class="card-title-actions">
-                        <button id="localeSwitcherBtn" class="icon-btn" title="Switch Language">
+                        <button id="localeSwitcherBtn" class="icon-btn" title="切換語言" data-i18n="switchLanguageTitle" data-i18n-attr="title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="10"/>
                                 <path d="M2 12h20"/>
@@ -289,20 +303,22 @@
 
     <script src="../utils/logger.js"></script>
     <script src="../utils/debounce.js"></script>
-    <script src="../utils/url-constants.js"></script>
+    <script src="../utils/message-constants.js"></script>
     <script src="../utils/tab-control.js"></script>
     <script src="../utils/window-control.js"></script>
-    <script src="../utils/editor-window-constants.js"></script>
     <script src="../utils/storage-manager.keys.js"></script>
-    <script src="../utils/storage-manager.chunk-lock.js"></script>
     <script src="../utils/storage-manager.rw.js"></script>
     <script src="../utils/storage-manager.sync.js"></script>
+    <script src="../utils/storage-manager.sync.retry.js"></script>
+    <script src="../utils/storage-manager.restore.js"></script>
     <script src="../utils/storage-manager.tombstone.js"></script>
     <script src="../utils/storage-manager.preset-merge.js"></script>
     <script src="../utils/storage-manager.preset-recency.js"></script>
     <script src="../utils/storage-manager.presets.js"></script>
     <script src="../utils/storage-manager.chatmap.diff.js"></script>
+    <script src="../utils/storage-manager.chatmap.ops.js"></script>
     <script src="../utils/storage-manager.chatmap.js"></script>
+    <script src="../utils/storage-manager.chatmap.client.js"></script>
     <script src="../utils/storage-manager.local.js"></script>
     <script src="../utils/storage-manager.init.js"></script>
     <script src="../utils/storage-manager.setters.js"></script>

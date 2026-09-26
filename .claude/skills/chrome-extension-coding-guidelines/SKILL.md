@@ -27,13 +27,13 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 |-|-|-|
 | `popup/` | Rendering, user input, calling `utils/` | Call `chrome.*` directly; hold business logic |
 | `background/` | Service-worker lifecycle, cross-tab coordination, alarms, message routing | Touch the DOM |
-| `content/` | DOM reading and injection on `chat.deepseek.com`, DeepSeek selectors, `MutationObserver` wiring | Call `chrome.storage.*`, `chrome.alarms.*`, or any other service-worker-only API |
+| `content/` | DOM reading and injection on `chat.deepseek.com`, DeepSeek selectors, `MutationObserver` wiring | Call `chrome.storage.*`, `chrome.alarms.*`, or any other service-worker-only API (exception: see §1 StorageManager exception below) |
 | `utils/` | Reusable logic — storage, i18n, messaging, formatting, validation | Reference the DOM; contain layer-specific branching |
 
 **Layer access rules:**
 
 - `popup/` MUST reach every extension API through a `utils/` module: storage through `utils/storage-manager.js`, tab/messaging coordination through `utils/tab-control.js`, and any window or tab control through a `utils/` wrapper named after that concern. Rationale: a popup with no `chrome.*` call is unit-testable without a `chrome` mock.
-- `content/` MUST obtain settings by messaging `background/`, which owns storage access on its behalf.
+- `content/` MUST obtain settings by messaging `background/`, which owns storage access on its behalf. **StorageManager exception:** content/ files that receive the `storage-manager` bundle via manifest `content_scripts` — `chat-binding-controller.js`, `content-script.js`, `preset-overlay.controller.js` — MAY call `StorageManager` directly. Guard: `test/unit/storage-manager.loader-contract.spec.js`.
 - `utils/` MUST stay loadable by any layer, which means it MUST NOT assume a `document` exists.
 
 **Runtime model (MV3, classic scripts):**

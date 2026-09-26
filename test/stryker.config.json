@@ -1,0 +1,21 @@
+{
+  "testRunner": "vitest",
+  "vitest": { "configFile": "test/stryker-vitest.config.js", "related": false },
+  "mutate": [
+    "utils/**/*.js",
+    "content/**/*.js",
+    "!content/sse-parser.js",
+    "!content/censor-xhr-hook.js",
+    "!content/prevent-auto-scroll.js",
+    "!content/temporary-chat-history-hook.js"
+  ],
+  "ignorePatterns": [".venv", "node_modules", ".git", ".playwright-cli"],
+  "incremental": true,
+  "incrementalFile": "test/stryker-incremental.json",
+  "ignoreStatic": true,
+  "dryRunTimeoutMinutes": 15,
+  "concurrency": 10,
+  "reporters": ["clear-text", "html"],
+  "htmlReporter": { "fileName": "test/reports/mutation.html" },
+  "thresholds": { "high": 80, "low": 60, "break": 90 }
+}

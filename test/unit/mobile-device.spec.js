@@ -1,13 +1,12 @@
 /**
  * content/mobile-device.js — shared mobile-device detection contract.
  *
- * Contract source (the three duplicate implementations this helper replaces —
+ * Contract source (the two duplicate implementations this helper replaces —
  * verified identical in expression, only the function name differs):
- *   - content/mobile-homepage-cleanup.js:27-30      `_isMobileDevice()`
  *   - content/mobile-sidebar-swipe.js:48-51         `_isMobileDevice()`
  *   - content/prompt-injector.controller.js:119-121 `isMobileDevice()`
  *
- * All three evaluate exactly:
+ * Both evaluate exactly:
  *   navigator.maxTouchPoints > 0 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
  *
  * So the contract is: touch-capable OR a mobile user-agent token. Viewport size
@@ -100,5 +99,26 @@ describe('isMobileDevice() — viewport is deliberately not an input', () => {
     it('returns a strict boolean, not merely a truthy value', () => {
         stubNavigator(5, 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)');
         expect(isMobileDevice()).toBe(true);
+    });
+});
+
+describe('isMobileDevice() — maxTouchPoints boundary (kills > 0 → > 1 mutant)', () => {
+    it('is true when maxTouchPoints is exactly 1 with a desktop user agent', () => {
+        stubNavigator(1, DESKTOP_UA);
+        expect(isMobileDevice()).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Mutant-killing: IIFE body → {} (line 9)
+// ---------------------------------------------------------------------------
+
+describe('content/mobile-device.js — IIFE body produces exports (kills BlockStatement → {} mutant on line 9)', () => {
+    it('isMobileDevice is a callable function, not undefined', () => {
+        // If the IIFE body were {}, globalThis.DSSMobileDevice would never be assigned,
+        // and isMobileDevice would be undefined.
+        const mod = require('../../content/mobile-device.js');
+        expect(mod).toBeDefined();
+        expect(mod.isMobileDevice).toBeTypeOf('function');
     });
 });

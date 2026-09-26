@@ -6,7 +6,6 @@
  */
 
 // 防抖工具來自 utils/debounce.js（由 popup.html 於本檔之前載入）
-const debounce = DSSDebounce;
 
 /**
  * 建立寬度滑桿管理器。
@@ -28,7 +27,7 @@ function createWidthSliderManager(ctx) {
             });
         }
         // 防抖儲存對話區域寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
-        const debouncedSaveChatWidth = debounce(async (widthValue) => {
+        const debouncedSaveChatWidth = DSSDebounce(async (widthValue) => {
             await ctx.StorageManager.saveChatWidth(widthValue);
             await ctx.refreshSyncStatus();
             ctx.showSaveStatus();
@@ -56,7 +55,7 @@ function createWidthSliderManager(ctx) {
             });
         }
         // 防抖儲存編輯輸入框寬度（500ms），避免拖曳滑桿時頻繁寫入 storage
-        const debouncedSaveInputWidth = debounce(async (widthValue) => {
+        const debouncedSaveInputWidth = DSSDebounce(async (widthValue) => {
             await ctx.StorageManager.saveInputWidth(widthValue);
             await ctx.refreshSyncStatus();
             ctx.showSaveStatus();

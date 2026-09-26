@@ -21,8 +21,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/temporary-chat-constants.js";
 import "../../content/temporary-chat-heartbeat.js";
 
-const INTERVAL = globalThis.HEARTBEAT_INTERVAL_MS;
-const HEARTBEAT_TYPE = globalThis.DSS_MSG_HEARTBEAT;
+const INTERVAL = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS;
+const HEARTBEAT_TYPE = globalThis.DSS_TEMP_CHAT.DSS_MSG_HEARTBEAT;
 
 let heartbeat;
 let sendMessage;
@@ -154,7 +154,7 @@ describe("start — resilient to a failing sendMessage", () => {
     it("does not throw out of the timer and keeps ticking after a rejection", async () => {
         sendMessage.mockReset();
         sendMessage
-            .mockRejectedValueOnce(new Error("Extension context invalidated"))
+            .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
             .mockResolvedValue(undefined);
 
         expect(() => heartbeat.start("uuid-1")).not.toThrow();

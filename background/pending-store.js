@@ -1,3 +1,4 @@
+// 287 lines: single temporary-chat storage facade — sync pending-delete queue, per-device lease/TTL evaluation, local open-UUID set, and auth-token cache share one runExclusive write chain and the trackForDeletion ordering invariant (open-set before queue); splitting would expose that ordering across files
 /**
  * DS studio — 臨時對話待刪佇列與裝置本機狀態存取（background/pending-store.js）
  * 職責：管理 chrome.storage.sync 的跨裝置待刪佇列，以及 chrome.storage.local 的
@@ -7,16 +8,18 @@
  */
 
 // 常數來源：utils/temporary-chat-constants.js（載入順序早於本檔，已掛載至 globalThis）
-const DSS_PENDING_STORE_SYNC_KEY = globalThis.DSS_PENDING_DELETES_SYNC_KEY;
-const DSS_PENDING_STORE_TOKEN_KEY = globalThis.DSS_LAST_AUTH_TOKEN_KEY;
+const DSS_PENDING_STORE_SYNC_KEY = globalThis.DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY;
+const DSS_PENDING_STORE_TOKEN_KEY = globalThis.DSS_TEMP_CHAT.DSS_LAST_AUTH_TOKEN_KEY;
 // 舊版共用陣列 key —— 僅允許讀取（相容升級中裝置尚未轉移的資料），永不再寫入
-const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = globalThis.DSS_OPEN_TEMP_UUIDS_KEY;
+const DSS_LEGACY_OPEN_UUIDS_ARRAY_KEY = globalThis.DSS_TEMP_CHAT.DSS_OPEN_TEMP_UUIDS_KEY;
 // 新版：每個 uuid 各自一把獨立 key，任何呼叫端都不會讀改寫到其他 uuid 擁有的資料，
 // 因此不再需要跨 context 鎖 —— 沒有共用結構就沒有讀改寫競態可言。
 const DSS_OPEN_UUID_KEY_PREFIX = 'dss-open-temp-uuid:';
-const DSS_LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
-const DSS_HEARTBEAT_INTERVAL_MS = globalThis.HEARTBEAT_INTERVAL_MS;
-const DSS_SEEN_CHANGE_KEY_PREFIX = globalThis.DSS_LAST_SEEN_CHANGE_KEY_PREFIX;
+const DSS_LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
+const DSS_FOREIGN_LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.FOREIGN_LEASE_TTL_MS;
+const DSS_PENDING_STORE_DEVICE_ID_KEY = globalThis.DSS_TEMP_CHAT.DSS_DEVICE_ID_KEY;
+const DSS_HEARTBEAT_INTERVAL_MS = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS;
+const DSS_SEEN_CHANGE_KEY_PREFIX = globalThis.DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX;
 
 // 讀改寫互斥鏈：所有對同步佇列的讀改寫依序排隊，避免並行覆蓋彼此結果。
 // 單一 job 拒絕不污染後續 job（鏈以 catch 收斂），呼叫端仍取得原始結果 Promise。
@@ -51,13 +54,39 @@ const TemporaryChatPendingStore = (() => {
         }
     }
 
+    // 讀取本機裝置 ID（僅 storage.local，不快取：每次呼叫皆重讀）；缺少或讀取失敗回傳 null
+    async function getLocalDeviceId() {
+        try {
+            const deviceId = (await chrome.storage.local.get(DSS_PENDING_STORE_DEVICE_ID_KEY))?.[DSS_PENDING_STORE_DEVICE_ID_KEY];
+            return typeof deviceId === 'string' && deviceId ? deviceId : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    // 取得或建立本機裝置 ID；僅於 addPendingDelete 的互斥 job 內呼叫，確保同一裝置只產生一次
+    // 寫入失敗回傳 null：項目視為無擁有者（對所有裝置皆為外來），偏向保守不誤刪
+    async function ensureLocalDeviceId() {
+        const existingId = await getLocalDeviceId();
+        if (existingId) return existingId;
+        const deviceId = crypto.randomUUID();
+        try {
+            await chrome.storage.local.set({ [DSS_PENDING_STORE_DEVICE_ID_KEY]: deviceId });
+            return deviceId;
+        } catch (error) {
+            logWriteFailure('ensureLocalDeviceId', error);
+            return null;
+        }
+    }
+
     async function addPendingDelete(chatUuid) {
         if (!chatUuid) return;
         return runExclusive(async () => {
             const queue = await getPendingDeletes();
             const hasExisting = queue.some((entry) => entry.chatUuid === chatUuid);
             if (hasExisting) return;
-            queue.push({ chatUuid, attemptCount: 0, lastActiveAt: Date.now() });
+            const ownerDeviceId = await ensureLocalDeviceId();
+            queue.push({ chatUuid, attemptCount: 0, lastActiveAt: Date.now(), ownerDeviceId });
             await savePendingDeletes(queue);
         });
     }
@@ -100,11 +129,33 @@ const TemporaryChatPendingStore = (() => {
         });
     }
 
-    // 純函式判定：lastActiveAt === 0 表示已釋放，立即可刪；否則以 lastSeenChange 判斷過期
-    function isLeaseExpired(entry, now, lastSeenChange) {
+    // 套用掃描差量：於互斥鎖內重讀最新佇列，僅移除已確認刪除者、失敗者 attemptCount +1；
+    // 其餘項目（含掃描期間新增或續約者）原封保留，絕不以掃描開始時的快照覆寫。回傳套用後佇列。
+    async function applySweepResult({ deletedUuids = [], failedUuids = [] } = {}) {
+        return runExclusive(async () => {
+            const queue = await getPendingDeletes();
+            if (deletedUuids.length === 0 && failedUuids.length === 0) return queue;
+            const deleted = new Set(deletedUuids);
+            const failed = new Set(failedUuids);
+            const next = queue
+                .filter((entry) => !deleted.has(entry.chatUuid))
+                .map((entry) => (failed.has(entry.chatUuid) ? { ...entry, attemptCount: (entry.attemptCount ?? 0) + 1 } : entry));
+            await savePendingDeletes(next);
+            return next;
+        });
+    }
+
+    // 純函式：本機建立的項目適用 LEASE_TTL_MS；外來或無擁有者（舊版）項目適用 FOREIGN_LEASE_TTL_MS
+    function resolveLeaseTtl(entry, localDeviceId) {
+        const isOwnEntry = Boolean(localDeviceId) && entry.ownerDeviceId === localDeviceId;
+        return isOwnEntry ? DSS_LEASE_TTL_MS : DSS_FOREIGN_LEASE_TTL_MS;
+    }
+
+    // 純函式判定：lastActiveAt === 0 表示已釋放，立即可刪；否則以 lastSeenChange 距今是否超過 ttlMs 判斷過期
+    function isLeaseExpired(entry, now, lastSeenChange, ttlMs = DSS_LEASE_TTL_MS) {
         if (entry.lastActiveAt === 0) return true;
         if (lastSeenChange === undefined || lastSeenChange === null || !Number.isFinite(lastSeenChange)) return true;
-        return now - lastSeenChange > DSS_LEASE_TTL_MS;
+        return now - lastSeenChange > ttlMs;
     }
 
     // 觀察並記錄 lastActiveAt 變更時間點；持久化至 storage.local 以抵抗 MV3 cold start
@@ -213,6 +264,9 @@ const TemporaryChatPendingStore = (() => {
         removePendingDelete,
         refreshLease,
         releaseLease,
+        applySweepResult,
+        getLocalDeviceId,
+        resolveLeaseTtl,
         isLeaseExpired,
         getOpenUuids,
         addOpenUuid,

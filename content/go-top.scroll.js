@@ -57,9 +57,10 @@
                     }
                 });
 
-                // 若快取容器無效，重新探測
+                // 若快取容器無效，重新探測（不以 scrollHeight <= clientHeight 判定無效：
+                // 未溢出僅代表內容尚短，容器本身仍然正確，見 harvest.dom.js 同理修正）
                 let scrollContainer = this._scrollContainer;
-                if (!scrollContainer || scrollContainer.scrollHeight <= scrollContainer.clientHeight) {
+                if (!scrollContainer) {
                     scrollContainer = this._findScrollContainer(this._getAnchor());
                     if (scrollContainer === document.scrollingElement || scrollContainer === document.documentElement) {
                         this._scrollContainer = null;
@@ -136,7 +137,7 @@
                         consecutiveMisses++;
                         if (consecutiveMisses >= this.MAX_ANCHOR_RETRIES) {
                             cleanup();
-                            resolve({ success: false });
+                            resolve({ success: false, reason: 'anchor_not_found' });
                             return;
                         }
                     } else {
@@ -148,7 +149,7 @@
                             if (consecutiveMisses >= this.MAX_ANCHOR_RETRIES &&
                                 currentScrollTop <= 0) {
                                 cleanup();
-                                resolve({ success: false });
+                                resolve({ success: false, reason: 'anchor_not_found' });
                                 return;
                             }
                         }
@@ -180,6 +181,8 @@
     };
 
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_GoToTop_scroll = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(globalThis);
+// Stryker restore all

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createNativeButton,
@@ -47,7 +48,7 @@ describe('GoToTop', () => {
                 'ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ' +
                 'ds-button--m ds-button--icon-relative-m ds-button--floating'
             );
-            expect(GoToTop.NATIVE_BTN_CLASSES).not.toContain('_0706cde');
+            expect(GoToTop.NATIVE_BTN_CLASSES).not.toContain(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS);
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-height: 34px');
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-color');
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-hover-color');
@@ -84,7 +85,7 @@ describe('GoToTop', () => {
             expect(btn.classList.contains('ds-button--icon-relative-m')).toBe(true);
             expect(btn.classList.contains('ds-button--floating')).toBe(true);
             // Must NOT carry the hash class
-            expect(btn.classList.contains('_0706cde')).toBe(false);
+            expect(btn.classList.contains(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS)).toBe(false);
         });
 
         it('template path: sets NATIVE_BTN_INLINE_STYLE via setAttribute("style", ...)', () => {
@@ -126,10 +127,10 @@ describe('GoToTop', () => {
 
         it('clone path: removes _0706cde from cloned element', () => {
             const nativeBtn = createNativeButton();
-            expect(nativeBtn.classList.contains('_0706cde')).toBe(true);
+            expect(nativeBtn.classList.contains(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS)).toBe(true);
 
             const btn = GoToTop._createButtonElement(nativeBtn);
-            expect(btn.classList.contains('_0706cde')).toBe(false);
+            expect(btn.classList.contains(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS)).toBe(false);
         });
 
         it('clone path: preserves all stable ds-* classes from native', () => {

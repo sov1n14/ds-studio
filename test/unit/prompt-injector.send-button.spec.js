@@ -14,8 +14,9 @@
  * selector string is asserted.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../content/ds-selectors.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/prompt-injector.send-button.js';
 import {
     SEND_ICON_PATH_D,
@@ -28,6 +29,8 @@ import {
     makeEditScenarioWithEmptyAncestorTextarea,
     makeEditSendButtonStandalone,
     mountInDocument,
+    makeAttachmentButtonInActionsRow,
+    makeSendButtonWithChangedIcon,
 } from '../helpers/send-button-fixtures.js';
 
 const SB = globalThis.__DS_PromptInjectorSendButton;
@@ -39,7 +42,7 @@ const SB = globalThis.__DS_PromptInjectorSendButton;
 /** An iconless [role=button] with no send-icon SVG and no content span. */
 function makeBareButton() {
     const button = document.createElement('div');
-    button.className = 'ds-icon-button';
+    button.className = 'ds-button ds-button--icon';
     button.setAttribute('role', 'button');
     return button;
 }
@@ -97,24 +100,23 @@ describe('isSendButtonCandidate', () => {
         expect(SB.isSendButtonCandidate(button)).toBe(false);
     });
 
-    it('accepts an iconless button placed inside a .ba4f09d3 ancestor', () => {
-        const button = makeBareButton();
-        const inputArea = wrapIn('ba4f09d3', wrapIn('some-inner-row', button));
-        cleanup = mountInDocument(inputArea);
-        expect(SB.isSendButtonCandidate(button)).toBe(true);
-    });
-
-    it('accepts an iconless button whose direct parent carries class bf38813a', () => {
-        const button = makeBareButton();
-        const actionsRow = wrapIn('bf38813a', button);
-        cleanup = mountInDocument(actionsRow);
-        expect(SB.isSendButtonCandidate(button)).toBe(true);
-    });
-
-    it('rejects an iconless button that is neither inside .ba4f09d3 nor a child of .bf38813a', () => {
+    it('rejects an iconless button with no send icon', () => {
         const button = makeBareButton();
         cleanup = mountInDocument(wrapIn('unrelated-row', button));
         expect(SB.isSendButtonCandidate(button)).toBe(false);
+    });
+
+
+    it('rejects the attachment (paperclip) button even though it sits in a bf38813a row', () => {
+        const { row, attachmentButton } = makeAttachmentButtonInActionsRow();
+        cleanup = mountInDocument(row);
+        expect(SB.isSendButtonCandidate(attachmentButton)).toBe(false);
+    });
+
+    it('accepts the send button from the same real actions row that contains the attachment button', () => {
+        const { row, sendButton } = makeAttachmentButtonInActionsRow();
+        cleanup = mountInDocument(row);
+        expect(SB.isSendButtonCandidate(sendButton)).toBe(true);
     });
 
     it('returns false for a detached, parentless button instead of throwing', () => {
@@ -122,6 +124,28 @@ describe('isSendButtonCandidate', () => {
         expect(button.parentElement).toBe(null);
         expect(() => SB.isSendButtonCandidate(button)).not.toThrow();
         expect(SB.isSendButtonCandidate(button)).toBe(false);
+    });
+
+    it('returns false for null input instead of throwing', () => {
+        expect(() => SB.isSendButtonCandidate(null)).not.toThrow();
+        expect(SB.isSendButtonCandidate(null)).toBe(false);
+    });
+
+    it('returns false for undefined input instead of throwing', () => {
+        expect(() => SB.isSendButtonCandidate(undefined)).not.toThrow();
+        expect(SB.isSendButtonCandidate(undefined)).toBe(false);
+    });
+
+    it('honours an explicit isEditSendButton=true even when the button is not an edit-send button', () => {
+        const button = makeBareButton();
+        cleanup = mountInDocument(wrapIn('unrelated-row', button));
+        expect(SB.isSendButtonCandidate(button, true)).toBe(true);
+    });
+
+    it('honours an explicit isEditSendButton=false even when the button is structurally an edit-send button', () => {
+        const { container, button } = makeEditSendButtonInContainer('edit message', '发送');
+        cleanup = mountInDocument(container);
+        expect(SB.isSendButtonCandidate(button, false)).toBe(false);
     });
 });
 
@@ -229,7 +253,7 @@ describe('isSendButtonEnabled', () => {
 describe('findSendButtonForTextarea', () => {
     it('finds the send button that shares an ancestor with the textarea', () => {
         const { button } = makeMobileSendButton();
-        const actionsRow = wrapIn('bf38813a', button);
+        const actionsRow = wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button);
         const inputArea = document.createElement('div');
         const textarea = makeTextarea('');
         inputArea.appendChild(textarea);
@@ -270,7 +294,7 @@ describe('findSendButtonForTextarea', () => {
 
     it('returns null for a detached textarea instead of walking off the tree', () => {
         const { button } = makeMobileSendButton();
-        cleanup = mountInDocument(wrapIn('bf38813a', button));
+        cleanup = mountInDocument(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
         const detached = makeTextarea('');
 
         expect(detached.parentElement).toBe(null);
@@ -346,7 +370,7 @@ describe('resolveTextareaForButton (composer case)', () => {
         const near = makeTextarea('near the button');
         const { button } = makeMobileSendButton();
         inputArea.appendChild(near);
-        inputArea.appendChild(wrapIn('bf38813a', button));
+        inputArea.appendChild(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
         cleanup = mountInDocument(first, inputArea);
         near.focus();
 
@@ -359,9 +383,237 @@ describe('resolveTextareaForButton (composer case)', () => {
         const near = makeTextarea('near the button');
         const { button } = makeMobileSendButton();
         inputArea.appendChild(near);
-        inputArea.appendChild(wrapIn('bf38813a', button));
+        inputArea.appendChild(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
         cleanup = mountInDocument(first, inputArea);
 
         expect(SB.resolveTextareaForButton(button)).toBe(first);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// isEditWindowSendButton — null / undefined / partial variant guards
+// ---------------------------------------------------------------------------
+
+describe('isEditWindowSendButton — null and partial-variant guards', () => {
+    it('returns false for null input instead of throwing', () => {
+        expect(() => SB.isEditWindowSendButton(null)).not.toThrow();
+        expect(SB.isEditWindowSendButton(null)).toBe(false);
+    });
+
+    it('returns false for undefined input instead of throwing', () => {
+        expect(() => SB.isEditWindowSendButton(undefined)).not.toThrow();
+        expect(SB.isEditWindowSendButton(undefined)).toBe(false);
+    });
+
+    it('rejects a button with --primary but NOT --filled (every→some mutant killer)', () => {
+        const button = document.createElement('div');
+        // Only primary, missing filled — should fail the .every() check
+        button.className = 'ds-button ds-button--primary ds-button--capsule ds-button--s';
+        button.setAttribute('role', 'button');
+        const span = document.createElement('span');
+        span.className = 'ds-button__content';
+        span.textContent = '发送';
+        button.appendChild(span);
+        cleanup = mountInDocument(button);
+        expect(SB.isEditWindowSendButton(button)).toBe(false);
+    });
+
+    it('rejects a button with --filled but NOT --primary', () => {
+        const button = document.createElement('div');
+        button.className = 'ds-button ds-button--filled ds-button--capsule ds-button--s';
+        button.setAttribute('role', 'button');
+        const span = document.createElement('span');
+        span.className = 'ds-button__content';
+        span.textContent = '发送';
+        button.appendChild(span);
+        cleanup = mountInDocument(button);
+        expect(SB.isEditWindowSendButton(button)).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// findSendButtonForTextarea — null guard
+// ---------------------------------------------------------------------------
+
+describe('findSendButtonForTextarea — null guard', () => {
+    it('returns null for null input instead of throwing', () => {
+        expect(() => SB.findSendButtonForTextarea(null)).not.toThrow();
+        expect(SB.findSendButtonForTextarea(null)).toBe(null);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// resolveTextareaForButton (edit path) — findTextareaNearButton edge cases
+// ---------------------------------------------------------------------------
+
+describe('resolveTextareaForButton (edit path) — findTextareaNearButton edge cases', () => {
+    it('treats a whitespace-only textarea as empty during walk-up', () => {
+        // Walk-up textarea has only whitespace → treated as empty
+        // A non-empty global textarea should be preferred (P3 priority)
+        const globalTa = makeTextarea('global non-empty');
+        const container = document.createElement('div');
+        const whitespaceTa = makeTextarea('   ');
+        const { button } = makeEditSendButtonStandalone();
+        container.appendChild(whitespaceTa);
+        container.appendChild(button);
+        cleanup = mountInDocument(globalTa, container);
+        clearFocus();
+
+        // P3: skip whitespace walk-up, take non-empty global
+        expect(SB.resolveTextareaForButton(button, true)).toBe(globalTa);
+    });
+
+    it('returns the nearer empty textarea when two empty textareas exist at different ancestor levels', () => {
+        // Outer ancestor has an empty textarea, inner ancestor also has one
+        // The walk-up should record the first (nearest) empty textarea
+        const outerContainer = document.createElement('div');
+        const outerTa = makeTextarea('');
+        const innerContainer = document.createElement('div');
+        const innerTa = makeTextarea('');
+        const { button } = makeEditSendButtonStandalone();
+
+        innerContainer.appendChild(innerTa);
+        innerContainer.appendChild(button);
+        outerContainer.appendChild(outerTa);
+        outerContainer.appendChild(innerContainer);
+        cleanup = mountInDocument(outerContainer);
+        clearFocus();
+
+        // Both textareas are empty, no non-empty global exists
+        // firstEmptyTextarea should be the nearest one (innerTa)
+        expect(SB.resolveTextareaForButton(button, true)).toBe(innerTa);
+    });
+
+    it('falls back to global empty textarea when walk-up finds no textarea at all', () => {
+        // Button is standalone (no textarea in ancestors), but a global empty textarea exists
+        const globalEmptyTa = makeTextarea('');
+        const { button } = makeEditSendButtonStandalone();
+        // Mount global textarea first, then button at body level (no textarea ancestor)
+        cleanup = mountInDocument(globalEmptyTa, button);
+        clearFocus();
+
+        // No walk-up textarea, no non-empty global → fall back to globalFallbackTextarea (empty)
+        expect(SB.resolveTextareaForButton(button, true)).toBe(globalEmptyTa);
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// Mutant-killing tests — findTextareaNearButton & resolveTextareaForButton
+// ---------------------------------------------------------------------------
+
+describe('findTextareaNearButton — null button guard (kills ?. to . mutant on line 87)', () => {
+    it('returns a global fallback textarea when button is null instead of throwing', () => {
+        const globalTa = makeTextarea('global text');
+        cleanup = mountInDocument(globalTa);
+
+        expect(() => SB.resolveTextareaForButton(null, true)).not.toThrow();
+        const result = SB.resolveTextareaForButton(null, true);
+        expect(result).toBe(globalTa);
+    });
+});
+
+describe('findTextareaNearButton — no-textarea ancestor (kills ta to true mutant on line 92)', () => {
+    it('skips ancestors with no textarea child without throwing', () => {
+        const outerDiv = document.createElement('div');
+        const innerDiv = document.createElement('div');
+        const ta = makeTextarea('found me');
+        const { button } = makeEditSendButtonStandalone();
+
+        outerDiv.appendChild(ta);
+        outerDiv.appendChild(innerDiv);
+        innerDiv.appendChild(button);
+        cleanup = mountInDocument(outerDiv);
+        clearFocus();
+
+        // With real code: innerDiv has no textarea, ta=null, skip. outerDiv has textarea, return it.
+        // With mutant (ta->true): innerDiv has no textarea, ta=null treated as truthy,
+        //   null.value.trim() throws TypeError
+        expect(() => SB.resolveTextareaForButton(button, true)).not.toThrow();
+        expect(SB.resolveTextareaForButton(button, true)).toBe(ta);
+    });
+});
+
+describe('findTextareaNearButton — trim on global fallback (kills .trim() removal on line 100)', () => {
+    it('treats a whitespace-only global textarea as empty in the global fallback path', () => {
+        const container = document.createElement('div');
+        const walkUpEmptyTa = makeTextarea('');
+        const { button } = makeEditSendButtonStandalone();
+        container.appendChild(walkUpEmptyTa);
+        container.appendChild(button);
+
+        const globalWhitespaceTa = makeTextarea('   ');
+        cleanup = mountInDocument(globalWhitespaceTa, container);
+        clearFocus();
+
+        // With trim: globalWhitespaceTa.value.trim() === '' -> not non-empty
+        //   return firstEmptyTextarea (walkUpEmptyTa) || globalFallbackTextarea
+        //   return walkUpEmptyTa
+        // Without trim (mutant): '   ' !== '' -> non-empty -> return globalWhitespaceTa
+        expect(SB.resolveTextareaForButton(button, true)).toBe(walkUpEmptyTa);
+    });
+});
+
+describe('resolveTextareaForButton — activeElement null guard (kills ?. to . mutant on line 115)', () => {
+    it('does not throw when document.activeElement is null', () => {
+        const ta = makeTextarea('some text');
+        const { button } = makeEditSendButtonStandalone();
+        cleanup = mountInDocument(ta, button);
+
+        const origDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'activeElement') ||
+                               Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'activeElement');
+        Object.defineProperty(document, 'activeElement', { value: null, configurable: true });
+
+        try {
+            expect(() => SB.resolveTextareaForButton(button, true)).not.toThrow();
+            expect(SB.resolveTextareaForButton(button, true)).toBe(ta);
+        } finally {
+            if (origDescriptor) {
+                Object.defineProperty(document, 'activeElement', origDescriptor);
+            } else {
+                delete document.activeElement;
+            }
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// isSendButtonCandidate — structural fallback
+// ---------------------------------------------------------------------------
+
+describe('isSendButtonCandidate — structural fallback', () => {
+    it('accepts send button via structural fallback when SVG path changes', () => {
+        const { button } = makeSendButtonWithChangedIcon();
+        cleanup = mountInDocument(button);
+        expect(SB.isSendButtonCandidate(button)).toBe(true);
+    });
+
+    it('logs a warning when structural fallback matches', () => {
+        const { button } = makeSendButtonWithChangedIcon();
+        cleanup = mountInDocument(button);
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            SB.isSendButtonCandidate(button);
+            expect(warnSpy).toHaveBeenCalledOnce();
+            expect(warnSpy.mock.calls[0][0]).toContain('structural fallback');
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
+
+    // Test 3 (attachment button rejection) already covered at line ~109:
+    // 'rejects the attachment (paperclip) button even though it sits in a bf38813a row'
+
+    it('rejects generic SVG button without variant classes', () => {
+        const button = document.createElement('div');
+        button.className = 'ds-button ds-button--icon';
+        button.setAttribute('role', 'button');
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M0 0 L5 5');
+        svg.appendChild(path);
+        button.appendChild(svg);
+        cleanup = mountInDocument(button);
+        expect(SB.isSendButtonCandidate(button)).toBe(false);
     });
 });

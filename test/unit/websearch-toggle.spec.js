@@ -15,9 +15,10 @@
  * not be invoked twice on one instance, or its one-shot would arm twice.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import "../../utils/settings-message-constants.js";
+import "../../utils/message-constants.js";
 import "../../utils/storage-manager.js";
 import StorageManager from "../../utils/storage-manager.js";
+import DSSelectors from "../../content/ds-selectors.js";
 
 const MASTER_KEY = "isEnabled";
 const MODE_KEY = StorageManager.KEYS.WEBSEARCH_TOGGLE;
@@ -92,7 +93,7 @@ function makeToggle(pressed, label, iconPath, generic = false) {
     }
     if (label !== null) {
         const labelSpan = document.createElement("span");
-        labelSpan.className = "_6dbc175";
+        labelSpan.className = '_6dbc175';
         labelSpan.textContent = label;
         toggle.appendChild(labelSpan);
     }

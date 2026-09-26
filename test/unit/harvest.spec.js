@@ -34,6 +34,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import harvestModule from '../../content/harvest.js';
+import DSSelectors from '../../content/ds-selectors.js';
+import harvestDomBundle from '../../content/harvest.dom.js';
+
+const { _measureMountedBottomOffset } = harvestDomBundle;
+
 
 const {
     harvestAllMessages,
@@ -99,7 +104,7 @@ function appendMessage(visibleItems, key, textContent = 'msg', isAI = false) {
         msg.appendChild(md);
     } else {
         const inner = document.createElement('div');
-        inner.className = 'fbb737a4';
+        inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
         inner.textContent = textContent;
         msg.appendChild(inner);
     }
@@ -151,10 +156,10 @@ describe('_findHarvestScrollContainer', () => {
         expect(result).toBe(scrollArea);
     });
 
-    it('strategy 1: skips .ds-scroll-area when scrollHeight <= clientHeight', () => {
-        buildVirtualListDOM({ scrollHeight: 300, clientHeight: 400 });
+    it('strategy 1: returns the .ds-scroll-area ancestor even when it does not overflow', () => {
+        const { scrollArea } = buildVirtualListDOM({ scrollHeight: 300, clientHeight: 400 });
         const result = _findHarvestScrollContainer();
-        expect(result).toBe(document.scrollingElement || document.documentElement);
+        expect(result).toBe(scrollArea);
     });
 
     it('strategy 2: finds overflow:auto ancestor of first visible message when no .ds-scroll-area', () => {
@@ -270,6 +275,229 @@ describe('_isAtBottom', () => {
         expect(_isAtBottom(makeContainer(0, 400, 300))).toBe(true);
     });
 });
+
+
+// --- section 3b: _isAtBottom tolerance boundary ---
+
+describe('_isAtBottom — HARVEST_BOTTOM_TOLERANCE boundary precision', () => {
+    function makeContainer(scrollTop, clientHeight, scrollHeight) {
+        const el = document.createElement('div');
+        el.scrollTop = scrollTop;
+        Object.defineProperty(el, 'clientHeight', { value: clientHeight, configurable: true });
+        Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true });
+        return el;
+    }
+
+    it('returns false when scrollTop+clientHeight === scrollHeight-5 (just outside tolerance=4)', () => {
+        expect(_isAtBottom(makeContainer(595, 400, 1000))).toBe(false);
+    });
+
+    it('returns true when scrollTop+clientHeight === scrollHeight-4 (exactly at tolerance boundary)', () => {
+        expect(_isAtBottom(makeContainer(596, 400, 1000))).toBe(true);
+    });
+
+    it('kills tolerance=5 mutant: 595+400=995 is false with tol=4 but would be true with tol=5', () => {
+        expect(_isAtBottom(makeContainer(595, 400, 1000))).toBe(false);
+    });
+});
+
+// --- section 3c: body exclusion guard ---
+
+describe('_findHarvestScrollContainer — body exclusion guard', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('strategy 1: does NOT return document.body even when body has .ds-scroll-area class', () => {
+        document.body.classList.add('ds-scroll-area');
+        const virtualListItems = document.createElement('div');
+        virtualListItems.className = 'ds-virtual-list-items _6f2c522';
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        virtualListItems.appendChild(visibleItems);
+        document.body.appendChild(virtualListItems);
+        const result = _findHarvestScrollContainer();
+        expect(result).not.toBe(document.body);
+        document.body.classList.remove('ds-scroll-area');
+    });
+
+    it('strategy 2: does NOT return document.body even when body has overflow:auto and overflows', () => {
+        document.body.style.overflowY = 'auto';
+        Object.defineProperty(document.body, 'scrollHeight', { value: 2000, configurable: true });
+        Object.defineProperty(document.body, 'clientHeight', { value: 400, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        document.body.appendChild(visibleItems);
+        const result = _findHarvestScrollContainer();
+        expect(result).not.toBe(document.body);
+        document.body.style.overflowY = '';
+    });
+});
+
+// --- section 3d: overflowY scroll ---
+
+describe('_findHarvestScrollContainer — strategy 2 overflowY scroll', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('finds ancestor with overflowY=scroll (not just auto)', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'scroll';
+        Object.defineProperty(outer, 'scrollHeight', { value: 800, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        const result = _findHarvestScrollContainer();
+        expect(result).toBe(outer);
+    });
+});
+
+// --- section 3e: documentElement fallback ---
+
+describe('_findHarvestScrollContainer — documentElement fallback', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('returns document.documentElement when document.scrollingElement is null', () => {
+        const orig = Object.getOwnPropertyDescriptor(Document.prototype, 'scrollingElement') ||
+            Object.getOwnPropertyDescriptor(document, 'scrollingElement');
+        Object.defineProperty(document, 'scrollingElement', { value: null, configurable: true });
+        const result = _findHarvestScrollContainer();
+        expect(result).toBe(document.documentElement);
+        if (orig) {
+            Object.defineProperty(document, 'scrollingElement', orig);
+        } else {
+            delete document.scrollingElement;
+        }
+    });
+});
+
+// --- section 3f: _measureMountedBottomOffset ---
+
+describe('_measureMountedBottomOffset', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('returns null when container is null', () => {
+        expect(_measureMountedBottomOffset(null)).toBeNull();
+    });
+
+    it('returns null when container is undefined', () => {
+        expect(_measureMountedBottomOffset(undefined)).toBeNull();
+    });
+
+    it('returns null when container lacks getBoundingClientRect', () => {
+        expect(_measureMountedBottomOffset({ scrollHeight: 100 })).toBeNull();
+    });
+
+    it('returns null when no VISIBLE_ITEMS_SELECTOR elements exist', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 500 });
+        document.body.appendChild(container);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('returns null when visible containers have no keyed nodes', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        vc.appendChild(msg);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('returns null when result is non-finite (keyed node bottom is Infinity)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: Infinity });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('returns null when mountedBottomOffset <= 0 (node bottom at or above container top)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 50 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    it('clamps negative container top to 0 via Math.max (containerVisibleTop clamping)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: -50, bottom: 500 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 300 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        // Math.max(0, -50) = 0; 300 - 0 = 300
+        expect(_measureMountedBottomOffset(container)).toBe(300);
+    });
+
+    it('happy path: returns lowestNodeBottom minus containerVisibleTop', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 500 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        // Math.max(0, 100) = 100; 500 - 100 = 400
+        expect(_measureMountedBottomOffset(container)).toBe(400);
+    });
+
+    it('selects the lowest node bottom across multiple keyed nodes', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w1 = document.createElement('div');
+        w1.setAttribute('data-virtual-list-item-key', '0');
+        w1.getBoundingClientRect = () => ({ bottom: 200 });
+        vc.appendChild(w1);
+        const w2 = document.createElement('div');
+        w2.setAttribute('data-virtual-list-item-key', '1');
+        w2.getBoundingClientRect = () => ({ bottom: 800 });
+        vc.appendChild(w2);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBe(800);
+    });
+});
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  § 4  _waitForDomStability
@@ -690,7 +918,7 @@ describe('harvestAllMessages', () => {
         const result = await harvestPromise;
 
         expect(result.items.length).toBeGreaterThanOrEqual(1);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent || '');
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent || '');
         expect([...new Set(texts)].filter(t => t === 'original-content').length).toBeLessThanOrEqual(1);
     });
 
@@ -715,7 +943,7 @@ describe('harvestAllMessages', () => {
         const result = await harvestPromise;
 
         expect(result.items.length).toBe(3);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(['msg-1', 'msg-2', 'msg-3']);
     });
 
@@ -855,7 +1083,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('complete');
         expect(result.isComplete).toBe(true);
         expect(result.items.length).toBe(TOTAL_MESSAGES);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(Array.from({ length: TOTAL_MESSAGES }, (_, i) => "msg-" + i));
     }, 20000);
 
@@ -874,7 +1102,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('stalled');
         expect(result.isComplete).toBe(false);
         expect(result.items.length).toBeGreaterThan(0);
-        expect(result.items[0].querySelector('.fbb737a4')?.textContent).toBe('captured-before-stall');
+        expect(result.items[0].querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent).toBe('captured-before-stall');
     }, 15000);
 
     it('does NOT stall when fresh progress arrives before the 20000ms threshold - the stall clock resets on progress', async () => {
@@ -923,7 +1151,7 @@ describe('harvestAllMessages', () => {
 
         expect(result.reason).toBe('complete');
         expect(result.isComplete).toBe(true);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(['msg-0', 'msg-1']);
     }, 20000);
 
@@ -970,7 +1198,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('cancelled');
         expect(result.isComplete).toBe(false);
         expect(result.items.length).toBeGreaterThan(0);
-        const texts = result.items.map(el => el.querySelector('.fbb737a4')?.textContent);
+        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
         expect(texts).toEqual(expect.arrayContaining(['keep-me-0', 'keep-me-1']));
     }, 15000);
 
@@ -1315,5 +1543,274 @@ describe('harvestAllMessages', () => {
         // Premise guard: without the floor the measured step would be 70, which
         // is below MIN_STEP — a regression dropping the floor cannot pass here.
         expect(MIN_STEP).toBeGreaterThan(Math.round(100 * 0.7));
+    });
+});
+
+// ---------------------------------------------------------------------------
+//  section 10  Mutant-killer tests - _findHarvestScrollContainer
+// ---------------------------------------------------------------------------
+
+describe('_findHarvestScrollContainer - mutant killers', () => {
+    beforeEach(() => { document.body.innerHTML = ''; });
+
+    // Kills: line 53 || to &&
+    it('finds container via VIRTUAL_LIST_FALLBACK when primary VIRTUAL_LIST_SELECTOR does not match', () => {
+        const scrollArea = document.createElement('div');
+        scrollArea.className = 'ds-scroll-area';
+        const virtualList = document.createElement('div');
+        virtualList.className = 'ds-virtual-list-items _different-hash';
+        scrollArea.appendChild(virtualList);
+        document.body.appendChild(scrollArea);
+        expect(_findHarvestScrollContainer()).toBe(scrollArea);
+    });
+
+    // Kills: line 61 el.classList.contains(SCROLL_AREA_CLASS) to true
+    it('walks past ancestors without .ds-scroll-area and returns the one that has it', () => {
+        const scrollArea = document.createElement('div');
+        scrollArea.className = 'ds-scroll-area';
+        const middleDiv = document.createElement('div');
+        const virtualList = document.createElement('div');
+        virtualList.className = 'ds-virtual-list-items _6f2c522';
+        middleDiv.appendChild(virtualList);
+        scrollArea.appendChild(middleDiv);
+        document.body.appendChild(scrollArea);
+        const result = _findHarvestScrollContainer();
+        expect(result).toBe(scrollArea);
+        expect(result).not.toBe(middleDiv);
+    });
+
+    // Kills: line 77 && to ||, condition to true, line 78 > to true, > to >=
+    it('strategy 2: rejects ancestor with overflowY=auto when scrollHeight === clientHeight', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'auto';
+        Object.defineProperty(outer, 'scrollHeight', { value: 300, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        expect(_findHarvestScrollContainer()).not.toBe(outer);
+    });
+
+    // Kills: line 78 > to >=
+    it('strategy 2: accepts ancestor when scrollHeight is strictly greater than clientHeight', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'auto';
+        Object.defineProperty(outer, 'scrollHeight', { value: 301, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        expect(_findHarvestScrollContainer()).toBe(outer);
+    });
+
+    // Kills: line 77 && to ||
+    it('strategy 2: rejects ancestor with overflowY=hidden even when scrollHeight > clientHeight', () => {
+        const outer = document.createElement('div');
+        outer.style.overflowY = 'hidden';
+        Object.defineProperty(outer, 'scrollHeight', { value: 800, configurable: true });
+        Object.defineProperty(outer, 'clientHeight', { value: 300, configurable: true });
+        const visibleItems = document.createElement('div');
+        visibleItems.className = 'ds-virtual-list-visible-items';
+        const msg = document.createElement('div');
+        msg.className = 'ds-message';
+        visibleItems.appendChild(msg);
+        outer.appendChild(visibleItems);
+        document.body.appendChild(outer);
+        expect(_findHarvestScrollContainer()).not.toBe(outer);
+    });
+});
+// ---------------------------------------------------------------------------
+//  section 11  Mutant-killer tests - _waitForDomStability
+//
+//  Strategy: mock MutationObserver to capture its callback, enabling
+//  deterministic mutation simulation with fake timers (bypasses happy-dom
+//  MutationObserver batching issue documented in section 4 above).
+// ---------------------------------------------------------------------------
+
+describe('_waitForDomStability - mutant killers', () => {
+    let observerCallback;
+    let mockObserver;
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        document.body.innerHTML = '';
+        mockObserver = { observe: vi.fn(), disconnect: vi.fn() };
+        vi.stubGlobal('MutationObserver', vi.fn((cb) => {
+            observerCallback = cb;
+            return mockObserver;
+        }));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    // Kills: line 126 false to true (initial isMutated)
+    // Kills: line 147 >= to > (HARVEST_STABLE_TICKS boundary)
+    it('resolves after exactly 3 ticks (300ms), not 4, when no mutations occur', async () => {
+        const container = document.createElement('div');
+        let resolved = false;
+        const p = _waitForDomStability(container, 10000);
+        p.then(() => { resolved = true; });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(resolved).toBe(false);
+        await vi.advanceTimersByTimeAsync(100);
+        expect(resolved).toBe(true);
+    });
+
+    // Kills: line 129 true to false (mutation callback does not set isMutated)
+    // Kills: line 142 !isMutated to true (stableTicks always increments)
+    it('mutation between ticks prevents stableTicks increment on that tick', async () => {
+        const container = document.createElement('div');
+        let resolved = false;
+        const p = _waitForDomStability(container, 10000);
+        p.then(() => { resolved = true; });
+        await vi.advanceTimersByTimeAsync(50);
+        observerCallback([]);
+        await vi.advanceTimersByTimeAsync(250);
+        expect(resolved).toBe(false);
+        await vi.advanceTimersByTimeAsync(100);
+        expect(resolved).toBe(true);
+    });
+
+    // Kills: line 133 isMutated reset (false in tick handler removed)
+    it('after one mutation, stability resumes once isMutated is reset by the tick handler', async () => {
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 60000);
+        observerCallback([]);
+        await vi.advanceTimersByTimeAsync(400);
+        await p;
+    });
+
+    // Kills: line 136 observer.disconnect() to noop (timeout path)
+    it('timeout path: calls observer.disconnect()', async () => {
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 50);
+        await vi.advanceTimersByTimeAsync(100);
+        await p;
+        expect(mockObserver.disconnect).toHaveBeenCalled();
+    });
+
+    // Kills: line 137 clearInterval(tickId) to noop (timeout path)
+    it('timeout path: calls clearInterval to stop tick timer', async () => {
+        const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 50);
+        await vi.advanceTimersByTimeAsync(100);
+        await p;
+        expect(clearIntervalSpy).toHaveBeenCalled();
+    });
+
+    // Kills: line 148 clearTimeout(timeoutId) to noop (stability path)
+    it('stability path: calls clearTimeout to cancel timeout fallback', async () => {
+        const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 60000);
+        await vi.advanceTimersByTimeAsync(500);
+        await p;
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    // Kills: line 150 observer.disconnect() to noop (stability path)
+    it('stability path: calls observer.disconnect()', async () => {
+        const container = document.createElement('div');
+        const p = _waitForDomStability(container, 60000);
+        await vi.advanceTimersByTimeAsync(500);
+        await p;
+        expect(mockObserver.disconnect).toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  section 12  Mutant-killer tests - _measureMountedBottomOffset
+// ---------------------------------------------------------------------------
+
+describe('_measureMountedBottomOffset - mutant killers', () => {
+    beforeEach(() => { document.body.innerHTML = ''; });
+
+    // Kills: line 182 typeof ... !== function to false
+    it('returns null (no throw) when container lacks getBoundingClientRect, even with keyed nodes in DOM', () => {
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 500 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        const container = { nodeName: 'DIV' };
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    // Kills: line 192 rect.bottom > lowestNodeBottom to true
+    it('uses the highest node bottom, not the last one encountered', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w1 = document.createElement('div');
+        w1.setAttribute('data-virtual-list-item-key', '0');
+        w1.getBoundingClientRect = () => ({ bottom: 800 });
+        const w2 = document.createElement('div');
+        w2.setAttribute('data-virtual-list-item-key', '1');
+        w2.getBoundingClientRect = () => ({ bottom: 200 });
+        vc.appendChild(w1);
+        vc.appendChild(w2);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBe(800);
+    });
+
+    // Kills: line 203 <= to < (mountedBottomOffset boundary)
+    it('returns null when mountedBottomOffset is exactly 0', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 100 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeNull();
+    });
+
+    // Complement: barely positive offset must return a value.
+    it('returns value when mountedBottomOffset is barely positive (0.1)', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 100.1 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBeCloseTo(0.1);
+    });
+
+    // Kills: line 198 -Infinity to +Infinity (initial lowestNodeBottom)
+    it('correctly accumulates lowest node bottom from -Infinity initial value', () => {
+        const container = document.createElement('div');
+        container.getBoundingClientRect = () => ({ top: 0, bottom: 600 });
+        document.body.appendChild(container);
+        const vc = document.createElement('div');
+        vc.className = 'ds-virtual-list-visible-items';
+        const w = document.createElement('div');
+        w.setAttribute('data-virtual-list-item-key', '0');
+        w.getBoundingClientRect = () => ({ bottom: 400 });
+        vc.appendChild(w);
+        document.body.appendChild(vc);
+        expect(_measureMountedBottomOffset(container)).toBe(400);
     });
 });

@@ -1,3 +1,4 @@
+// 270 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -51,13 +52,6 @@
         return StorageManager.resolveGlobalPromptEnabled(activePreset, settings.globalPromptEnabled ?? true);
     }
 
-    // 純函式：由完整 settings 物件解析目前生效中的全域提示詞開關。
-    // 以「目前啟用中的 preset」自身欄位為準（StorageManager.resolveGlobalPromptEnabled 內部
-    // 以 ?? true 處理欄位缺漏），找不到啟用中的 preset 時回退至 legacy 裝置層級旗標。
-    function resolveGlobalPromptEnabledFromSettings(settings) {
-        return resolveGlobalPromptEnabledFor(settings.activePresetId, settings);
-    }
-
     /**
      * 建立綁定狀態機實例。
      * @param {{getPresetOverlay: Function, isExtensionContextValid: Function}} deps
@@ -94,17 +88,23 @@
         function applyInitialSettings(settings) {
             state.isEnabled = settings.isEnabled;
             state.globalDefaultPrompt = settings.globalDefaultPrompt ?? '';
-            state.isGlobalPromptEnabled = resolveGlobalPromptEnabledFromSettings(settings);
             state.isShowSystemTime = settings.isShowSystemTime ?? false;
             state.chatPresetMap = settings.chatPresetMap ?? {};
+            state.isGlobalPromptEnabled = resolveDisplayedGlobalPromptEnabled(settings);
+        }
+
+        // 全域提示詞開關一律以「浮動選單顯示的 preset」為準（單一真相來源），
+        // 而非可能與目前對話脫勾的 settings.activePresetId，確保顯示與實際注入一致。
+        function resolveDisplayedGlobalPromptEnabled(settings) {
+            return resolveGlobalPromptEnabledFor(resolveActivePresetIdFrom(settings), settings);
         }
 
         // 重新讀取設定並解析全域提示詞開關；供設定變更廣播在 preset 相關金鑰
-        //（啟用中 preset 自身內容、activePresetId、legacy 旗標）變動時呼叫，
-        // 確保下一則送出訊息即反映最新生效值，不需重新整理頁面。
+        //（preset 內容、activePresetId、chatPresetMap、legacy 旗標）變動時，
+        // 以及 popup 切換 pending preset 時呼叫，確保下一則送出訊息即反映最新生效值。
         async function refreshGlobalPromptEnabled() {
             const settings = await StorageManager.getSettings();
-            state.isGlobalPromptEnabled = resolveGlobalPromptEnabledFromSettings(settings);
+            state.isGlobalPromptEnabled = resolveDisplayedGlobalPromptEnabled(settings);
         }
 
         // 標記使用者在新對話頁面送出訊息，允許後續 auto-bind；逾時後自動清除。
@@ -188,19 +188,17 @@
                     await StorageManager.saveActivePresetId(state.chatPresetMap[newUuid]);
                     state.promptPrefix = await StorageManager.getActivePromptContent();
                 } else {
-                    // 綁定已失效 — 透過交易式 API 清除
-                    state.chatPresetMap = await StorageManager.mutateChatPresetMap(map => {
-                        delete map[newUuid];
-                    });
+                    // 綁定已失效 — 交由 service worker 清除後重新讀取
+                    await StorageManager.unbindChat(newUuid);
+                    state.chatPresetMap = await StorageManager.getChatPresetMap();
                     state.promptPrefix = '';
                 }
             } else if (hadNoUuid && state.awaitingNewChatUuid) {
                 // 真的是「新對話送出訊息 → DeepSeek 配 UUID」場景，才自動綁定
                 if (state.pendingPresetId) {
                     const boundPresetId = state.pendingPresetId;
-                    state.chatPresetMap = await StorageManager.mutateChatPresetMap(map => {
-                        map[newUuid] = boundPresetId;
-                    });
+                    await StorageManager.bindChatToPreset(newUuid, boundPresetId);
+                    state.chatPresetMap = await StorageManager.getChatPresetMap();
                     const preset = settings.promptPresets.find(p => p.id === boundPresetId);
                     state.promptPrefix = preset?.content ?? '';
                 } else {
@@ -236,7 +234,8 @@
             const checkForNavigation = () => {
                 if (window.location.pathname === lastPath) return;
                 lastPath = window.location.pathname;
-                handleChatChange();
+                // 導覽回呼無人可接住 rejection（含 popstate 路徑），於此記錄避免 unhandled rejection
+                handleChatChange().catch(err => console.error('[DSS] chat-binding handleChatChange 失敗:', err));
             };
 
             window.addEventListener('popstate', () => {

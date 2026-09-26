@@ -34,7 +34,7 @@
  * particular, loading the file must not register any chrome listener).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import "../../utils/settings-message-constants.js";
+import "../../utils/message-constants.js";
 
 const MASTER_KEY = "isEnabled";
 const OWN_KEY = "isGoTopEnabled";

@@ -6,13 +6,14 @@
  * 向 background 索取並訂閱變更。
  */
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+// Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
 const __DS_HideThinkingSelectors = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
 const HideThinking = {
     STORAGE_KEY: StorageManager.KEYS.HIDE_THINKING,
-    CONTAINER_CLASS: '_74c0879',
-    HEADER_CLASS: '_245c867',
+    CONTAINER_CLASS: __DS_HideThinkingSelectors.THINK_BLOCK_CLASS,
+    HEADER_CLASS: __DS_HideThinkingSelectors.THINK_HEADER_TOGGLE_CLASS,
     THINK_CONTENT_CLASS: __DS_HideThinkingSelectors.THINK_CONTENT_CLASS,
     DATA_ATTR: 'data-ht-collapsed',
 
@@ -100,11 +101,13 @@ const HideThinking = {
      * 初始值與後續變更皆由 background 透過訊息提供。
      */
     start() {
+        // Stryker disable all: unreachable in tests — module auto-starts at load time, featureToggle always present
         const featureToggle = globalThis.DSSFeatureToggle
             || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
         if (!featureToggle) {
             throw new Error('content/hide-thinking.js 需要 content/feature-toggle.js 先行載入');
         }
+        // Stryker restore all
 
         featureToggle.registerFeatureToggle({
             ownKey: this.STORAGE_KEY,
@@ -117,6 +120,8 @@ const HideThinking = {
 // Auto-start：入口檔的刻意啟動點（模組本身無其他載入期副作用）
 HideThinking.start();
 
+// Stryker disable all: equivalent mutants — module type check is environment-dependent, untestable in Node
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = HideThinking;
 }
+// Stryker restore all

@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // order, so these three lines fix the sequence.
 import '../../utils/temporary-chat-constants.js';
 import '../../content/ds-selectors.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/temporary-chat-sidebar-hide.js';
 
 // --- Sidebar DOM fixtures (inlined; sole consumer) ---
@@ -24,11 +25,11 @@ function makeChatAnchor(uuid, { absolute = false } = {}) {
     ring.className = 'ds-focus-ring';
 
     const title = document.createElement('div');
-    title.className = 'c08e6e93';
+    title.className = DSSelectors.SIDEBAR_TITLE_CLASS;
     title.textContent = 'chat title';
 
     const actions = document.createElement('div');
-    actions.className = '_254829d';
+    actions.className = DSSelectors.SIDEBAR_ACTIONS_CLASS;
     const actionBtn = document.createElement('div');
     actionBtn.setAttribute('role', 'button');
     actionBtn.className = 'ds-button _2090548';
@@ -41,12 +42,12 @@ function makeChatAnchor(uuid, { absolute = false } = {}) {
     return a;
 }
 
-function makeDateGroup({ uuids = [], label = '今天', groupClass = '_3098d02', absolute = false } = {}) {
+function makeDateGroup({ uuids = [], label = '今天', groupClass = DSSelectors.SIDEBAR_DATE_GROUP_SELECTOR.split('.').pop(), absolute = false } = {}) {
     const group = document.createElement('div');
     group.className = groupClass;
 
     const dateLabel = document.createElement('div');
-    dateLabel.className = 'f3d18f6a';
+    dateLabel.className = DSSelectors.SIDEBAR_DATE_LABEL_CLASS;
     dateLabel.textContent = label;
     group.appendChild(dateLabel);
 
@@ -63,7 +64,7 @@ function makeDateGroup({ uuids = [], label = '今天', groupClass = '_3098d02', 
 
 function mountSidebar(...groups) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'dc04ec1d';
+    wrapper.className = DSSelectors.SIDEBAR_WRAPPER_SELECTOR.split('.').pop();
     const inner = document.createElement('div');
     inner.className = 'b8812f16 a2f3d50e';
     wrapper.appendChild(inner);

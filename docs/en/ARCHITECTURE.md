@@ -40,6 +40,7 @@ ds-studio/
 │   ├── sidebar-auto-hide.styles.js  ─  CSS inject/remove for sidebar auto-hide
 │   ├── temporary-chat-toggle.js     ─  Homepage toggle UI for temporary chat (v4.5.0)
 │   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
+│   ├── temporary-chat-toggle.ui.js  ─  Temporary chat toggle-row UI creation and visual state
 │   ├── temporary-chat-delete.js     ─  Entry: delete logic for temporary conversations (v4.5.0)
 │   ├── temporary-chat-delete.tracking.js   ─  Shared state, UUID sessionStorage persistence, create+completion co-occurrence detection
 │   ├── temporary-chat-delete.coordinator.js ─  Delete coordination (Fiber → API retry → SW alarm fallback)
@@ -48,6 +49,8 @@ ds-studio/
 │   ├── temporary-chat-enabled-flag.js ─  Master-switch-independent temporary-chat enabled flag via settings pipeline
 │   ├── temporary-chat-history-hook.js * ─  MAIN-world history navigation interception (v4.9.0)
 │   ├── temporary-chat-fiber-delete.js * ─  React Fiber-based conversation deletion integration (web accessible)
+│   ├── invalidation-toast.js    ─  Extension context invalidation toast with refresh button (v4.33.16)
+│   ├── invalidation-watcher.js  ─  Periodic extension context validity check, shows refresh toast once on first failure (v4.34.0)
 │   ├── temporary-chat-heartbeat.js      ─  Lease heartbeat for the tracked temporary conversation (v4.31.1)
 │   ├── temporary-chat-sidebar-hide.js   ─  Hides queued temporary conversations from the DeepSeek sidebar (v4.31.1)
 │   ├── chat-width.js        ─  Conversation area width via CSS injection
@@ -61,9 +64,7 @@ ds-studio/
 │   ├── censor-reply-restore.js  ─  Entry: SSE intercept, observer, detection (v4.0.0 split)
 │   ├── censor-reply-restore.keymap.js    ─  Key mapping for censor-reply-restore
 │   ├── censor-reply-restore.markdown.js  ─  Markdown → HTML renderer bundle
-│   ├── censor-reply-restore.dom.js       ─  DOM orchestration entry bundle
-│   ├── censor-reply-restore.dom.extract.js ─  Fragment extraction from DOM
-│   ├── censor-reply-restore.dom.resolve.js ─  DOM element resolution for restored content
+│   ├── censor-reply-restore.dom.resolve.js ─  DOM element resolution and fragment extraction for restored content
 │   ├── censor-reply-restore.dom.inject.js  ─  Restored-content DOM injection
 │   ├── censor-reply-restore.dom.scan.js    ─  DOM scanning for censor events
 │   ├── censor-reply-restore.thinkblock.js  ─  Think-block handling for restored content
@@ -77,12 +78,10 @@ ds-studio/
 │   ├── harvest.dom.js       ─  DOM probing: container lookup, message harvest, stability observer, mount measurement (v4.19.1 split)
 │   ├── go-top.js            ─  Entry: "Go to Top" button lifecycle (v4.0.0 split)
 │   ├── go-top.locate.js     ─  DOM query / locator / visibility orchestration bundle
-│   ├── go-top.locate.scroll.js  ─  Scroll-container locator bundle
-│   ├── go-top.locate.anchor.js  ─  Anchor-element locator bundle
-│   ├── go-top.render.js     ─  Button render orchestration bundle
-│   ├── go-top.render.button.js  ─  Button element creation bundle
-│   ├── go-top.render.inject.js  ─  Button DOM injection bundle
-│   ├── go-top.render.observer.js ─  Render-related observer bundle
+│   ├── go-top.render.button.js  ─  Button element creation bundle (stub, merged into go-top.render.combined.js)
+│   ├── go-top.render.combined.js ─  Go-top button render combined module (button, inject, observer)
+│   ├── go-top.render.inject.js  ─  Button DOM injection bundle (stub, merged into go-top.render.combined.js)
+│   ├── go-top.render.observer.js ─  Render-related observer bundle (stub, merged into go-top.render.combined.js)
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
 │   ├── go-top.observers.js  ─  GoToTop observer setup bundle
 │   ├── go-top.lifecycle.js  ─  GoToTop enable/disable lifecycle bundle
@@ -91,9 +90,9 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.gesture.js   ─  Touch gesture recognition
 │   ├── mobile-sidebar-swipe.bind.js      ─  Event binding for swipe gesture
 │   ├── mobile-sidebar-swipe.lifecycle.js ─  Enable/disable lifecycle for mobile swipe
-│   ├── mobile-homepage-cleanup.js ─  Mobile homepage DOM cleanup (v4.1.0)
 │   ├── auto-expand-messages.js ─  MutationObserver-based auto-click of collapsed expand buttons (v4.32.0)
-│   ├── auto-retry.js          ─  1s-interval auto-click of the retry button (v4.11.0)
+│   ├── auto-click.delay.js    ─  0–3 s random delay for auto-click rounds, in 0.1 s steps (v4.35.0)
+│   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, clicks the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0)
 │   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
@@ -107,13 +106,12 @@ ds-studio/
 │   ├── pending-store.js        ─  Pending-delete queue storage layer (importScripts only, not a content script)
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
+│   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG routes: puts the service worker's StorageManager in chat-map writer mode, validates each op, applies it in one FIFO queue
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
-│   ├── popup.css            ─  Theme vars, layout grid, typography/inputs base (v4.0.0 split)
 │   ├── popup-button.css     ─  Button component styles
 │   ├── popup-card.css       ─  Card component styles
-│   ├── popup-controls.css   ─  Switch, button, icon-button, range slider, toast styles
 │   ├── popup-form.css       ─  Form element styles
 │   ├── popup-layout.css     ─  Page layout styles
 │   ├── popup-locale.css     ─  Locale switcher styles
@@ -151,30 +149,31 @@ ds-studio/
 │       ├── editor.render.js ─  Editor UI rendering bundle
 │       └── editor.storage.js ─  Editor storage read/write bundle
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
-│   ├── storage-manager.js   ─  Entry: storage API, getSettings (v4.0.0 split; initialize() moved out in v4.7.3)
-│   ├── storage-manager.keys.js          ─  Storage key names, defaults, error classes, pure helpers
-│   ├── storage-manager.chunk-lock.js    ─  ChatPresetMap chunked read/write + cross-context advisory lock bundle (v4.11.3 merge of chunking.js + lock.js)
-│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write logic
-│   ├── storage-manager.sync.js          ─  Cloud sync / conflict / restore bundle, incl. syncNow() entry point (absorbed syncnow.js in v4.11.3)
+│   ├── storage-manager.js   ─  Entry: StorageManager object, chat-map writer flag, per-context FIFO write queue, bundle mixin
+│   ├── storage-manager.keys.js          ─  Storage key names, defaults, ChatMapDispatchError, _buildNextMeta
+│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write, remote-wins write-back to local
+│   ├── storage-manager.sync.js          ─  Sync conflict detection / resolveSyncConflict (skips chat-map keys), sync status, syncNow() entry point
+│   ├── storage-manager.sync.retry.js    ─  retrySync(): per-key guarded re-push of dsLocalAuth; parked chat-map keys go to the service worker as one REPUBLISH_PARKED op
+│   ├── storage-manager.restore.js       ─  Backup restore logic (extracted from sync.js)
 │   ├── storage-manager.tombstone.js     ─  Deletion tombstone management bundle
 │   ├── storage-manager.preset-merge.js  ─  Dual-side preset array merge logic bundle
 │   ├── storage-manager.preset-recency.js ─  Preset recency determination, push guard, global prompt enabled resolution bundle
-│   ├── storage-manager.presets.js       ─  Preset CRUD & chat-binding bundle, incl. deletion-tombstone merge/prune (absorbed tombstones.js in v4.11.3)
-│   ├── storage-manager.chatmap.diff.js  ─  ChatPresetMap diff computation & application bundle
-│   ├── storage-manager.chatmap.js       ─  ChatPresetMap chunk operations bundle (v4.6.2 split)
+│   ├── storage-manager.presets.js       ─  Preset CRUD bundle: savePromptPresets / saveOnePromptPreset
+│   ├── storage-manager.chatmap.diff.js  ─  ChatPresetMap pure diff computation & chunk placement bundle
+│   ├── storage-manager.chatmap.ops.js   ─  DSSChatMapOps: pure validate / apply for DSS_CHAT_MAP_MSG ops
+│   ├── storage-manager.chatmap.js       ─  Single-writer engine (service worker only): applyChatMapOp, mutateChatPresetMap, chunked commit; getChatPresetMap for every context
+│   ├── storage-manager.chatmap.client.js ─  Public binding API + dispatch: direct engine call in the service worker, chrome.runtime.sendMessage to it elsewhere
 │   ├── storage-manager.local.js         ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
-│   ├── storage-manager.init.js          ─  initialize() & chunk-cache-invalidator bundle (v4.7.3 split)
-│   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 14 one-line setters split out of the entry file
+│   ├── storage-manager.init.js          ─  initialize(): defaults, migrations, first-sync conflict detection; dispatches legacy chat-map migration + orphan prune
+│   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 15 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
-│   ├── settings-message-constants.js ─  DSS_SETTINGS_MSG: GET_SETTINGS / SET_SETTINGS / SETTINGS_CHANGED type constants
-│   ├── editor-window-constants.js ─  DSS_EDITOR_WINDOW: DSS_CLOSE_EDITOR_WINDOWS type + the two editor-window session storage keys (v4.29.0)
+│   ├── message-constants.js          ─  Cross-layer message type and URL constants (merged)
 │   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
 │   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
 │   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
-│   ├── url-constants.js        ─  URL pattern matching constants
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
 │   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
 │   ├── i18n.locales.en.js      ─  en string dictionary, pure data
@@ -207,10 +206,14 @@ Several large files were split into smaller modules using a **dual-load pattern*
 DeepSeek's chat interface relies on a frontend framework (likely React) which tracks state internally rather than just reading from the DOM. To inject text, the content script must not only alter `textarea.value` but also dispatch a bubbling `input` event so the framework recognizes the change before it processes the final `Enter` keystroke or mouse click.
 
 - **Keyboard interception**: Listens for `keydown` at capture phase. When `Enter` (without Shift) is detected on a textarea, the prefix is injected via the native HTMLTextAreaElement value setter (bypassing React's overridden setter), then an `input` event is dispatched. The original event is suppressed, and a programmatic `Enter` is re-dispatched inside a `requestAnimationFrame` callback to allow React state to commit.
-- **Send button interception**: Listens for `pointerdown`, `mousedown`, and `click` at capture phase. The send button is identified by CSS class `div.ds-icon-button[role="button"]` (desktop) or `div.ds-button[role="button"]` (mobile), or by specific parent class selectors. After injection, the user's intended click is programmatically re-triggered via `requestAnimationFrame`.
+- **Send button interception**: Listens for `pointerdown`, `mousedown`, and `click` at capture phase. The send button is identified by a three-tier strategy in `isSendButtonCandidate`:
+  1. **Primary — SVG path prefix**: `svg path[d^="M8.3125"]` (constant `SEND_BUTTON_ICON_SELECTOR`) — fastest and most specific, covering both desktop and mobile layouts.
+  2. **Structural fallback**: button contains an `svg` element AND carries both `ds-button--primary` + `ds-button--filled` variant classes (reuses `EDIT_SEND_BUTTON_VARIANT_CLASSES`) — catches the case when DeepSeek changes the icon SVG path. Logs `console.warn` for observability.
+  3. **Edit-window**: `isEditWindowSendButton` — structural check via variant classes + text label for the edit-window send button (no SVG).
+  The attachment button is excluded by all three tiers: its classes are `ds-button--iconLabelPrimary` + `ds-button--capsule`, not `--primary`/`--filled`. After injection, the user's intended click is programmatically re-triggered via `requestAnimationFrame`.
 - **Attachment-only sends (v4.21.1)**: `injectPrefix(textarea, isSendableWithoutText = false)` takes a second parameter so injection can proceed when the textarea is empty/whitespace-only but the message is still sendable (attachment or image only, no text). When `isSendableWithoutText` is true, the output contains the timestamp line (if the system-time toggle is on) plus the prompt-group / global-prompt prefix, deliberately omitting the `<user-input>` wrapper — there is no user text to wrap. Empty textarea with the flag false/omitted still returns false, and the extension-disabled early return still takes priority.
   - **Send-button-state signal**: whether "empty is still sendable" is derived from DeepSeek's own send button rather than any text heuristic. New helpers in `content/prompt-injector.controller.js`: `SEND_BUTTON_SELECTOR`, `isSendButtonCandidate`, `isSendButtonEnabled(button)` (disabled when the button carries `ds-button--disabled`, `aria-disabled="true"`, or a truthy `disabled` property), and `findSendButtonForTextarea(textarea)`. `ds-button--disabled` is a semantic BEM class rather than a build-hashed CSS-module class name, so it is preferred as a locator.
-  - **Click path**: no longer bails out when the resolved textarea is empty — it now injects if the clicked send button is not disabled, keeping the existing `preventDefault` / `stopPropagation` / `requestAnimationFrame` synthetic re-click flow and the `isInjecting` re-entrancy guard unchanged.
+  - **Click path**: injects whenever the clicked send button is not disabled, even when the resolved textarea is empty, keeping the existing `preventDefault` / `stopPropagation` / `requestAnimationFrame` synthetic re-click flow. The `isInjecting` re-entrancy guard is set synchronously immediately after injection (before `redispatchClick`), so that subsequent event phases (`mousedown` / `click`) from the same physical click are suppressed without waiting for the `requestAnimationFrame` callback.
   - **Textarea-resolution priority (click path, revised in the v4.21.1 follow-up fix)**: resolution is now a strict three-tier order, not a plain empty-textarea fallback:
     1. A **non-empty** textarea found while walking up the DOM from the clicked send button wins.
     2. Otherwise, the global `document.querySelector('textarea')` fallback is used when it is **non-empty** — this is the original, pre-feature behavior and is preserved unchanged.
@@ -227,7 +230,7 @@ The `isEnabled` key acts as a master switch for all extension features:
 - **System time injection**: When `isEnabled` is false, `isShowSystemTime` is ignored and no timestamp is prepended (`injectPrefix()` returns false before reaching the system-time logic).
 - **Overlay preset selector**: The `PresetOverlay` module hides its wrapper (`display: none`) and removes injected CSS (`removeOverlayStyles()`) when `isEnabled` is false. When re-enabled, CSS is re-injected and the overlay is shown.
 - **Prompt injection**: When `isEnabled` is false, `injectPrefix()` returns false immediately — no injection occurs.
-- **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0) `isGlobalPromptEnabled` is no longer a straight mirror of one storage key — it is resolved per navigation from the active preset's own `globalPromptEnabled` field, falling back to the legacy device-level key when no preset is active. Subordination to the master switch is unchanged.
+- **Global prompt toggle subordination** (v3.0.0): The dedicated `globalPromptEnabled` toggle only takes effect when the master switch is on. With the master off, the global prompt is never injected regardless of the toggle; with the master on, `buildInjectionPrefix()` includes the global prompt only when `isGlobalPromptEnabled` is true. (v4.20.0; displayed-preset rule v4.34.3) `isGlobalPromptEnabled` follows the preset the floating overlay displays: `ChatBinding.resolveDisplayedGlobalPromptEnabled(settings)` resolves that preset with `resolveActivePresetIdFrom()` (chat binding in `chatPresetMap` → `pendingPresetId` → `pinnedPresetId`) and reads its own `globalPromptEnabled` field; with no displayed preset, the legacy device-level `globalPromptEnabled` key decides. It is recomputed on navigation, on preset, `activePresetId`, chat-map chunk, or legacy-key storage changes, and on `ACTIVE_PRESET_CHANGED`, so the display matches the result that will be injected. It stays subordinate to the master switch.
 
 ### WebSearch Toggle Locator (v4.20.1)
 
@@ -264,9 +267,10 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 
 - **Layer 1 (real-time, content script)**: `beforeunload` calls `fetch(..., { keepalive: true })` directly. SPA navigation uses Fiber/API deletion.
 - **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup`, `chrome.runtime.onInstalled`, the `dss-delete-retry` alarm, and the sync-area `chrome.storage.onChanged` listener each call `remediatePendingDeletes()`, which reads the shared pending-delete queue from `chrome.storage.sync` and retries every lease-expired entry with the device's own locally-cached auth token. The function takes no argument and applies the same lease gate on all four paths.
-- **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount, lastActiveAt }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any expired queue entry.
+- **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount, lastActiveAt, ownerDeviceId }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any expired queue entry.
+- **Owning device**: `ownerDeviceId` is the id stored under the `chrome.storage.local` key `dss-device-id`, never synced. `addPendingDelete()` creates it once per device with `crypto.randomUUID()` inside the store mutex; when that local write fails the entry is stored with a `null` owner, so every device treats it as foreign.
 - **Privacy**: `authToken` (`dss-last-auth-token`) is stored in `chrome.storage.local` only — never synced.
-- **Storage ownership sits in the service worker**: the content layer no longer loads `background/pending-store.js`; that file is absent from `manifest.json`'s `content_scripts` list and is pulled in only by `background/service-worker.js` via `importScripts`, so `TemporaryChatPendingStore` — and every `chrome.storage.*` call it makes — exists solely in the worker. Content modules request writes by message instead. The four request types are declared in `utils/temporary-chat-constants.js` (also re-exported on `DSS_TEMP_CHAT_CONSTANTS` and assigned onto `globalThis`):
+- **Storage ownership sits in the service worker**: `background/pending-store.js` sits outside `manifest.json`'s `content_scripts` list and is pulled in only by `background/service-worker.js` via `importScripts`, so `TemporaryChatPendingStore` — and every `chrome.storage.*` call it makes — exists solely in the worker. Content modules request writes by message instead. The four request types are declared in `utils/temporary-chat-constants.js` (also re-exported on `DSS_TEMP_CHAT_CONSTANTS` and assigned onto `globalThis`):
 
 | Message type | Payload | Effect in the service worker |
 |-|-|-|
@@ -283,13 +287,14 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 
 #### Delete Lease & Heartbeat (v4.31.1)
 
-Ownership of a queued conversation is expressed as a lease that lives in the synced queue itself, so every device sees it. `lastActiveAt` is an epoch-ms timestamp on the entry, and `utils/temporary-chat-constants.js` publishes the two knobs: `LEASE_TTL_MS = 600000` (10 minutes) and `HEARTBEAT_INTERVAL_MS = 60000` (1 minute). The TTL is deliberately generous — it has to absorb `chrome.storage.sync` propagation delay, background-tab timer throttling, and cross-device clock skew all at once.
+Ownership of a queued conversation is expressed as a lease that lives in the synced queue itself, so every device sees it. `lastActiveAt` is an epoch-ms timestamp on the entry, and `utils/temporary-chat-constants.js` publishes three knobs: `LEASE_TTL_MS = 600000` (10 minutes), `FOREIGN_LEASE_TTL_MS` (24 hours), and `HEARTBEAT_INTERVAL_MS = 60000` (1 minute). The TTL is deliberately generous — it has to absorb `chrome.storage.sync` propagation delay, background-tab timer throttling, and cross-device clock skew all at once.
 
-- **`background/pending-store.js`** exposes `refreshLease(chatUuid)`, `releaseLease(chatUuid)` (which zeroes `lastActiveAt`), and the pure predicate `isLeaseExpired(entry, now)`. An entry counts as expired when `lastActiveAt` is not a finite number, or when `now - lastActiveAt > LEASE_TTL_MS`; a value exactly at the TTL is still live. Every read-modify-write over the sync queue runs through a promise-chain mutex, so messages arriving concurrently from several tabs cannot interleave their `get`/`set` pairs and lose an update.
-- **`content/temporary-chat-heartbeat.js`** publishes `{ start, stop }`. While a tab is tracking a temporary conversation it sends `{ type: 'DSS_HEARTBEAT', uuid }` once immediately and then every `HEARTBEAT_INTERVAL_MS`. It starts from `trackUuid()` and from the restore-from-`sessionStorage` path, and stops when tracking ends or the listeners detach. Being bound to the content-script/tab lifecycle is the whole design: a crashed or force-killed tab simply stops renewing, and the lease expires on its own — no device identifier or liveness protocol is needed.
+- **`background/pending-store.js`** exposes `refreshLease(chatUuid)`, `releaseLease(chatUuid)` (which zeroes `lastActiveAt`), and the pure predicates `resolveLeaseTtl(entry, localDeviceId)` and `isLeaseExpired(entry, now, lastSeenChange, ttlMs)`. `resolveLeaseTtl` returns `LEASE_TTL_MS` (10 minutes) when the entry's `ownerDeviceId` equals this device's `dss-device-id`, and `FOREIGN_LEASE_TTL_MS` (24 hours) for entries owned by another device or with no owner. An entry counts as expired when `lastActiveAt` is `0` (explicitly released), when the locally observed change time `lastSeenChange` is not a finite number, or when `now - lastSeenChange > ttlMs`; a value exactly at the TTL is still live. So the owning device remediates its own entry after 10 minutes without renewal, while other devices wait for an explicit release or 24 hours.
+- **Sweep write-back**: `remediatePendingDeletes()` collects per-entry outcomes and hands them to `applySweepResult({ deletedUuids, failedUuids })`, which re-reads the latest queue under the store mutex, drops the confirmed-deleted entries, increments `attemptCount` on the failed ones, and leaves every other entry — including ones added or renewed during the sweep — untouched. Every read-modify-write over the sync queue runs through a promise-chain mutex, so messages arriving concurrently from several tabs cannot interleave their `get`/`set` pairs and lose an update.
+- **`content/temporary-chat-heartbeat.js`** publishes `{ start, stop }`. While a tab is tracking a temporary conversation it sends `{ type: 'DSS_HEARTBEAT', uuid }` once immediately and then every `HEARTBEAT_INTERVAL_MS`. It starts from `trackUuid()` and from the restore-from-`sessionStorage` path, and stops when tracking ends or the listeners detach. Being bound to the content-script/tab lifecycle is the whole design: a crashed or force-killed tab simply stops renewing, and the lease expires on its own — after `LEASE_TTL_MS` on the device that queued it, after `FOREIGN_LEASE_TTL_MS` on every other device.
 - **Fast-restart recovery**: on `chrome.runtime.onStartup` the worker first releases the lease of every locally-open uuid that is also queued, then clears the local open set, then runs remediation. A conversation this device had open at shutdown is therefore deleted immediately on the next start rather than waiting out the TTL.
 - **Explicit release**: when the leave flow's immediate delete fails outright — the Fiber delete fails *and* the API fallback exhausts its retries — the coordinator sends `DSS_RELEASE_LEASE`, zeroing the lease so another device can take over instantly.
-- **Persisted observation records (v4.33.2)**: `recordLeaseObservation` writes each UUID's observation as `{ lastActiveAt, observedAt }` to `chrome.storage.local` (key `dss-last-seen-change:<uuid>`); the remediation pass compares the stored `lastActiveAt` against the queue entry's current value to decide whether to reuse the stored `observedAt`, so lease expiry survives service worker cold starts. A `lastActiveAt` of 0 is immediately expired. After saving the queue, orphan `dss-last-seen-change:` keys whose UUIDs are no longer queued are removed.
+- **Persisted observation records (v4.33.2)**: `recordLeaseObservation` writes each UUID's observation as `{ lastActiveAt, observedAt }` to `chrome.storage.local` (key `dss-last-seen-change:<uuid>`); the remediation pass compares the stored `lastActiveAt` against the queue entry's current value to decide whether to reuse the stored `observedAt`, so lease expiry survives service worker cold starts. A `lastActiveAt` of 0 is immediately expired. After saving the queue, orphan `dss-last-seen-change:` keys for UUIDs outside the queue are removed.
 - **No-token hand-off (v4.33.2)**: When a Chrome-restored tab navigates away from a tracked temporary conversation and no auth token was captured in this page session, the content script calls `handOffToServiceWorker` — stops the heartbeat, sends `DSS_REMOVE_OPEN_UUID` / `DSS_SCHEDULE_DELETE_RETRY` / `DSS_RELEASE_LEASE` — and the service worker deletes the conversation on the next alarm remediation pass.
 - **Retry alarm armed whenever the queue is non-empty (v4.33.3)**: `remediatePendingDeletes()` calls `scheduleRetryAlarm(pending)` after confirming the queue is non-empty and before the auth-token gate, so the no-token path and `onInstalled` (Chrome clears all alarms on reload/update) both keep the `dss-delete-retry` alarm armed. `onInstalled` is the fourth remediation path.
 
@@ -305,7 +310,7 @@ A conversation sitting in the pending-delete queue is hidden from the DeepSeek s
 
 ### Content Settings Access (content → background)
 
-Content modules likewise stopped reading and writing settings storage themselves. `utils/settings-message-constants.js` publishes `globalThis.DSS_SETTINGS_MSG` with three types — `DSS_GET_SETTINGS`, `DSS_SET_SETTINGS`, `DSS_SETTINGS_CHANGED` — and both the content scripts and the service worker load that same file, so neither side hardcodes the strings.
+Most content modules obtain settings by messaging background/. Three files — `chat-binding-controller.js`, `content-script.js`, `preset-overlay.controller.js` — retain direct `StorageManager` access because the manifest loads the storage-manager bundle into their content_scripts group (guarded by `test/unit/storage-manager.loader-contract.spec.js`). `utils/message-constants.js` publishes `globalThis.DSS_SETTINGS_MSG` with three types — `DSS_GET_SETTINGS`, `DSS_SET_SETTINGS`, `DSS_SETTINGS_CHANGED` — and both the content scripts and the service worker load that same file, so neither side hardcodes the strings.
 
 - **`background/settings-routes.js`** installs the counterpart at worker top level. `DSS_GET_SETTINGS` takes `{ keys: string[] }`, reads them from `chrome.storage.local`, fills gaps from `StorageManager.DEFAULTS`, routes `dsWebSearchToggle` through the shared `normalizeWebsearchToggle()`, and replies `{ ok: true, values }`. `DSS_SET_SETTINGS` takes `{ values: object }` and writes it to `chrome.storage.local`. Both reject empty or malformed payloads with `{ ok: false, error }`.
 - **Change broadcast**: the same `install()` registers `chrome.storage.onChanged` and forwards watched changes to every `*://chat.deepseek.com/*` tab as `{ type: DSS_SETTINGS_CHANGED, area, changes }`, preserving the original `changes` shape. Watched = any `StorageManager.KEYS` value in the `local` area, plus the extra local key `dss-temporary-chat-enabled`, plus anything under the `dsPreset_` / `chatPresetMap_` prefixes in either area. Per-tab send failures are swallowed so one unloaded tab cannot starve the rest.
@@ -320,7 +325,7 @@ The standalone prompt editor opens as its own OS window, so it can end up buried
 |-|-|-|
 | `DSS_CLOSE_EDITOR_WINDOWS` | none | Reads both editor-window ids from `chrome.storage.session`, `chrome.windows.remove()` each one that is present, removes the corresponding keys, and replies `{ ok: true }` |
 
-- **`utils/editor-window-constants.js`** publishes `globalThis.DSS_EDITOR_WINDOW` with `CLOSE_MESSAGE_TYPE` (`'DSS_CLOSE_EDITOR_WINDOWS'`) and `STORAGE_KEYS` (`global: 'dss-editor-window-id-global'`, `preset: 'dss-editor-window-id-preset'`). It is a plain `globalThis` assignment rather than a top-level `const`, because a top-level `const` does not become a `globalThis` property. All three consumers — `content/editor-window-autoclose.js`, `background/editor-window-routes.js`, `popup/popup.editor-window.js` — read the same file, so the storage keys have one definition; each throws a named load-order error when the constants file is absent.
+- **`utils/message-constants.js`** publishes `globalThis.DSS_EDITOR_WINDOW` with `CLOSE_MESSAGE_TYPE` (`'DSS_CLOSE_EDITOR_WINDOWS'`) and `STORAGE_KEYS` (`global: 'dss-editor-window-id-global'`, `preset: 'dss-editor-window-id-preset'`). It is a plain `globalThis` assignment rather than a top-level `const`, because a top-level `const` does not become a `globalThis` property. All three consumers — `content/editor-window-autoclose.js`, `background/editor-window-routes.js`, `popup/popup.editor-window.js` — read the same file, so the storage keys have one definition; each throws a named load-order error when the constants file is absent.
 - **`content/editor-window-autoclose.js`** is the sender: a `focus` listener on `window` posts `{ type: CLOSE_MESSAGE_TYPE }` and swallows the rejection, since a sleeping service worker with no receiver is expected rather than exceptional. It forwards the event and nothing more — window removal and session-storage access both belong to the background layer.
 - **`background/editor-window-routes.js`** owns that side. `DSSEditorWindowRoutes.install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener; unknown types return `false` without responding, leaving the worker's other listeners free to handle them. Each id is handled independently: a `chrome.windows.remove()` rejection (the user already closed that window) is logged via `console.error` and the storage key is removed in a `finally` regardless, so one stale id cannot leave the other tracked window open or its key behind.
 - **No data loss**: the editor's own auto-save pipeline — 500 ms debounced on `input`, immediate flush on `blur` / `visibilitychange` / `pagehide` — writes dirty content before the window goes away, the same guarantee that already covered the `Esc` shortcut.
@@ -340,7 +345,7 @@ sequenceDiagram
     Storage-->>Popup: If mismatch → syncConflictPending=true
     Popup->>Popup: Show "Cloud Sync Conflict" Modal
     Popup->>Storage: resolveSyncConflict() → mergePresets()
-    Storage-->>Popup: Write merged result, clear conflict flag
+    Storage-->>Popup: Write merged result (chat-map keys skipped, written only by the service worker), clear conflict flag
 
     Note over Popup,Content: Normal Flow — Prompt Operations
     Popup->>Popup: Modal.prompt/confirm for prompt CRUD
@@ -351,7 +356,7 @@ sequenceDiagram
 
     Note over Content: Overlay In-Page Prompt Group Switching
     Content->>Content: PresetOverlay.onSelectChange(newId)
-    Content->>Storage: saveActivePresetId / bindChatToPreset
+    Content->>Storage: saveActivePresetId / bindChatToPreset (via the service worker single writer)
     Storage-->>Popup: (read on next open)
     Storage-->>Content: onChanged (ACTIVE_PRESET_ID / PRESET_INDEX)
     Content->>Content: PresetOverlay.render() / updateActiveId()

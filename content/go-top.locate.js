@@ -1,11 +1,6 @@
 /**
- * DS studio — Go To Top Locate Bundle (Entry)
- * DOM 查詢輔助、包裝容器定位與可見性評估。
- *
- * 載入順序（manifest.json 中 bundle 必須先於 entry）：
- *   1. go-top.locate.scroll.js → globalThis.__DS_GoToTop_locate_scroll
- *   2. go-top.locate.anchor.js → globalThis.__DS_GoToTop_locate_anchor
- *   3. go-top.locate.js        （本檔，Object.assign 合入以上兩個 bundle）
+ * DS studio — Go To Top Locate Bundle
+ * DOM 查詢輔助、錨點偵測、原生按鈕定位、捲動容器定位與可見性評估。
  */
 (function (root) {
     'use strict';
@@ -13,6 +8,14 @@
     // 合併共用選擇器常數
     const __DSSelectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+    const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
+    const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
+    const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
+    const DS_BUTTON_FLOATING = __DSSelectors.DS_BUTTON_FLOATING_CLASS;
+    const DS_BUTTON_CIRCLE = __DSSelectors.DS_BUTTON_CIRCLE_CLASS;
+    const DS_BUTTON_PRIMARY = __DSSelectors.DS_BUTTON_PRIMARY_CLASS;
+    const DS_BUTTON_FILLED = __DSSelectors.DS_BUTTON_FILLED_CLASS;
+    const BUTTON_DISABLED = __DSSelectors.BUTTON_DISABLED_CLASS;
 
     const bundle = {
         // ─────────────────────────────
@@ -129,13 +132,116 @@
                 this._button.style.display = 'none';
             }
         },
-    };
 
-    // 合入兩個 sub-bundle
-    Object.assign(bundle,
-        root.__DS_GoToTop_locate_scroll || {},
-        root.__DS_GoToTop_locate_anchor || {}
-    );
+        // ─────────────────────────────
+        //  Anchor: 錨點偵測與原生按鈕定位
+        // ─────────────────────────────
+
+        /**
+         * @returns {Element|null} The conversation-start anchor node.
+         */
+        _getAnchor() {
+            return this._querySelectorWithFallback([
+                this.ANCHOR_SELECTOR,
+                this.ANCHOR_SELECTOR_FALLBACK1,
+                this.ANCHOR_SELECTOR_FALLBACK2,
+                this.FIRST_MSG_SELECTOR,
+            ]);
+        },
+
+        /**
+         * @returns {Element|null} The first message element in DOM.
+         */
+        _getFirstMessage() {
+            return this._querySelectorWithFallback([
+                this.FIRST_MSG_SELECTOR,
+                '[class*="ds-message"]',
+            ]);
+        },
+
+        /**
+         * @returns {Element|null} The native go-bottom button if it exists.
+         */
+        _getNativeButton() {
+            const result = this._querySelectorWithFallback([
+                this.NATIVE_BTN_SELECTOR,
+                FLOATING_BAR + ' .' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + ':not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + ':not(.dsw-gotop)',
+                FLOATING_BAR + ' [role="button"].' + DS_BUTTON_FLOATING + '[class*="' + DS_BUTTON_CIRCLE + '"]:not(.dsw-gotop)',
+            ]);
+            if (!result) return null;
+
+            // 後驗證：若匹配來自降級選擇器（非 _0706cde），確認確實為 floating 按鈕
+            if (!result.classList.contains(GO_TOP_NATIVE_BUTTON_CLASS)) {
+                if (!result.classList.contains(DS_BUTTON_FLOATING) ||
+                    result.classList.contains(DS_BUTTON_PRIMARY) ||
+                    result.classList.contains(DS_BUTTON_FILLED) ||
+                    result.classList.contains(BUTTON_DISABLED)) {
+                    return null;
+                }
+            }
+
+            return result;
+        },
+
+        // ─────────────────────────────
+        //  Scroll: 捲動容器定位策略
+        // ─────────────────────────────
+
+        /**
+         * Walk up from anchor to find the scrollable container.
+         * 以三段策略定位訊息列表的滾動容器，避免抓到側邊欄的 .ds-scroll-area。
+         * @param {Element} anchor - Starting DOM node
+         * @returns {Element}
+         */
+        _findScrollContainer(anchor) {
+            // 策略 1：從 anchor 向上走，找到最近的 .ds-scroll-area
+            if (anchor) {
+                let el = anchor.parentElement;
+                while (el && el !== document.body) {
+                    // 不可滾動的容器仍為有效目標：未溢出僅代表內容尚短，容器本身仍然正確，見 harvest.dom.js 同理修正。
+                    if (el.classList.contains(SCROLL_AREA_CLASS)) {
+                        this._scrollContainer = el;
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+            }
+
+            // 策略 2：從虛擬列表容器向上找
+            const virtualList = document.querySelector(this.VIRTUAL_LIST_SELECTOR) ||
+                                document.querySelector(this.VIRTUAL_LIST_FALLBACK);
+            if (virtualList) {
+                let el = virtualList.parentElement;
+                while (el && el !== document.body) {
+                    // 不可滾動的容器仍為有效目標：未溢出僅代表內容尚短，容器本身仍然正確。
+                    if (el.classList.contains(SCROLL_AREA_CLASS)) {
+                        this._scrollContainer = el;
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+            }
+
+            // 策略 3：從 anchor 向上探測具有 overflow:auto/scroll 的元素
+            if (anchor && anchor.parentElement) {
+                let el = anchor.parentElement;
+                while (el && el !== document.body) {
+                    const style = getComputedStyle(el);
+                    const overflowY = style.overflowY;
+                    // 不可滾動的容器仍為有效目標：未溢出僅代表內容尚短，容器本身仍然正確。
+                    if (overflowY === 'auto' || overflowY === 'scroll') {
+                        this._scrollContainer = el;
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+            }
+
+            // 策略 4：最後回退到 document.scrollingElement
+            return document.scrollingElement || document.documentElement;
+        },
+    };
 
     // 將 bundle 掛載至全域（供 go-top.js 的 Object.assign 合併使用）
     root.__DS_GoToTop_locate = bundle;

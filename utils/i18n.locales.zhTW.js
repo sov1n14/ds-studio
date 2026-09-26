@@ -24,12 +24,15 @@
     sidebarAutoHideLabel: '側邊欄自動隱藏（保留 60px hover 展開）',
     hideThinkingLabel: '隱藏思考過程',
     autoExpandMessagesLabel: '自動展開訊息',
+    autoRetryLabel: '自動重試',
+    autoContinueLabel: '自動繼續生成',
     preventAutoScrollLabel: '防止自動回滾',
     websearchToggleLabel: '連網搜索',
     websearchOnLabel: '開啟',
     websearchOffLabel: '關閉',
     chatWidthLabel: '對話區域寬度',
     inputWidthLabel: '編輯輸入框寬度',
+    switchLanguageTitle: '切換語言',
     narrowLabel: '窄',
     wideLabel: '寬',
     requiredIndicator: '* 必填',
@@ -185,6 +188,10 @@
 
     // ---- Utils ----
     migratedPresetName: '我的提示詞',
+
+    // ---- Content Script: Invalidation Toast ----
+    'invalidationToast.message': 'DS Studio 已更新，請重新整理頁面以繼續使用',
+    'invalidationToast.refresh': '重新整理',
   };
 
   root.__DS_I18N_Locales_zhTW = zh_TW;

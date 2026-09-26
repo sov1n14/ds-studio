@@ -12,6 +12,8 @@
  *            prompt-injector.controller.spec.js
  */
 
+import DSSelectors from '../../content/ds-selectors.js';
+
 /** The d attribute of the real send-icon SVG path (composer send button, both layouts). */
 export const SEND_ICON_PATH_D = 'M8.3125 0L16.625 8.3125L8.3125 16.625';
 
@@ -25,6 +27,13 @@ export const COMPOSER_SEND_CLASSES =
     'ds-button ds-button--primary ds-button--filled ds-button--circle ' +
     'ds-button--m ds-button--icon-relative-m _52c986b';
 
+/** The d attribute of the real paperclip (attachment) icon, verbatim from to-do/samples/input.html. */
+export const ATTACHMENT_ICON_PATH_D = 'M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z';
+
+/** The d attribute of the real send-arrow icon, verbatim from to-do/samples/input.html. */
+export const REAL_SEND_ICON_PATH_D = 'M8.3125 0.980206C8.66767 1.05312 8.97902 1.2042 9.2627 1.43235C9.48724 1.613 9.73029 1.85795 9.97949 2.10716L14.707 6.8347L13.293 8.24876L9 3.95579V15.0417H7V3.95579L2.70703 8.24876L1.29297 6.8347L6.02051 2.10716C6.26971 1.85795 6.51277 1.613 6.7373 1.43235C6.97662 1.23988 7.28445 1.04404 7.6875 0.980206C7.8973 0.947029 8.1031 0.955183 8.3125 0.980206Z';
+
+
 function makeIconSvg(d) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -34,13 +43,13 @@ function makeIconSvg(d) {
 }
 
 /**
- * Desktop-style send button:
- *   <div class="ds-icon-button" role="button"><svg><path d="M8.3125..."/></svg></div>
+ * Desktop-style send button (now ds-button after .ds-icon-button removal):
+ *   <div class="ds-button ds-button--icon" role="button"><svg><path d="M8.3125..."/></svg></div>
  * Returns { button, svg } so the tap target (svg) can be dispatched.
  */
 export function makeDesktopSendButton() {
     const button = document.createElement('div');
-    button.className = 'ds-icon-button';
+    button.className = 'ds-button ds-button--icon';
     button.setAttribute('role', 'button');
     const svg = makeIconSvg(SEND_ICON_PATH_D);
     button.appendChild(svg);
@@ -76,7 +85,7 @@ export function makeMobileSendButton() {
  */
 export function makeOtherButton() {
     const button = document.createElement('div');
-    button.className = 'ds-icon-button';
+    button.className = 'ds-button ds-button--icon';
     button.setAttribute('role', 'button');
     const svg = makeIconSvg('M0 0 L10 10 L20 0');
     button.appendChild(svg);
@@ -213,6 +222,82 @@ export function makeEditSendButtonStandalone(value = 'edit text') {
     return { button, span, textarea };
 }
 
+
+/**
+ * Real composer actions row containing BOTH the attachment (paperclip) button
+ * and the send button, transcribed verbatim from to-do/samples/input.html.
+ *
+ * Structure:
+ *   div.bf38813a                       <-- actionsRow (direct parent of attachment button)
+ *     div[role=button].ds-button...    <-- attachment button (paperclip icon)
+ *     input[type=file][display:none]
+ *     div[style="width: fit-content;"] <-- send button wrapper
+ *       div[role=button].ds-button...  <-- send button (arrow icon)
+ *
+ * Returns { row, attachmentButton, sendButton }
+ */
+export function makeAttachmentButtonInActionsRow() {
+    const row = document.createElement('div');
+    row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
+
+    // --- attachment button ---
+    const attachmentButton = document.createElement('div');
+    attachmentButton.setAttribute('role', 'button');
+    attachmentButton.className =
+        'ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ' +
+        'ds-button--s ds-button--icon-relative-m f02f0e25';
+    attachmentButton.tabIndex = 0;
+
+    const attachBg = document.createElement('div');
+    attachBg.className = 'ds-button__background';
+    const attachIconWrap = document.createElement('div');
+    attachIconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+    const attachIconDiv = document.createElement('div');
+    attachIconDiv.className = 'ds-icon';
+    const attachSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const attachPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    attachPath.setAttribute('d', ATTACHMENT_ICON_PATH_D);
+    attachSvg.appendChild(attachPath);
+    attachIconDiv.appendChild(attachSvg);
+    attachIconWrap.appendChild(attachIconDiv);
+    attachmentButton.appendChild(attachBg);
+    attachmentButton.appendChild(attachIconWrap);
+
+    // --- hidden file input ---
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.style.display = 'none';
+
+    // --- send button wrapper ---
+    const sendWrapper = document.createElement('div');
+    sendWrapper.style.width = 'fit-content';
+
+    const sendButton = document.createElement('div');
+    sendButton.setAttribute('role', 'button');
+    sendButton.className =
+        'ds-button ds-button--primary ds-button--filled ds-button--circle ' +
+        'ds-button--m ds-button--icon-relative-m _52c986b bd74640a';
+
+    const sendBg = document.createElement('div');
+    sendBg.className = 'ds-button__background';
+    const sendIconWrap = document.createElement('div');
+    sendIconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+    const sendSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const sendPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    sendPath.setAttribute('d', REAL_SEND_ICON_PATH_D);
+    sendSvg.appendChild(sendPath);
+    sendIconWrap.appendChild(sendSvg);
+    sendButton.appendChild(sendBg);
+    sendButton.appendChild(sendIconWrap);
+    sendWrapper.appendChild(sendButton);
+
+    row.appendChild(attachmentButton);
+    row.appendChild(fileInput);
+    row.appendChild(sendWrapper);
+
+    return { row, attachmentButton, sendButton };
+}
+
 /** Attach elements to document.body; returns a cleanup function. */
 export function mountInDocument(...elements) {
     elements.forEach(el => document.body.appendChild(el));
@@ -234,4 +319,29 @@ export function dispatchClick(target) {
     const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
     target.dispatchEvent(ev);
     return ev;
+}
+
+/**
+ * Composer send button whose SVG path has CHANGED (DeepSeek updated the icon)
+ * but still carries the primary+filled+circle variant classes.
+ * Exercises the structural fallback in isSendButtonCandidate.
+ *
+ * Structure mirrors makeMobileSendButton but with a different SVG path d.
+ * Returns { button, svg }
+ */
+export function makeSendButtonWithChangedIcon() {
+    const button = document.createElement('div');
+    button.className = COMPOSER_SEND_CLASSES;
+    button.setAttribute('role', 'button');
+
+    const iconWrapper = document.createElement('div');
+    iconWrapper.className = 'ds-button__icon ds-button__icon--last-child';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M99.999 0 L10 10');
+    svg.appendChild(path);
+    iconWrapper.appendChild(svg);
+    button.appendChild(iconWrapper);
+
+    return { button, svg };
 }

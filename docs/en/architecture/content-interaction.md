@@ -43,7 +43,7 @@ A single `handleViewportChange` handler serves both `scroll` (capture, passive) 
 Appends `formatQuote(selectedText)` to the textarea value:
 
 - **`formatQuote`**: `text.split(/\r?\n/).map(l => '> ' + l).join('\n')` — each line receives a Markdown blockquote prefix.
-- **React-aware write**: Uses `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` (same pattern as `content-script.js:302-303`) followed by `input` and `change` event dispatch to trigger React state updates.
+- **React-aware write**: Uses `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` (same pattern as `content/prompt-injector.controller.js:84-85`) followed by `input` and `change` event dispatch to trigger React state updates.
 - **Append logic**: empty textarea → quoted text only; non-empty → existing content + `\n` (if not already ending with `\n`) + quoted text.
 
 ### CSS Injection
@@ -64,7 +64,7 @@ Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQ
 
 ## Edit Message Cleanup Module
 
-`content/edit-message-cleanup.js` strips the injected prompt wrapper from DeepSeek's edit textarea so the user edits only their original message. It complements the prompt-injection flow in `content-script.js` (`injectPrefix`): injection wraps the outgoing message, this module unwraps it on re-edit.
+`content/edit-message-cleanup.js` strips the injected prompt wrapper from DeepSeek's edit textarea so the user edits only their original message. It complements the prompt-injection flow in `content/prompt-injector.controller.js` (`injectPrefix`, re-exported through `content-script.js`): injection wraps the outgoing message, this module unwraps it on re-edit.
 
 ### Trigger and Scope
 
@@ -95,8 +95,8 @@ After the max-height adjustment and wrapper cleanup, the edit box is scrolled so
 
 ### Wrapper Extraction (`extractUserInput` + `applyTextareaCleanup`)
 
-- **`extractUserInput(text)`**: Returns the inner content if `text` matches `/<user-input>\n([\s\S]*)\n<\/user-input>$/` (the same end-anchored regex shape as `content-script.js`), else `null`. Non-string input → `null`. The `$` anchor means trailing content after `</user-input>` does not match.
-- **`applyTextareaCleanup(textarea)`**: Calls `extractUserInput(textarea.value)`. On a match, rewrites the value to ONLY the inner content using `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` followed by `input`/`change` event dispatch (same React-aware write as `quote-reply.js` / `content-script.js`). When there is **no** `<user-input>` wrapper, the textarea is left completely untouched and no event is dispatched (explicit requirement — plain messages are never cleared).
+- **`extractUserInput(text)`**: Returns the inner content if `text` matches `/<user-input>\n([\s\S]*)\n<\/user-input>$/` (the same end-anchored regex shape as `injectPrefix` in `content/prompt-injector.controller.js`), else `null`. Non-string input → `null`. The `$` anchor means trailing content after `</user-input>` does not match.
+- **`applyTextareaCleanup(textarea)`**: Calls `extractUserInput(textarea.value)`. On a match, rewrites the value to ONLY the inner content using `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` followed by `input`/`change` event dispatch (same React-aware write as `quote-reply.js` / `content/prompt-injector.controller.js`). When there is **no** `<user-input>` wrapper, the textarea is left completely untouched and no event is dispatched (explicit requirement — plain messages are never cleared).
 
 ### Test Interface
 
@@ -118,15 +118,15 @@ The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's
 - `isEnabled()`: Reads the current flag. **There is no reference counting** — outside persistent mode, `disable()` is an unconditional global off-switch. Any caller that may run nested inside another caller's enabled window MUST save the prior state via `isEnabled()` and restore it, rather than blind-toggling.
 - `setPersistent(shouldPersist)` (v4.12.0): When true, enables protection and marks `bridge.dataset.persistent = 'true'`. When false, clears the mark and force-writes `dataset.enabled = 'false'` directly — deliberately bypassing `disable()`'s own persistent guard, which would otherwise make turning persistence off unable to ever release the protection.
 - `isPersistent()` (v4.12.0): Reads the persistent flag. Persistent state lives on the same hidden bridge element's dataset as `enabled`, so the module keeps no module-scope mutable state.
-- `start()` (v4.12.0): Auto-invoked at module load, mirroring `content/hide-thinking.js`'s bootstrap convention. Delegates master-switch and own-toggle gating to `registerFeatureToggle` from `content/feature-toggle.js` with `ownKey: StorageManager.KEYS.PREVENT_AUTO_SCROLL`, calling `setPersistent(true)` on enable and `setPersistent(false)` on disable.
+- `start()` (v4.12.0): Auto-invoked at module load, mirroring `content/hide-thinking.js`'s bootstrap convention. Delegates master-switch and own-toggle gating to `registerFeatureToggle` from `content/feature-toggle.js` with `ownKey: StorageManager.KEYS.PREVENT_AUTO_SCROLL`, calling `setPersistent(true)` on enable and `setPersistent(false)` on disable. Settings are obtained from background via `DSS_GET_SETTINGS` and subsequent `DSS_SETTINGS_CHANGED` broadcasts. Persistent mode is on only when the master switch is enabled **and** this setting is true.
 
 ### Consumers
 
 Three consumers coordinate with this bridge, and the first two nest:
 
-- **`harvest.js`** enables it before the scroll-to-top phase and disables it in a `finally` after the entire top-to-bottom capture completes — so it stays on for the whole export. Note that `finally` block calls `disable()` **unconditionally**; combined with the absence of reference counting, that is precisely why `disable()` had to become a no-op under persistent mode. Without that guard, one Markdown export would silently switch off a user-enabled permanent lock.
+- **`harvest.js`** enables it before the scroll-to-top phase and disables it in a `finally` after the entire top-to-bottom capture completes — so it stays on for the whole export. Note that `finally` block calls `disable()` **unconditionally**; combined with the absence of reference counting, that is precisely why `disable()` is a no-op under persistent mode. Without that guard, one Markdown export would silently switch off a user-enabled permanent lock.
 - **`go-top.js`** (`scrollToTopAndWait`, in `go-top.scroll.js`) enables it for the duration of a single scroll-to-top and restores the prior state in `cleanup()`. Because `harvest.js` calls `scrollToTopAndWait` from inside its own enabled window, GoToTop uses save-and-restore: it disables only if it was the call that enabled. A blind `disable()` here would strip harvest's protection mid-export. Under persistent mode this logic short-circuits naturally — `isEnabled()` is already true, so GoToTop neither enables nor disables.
-- **The `dsPreventAutoScroll` popup toggle** (v4.12.0) drives `setPersistent()` via `start()`'s storage subscription. Neither of the two transient consumers was modified to support it: the persistent flag lives at the shared choke point, which is the only place a caller-agnostic mode switch can be correct given that callers do not refcount.
+- **The `dsPreventAutoScroll` popup toggle** (v4.12.0) drives `setPersistent()` via `start()`'s settings subscription. The two transient consumers carry no persistent-mode logic: the persistent flag lives at the shared choke point, which is the only place a caller-agnostic mode switch can be correct given that callers do not refcount.
 
 **Scope caveat.** The main-world patch is a global `Element.prototype`-level interception that blocks **downward** scrolls only and cannot distinguish page-initiated from user-initiated calls. Under persistent mode this means DeepSeek's streaming follow-scroll is also suppressed, and any conversation-switch that needs to scroll down to land correctly will be blocked too. Native wheel/trackpad scrolling does not route through these JS APIs and is unaffected. This trade-off is why the setting defaults to `false`.
 
@@ -151,12 +151,10 @@ A checkbox in the Features card (`#showSystemTimeToggle`) controls the setting. 
 
 ### Content Script Integration
 
-In `content-script.export.js` (re-exported through `content-script.js`):
-
-- `let showSystemTime = false` — runtime state variable, initialized from storage during `initSettings()`.
-- `formatSystemTime(date = new Date())` — pure function returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
-- `formatTimezoneOffset(date)` — pure helper returning the timezone offset string `UTC±hh:mm` (e.g., `UTC+08:00`, `UTC-03:45`).
-- In `injectPrefix()`, the system time is prepended before the injection prefix:
+- `isShowSystemTime: false` — runtime state field in `content/chat-binding-controller.js`, initialized from storage via `applyInitialSettings()` during `initSettings()`.
+- `formatSystemTime(date)` (defaults to the current time) — pure function in `content/content-script.export.time.js` returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
+- `formatTimezoneOffset(date)` — pure helper in the same file returning the timezone offset string `UTC±hh:mm` (e.g., `UTC+08:00`, `UTC-03:45`).
+- In `injectPrefix()` (`content/prompt-injector.controller.js`), the system time is prepended before the injection prefix:
   ```
   Current Time: 2026/05/31 14:30:00 (UTC+08:00)\n\n
   ```
@@ -164,8 +162,44 @@ In `content-script.export.js` (re-exported through `content-script.js`):
 
 ### Re-injection Guard
 
-The timestamp is captured once at injection time (not at page load), so each message reflects the time when the user pressed send. If `showSystemTime` changes between messages (via popup toggle + `chrome.storage.onChanged`), the new value takes effect on the next send.
+The timestamp is captured once at injection time (not at page load), so each message reflects the time when the user pressed send. If `isShowSystemTime` changes between messages (via popup toggle + the `DSS_SETTINGS_CHANGED` broadcast), the new value takes effect on the next send.
 
 ### Master Switch Awareness
 
-When `isEnabled` is `false`, `injectPrefix()` returns early — the system time is never prepended regardless of `showSystemTime`. The toggle in the popup is also disabled by `applyMasterSwitchUI()`.
+When `isEnabled` is `false`, `injectPrefix()` returns `false` early — the system time is never prepended regardless of `isShowSystemTime`. The toggle in the popup is also disabled by `applyMasterSwitchUI()`.
+
+## Auto Retry and Auto Continue (AutoRetry)
+
+`content/auto-retry.js` drives both the retry button and the continue-generating button from a single `setTimeout` chain.
+
+### Storage Keys
+
+- `isAutoRetryEnabled` (boolean, default `false`) — `KEYS.AUTO_RETRY`, gates the retry button.
+- `isAutoContinueEnabled` (boolean, default `false`) — `KEYS.AUTO_CONTINUE`, gates the continue button.
+
+### Popup Toggles
+
+The `#autoRetryToggle` and `#autoContinueToggle` checkboxes in the Features card write through `StorageManager.saveAutoRetry()` / `saveAutoContinue()`. Both are master-switch-aware sub-controls, and `popup/popup.live-sync.js` reflects storage changes to them live.
+
+### Gating (registerFeatureToggle)
+
+`start()` calls `registerFeatureToggle({ ownKey, onEnable, onDisable })` once per entry in `BUTTONS`, so each button's gate is open only when the master switch `isEnabled` and its own key are both on. `enable(name)` / `disable(name)` maintain the `_openGates` set; the module does not read storage directly.
+
+### Round Loop
+
+- At most one timer (`_timer`) exists at any time. When `_openGates` goes from empty to non-empty, `_scheduleRound()` schedules the next round with `DSSAutoClickDelay.nextDelayMs()` (`content/auto-click.delay.js`, a uniform random value of 0–3000ms in 100ms steps).
+- `_runRound()` tries each open button's selectors in order, clicks the first match once, then schedules the next round with a fresh random delay; there is no click cap. An error thrown inside a round is logged and the next round is still scheduled.
+- When `_openGates` becomes empty, `_stopTimer()` clears the timer, so no timer runs while every toggle is off.
+
+### Button Location
+
+Buttons are located only through the selectors in `content/ds-selectors.js`, never by button text; the fallback is tried only when the primary selector finds nothing.
+
+| Button | Primary | Fallback |
+|-|-|-|
+| Retry | `RETRY_BUTTON_SELECTOR` (`.ds-button--warning.ds-button--circle.ds-button--xs`) | `RETRY_BUTTON_FALLBACK_SELECTOR` (`.a3b9bd76._76a2310`) |
+| Continue generating | `CONTINUE_BUTTON_SELECTOR` (`._8e85838 > .ds-button[role="button"]`) | `CONTINUE_BUTTON_FALLBACK_SELECTOR` (`._6eef0b0`) |
+
+### Load Order
+
+In the manifest, `content/auto-click.delay.js` loads before `content/auto-retry.js`; `start()` throws a named load-order error when `DSSFeatureToggle` or `DSSAutoClickDelay` is absent.
