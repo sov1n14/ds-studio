@@ -25,7 +25,8 @@ export async function settle() {
     await flush();
 }
 
-async function waitForContentScriptBootstrap() {
+// content-script.js starts initSettings() un-awaited at import; its last step registers the second onMessage listener. Await this before touching state, or the bootstrap's handleChatChange() lands mid-test and supersedes the test's promptPrefix write.
+export async function waitForContentScriptBootstrap() {
     for (let i = 0; i < 500; i++) {
         if (chrome.runtime.onMessage.listenerCount() >= 2) return;
         await new Promise((resolve) => setTimeout(resolve, 0));

@@ -3,6 +3,7 @@ import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
+import { waitForContentScriptBootstrap } from '../helpers/overlay-consistency-harness.js';
 
 const s = () => contentScript.state;
 
@@ -26,7 +27,7 @@ describe('pinned default preset preselection (new-chat path only)', () => {
     }
 
     beforeEach(async () => {
-        await new Promise(r => setTimeout(r, 0));
+        await waitForContentScriptBootstrap();
         Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
 
         await chrome.storage.local.remove([
