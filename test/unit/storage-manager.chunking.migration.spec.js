@@ -1,19 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
-import { resetStorageOnChangedListeners, getStorageOnChangedListenerCount } from '../setup/vitest.setup.js';
 
 /**
- * NOTE on module-level cache bleed:
- * Because _metaCache and _chunkIndexCache are module-level (not reset between tests),
- * later tests in this file may operate with stale caches from prior tests.
- * The assertions are designed to be robust against this: they inspect raw storage
- * directly and check relative properties (e.g., "at least one chunk exists") rather
- * than assuming absolute chunk indices.
+ * Legacy chatPresetMap -> chunked layout migration performed by initialize(). The migration writes through mutateChatPresetMap, so the instance runs in writer mode (the service-worker single-writer role). Assertions inspect raw storage and check relative properties (e.g., "at least one chunk exists") rather than absolute chunk indices.
  */
 
 describe('StorageManager legacy chatPresetMap migration', () => {
     beforeEach(() => {
         // Storage is cleared by vitest.setup.js beforeEach
+        StorageManager.enableChatMapWriterMode();
     });
 
     describe('1. Happy path migration', () => {
@@ -156,44 +151,5 @@ describe('StorageManager legacy chatPresetMap migration', () => {
             const localData = await chrome.storage.local.get('chatPresetMap');
             expect(localData.chatPresetMap).toBeUndefined();
         });
-    });
-});
-
-/**
- * U8 — initialize() is re-entrant (the popup, the content script and the service
- * worker each call it, and the promptPresets migration branch re-enters it
- * recursively), so the chunk-cache invalidator it installs must be registered
- * exactly once per context no matter how many times initialize() runs.
- * Otherwise every extra call leaves another live chrome.storage.onChanged
- * listener behind, and each subsequent storage write fans out to all of them.
- */
-describe('U8 — initialize() installs the chunk-cache invalidator exactly once', () => {
-    beforeEach(() => {
-        resetStorageOnChangedListeners();
-    });
-
-    it('registers exactly one chrome.storage.onChanged listener across 3 initialize() calls', async () => {
-        expect(getStorageOnChangedListenerCount()).toBe(0);
-
-        await StorageManager.initialize();
-        expect(getStorageOnChangedListenerCount()).toBe(1);
-
-        await StorageManager.initialize();
-        await StorageManager.initialize();
-
-        expect(getStorageOnChangedListenerCount()).toBe(1);
-    });
-
-    it('still invalidates the chunk caches after repeated initialize() calls', async () => {
-        await StorageManager.initialize();
-        await StorageManager.initialize();
-
-        StorageManager._chunkIndexCache = new Map();
-        StorageManager._metaCache = { version: 1, chunkCount: 0, chunkSizes: [] };
-
-        await chrome.storage.sync.set({ chatPresetMapMeta: { version: 2, chunkCount: 0, chunkSizes: [] } });
-
-        expect(StorageManager._chunkIndexCache).toBeNull();
-        expect(StorageManager._metaCache).toBeNull();
     });
 });

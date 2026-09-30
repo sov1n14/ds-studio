@@ -7,16 +7,10 @@
 
 // === 錯誤類別（供 instanceof 檢查） ===
 
-class LockAcquireTimeoutError extends Error {
+class ChatMapDispatchError extends Error {
     constructor(message) {
         super(message);
-        this.name = 'LockAcquireTimeoutError';
-    }
-}
-class WriteReconciliationExhaustedError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = 'WriteReconciliationExhaustedError';
+        this.name = 'ChatMapDispatchError';
     }
 }
 
@@ -56,6 +50,8 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         SIDEBAR_AUTO_HIDE: 'dsSidebarAutoHide',
         HIDE_THINKING: 'dsHideThinking',
         AUTO_EXPAND_MESSAGES: 'dsAutoExpandMessages',
+        AUTO_RETRY: 'isAutoRetryEnabled',
+        AUTO_CONTINUE: 'isAutoContinueEnabled',
         PREVENT_AUTO_SCROLL: 'dsPreventAutoScroll',
         WEBSEARCH_TOGGLE: 'dsWebSearchToggle',
         SHOW_SYSTEM_TIME: 'dsShowSystemTime',
@@ -86,6 +82,8 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         dsSidebarAutoHide: false,
         dsHideThinking: false,
         dsAutoExpandMessages: false,
+        isAutoRetryEnabled: false,
+        isAutoContinueEnabled: false,
         dsPreventAutoScroll: false,
         dsWebSearchToggle: 'on',
         dsShowSystemTime: false,
@@ -104,8 +102,7 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
      * Typed error constructors for instanceof checks by callers and tests.
      */
     errors: {
-        LockAcquireTimeoutError,
-        WriteReconciliationExhaustedError,
+        ChatMapDispatchError,
     },
 
     /**

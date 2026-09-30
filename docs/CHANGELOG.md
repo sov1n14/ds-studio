@@ -1,9 +1,8 @@
-# Changelog
+# 版本變更記錄
 
-All notable changes to this project will be documented in this file.
+本專案所有重要變更皆記錄於此檔案。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+格式依循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，版本號遵循 [語意化版本](https://semver.org/spec/v2.0.0.html)（Semantic Versioning）。
 
 ## 版本摘要
 
@@ -11,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | 版本 | 摘要 |
 |-|-|
+| [4.35.5](changelog/v4.md#4355---2026-09-30) | 行動裝置改依裝置外型判定（User-Agent 符合 `/Mobi\|Android\|iPhone\|iPad/i`，或桌面模式 iPadOS：`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`）；以桌面 User-Agent 回報觸控點的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面：這類裝置按 `Enter` 送出時會注入提示詞前綴，新對話建立後仍綁定所選提示詞組；行動裝置側欄滑動與首頁「下载应用」清理在這類裝置上不啟用 |
+| [4.35.4](changelog/v4.md#4354---2026-09-27) | 自動繼續生成與自動重試現在會實際觸發「继续生成」與重試按鈕：DeepSeek 的 React `onClick` 只接受受信任事件，content script 改派送 `dss:react-click`，由新增的 MAIN world bridge `content/react-click-bridge.main.js` 以能通過檢查的合成事件呼叫 React `onClick` |
+| [4.35.3](changelog/v4.md#4353---2026-09-26) | 點擊「停止生成」不再注入提示詞（主輸入框送出按鈕僅以圖示路徑辨識）；對話中切換提示詞組時下拉選單不再逐次變寬（量測期間標籤 `flex: none`）；綁定失敗回滾時注入前綴隨標籤一起回滾（`updatePromptPrefixFromBinding()` 最後一次呼叫勝出）；潛在問題：觸發器 gap 與原生按鈕 margin-bottom 若為 0px 曾被誤當成預設值（下拉選單會多寬 4px、GoTop 間距會變成 28px），現改為照實採用；目前兩者實測值與預設值相同，畫面無可見差異 |
+| [4.35.2](changelog/v4.md#4352---2026-09-25) | 刪除自 v4.33.8 起未載入的純註解 stub `censor-reply-restore.dom.js`、`censor-reply-restore.dom.extract.js`；`censor-reply-restore.js` 不再讀取從未設定的 `__DS_CensorReplyRestore_dom_extract`，載入順序註解與 `manifest.json` 一致；對執行期無影響 |
+| [4.35.1](changelog/v4.md#4351---2026-09-25) | 移除未使用的網路搜尋雜湊 class 常數 `WEBSEARCH_TOGGLE_CLASS`、`WEBSEARCH_LABEL_CLASS`（`DSSelectors` 匯出 94 → 92）；網路搜尋開關的定位方式不變；新增 fresh-load spec，`ds-selectors.js` mutation score 達 100% |
+| [4.35.0](changelog/v4.md#4350---2026-09-24) | 「Features」卡片新增「自動重試」與「自動繼續生成」兩個獨立開關（`isAutoRetryEnabled`、`isAutoContinueEnabled`，預設關閉，受主開關連動、同步並納入備份還原）；自動重試改為需手動開啟；兩者共用單一輪次迴圈，每輪等待 0–3 秒（0.1 秒級距）隨機延遲後各點擊至多一次，按鈕僅以選擇器定位 |
+| [4.34.3](changelog/v4.md#4343---2026-09-24) | chat→preset 綁定表改由 service worker 單一寫入，其他 context 以訊息送交操作，並行綁定不再遺失；寫入失敗拋出 `ChatMapDispatchError`，僅未送達時重試一次，10 秒逾時，overlay 寫入失敗時回滾；`resolveSyncConflict`、initialize 遷移推送與 `retrySync` 略過 chat-map 金鑰；修正解除綁定後殘留空 chunk 與 remote-wins 以參考比較；content-script 初始綁定失敗時繼續啟動；全域預設提示詞的納入改依顯示中的提示詞組，頁面內切換失敗時還原 `activePresetId`；移除 `storage-manager.chunk-lock.js` |
+| [4.34.2](changelog/v4.md#4342---2026-09-24) | 失效提示的「重新整理」不再刪除臨時對話，關閉分頁仍會刪除；補救掃描於互斥鎖內只套用本輪結果，不再覆蓋掃描期間的續約；佇列項目記錄 `ownerDeviceId`，其他裝置建立的項目未明確釋放時須閒置 24 小時才刪除 |
+| [4.34.1](changelog/v4.md#4341---2026-09-23) | `isExtensionContextValid()` 將缺失或空的 `chrome.runtime.id` 視為失效，失效監看器因此顯示重新整理提示；臨時對話心跳的同步拋錯與非同步 rejection 一致處理：context 失效時停止心跳並顯示一次提示，其餘錯誤心跳以原 uuid 續行，不再以 `null` uuid 發送；臨時對話開關 `navigate` 監聽器以目前頁面解析 `destination.url`，網址為空、缺失或無法解析時維持開關列不變 |
+| [4.34.0](changelog/v4.md#4340---2026-09-23) | 新增 `invalidation-watcher.js` 每 30 秒檢查擴充功能 context，失效時主動顯示一次重新整理提示；移除三個 re-export stub 常數檔，改由 `utils/message-constants.js` 匯入 |
+| [4.33.31](changelog/v4.md#43331---2026-09-23) | 修正導航目的地為相對路徑時 `new URL()` 拋出 `TypeError: Invalid URL`，改為直接傳入 `extractUuidFromUrl` |
+| [4.33.29](changelog/v4.md#43329---2026-09-22) | 恢復行動版首頁清理模組（`mobile-homepage-cleanup.js`）與 `HOMEPAGE_MOBILE_CLEANUP_SELECTOR`——v4.33.20 因選擇器探測誤判移除，經確認選擇器仍有效後恢復 |
+| [4.33.28](changelog/v4.md#43328---2026-09-22) | 修正 `redispatchClick` rAF 回調 early return 未重設 `isInjecting` 旗標導致 prompt injection 永久失效 |
+| [4.33.27](changelog/v4.md#43327---2026-09-22) | `isSendButtonCandidate` 送出按鈕識別升級為三層式策略，新增結構性降級路徑 |
+| [4.33.26](changelog/v4.md#43326---2026-09-21) | 修正純附件送出時 prompt injection 未觸發（`querySelector` → `querySelectorAll` 遍歷所有候選按鈕）；修正點擊路徑三事件連鎖導致重複注入（`isInjecting` 旗標同步設定） |
+| [4.33.25](changelog/v4.md#43325---2026-09-21) | 新增 4 個選擇器常數並統一產品程式碼的選擇器來源 |
+| [4.33.24](changelog/v4.md#43324---2026-09-21) | 新增 12 個選擇器常數並統一測試檔案的選擇器來源 |
+| [4.33.23](changelog/v4.md#43323---2026-09-21) | 補充捲動失敗回傳 reason 屬性 |
+| [4.33.22](changelog/v4.md#43322---2026-09-21) | 修正未溢出對話無法匯出 |
+| [4.33.21](changelog/v4.md#43321---2026-09-21) | 修正匯出時臨時對話被誤刪 |
+| [4.33.20](changelog/v4.md#43320---2026-09-21) | 修正僅含一輪對話的匯出失敗（`harvest.dom.js`、`go-top.scroll.js` 移除溢位閘門，不可捲動容器為合法成功路徑）；選擇器維護：`THINK_STATUS_SELECTOR` 輪換 `_08cbf39` → `_5255ff8`、移除四個零匹配常數（`ds-icon-button` 系列與 `ds-elevated`）、新增 `THINK_HEADER_TOGGLE_CLASS`、刪除 `mobile-homepage-cleanup` 功能（`._9579690` 已從頁面消失）；匯出數 74 → 71 |
+| [4.33.18](changelog/v4.md#43318---2026-09-20) | 修正 composer 附件按鈕誤觸提示詞組注入：`isSendButtonCandidate` 移除兩個容器分支（`.ba4f09d3` closest 與 `.bf38813a` parent class），保留 SVG 圖示（`SEND_BUTTON_ICON_SELECTOR`）與編輯視窗按鈕判定；`ds-selectors.js` 刪除 `SEND_BUTTON_CONTAINER_SELECTOR` 與 `SEND_BUTTON_PARENT_CLASS`（匯出 76 → 74） |
+| [4.33.17](changelog/v4.md#43317---2026-09-12) | 修正 context 失效時 `handleNavigationEvent` 連鎖刪除非臨時對話：`trackUuid` 的 `isPendingCreate` 旗標提前重置並包裹 try/catch、`handleNavigationEvent` 補上 `return` 與 `chrome.runtime?.id` 守衛，新增 scenario test（5 測試） |
+| [4.33.16](changelog/v4.md#43316---2026-09-12) | 新增擴充功能 context 失效時的頁面 toast 提示與重新整理按鈕，heartbeat 偵測到 context 失效時觸發 toast 並停止心跳，editor-window-routes 的 `closeTrackedWindow` catch 改為靜默（預期競態） |
 | [4.33.4](changelog/v4.md#4334---2026-09-07) | 修正擴充功能重載或更新後 coordinator 殘存 content script 的 `chrome.runtime.sendMessage` 拋出未捕捉的 `Extension context invalidated`：`sendPendingStoreRoute` 以 try/catch 包裹並記錄，`handOffToServiceWorker` 與 `fallbackToApi` 的直接發送亦改經同一防護 |
 | [4.33.3](changelog/v4.md#4333---2026-09-07) | 修正 service worker 冷啟動或擴充功能重載後 `dss-delete-retry` alarm 未重新建立：`remediatePendingDeletes()` 在 auth-token 閘控之前即建立 alarm、`onInstalled` 新增呼叫 `remediatePendingDeletes()` 以重建被 Chrome 清除的 alarm |
 | [4.33.2](changelog/v4.md#4332---2026-09-06) | 修正 service worker 冷啟動導致租約觀察記錄遺失（改以 `chrome.storage.local` 持久化 `{ lastActiveAt, observedAt }`）、`lastActiveAt` 為 0 立即視為過期、補救掃描後清理孤兒觀察鍵、已還原分頁無 token 時將刪除交由 service worker 處理 |

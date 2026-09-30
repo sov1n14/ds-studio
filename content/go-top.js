@@ -25,8 +25,8 @@ const GoToTop = {
     NATIVE_BTN_CLASSES: 'ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ds-button--m ds-button--icon-relative-m ds-button--floating',
     NATIVE_BTN_INLINE_STYLE: '--dsl-button-color: var(--dsw-alias-button-floating-fill); --dsl-button-height: 34px; --dsl-button-hover-color: var(--dsw-alias-button-floating-hover); --dsl-button-icon-size: 14px;',
     STACK_GAP_PX: 8,
-    ANCHOR_SELECTOR: '._9663006._2c189bc',
-    ANCHOR_SELECTOR_FALLBACK1: '._9663006',
+    ANCHOR_SELECTOR: __DSSelectorsGoTop.GO_TOP_ANCHOR_SELECTOR,
+    ANCHOR_SELECTOR_FALLBACK1: __DSSelectorsGoTop.GO_TOP_ANCHOR_FALLBACK1_SELECTOR,
     ANCHOR_SELECTOR_FALLBACK2: '[data-virtual-list-item-key="1"]',
     FIRST_MSG_SELECTOR: __DSSelectorsGoTop.ASSISTANT_MESSAGE_SELECTOR,
     VIRTUAL_LIST_SELECTOR: __DSSelectorsGoTop.VIRTUAL_LIST_SELECTOR,
@@ -58,7 +58,7 @@ const GoToTop = {
 
 // 合併所有 bundle（bundle 檔案須在 manifest 中先於此檔案載入）
 (function (root) {
-    Object.assign(GoToTop, root.__DS_GoToTop_locate || {}, root.__DS_GoToTop_render || {}, root.__DS_GoToTop_scroll || {}, root.__DS_GoToTop_observers || {}, root.__DS_GoToTop_lifecycle || {});
+    Object.assign(GoToTop, root.__DS_GoToTop_locate || {}, root.__DS_GoToTop_render_combined || {}, root.__DS_GoToTop_scroll || {}, root.__DS_GoToTop_observers || {}, root.__DS_GoToTop_lifecycle || {});
 })(globalThis);
 
 GoToTop.init();

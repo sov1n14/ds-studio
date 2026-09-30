@@ -183,7 +183,7 @@ function createBackupManager(ctx) {
                 await Promise.all(
                     tabs
                         .filter((tab) => typeof tab.id === 'number')
-                        .map((tab) => DSSTabControl.sendToTab(tab.id, { type: 'clearRestoredMessages' }))
+                        .map((tab) => DSSTabControl.sendToTab(tab.id, { type: DSS_CONTENT_MSG.CLEAR_RESTORED_MESSAGES }))
                 );
 
                 ctx.Toast.show(dsI18n.t('restoredRecordsClearedToast'));

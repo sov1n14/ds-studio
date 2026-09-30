@@ -1,6 +1,6 @@
 /**
  * DS studio — Censor Reply Restore :: DOM Resolve
- * messageId 解析輔助函式。由 censor-reply-restore.dom.js 以 Object.assign 合入。
+ * messageId 解析與 fragment 萃取輔助函式。由 censor-reply-restore.js 以 Object.assign 合入。
  */
 (function (root) {
     'use strict';
@@ -111,6 +111,34 @@
                 this._keyToMessageId.set(virtualItem.getAttribute(selectors.VIRTUAL_ITEM_KEY_ATTR), chosen.message_id);
             }
             return chosen.message_id;
+        },
+
+        /**
+         * Fragment 萃取輔助函式：將 fragments 陣列拆分為 think 與 response 部分。
+         * @param {Array} fragments
+         * @returns {{ thinkContent: string, hasThink: boolean, responseContent: string, hasResponse: boolean }}
+         */
+        _extractRenderableFragments(fragments) {
+            const thinkParts = [];
+            let responseContent = '';
+            let hasResponse = false;
+            for (const f of fragments) {
+                if (!f || !f.type) continue;
+                if (f.type === 'THINK') {
+                    if (typeof f.content === 'string' && f.content) thinkParts.push(f.content);
+                } else if (f.type === 'RESPONSE') {
+                    if (typeof f.content === 'string') {
+                        responseContent += f.content;
+                        hasResponse = true;
+                    }
+                }
+            }
+            return {
+                thinkContent: thinkParts.join('\n\n'),
+                hasThink: thinkParts.length > 0,
+                responseContent,
+                hasResponse,
+            };
         },
     };
 

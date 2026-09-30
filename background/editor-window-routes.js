@@ -1,13 +1,13 @@
-/**
+﻿/**
  * DS studio — 編輯器視窗關閉訊息路由（background/editor-window-routes.js）
  *
  * 職責：background 層的訊息路由。install() 於呼叫時（非載入時）註冊單一
- * chrome.runtime.onMessage 監聽器；收到 DSS_EDITOR_WINDOW.CLOSE_MESSAGE_TYPE
+ * chrome.runtime.onMessage 監聯器；收到 DSS_EDITOR_WINDOW.CLOSE_MESSAGE_TYPE
  * 時，讀取 chrome.storage.session 中的全域／提示詞組編輯器視窗 id，逐一關閉
  * 視窗並移除對應的 storage key（單一 id 關閉失敗不阻擋另一個 id 的處理）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
- * 相依：utils/editor-window-constants.js 需先載入。
+ * 相依：utils/message-constants.js 需先載入。
  */
 (function () {
     'use strict';
@@ -15,7 +15,7 @@
     /** 於呼叫時解析訊息常數，缺失即拋出並指名修法。 */
     function resolveConstants() {
         const constants = globalThis.DSS_EDITOR_WINDOW;
-        if (!constants) throw new Error('[DSS] editor-window-routes 需要 utils/editor-window-constants.js 先行載入');
+        if (!constants) throw new Error('[DSS] editor-window-routes 需要 utils/message-constants.js 先行載入');
         return constants;
     }
 
@@ -32,33 +32,57 @@
         try {
             await chrome.windows.remove(windowId);
         } catch (err) {
-            console.error('[DSS] editor-window-routes closeTrackedWindow:', err);
+
         } finally {
             await chrome.storage.session.remove(storageKey);
         }
     }
 
-    /** 關閉所有追蹤中的編輯器視窗（全域＋提示詞組），並回應 ok:true。 */
-    async function closeAllEditorWindows(storageKeys, sendResponse) {
+    /** 關閉所有追蹤中的編輯器視窗（全域＋提示詞組），並回傳結果。 */
+    async function closeAllEditorWindows(storageKeys) {
         const keys = Object.values(storageKeys);
         const stored = await chrome.storage.session.get(keys);
-
         await Promise.all(keys.map((key) => closeTrackedWindow(key, stored)));
-
-        sendResponse({ ok: true });
     }
 
     /**
-     * 註冊編輯器視窗關閉訊息路由監聽器。
+     * 建立 message.type → 處理函式的對照表。
+     * @returns {Object<string, (message: object) => Promise<void>>}
+     */
+    function buildRouteTable() {
+        const { CLOSE_MESSAGE_TYPE, STORAGE_KEYS } = resolveConstants();
+        return {
+            [CLOSE_MESSAGE_TYPE]: () => closeAllEditorWindows(STORAGE_KEYS),
+        };
+    }
+
+    /**
+     * 執行單一路由並回應結果；失敗於此邊界攔截（onMessage 之外無人可攔）。
+     * @param {(message: object) => Promise<void>} route
+     * @param {object} message
+     * @param {(response: object) => void} sendResponse
+     */
+    async function runRoute(route, message, sendResponse) {
+        try {
+            const result = await route(message);
+            sendResponse(result && typeof result === 'object' ? { ok: true, ...result } : { ok: true });
+        } catch (err) {
+            console.error(`[DSS] editor-window-routes ${message?.type}:`, err);
+            sendResponse({ ok: false, error: String(err) });
+        }
+    }
+
+    /**
+     * 註冊編輯器視窗關閉訊息路由監聯器。
      * 必須由 service worker 於頂層呼叫，確保 worker 重啟後仍能存活。
      */
     function install() {
-        const { CLOSE_MESSAGE_TYPE, STORAGE_KEYS } = resolveConstants();
+        const routes = buildRouteTable();
 
         chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-            if (message?.type !== CLOSE_MESSAGE_TYPE) return false; // 交由其他監聽器處理
-
-            closeAllEditorWindows(STORAGE_KEYS, sendResponse);
+            const route = routes[message?.type];
+            if (!route) return false; // 交由其他監聽器處理
+            runRoute(route, message, sendResponse);
             return true; // 非同步回應
         });
     }

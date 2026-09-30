@@ -2,6 +2,7 @@
 // global that content/censor-reply-restore.js dereferences at load time.
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * Resets every piece of CensorReplyRestore runtime state plus the document body.
@@ -33,7 +34,7 @@ export function buildChatPair(assistantKey, userPromptText, { censored = true } 
     const userMsg = document.createElement('div');
     userMsg.className = 'ds-message';
     const userContent = document.createElement('div');
-    userContent.className = 'fbb737a4';
+    userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
     userContent.textContent = userPromptText;
     userMsg.appendChild(userContent);
     userItem.appendChild(userMsg);
@@ -53,10 +54,11 @@ export function buildChatPair(assistantKey, userPromptText, { censored = true } 
     const toolbar = document.createElement('div');
     toolbar.className = 'ds-flex';
     for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
-        const btn = document.createElement('button');
-        btn.className = 'ds-icon-button';
+        const btn = document.createElement('div');
+        btn.setAttribute('role', 'button');
+        btn.className = 'ds-button ds-button--icon';
         if (state === 'disabled' && censored) {
-            btn.classList.add('ds-icon-button--disabled');
+            btn.classList.add('ds-button--disabled');
             btn.setAttribute('aria-disabled', 'true');
         }
         toolbar.appendChild(btn);

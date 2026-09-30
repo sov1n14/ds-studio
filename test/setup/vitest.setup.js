@@ -23,60 +23,53 @@ await globalThis.dsI18n.init();
 // stubbing __DS_Logger per-spec since this file has no other side effects.
 import '../../utils/logger.js';
 
-// globalThis.DSS_SETTINGS_MSG is read at call time by content/feature-toggle.js
-// (message type strings for GET_SETTINGS / SETTINGS_CHANGED). Preload it so any
-// spec that loads a toggle-gated content module gets the real constants instead
-// of a TypeError inside the toggle's initial settings read.
-import '../../utils/settings-message-constants.js';
-// utils/url-constants.js mounts DEEPSEEK_TAB_URL onto globalThis. It MUST load
-// before utils/tab-control.js (preloaded indirectly by specs that import it) so
-// the tab query URL constant is available at call time.
-import '../../utils/url-constants.js';
+// utils/message-constants.js mounts DSS_TAB_URL, DSS_EDITOR_WINDOW,
+// DSS_SETTINGS_MSG, and DSS_CONTENT_MSG onto globalThis. Preload it so specs
+// referencing any cross-layer constant don't hit ReferenceError.
+import '../../utils/message-constants.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
 // imports an entry file (storage-manager.js, go-top.js, etc.) so that the
 // entry's Object.assign finds the bundles already populated.
-// utils/temporary-chat-constants.js mounts every DSS_TEMP_CHAT_* constant onto
-// globalThis via Object.assign as a load side effect. It MUST load before any
-// preloaded module that resolves one of those constants -- content/temporary-chat-enabled-flag.js
-// reads DSS_TEMP_CHAT_STORAGE_KEY at load time (its module-level ENABLED_KEY), and the
-// temporary-chat-delete.* parts read DSS_* constants at call time. Placed at the top of
-// the preload block so it precedes all of them.
+// utils/temporary-chat-constants.js mounts DSS_TEMP_CHAT_CONSTANTS as a single
+// globalThis.DSS_TEMP_CHAT namespace object. It MUST load before any preloaded
+// module that resolves one of those constants -- content/temporary-chat-enabled-flag.js
+// reads DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY at load time, and the
+// temporary-chat-delete.* parts read DSS_TEMP_CHAT.* constants at call time.
+// Placed at the top of the preload block so it precedes all of them.
 import '../../utils/temporary-chat-constants.js';
 import '../../utils/storage-manager.keys.js';
-import '../../utils/storage-manager.chunk-lock.js';
 import '../../utils/storage-manager.rw.js';
 import '../../utils/storage-manager.sync.js';
+import '../../utils/storage-manager.sync.retry.js';
+import '../../utils/storage-manager.restore.js';
 import '../../utils/storage-manager.tombstone.js';
 import '../../utils/storage-manager.preset-merge.js';
 import '../../utils/storage-manager.preset-recency.js';
 import '../../utils/storage-manager.presets.js';
 import '../../utils/storage-manager.chatmap.diff.js';
+import '../../utils/storage-manager.chatmap.ops.js';
 import '../../utils/storage-manager.chatmap.js';
+import '../../utils/storage-manager.chatmap.client.js';
 import '../../utils/storage-manager.local.js';
 import '../../utils/storage-manager.init.js';
 import '../../utils/storage-manager.setters.js';
 import '../../utils/storage-manager.settings-read.js';
 import '../../content/censor-reply-restore.markdown.js';
-import '../../content/censor-reply-restore.dom.extract.js';
 import '../../content/censor-reply-restore.dom.resolve.js';
 import '../../content/censor-reply-restore.dom.inject.js';
 import '../../content/censor-reply-restore.dom.scan.js';
-import '../../content/censor-reply-restore.dom.js';
 import '../../content/censor-reply-restore.thinkblock.js';
 import '../../content/censor-reply-restore.storage.js';
 import '../../content/censor-reply-restore.detection.js';
 import '../../content/censor-reply-restore.observer.js';
 import '../../content/quote-reply.geometry.js';
 import '../../content/quote-reply.button.js';
-import '../../content/go-top.locate.scroll.js';
-import '../../content/go-top.locate.anchor.js';
 import '../../content/go-top.locate.js';
 import '../../content/go-top.render.button.js';
 import '../../content/go-top.render.inject.js';
 import '../../content/go-top.render.observer.js';
-import '../../content/go-top.render.js';
 import '../../content/go-top.scroll.js';
 import '../../content/go-top.observers.js';
 import '../../content/go-top.lifecycle.js';

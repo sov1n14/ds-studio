@@ -3,151 +3,87 @@
  *
  * Covers:
  *   - chrome.runtime.onStartup triggers a best-effort retryParkedSync()
- *   - chrome.runtime.onInstalled creates the 'dss-sync-retry' alarm
- *     (periodInMinutes 5) and triggers an immediate retry
- *   - chrome.alarms.onAlarm calls retryParkedSync() only for the
- *     'dss-sync-retry' alarm name, and is isolated from the pre-existing
- *     'dss-delete-retry' alarm listener
+ *   - chrome.runtime.onInstalled creates the 'dss-sync-retry' alarm (periodInMinutes 5) and triggers an immediate retry
+ *   - chrome.alarms.onAlarm calls retryParkedSync() only for the 'dss-sync-retry' alarm name, and is isolated from the 'dss-delete-retry' alarm listener
  *
- * Harness notes:
- *   - service-worker.js is a classic (non-module) script that calls
- *     importScripts(...) at the top and references bare globals
- *     (StorageManager, TemporaryChatPendingStore, and the DSS*Routes install
- *     hooks it invokes at load time — DSSSettingsRoutes, DSSPendingStoreRoutes,
- *     DSSEditorWindowRoutes). All are stubbed BEFORE importing so the file's
- *     top-level code and listener registrations see our stubs; a missing
- *     DSSEditorWindowRoutes stub makes the whole module fail to load.
- *   - Listener registration is a one-time module side effect; ESM import
- *     caching means the file's top-level code runs only once for this test
- *     file. Each test resets the stubs' mock state instead of re-importing.
+ * Harness: test/helpers/service-worker-harness.js loads the REAL pending-store and service worker (so the onStartup/onInstalled sweeps run for real against the in-memory storage fixture). StorageManager is the harness stub; its isSyncedWithCloud/retrySync are the collaborator this spec is about. Alarms are observed through the harness `alarms` Map.
  */
-import '../../background/service-worker-constants.js';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { alarms, settle, installServiceWorkerHarness } from '../helpers/service-worker-harness.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+
+installServiceWorkerHarness();
 
 const SYNC_RETRY_ALARM_NAME = globalThis.SYNC_RETRY_ALARM_NAME;
 const DELETE_RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
 
-function flushMicrotasks() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-let storageManagerStub;
-let pendingStoreStub;
-let settingsRoutesStub;
-
-beforeAll(async () => {
-    globalThis.importScripts = vi.fn();
-    storageManagerStub = {
-        isSyncedWithCloud: vi.fn().mockResolvedValue(true),
-        retrySync: vi.fn().mockResolvedValue({ success: true, remainingUnsyncedCount: 0 }),
-    };
-    globalThis.StorageManager = storageManagerStub;
-
-    // service-worker.js's onStartup listener also drives TemporaryChatPendingStore
-    // (getOpenUuids/releaseLease/clearOpenUuids + remediatePendingDeletes, which
-    // gates on isLeaseExpired). Stub the full surface so the listener does not
-    // throw; pending-delete behaviour itself is covered by
-    // service-worker.pending-delete.spec.js.
-    pendingStoreStub = {
-        getPendingDeletes: vi.fn().mockResolvedValue([]),
-        savePendingDeletes: vi.fn().mockResolvedValue(undefined),
-        getOpenUuids: vi.fn().mockResolvedValue([]),
-        clearOpenUuids: vi.fn().mockResolvedValue(undefined),
-        getLastAuthToken: vi.fn().mockResolvedValue(null),
-        isLeaseExpired: (entry, now) =>
-            !Number.isFinite(entry?.lastActiveAt) || now - entry.lastActiveAt > LEASE_TTL_MS,
-        refreshLease: vi.fn(),
-        releaseLease: vi.fn().mockResolvedValue(undefined),
-    };
-    globalThis.TemporaryChatPendingStore = pendingStoreStub;
-
-    settingsRoutesStub = { install: vi.fn() };
-    globalThis.DSSSettingsRoutes = settingsRoutesStub;
-    globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
-    globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
-
-    // Import once; top-level installs and chrome.runtime.onStartup / onInstalled /
-    // alarms.onAlarm registrations happen here.
-    await import('../../background/service-worker.js');
-});
+let storageManager;
 
 beforeEach(() => {
-    storageManagerStub.isSyncedWithCloud.mockReset().mockResolvedValue(true);
-    storageManagerStub.retrySync.mockReset().mockResolvedValue({ success: true, remainingUnsyncedCount: 0 });
-    pendingStoreStub.getPendingDeletes.mockReset().mockResolvedValue([]);
-    pendingStoreStub.savePendingDeletes.mockReset().mockResolvedValue(undefined);
-    pendingStoreStub.getOpenUuids.mockReset().mockResolvedValue([]);
-    pendingStoreStub.clearOpenUuids.mockReset().mockResolvedValue(undefined);
-    pendingStoreStub.getLastAuthToken.mockReset().mockResolvedValue(null);
-    chrome.alarms.create.mockClear?.();
+    storageManager = globalThis.StorageManager;
+    storageManager.isSyncedWithCloud.mockReset().mockResolvedValue(true);
+    storageManager.retrySync.mockReset().mockResolvedValue({ success: true, remainingUnsyncedCount: 0 });
 });
 
 describe('module load — settings routes wiring', () => {
     it('installs DSSSettingsRoutes exactly once at load', () => {
-        expect(settingsRoutesStub.install).toHaveBeenCalledTimes(1);
+        expect(globalThis.DSSSettingsRoutes.install).toHaveBeenCalledTimes(1);
     });
 });
 
 describe('chrome.runtime.onStartup — retryParkedSync on startup', () => {
     it('calls retrySync when isSyncedWithCloud() resolves false', async () => {
-        storageManagerStub.isSyncedWithCloud.mockResolvedValue(false);
+        storageManager.isSyncedWithCloud.mockResolvedValue(false);
 
         chrome.runtime.onStartup.callListeners();
-        await flushMicrotasks();
+        await settle();
 
-        expect(storageManagerStub.isSyncedWithCloud).toHaveBeenCalled();
-        expect(storageManagerStub.retrySync).toHaveBeenCalled();
+        expect(storageManager.retrySync).toHaveBeenCalled();
     });
 
     it('does NOT call retrySync when isSyncedWithCloud() resolves true', async () => {
-        storageManagerStub.isSyncedWithCloud.mockResolvedValue(true);
-
         chrome.runtime.onStartup.callListeners();
-        await flushMicrotasks();
+        await settle();
 
-        expect(storageManagerStub.isSyncedWithCloud).toHaveBeenCalled();
-        expect(storageManagerStub.retrySync).not.toHaveBeenCalled();
+        expect(storageManager.isSyncedWithCloud).toHaveBeenCalled();
+        expect(storageManager.retrySync).not.toHaveBeenCalled();
     });
 });
 
 describe('chrome.runtime.onInstalled — periodic alarm creation + immediate retry', () => {
-    it('creates the dss-sync-retry alarm with periodInMinutes 5', async () => {
-        chrome.runtime.onInstalled.callListeners();
-        await flushMicrotasks();
+    it('schedules the dss-sync-retry alarm with periodInMinutes 5', async () => {
+        chrome.runtime.onInstalled.callListeners({ reason: 'update' });
+        await settle();
 
-        expect(chrome.alarms.create).toHaveBeenCalledWith(
-            SYNC_RETRY_ALARM_NAME,
-            { periodInMinutes: 5 }
-        );
+        expect(alarms.get(SYNC_RETRY_ALARM_NAME)).toEqual({ periodInMinutes: 5 });
     });
 
     it('also triggers an immediate retry attempt', async () => {
-        storageManagerStub.isSyncedWithCloud.mockResolvedValue(false);
+        storageManager.isSyncedWithCloud.mockResolvedValue(false);
 
-        chrome.runtime.onInstalled.callListeners();
-        await flushMicrotasks();
+        chrome.runtime.onInstalled.callListeners({ reason: 'update' });
+        await settle();
 
-        expect(storageManagerStub.retrySync).toHaveBeenCalled();
+        expect(storageManager.retrySync).toHaveBeenCalled();
     });
 });
 
 describe('chrome.alarms.onAlarm — alarm-name isolation', () => {
     it('invokes the retry path when the alarm name is dss-sync-retry', async () => {
-        storageManagerStub.isSyncedWithCloud.mockResolvedValue(false);
+        storageManager.isSyncedWithCloud.mockResolvedValue(false);
 
         chrome.alarms.onAlarm.callListeners({ name: SYNC_RETRY_ALARM_NAME });
-        await flushMicrotasks();
+        await settle();
 
-        expect(storageManagerStub.isSyncedWithCloud).toHaveBeenCalled();
-        expect(storageManagerStub.retrySync).toHaveBeenCalled();
+        expect(storageManager.retrySync).toHaveBeenCalled();
     });
 
     it('does NOT call retrySync for the unrelated dss-delete-retry alarm', async () => {
-        chrome.alarms.onAlarm.callListeners({ name: DELETE_RETRY_ALARM_NAME });
-        await flushMicrotasks();
+        storageManager.isSyncedWithCloud.mockResolvedValue(false);
 
-        expect(storageManagerStub.isSyncedWithCloud).not.toHaveBeenCalled();
-        expect(storageManagerStub.retrySync).not.toHaveBeenCalled();
+        chrome.alarms.onAlarm.callListeners({ name: DELETE_RETRY_ALARM_NAME });
+        await settle();
+
+        expect(storageManager.isSyncedWithCloud).not.toHaveBeenCalled();
+        expect(storageManager.retrySync).not.toHaveBeenCalled();
     });
 });

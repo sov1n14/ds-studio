@@ -23,7 +23,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 
 const MASTER_KEY = 'isEnabled';
 const SETTING_KEY = 'dsPreventAutoScroll';

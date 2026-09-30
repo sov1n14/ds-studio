@@ -3,6 +3,7 @@ import '../../utils/storage-manager.js';
 import '../../content/sidebar-auto-hide.styles.js';
 import '../../content/sidebar-auto-hide.observers.js';
 import SidebarAutoHide from '../../content/sidebar-auto-hide.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -10,7 +11,7 @@ import SidebarAutoHide from '../../content/sidebar-auto-hide.js';
 
 function createSidebar() {
     const el = document.createElement('div');
-    el.className = 'dc04ec1d';
+    el.className = DSSelectors.SIDEBAR_WRAPPER_SELECTOR.split('.').pop();
     document.body.appendChild(el);
     return el;
 }
@@ -75,10 +76,10 @@ afterEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Group A — setupHoverZone(): direct ds-elevated interactions
+//  Group A — setupHoverZone(): floating-element detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Group A — setupHoverZone() direct ds-elevated interactions', () => {
+describe('Group A — setupHoverZone() floating-element detection', () => {
     beforeEach(() => {
         SidebarAutoHide.sidebarEl = createSidebar();
         SidebarAutoHide.setupHoverZone();
@@ -116,19 +117,7 @@ describe('Group A — setupHoverZone() direct ds-elevated interactions', () => {
         expect(collapseSpy).not.toHaveBeenCalled();
     });
 
-    it('A3: cancels leaveTimer when mouse enters a ds-elevated element directly', () => {
-        SidebarAutoHide.enabled = true;
-        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const floating = document.createElement('div');
-        floating.classList.add('ds-elevated');
-        document.body.appendChild(floating);
-
-        fireMouseover(floating);
-
-        expect(SidebarAutoHide.leaveTimer).toBeNull();
-        expect(SidebarAutoHide._activeDropdownEl).not.toBeNull();
-    });
 
     it('A4: cancels leaveTimer when mouse enters element inside .ds-floating-position-wrapper', () => {
         SidebarAutoHide.enabled = true;
@@ -199,36 +188,9 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.setupHoverZone();
     });
 
-    it('B1: cancels leaveTimer when mouse enters a child element inside ds-elevated', () => {
-        SidebarAutoHide.enabled = true;
-        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        const menuItem = document.createElement('div');
-        menuItem.className = 'menu-item';
-        dsElevated.appendChild(menuItem);
-        document.body.appendChild(dsElevated);
 
-        // The fix: hovering over a child of ds-elevated must also cancel the timer
-        fireMouseover(menuItem);
 
-        expect(SidebarAutoHide.leaveTimer).toBeNull();
-        expect(SidebarAutoHide._activeDropdownEl).not.toBeNull();
-    });
-
-    it('B2: sets _activeDropdownEl to the ds-elevated element on direct entry', () => {
-        SidebarAutoHide.enabled = true;
-        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
-
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
-
-        fireMouseover(dsElevated);
-
-        expect(SidebarAutoHide._activeDropdownEl).toBe(dsElevated);
-    });
 
     it('B3: sets _activeDropdownEl to the wrapper when inside .ds-floating-position-wrapper', () => {
         SidebarAutoHide.enabled = true;
@@ -253,17 +215,19 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        const inner = document.createElement('div');
+        wrapper.appendChild(inner);
+        document.body.appendChild(wrapper);
 
-        fireMouseover(dsElevated);
-        expect(SidebarAutoHide._activeDropdownEl).toBe(dsElevated);
+        fireMouseover(inner);
+        expect(SidebarAutoHide._activeDropdownEl).toBe(wrapper);
 
         const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
 
         // Simulate mouse leaving the dropdown
-        dsElevated.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 
         expect(collapseSpy).toHaveBeenCalledOnce();
         expect(SidebarAutoHide._activeDropdownEl).toBeNull();
@@ -276,17 +240,19 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        const inner = document.createElement('div');
+        wrapper.appendChild(inner);
+        document.body.appendChild(wrapper);
 
-        fireMouseover(dsElevated);
+        fireMouseover(inner);
 
         // Simulate user moving cursor back to sidebar before rAF fires
         SidebarAutoHide.enterTimer = setTimeout(() => {}, 9999);
 
         const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
-        dsElevated.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 
         // enterTimer is set — collapse must be skipped
         expect(collapseSpy).not.toHaveBeenCalled();
@@ -300,14 +266,16 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
         SidebarAutoHide.enabled = true;
         SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
 
-        const dsElevated = document.createElement('div');
-        dsElevated.classList.add('ds-elevated');
-        document.body.appendChild(dsElevated);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        const inner = document.createElement('div');
+        wrapper.appendChild(inner);
+        document.body.appendChild(wrapper);
 
-        fireMouseover(dsElevated);
+        fireMouseover(inner);
         expect(SidebarAutoHide._activeDropdownEl).not.toBeNull();
 
-        dsElevated.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 
         expect(SidebarAutoHide._activeDropdownEl).toBeNull();
     });
@@ -564,7 +532,7 @@ describe('Group F1 — applyOverflow() overflow state management', () => {
 
     it('F3: clears overflow when natively collapsed regardless of our collapse state', () => {
         const nativeBar = document.createElement('div');
-        nativeBar.className = 'ca6d4be1';
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
         SidebarAutoHide.sidebarEl.appendChild(nativeBar);
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.applyOverflow();
@@ -743,3 +711,746 @@ describe('Group I — enable() / disable() lifecycle', () => {
         expect(SidebarAutoHide.enterTimer).toBeNull();
     });
 });
+
+// ---------------------------------------------------------------------------
+//  Group J - setupResizeHandler(): window resize debounce
+// ---------------------------------------------------------------------------
+
+describe('Group J - setupResizeHandler() window resize debounce', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupResizeHandler();
+    });
+
+    it('J1: resize dispatches collapse after RESIZE_DEBOUNCE_MS when not collapsed', () => {
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).toHaveBeenCalledOnce();
+    });
+
+    it('J2: two rapid resize events result in only one collapse (debounce)', () => {
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS / 2);
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).toHaveBeenCalledOnce();
+    });
+
+    it('J3: resize with enabled = false does NOT collapse', () => {
+        SidebarAutoHide.enabled = false;
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).not.toHaveBeenCalled();
+    });
+
+    it('J4: resize while already collapsed does NOT collapse again', () => {
+        SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        window.dispatchEvent(new Event('resize'));
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).not.toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group K - setupMutationObserver(): sidebar replacement detection
+// ---------------------------------------------------------------------------
+
+describe('Group K - setupMutationObserver() sidebar replacement detection', () => {
+    it('K1: sidebar replaced in DOM triggers collapse on new element', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+
+        oldSidebar.remove();
+        const newSidebar = createSidebar();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(SidebarAutoHide.sidebarEl).toBe(newSidebar);
+        expect(collapseSpy).toHaveBeenCalled();
+    });
+
+    it('K2: mutation but sidebar unchanged does NOT re-bind', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const bindSpy = vi.spyOn(SidebarAutoHide, 'bindEvents');
+
+        const unrelated = document.createElement('div');
+        unrelated.className = 'unrelated';
+        document.body.appendChild(unrelated);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(bindSpy).not.toHaveBeenCalled();
+    });
+
+    it('K3: sidebar replaced but enabled = false does NOT call bindEvents', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = false;
+        SidebarAutoHide.setupMutationObserver();
+
+        const bindSpy = vi.spyOn(SidebarAutoHide, 'bindEvents');
+
+        oldSidebar.remove();
+        createSidebar();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(bindSpy).not.toHaveBeenCalled();
+    });
+
+    it('K4: calling setupMutationObserver twice disconnects the first observer', () => {
+        SidebarAutoHide.setupMutationObserver();
+        const firstObserver = SidebarAutoHide.mutationObserver;
+        const disconnectSpy = vi.spyOn(firstObserver, 'disconnect');
+
+        SidebarAutoHide.setupMutationObserver();
+
+        expect(disconnectSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.mutationObserver).not.toBe(firstObserver);
+    });
+
+    it('K5: sidebar replacement disconnects old sidebarObserver', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+
+        SidebarAutoHide.sidebarObserver = new MutationObserver(() => {});
+        const disconnectSpy = vi.spyOn(SidebarAutoHide.sidebarObserver, 'disconnect');
+
+        SidebarAutoHide.setupMutationObserver();
+
+        oldSidebar.remove();
+        createSidebar();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(disconnectSpy).toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group L - observeSidebar(): native-expand re-collapse branch
+// ---------------------------------------------------------------------------
+
+describe('Group L - observeSidebar() native-expand re-collapse', () => {
+    it('L1: native expand while our collapse is active re-applies width, overflow, and marginLeft', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+
+        SidebarAutoHide.observeSidebar();
+        expect(SidebarAutoHide._wasNativelyCollapsed).toBe(true);
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        nativeBar.remove();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(sidebar.style.width).toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+        expect(overflowSpy).toHaveBeenCalled();
+        expect(innerEl.style.marginLeft).toBe(-(260 - SidebarAutoHide.COLLAPSED_WIDTH) + 'px');
+    });
+
+    it('L2: native expand with no inner element does not throw', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.observeSidebar();
+
+        nativeBar.remove();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(sidebar.style.width).toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+    });
+
+    it('L3: inner element with getBoundingClientRect().width = 0 does NOT set marginLeft', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+        SidebarAutoHide.observeSidebar();
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 0 });
+
+        nativeBar.remove();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(innerEl.style.marginLeft).toBe('');
+    });
+
+    it('L4: non-native-state-change mutation triggers applyOverflow only (else branch)', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        SidebarAutoHide.observeSidebar();
+
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        const dummy = document.createElement('span');
+        sidebar.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).toHaveBeenCalled();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group M - bindEvents() return values
+// ---------------------------------------------------------------------------
+
+describe('Group M - bindEvents() return values', () => {
+    it('M1: returns false when getSidebar() returns null (no sidebar in DOM)', () => {
+        SidebarAutoHide.sidebarEl = null;
+        const result = SidebarAutoHide.bindEvents();
+        expect(result).toBe(false);
+    });
+
+    it('M2: returns true when sidebar element exists in DOM', () => {
+        createSidebar();
+        SidebarAutoHide._eventAbortController = null;
+        const result = SidebarAutoHide.bindEvents();
+        expect(result).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+//  Group N - observeSidebar() guards
+// ---------------------------------------------------------------------------
+
+describe('Group N - observeSidebar() guards', () => {
+    it('N1: call with sidebarEl = null does NOT create sidebarObserver', () => {
+        SidebarAutoHide.sidebarEl = null;
+        SidebarAutoHide.sidebarObserver = null;
+
+        SidebarAutoHide.observeSidebar();
+
+        expect(SidebarAutoHide.sidebarObserver).toBeNull();
+    });
+
+    it('N2: mutation while enabled = false skips applyOverflow', async () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        SidebarAutoHide.observeSidebar();
+
+        SidebarAutoHide.enabled = false;
+        const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
+
+        const dummy = document.createElement('span');
+        sidebar.appendChild(dummy);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(overflowSpy).not.toHaveBeenCalled();
+    });
+
+    it('N3: calling observeSidebar twice disconnects first observer', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+
+        SidebarAutoHide.observeSidebar();
+        const first = SidebarAutoHide.sidebarObserver;
+        const disconnectSpy = vi.spyOn(first, 'disconnect');
+
+        SidebarAutoHide.observeSidebar();
+
+        expect(disconnectSpy).toHaveBeenCalled();
+        expect(SidebarAutoHide.sidebarObserver).not.toBe(first);
+    });
+});
+
+// ---------------------------------------------------------------------------
+//  Group O - setupHoverZone() edge-case guards
+// ---------------------------------------------------------------------------
+
+describe('Group O - setupHoverZone() edge-case guards', () => {
+    beforeEach(() => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+    });
+
+    afterEach(() => {
+        if (SidebarAutoHide.leaveTimer) {
+            clearTimeout(SidebarAutoHide.leaveTimer);
+            SidebarAutoHide.leaveTimer = null;
+        }
+    });
+
+    it('O1: mouseover event on document body itself (no floating wrapper) does not throw', () => {
+        expect(() => {
+            document.body.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+        }).not.toThrow();
+    });
+
+    it('O2: mouseover same dropdown wrapper twice does NOT add duplicate listeners', () => {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+        const addListenerSpy = vi.spyOn(wrapper, 'addEventListener');
+
+        fireMouseover(wrapper);
+        expect(SidebarAutoHide._activeDropdownEl).toBe(wrapper);
+
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+        fireMouseover(wrapper);
+
+        expect(addListenerSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('O3: onLeave when _activeDropdownEl already null does not throw', () => {
+        vi.stubGlobal('requestAnimationFrame', (cb) => cb());
+
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+
+        fireMouseover(wrapper);
+        expect(SidebarAutoHide._activeDropdownEl).toBe(wrapper);
+
+        SidebarAutoHide._activeDropdownEl = null;
+
+        expect(() => {
+            wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        }).not.toThrow();
+    });
+});
+// ---------------------------------------------------------------------------
+//  Group P - bindEvents() AbortController and signal wiring
+// ---------------------------------------------------------------------------
+
+describe('Group P - bindEvents() AbortController and signal wiring', () => {
+    it('P1: bindEvents reuses existing AbortController on second call', () => {
+        createSidebar();
+        SidebarAutoHide._eventAbortController = null;
+
+        SidebarAutoHide.bindEvents();
+        const first = SidebarAutoHide._eventAbortController;
+        expect(first).toBeInstanceOf(AbortController);
+
+        SidebarAutoHide.bindEvents();
+        expect(SidebarAutoHide._eventAbortController).toBe(first);
+    });
+
+    it('P2: mouseenter listener is registered with abort signal', () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide._eventAbortController = null;
+        const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener');
+        SidebarAutoHide.bindEvents();
+
+        const enterCall = addSpy.mock.calls.find(c => c[0] === 'mouseenter');
+        expect(enterCall).toBeDefined();
+        expect(enterCall[2]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    });
+
+    it('P3: mouseleave on sidebar triggers handleMouseLeave', () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide._eventAbortController = null;
+        SidebarAutoHide.bindEvents();
+
+        const spy = vi.spyOn(SidebarAutoHide, 'handleMouseLeave');
+        sidebar.dispatchEvent(new MouseEvent('mouseleave'));
+        expect(spy).toHaveBeenCalledOnce();
+    });
+
+    it('P4: mouseleave listener is registered with abort signal', () => {
+        const sidebar = createSidebar();
+        SidebarAutoHide._eventAbortController = null;
+        const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener');
+        SidebarAutoHide.bindEvents();
+
+        const leaveCall = addSpy.mock.calls.find(c => c[0] === 'mouseleave');
+        expect(leaveCall).toBeDefined();
+        expect(leaveCall[2]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    });
+
+});
+
+
+// ---------------------------------------------------------------------------
+//  Group Q - setupMutationObserver() callback side-effects
+// ---------------------------------------------------------------------------
+
+describe('Group Q - setupMutationObserver() callback side-effects', () => {
+    it('Q1: sidebar replacement disconnects old sidebarObserver (isolated from observeSidebar)', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+
+        const mockObs = { disconnect: vi.fn() };
+        SidebarAutoHide.sidebarObserver = mockObs;
+
+        vi.spyOn(SidebarAutoHide, 'observeSidebar').mockImplementation(() => {});
+        SidebarAutoHide.setupMutationObserver();
+
+        oldSidebar.remove();
+        createSidebar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(mockObs.disconnect).toHaveBeenCalled();
+    });
+
+    it('Q2: sidebar replacement calls bindEvents', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const spy = vi.spyOn(SidebarAutoHide, 'bindEvents');
+        oldSidebar.remove();
+        createSidebar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(spy).toHaveBeenCalled();
+    });
+
+    it('Q3: sidebar replacement calls observeSidebar', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const spy = vi.spyOn(SidebarAutoHide, 'observeSidebar');
+        oldSidebar.remove();
+        createSidebar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(spy).toHaveBeenCalled();
+    });
+
+    it('Q4: sidebar replacement calls storeOriginalWidth', async () => {
+        const oldSidebar = createSidebar();
+        SidebarAutoHide.sidebarEl = oldSidebar;
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.setupMutationObserver();
+
+        const spy = vi.spyOn(SidebarAutoHide, 'storeOriginalWidth');
+        oldSidebar.remove();
+        createSidebar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(spy).toHaveBeenCalled();
+    });
+
+    it('Q5: setupMutationObserver observes body with childList: true', () => {
+        const spy = vi.spyOn(MutationObserver.prototype, 'observe');
+        SidebarAutoHide.setupMutationObserver();
+
+        expect(spy).toHaveBeenCalledWith(
+            document.body,
+            expect.objectContaining({ childList: true })
+        );
+    });
+
+});
+
+
+// ---------------------------------------------------------------------------
+//  Group R - observeSidebar() callback conditions and observe options
+// ---------------------------------------------------------------------------
+
+describe('Group R - observeSidebar() callback conditions and observe options', () => {
+    it('R1: unchanged native state does not trigger re-collapse branch', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+        SidebarAutoHide.observeSidebar();
+
+        const dummy = document.createElement('span');
+        sidebar.appendChild(dummy);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(innerEl.style.marginLeft).toBe('');
+    });
+
+    it('R2: native collapse (not expand) does not trigger re-collapse branch', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+        sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+        SidebarAutoHide.observeSidebar();
+        expect(SidebarAutoHide._wasNativelyCollapsed).toBe(false);
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(innerEl.style.marginLeft).toBe('');
+    });
+
+    it('R3: native expand while not our-collapsed does not trigger re-collapse', async () => {
+        const sidebar = createSidebar();
+        const innerEl = createSidebarInner(sidebar);
+        SidebarAutoHide.sidebarEl = sidebar;
+        SidebarAutoHide.enabled = true;
+
+        const nativeBar = document.createElement('div');
+        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
+        sidebar.appendChild(nativeBar);
+
+        SidebarAutoHide.observeSidebar();
+        expect(SidebarAutoHide._wasNativelyCollapsed).toBe(true);
+
+        vi.spyOn(innerEl, 'getBoundingClientRect').mockReturnValue({ width: 260 });
+        nativeBar.remove();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(innerEl.style.marginLeft).toBe('');
+    });
+
+    it('R4: observeSidebar observes with subtree: true', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        const spy = vi.spyOn(MutationObserver.prototype, 'observe');
+        SidebarAutoHide.observeSidebar();
+
+        const call = spy.mock.calls.find(c => c[0] === SidebarAutoHide.sidebarEl);
+        expect(call[1]).toEqual(expect.objectContaining({ subtree: true }));
+    });
+
+    it('R5: observeSidebar attributeFilter includes style', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        const spy = vi.spyOn(MutationObserver.prototype, 'observe');
+        SidebarAutoHide.observeSidebar();
+
+        const call = spy.mock.calls.find(c => c[0] === SidebarAutoHide.sidebarEl);
+        expect(call[1].attributeFilter).toContain('style');
+    });
+
+    it('R6: observeSidebar attributeFilter includes class', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        const spy = vi.spyOn(MutationObserver.prototype, 'observe');
+        SidebarAutoHide.observeSidebar();
+
+        const call = spy.mock.calls.find(c => c[0] === SidebarAutoHide.sidebarEl);
+        expect(call[1].attributeFilter).toContain('class');
+    });
+
+});
+
+
+// ---------------------------------------------------------------------------
+//  Group S - setupResizeHandler() registration and debounce
+// ---------------------------------------------------------------------------
+
+describe('Group S - setupResizeHandler() registration and debounce', () => {
+    it('S1: setupResizeHandler registers resize listener with passive: true', () => {
+        const spy = vi.spyOn(window, 'addEventListener');
+        SidebarAutoHide.setupResizeHandler();
+
+        const call = spy.mock.calls.find(c => c[0] === 'resize');
+        expect(call).toBeDefined();
+        expect(call[2]).toEqual(expect.objectContaining({ passive: true }));
+    });
+
+    it('S2: rapid resizes produce only one collapse via debounce (isolated handler)', () => {
+        vi.useFakeTimers();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.resizeTimer = null;
+
+        const addSpy = vi.spyOn(window, 'addEventListener');
+        SidebarAutoHide.setupResizeHandler();
+        const handler = addSpy.mock.calls.find(c => c[0] === 'resize')[1];
+
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+        handler();
+        handler();
+        vi.advanceTimersByTime(SidebarAutoHide.RESIZE_DEBOUNCE_MS);
+
+        expect(collapseSpy).toHaveBeenCalledOnce();
+    });
+
+    it('S3: first resize with no prior timer does not call clearTimeout', () => {
+        vi.useFakeTimers();
+        SidebarAutoHide.resizeTimer = null;
+
+        const addSpy = vi.spyOn(window, 'addEventListener');
+        SidebarAutoHide.setupResizeHandler();
+        const handler = addSpy.mock.calls.find(c => c[0] === 'resize')[1];
+
+        const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+        handler();
+
+        expect(clearSpy).not.toHaveBeenCalled();
+    });
+
+});
+
+
+// ---------------------------------------------------------------------------
+//  Group T - setupHoverZone() guard conditions and capture phase
+// ---------------------------------------------------------------------------
+
+describe('Group T - setupHoverZone() guard conditions and capture phase', () => {
+    it('T1: disabled handler does not process floating elements', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.enabled = false;
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+
+        fireMouseover(wrapper);
+
+        expect(SidebarAutoHide.leaveTimer).not.toBeNull();
+        expect(SidebarAutoHide._activeDropdownEl).toBeNull();
+        clearTimeout(SidebarAutoHide.leaveTimer);
+        SidebarAutoHide.leaveTimer = null;
+    });
+
+    it('T2: null leaveTimer prevents hover zone processing of floating elements', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.leaveTimer = null;
+
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+
+        fireMouseover(wrapper);
+
+        expect(SidebarAutoHide._activeDropdownEl).toBeNull();
+    });
+
+    it('T3: target without classList is safely ignored', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+
+        SidebarAutoHide._hoverMonitorHandler({ target: document.createTextNode('text') });
+
+        expect(SidebarAutoHide.leaveTimer).not.toBeNull();
+        clearTimeout(SidebarAutoHide.leaveTimer);
+        SidebarAutoHide.leaveTimer = null;
+    });
+
+    it('T4: null target is safely ignored', () => {
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+
+        SidebarAutoHide._hoverMonitorHandler({ target: null });
+
+        expect(SidebarAutoHide.leaveTimer).not.toBeNull();
+        clearTimeout(SidebarAutoHide.leaveTimer);
+        SidebarAutoHide.leaveTimer = null;
+    });
+
+    it('T5: re-entering sidebar actually cancels the pending collapse timer', () => {
+        vi.useFakeTimers();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+        SidebarAutoHide.handleMouseLeave();
+
+        fireMouseover(SidebarAutoHide.sidebarEl);
+
+        vi.advanceTimersByTime(SidebarAutoHide.LEAVE_DELAY_MS);
+        expect(collapseSpy).not.toHaveBeenCalled();
+    });
+
+    it('T6: hovering floating element actually cancels the pending collapse timer', () => {
+        vi.useFakeTimers();
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+
+        const collapseSpy = vi.spyOn(SidebarAutoHide, 'collapse');
+        SidebarAutoHide.handleMouseLeave();
+
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+        fireMouseover(wrapper);
+
+        vi.advanceTimersByTime(SidebarAutoHide.LEAVE_DELAY_MS);
+        expect(collapseSpy).not.toHaveBeenCalled();
+    });
+
+    it('T7: onLeave removes mouseleave listener with correct event name', () => {
+        vi.stubGlobal('requestAnimationFrame', (cb) => cb());
+        SidebarAutoHide.enabled = true;
+        SidebarAutoHide.sidebarEl = createSidebar();
+        SidebarAutoHide.setupHoverZone();
+        SidebarAutoHide.leaveTimer = setTimeout(() => {}, 9999);
+
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('ds-floating-position-wrapper');
+        document.body.appendChild(wrapper);
+
+        const removeSpy = vi.spyOn(wrapper, 'removeEventListener');
+        fireMouseover(wrapper);
+        wrapper.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+
+        expect(removeSpy).toHaveBeenCalledWith('mouseleave', expect.any(Function));
+    });
+
+    it('T8: setupHoverZone registers mouseover listener in capture phase', () => {
+        const spy = vi.spyOn(document, 'addEventListener');
+        SidebarAutoHide.setupHoverZone();
+
+        const call = spy.mock.calls.find(c => c[0] === 'mouseover' && c[2] === true);
+        expect(call).toBeDefined();
+    });
+
+});
+

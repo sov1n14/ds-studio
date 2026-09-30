@@ -13,7 +13,7 @@
  *
  *   sendToTab(tabId, message)
  *     - forwards to chrome.tabs.sendMessage(tabId, message) and resolves the response
- *     - a rejected send resolves undefined and logs a '[DSS]'-prefixed console.error
+ *     - a rejected send resolves undefined and logs a '[DSS]'-prefixed console.debug
  *       (popup callers today treat a failed send as non-fatal)
  *
  * The chrome.tabs mock comes from test/setup/vitest.setup.js; each test installs
@@ -29,8 +29,8 @@ const ACTIVE_DEEPSEEK_QUERY = {
     url: '*://chat.deepseek.com/*',
 };
 
-/** True when any console.error call carried a '[DSS]'-prefixed string argument. */
-const loggedDssError = (spy) =>
+/** True when any call on the given spy carried a '[DSS]'-prefixed string argument. */
+const loggedDss = (spy) =>
     spy.mock.calls.some((args) =>
         args.some((arg) => typeof arg === 'string' && arg.includes('[DSS]')),
     );
@@ -72,14 +72,14 @@ describe('DSSTabControl', () => {
             chrome.tabs.query = vi.fn().mockResolvedValue([]);
 
             await expect(queryActiveDeepseekTab()).resolves.toBeNull();
-            expect(loggedDssError(errorSpy)).toBe(false);
+            expect(loggedDss(errorSpy)).toBe(false);
         });
 
         it('resolves null and logs a [DSS] error when the query rejects', async () => {
             chrome.tabs.query = vi.fn().mockRejectedValue(new Error('tabs API error'));
 
             await expect(queryActiveDeepseekTab()).resolves.toBeNull();
-            expect(loggedDssError(errorSpy)).toBe(true);
+            expect(loggedDss(errorSpy)).toBe(true);
         });
     });
 
@@ -93,20 +93,24 @@ describe('DSSTabControl', () => {
             expect(response).toEqual({ ok: true, count: 3 });
         });
 
-        it('resolves undefined and logs a [DSS] error when the send rejects', async () => {
+        it('resolves undefined and logs a [DSS] debug when the send rejects', async () => {
+            const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
             chrome.tabs.sendMessage = vi
                 .fn()
                 .mockRejectedValue(new Error('Could not establish connection'));
 
             await expect(sendToTab(42, { action: 'HARVEST' })).resolves.toBeUndefined();
-            expect(loggedDssError(errorSpy)).toBe(true);
+            expect(loggedDss(debugSpy)).toBe(true);
+            expect(loggedDss(errorSpy)).toBe(false);
         });
 
         it('resolves a falsy response as-is without treating it as a failure', async () => {
+            const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
             chrome.tabs.sendMessage = vi.fn().mockResolvedValue(undefined);
 
             await expect(sendToTab(42, { action: 'PING' })).resolves.toBeUndefined();
-            expect(loggedDssError(errorSpy)).toBe(false);
+            expect(loggedDss(errorSpy)).toBe(false);
+            expect(loggedDss(debugSpy)).toBe(false);
         });
     });
 

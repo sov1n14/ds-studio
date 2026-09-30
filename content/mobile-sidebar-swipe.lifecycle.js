@@ -5,14 +5,9 @@
 (function (root) {
     'use strict';
 
-    const __DS_SwipeMobileDevice = globalThis.DSSMobileDevice
-        || (typeof require !== 'undefined' ? require('./mobile-device.js') : null);
-    const __DS_SwipeFeatureToggle = globalThis.DSSFeatureToggle
-        || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null);
-
     const bundle = {
     enable() {
-        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
+        if (!this._mobileDevice.isMobileDevice()) return;
         if (this.enabled) return;
         this.enabled = true;
 
@@ -47,9 +42,9 @@
      * 初始化模組：確認為行動裝置後，將主開關閘控交給共用管線。
      */
     start() {
-        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
+        if (!this._mobileDevice.isMobileDevice()) return;
 
-        this._unregisterToggle = __DS_SwipeFeatureToggle.registerFeatureToggle({
+        this._unregisterToggle = this._featureToggle.registerFeatureToggle({
             onEnable: () => this.enable(),
             onDisable: () => this.disable(),
         });

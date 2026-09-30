@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { evalPopupScript, loadI18nOnce } from '../helpers/popup-script-loader.js';
+import { createChatMapWriterHarness, restoreChromeBoundaries } from '../helpers/chat-map-writer-harness.js';
 
 beforeAll(() => {
     // popup.preset-manager.js references the global dsI18n.t(...), so i18n
@@ -18,6 +19,10 @@ beforeEach(async () => {
     }
 });
 
+afterEach(() => {
+    restoreChromeBoundaries();
+});
+
 function makePresets() {
     return [
         { id: 'a', name: 'Alpha', content: '' },
@@ -32,21 +37,20 @@ function makePresets() {
  * `chatPresetMap` are mutable closures so setPresets()/setActivePresetId()
  * calls are observable.
  */
-function makeCtx({ presets = makePresets(), activePresetId = '', chatPresetMap = {}, confirmResult = true } = {}) {
+function makeCtx({ presets = makePresets(), activePresetId = '', chatPresetMap = {}, confirmResult = true, storageManager = null } = {}) {
     let _presets = presets;
     let _activePresetId = activePresetId;
     let _chatPresetMap = chatPresetMap;
 
     const customSelect = { render: vi.fn() };
 
-    const StorageManager = {
+    // Boundary stub following the client contract: unbindChatsForPresets(ids) resolves with the map left after dropping every binding to those ids. Pass `storageManager` to use a real client instead.
+    const StorageManager = storageManager ?? {
         savePromptPresets: vi.fn().mockResolvedValue(undefined),
         saveActivePresetId: vi.fn().mockResolvedValue(undefined),
-        mutateChatPresetMap: vi.fn(async (mutator) => {
-            const map = { ..._chatPresetMap };
-            mutator(map);
-            _chatPresetMap = map;
-            return map;
+        unbindChatsForPresets: vi.fn(async (presetIds) => {
+            const ids = new Set(presetIds);
+            return Object.fromEntries(Object.entries(_chatPresetMap).filter(([, presetId]) => !ids.has(presetId)));
         }),
     };
 
@@ -111,7 +115,7 @@ describe('createPresetManager().requestDeleteAllPresets()', () => {
             expect(getActivePresetId()).toBe('a');
             expect(StorageManager.savePromptPresets).not.toHaveBeenCalled();
             expect(StorageManager.saveActivePresetId).not.toHaveBeenCalled();
-            expect(StorageManager.mutateChatPresetMap).not.toHaveBeenCalled();
+            expect(StorageManager.unbindChatsForPresets).not.toHaveBeenCalled();
             expect(ctx.setPresets).not.toHaveBeenCalled();
         });
     });
@@ -134,20 +138,26 @@ describe('createPresetManager().requestDeleteAllPresets()', () => {
         });
 
         it('removes every chatPresetMap entry that referenced any previously-existing preset id', async () => {
+            // Real popup client StorageManager whose unbind goes through the real SW writer (chat-map-writer-harness).
+            const h = await createChatMapWriterHarness({ clientCount: 1 });
+            const storedMap = {
+                'chat-1': 'a',
+                'chat-2': 'b',
+                'chat-3': 'c',
+                'chat-4': 'unrelated-id-not-in-presets',
+            };
+            await h.seedChatMap([storedMap]);
             const { ctx, getChatPresetMap } = makeCtx({
                 presets: makePresets(), // ids: a, b, c
-                chatPresetMap: {
-                    'chat-1': 'a',
-                    'chat-2': 'b',
-                    'chat-3': 'c',
-                    'chat-4': 'unrelated-id-not-in-presets',
-                },
+                chatPresetMap: { ...storedMap },
                 confirmResult: true,
+                storageManager: h.clients[0],
             });
             const manager = window.__DS_PopupPresetManager.createPresetManager(ctx);
 
             await manager.requestDeleteAllPresets();
 
+            expect((await h.readStored()).map, 'durable map after delete-all').toEqual({ 'chat-4': 'unrelated-id-not-in-presets' });
             const finalMap = getChatPresetMap();
             expect(finalMap).not.toHaveProperty('chat-1');
             expect(finalMap).not.toHaveProperty('chat-2');

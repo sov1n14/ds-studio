@@ -1,6 +1,6 @@
 /**
  * DS studio — Censor Reply Restore :: DOM Scan
- * 儲存記錄完整掃描復原子系統。由 censor-reply-restore.dom.js 以 Object.assign 合入。
+ * 儲存記錄完整掃描復原子系統。由 censor-reply-restore.js（entry）以 Object.assign 合入。
  */
 (function (root) {
     'use strict';

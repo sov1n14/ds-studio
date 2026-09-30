@@ -17,6 +17,7 @@ DS studio is a Chrome extension designed to optimize the user experience of `cha
 | **Censored Reply Restore** | Automatically restores original replies censored by DeepSeek from streaming data, persisted across refreshes |
 | **Cloud Sync** | Cross-device automatic sync of prompt groups and settings with built-in conflict detection and smart merge |
 | **JSON Backup & Restore** | Full backup and restore of prompt groups, settings, and censored reply restore records |
+| **Auto Retry and Auto Continue** | Two independent toggles (off by default): automatically click retry when DeepSeek returns a server error, and click continue when a reply stops |
 | **Mobile** | Sidebar swipe gesture, solving the lack of quick sidebar switching on mobile |
 
 See [FEATURES.md](FEATURES.md) for detailed feature descriptions.

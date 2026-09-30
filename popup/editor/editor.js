@@ -20,7 +20,6 @@
 'use strict';
 
 // 防抖工具來自 utils/debounce.js（由 editor.html 於本檔之前載入）
-const debounce = DSSDebounce;
 
 // ── 合入三個 bundle ──
 const { parseTarget } = globalThis.__DS_Editor_parse || {};
@@ -108,7 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 防抖儲存（500ms）
-    const debouncedSave = debounce(performSave, 500);
+    const debouncedSave = DSSDebounce(performSave, 500);
 
     // input 事件：設定 dirty + 觸發防抖儲存
     textareaEl.addEventListener('input', () => {

@@ -22,9 +22,9 @@ describe('temporary-chat-constants', () => {
     });
 
 
-    it('exports exactly twenty-five constants', () => {
+    it('exports exactly twenty-seven constants', () => {
         const keys = Object.keys(constants);
-        expect(keys).toHaveLength(25);
+        expect(keys).toHaveLength(27);
         expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
         expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
         expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
@@ -50,6 +50,8 @@ describe('temporary-chat-constants', () => {
         expect(keys).toContain('DSS_HISTORY_NAV_TYPE');
         expect(keys).toContain('DSS_FRAGMENT_COMPLETE_TYPE');
         expect(keys).toContain('DSS_LAST_SEEN_CHANGE_KEY_PREFIX');
+        expect(keys).toContain('DSS_DEVICE_ID_KEY');
+        expect(keys).toContain('FOREIGN_LEASE_TTL_MS');
         expect(keys).not.toContain('DSS_SW_DELETE_MESSAGE_TYPE');
     });
 
@@ -96,6 +98,8 @@ describe('temporary-chat-constants', () => {
         ['DSS_MSG_SET_LAST_AUTH_TOKEN', 'DSS_SET_LAST_AUTH_TOKEN'],
         ['LEASE_TTL_MS', 600000],
         ['HEARTBEAT_INTERVAL_MS', 60000],
+        ['DSS_DEVICE_ID_KEY', 'dss-device-id'],
+        ['FOREIGN_LEASE_TTL_MS', 86400000], // 24 hours
         ['DSS_MSG_HEARTBEAT', 'DSS_HEARTBEAT'],
         ['DSS_MSG_RELEASE_LEASE', 'DSS_RELEASE_LEASE'],
         ['DSS_MSG_GET_PENDING_UUIDS', 'DSS_GET_PENDING_UUIDS'],

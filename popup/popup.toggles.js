@@ -1,7 +1,6 @@
 /**
  * DS studio — Popup Feature Toggles 模組
- * 封裝九組功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、
- * 隱藏思考過程、顯示系統時間、防止自動捲動、聯網搜尋單選）的 change 事件綁定。
+ * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、聯網搜尋單選）的 change 事件綁定。
  * 使用 factory 模式接收 ctx 上下文物件。
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -46,7 +45,7 @@ function createToggleManager(ctx) {
 
     /**
      * 綁定所有功能開關的 change 事件監聽器。
-     * @param {Object} elements - 九組開關的 DOM 元素參照
+     * @param {Object} elements - 各功能開關的 DOM 元素參照
      * @param {HTMLElement} elements.globalPromptToggle
      * @param {HTMLElement} elements.enableToggle
      * @param {HTMLElement} elements.includeThinkingToggle
@@ -55,6 +54,9 @@ function createToggleManager(ctx) {
      * @param {HTMLElement} elements.hideThinkingToggle
      * @param {HTMLElement} elements.showSystemTimeToggle
      * @param {HTMLElement} elements.preventAutoScrollToggle
+     * @param {HTMLElement} elements.autoExpandMessagesToggle
+     * @param {HTMLElement} elements.autoRetryToggle
+     * @param {HTMLElement} elements.autoContinueToggle
      * @param {HTMLElement[]} elements.websearchRadios
      */
     function bindToggles(elements) {
@@ -68,6 +70,8 @@ function createToggleManager(ctx) {
             showSystemTimeToggle,
             preventAutoScrollToggle,
             autoExpandMessagesToggle,
+            autoRetryToggle,
+            autoContinueToggle,
             websearchRadios,
         } = elements;
 
@@ -151,6 +155,23 @@ function createToggleManager(ctx) {
                 showSaveStatus();
             });
         }
+
+        if (autoRetryToggle) {
+            autoRetryToggle.addEventListener('change', async () => {
+                await StorageManager.saveAutoRetry(autoRetryToggle.checked);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        }
+
+        if (autoContinueToggle) {
+            autoContinueToggle.addEventListener('change', async () => {
+                await StorageManager.saveAutoContinue(autoContinueToggle.checked);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        }
+
         websearchRadios.forEach(r => {
             r.addEventListener('change', async () => {
                 if (!r.checked) return;

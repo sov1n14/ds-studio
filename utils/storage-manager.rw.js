@@ -110,7 +110,8 @@
             const winner = this._pickNewerPreset(localPreset, syncPreset);
             if (winner === localPreset && merged[key] !== localPreset) {
                 merged[key] = localPreset;
-            } else if (winner === syncPreset && localPreset !== syncPreset) {
+            } else if (winner === syncPreset && JSON.stringify(localPreset) !== JSON.stringify(syncPreset)) {
+                // 以內容（而非物件參考）比較：真實 storage 每次讀取都回傳新物件，參考比較會在內容相同時也重複回寫本機。
                 // 遠端較新：merged[key] 已經是 sData[key]（sync-wins 合併的預設行為），
                 // 但本機儲存仍保有舊值，需一併持久化，避免離線讀取或下次啟動時看到過期資料。
                 remoteWinsToPersist[key] = syncPreset;

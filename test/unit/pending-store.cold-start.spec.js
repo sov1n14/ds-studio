@@ -19,7 +19,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Constants are already on globalThis from vitest.setup.js preload.
 import TemporaryChatPendingStore from '../../background/pending-store.js';
 
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS; // 600000
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS; // 600000
 
 // Helpers for fake-timer storage pump (same pattern as pending-store.lease.spec.js)
 async function flushOp(promise) {

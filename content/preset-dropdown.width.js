@@ -50,7 +50,11 @@
             const candidateTexts = safeOptionData.map(o => o.name).concat([placeholderText]);
 
             const originalText = label.textContent;
+            const originalFlex = label.style.flex;
             const labelWidths = [];
+            // label 為 flex: 1 1 auto 且 overflow: hidden，短名稱時 scrollWidth 會回傳被撐開的盒寬（取決於 overlay 前一次的 inline width），
+            // 導致每次重新量測寬度累加；量測期間設 flex: none，使 scrollWidth 反映文字本身的完整寬度
+            label.style.flex = 'none';
             try {
                 for (let i = 0; i < candidateTexts.length; i++) {
                     label.textContent = candidateTexts[i];
@@ -58,6 +62,7 @@
                 }
             } finally {
                 label.textContent = originalText;
+                label.style.flex = originalFlex;
             }
 
             // 箭頭寬度使用穩定常數，避免 getBoundingClientRect 受當前 inline width 約束影響，
@@ -68,7 +73,9 @@
             const computed     = window.getComputedStyle(trigger);
             const paddingLeft  = parseFloat(computed.paddingLeft)  || 0;
             const paddingRight = parseFloat(computed.paddingRight) || 0;
-            const gap          = parseFloat(computed.gap)          || 4;
+            const parsedGap    = parseFloat(computed.gap);
+            // 僅在解析失敗（NaN，如 '' 或 'normal'）時回退預設 4；合法的 0px 須原值採用
+            const gap          = Number.isFinite(parsedGap) ? parsedGap : 4;
 
             cachedNaturalWidth = PresetPosition.pickNaturalWidth({
                 labelWidths:  labelWidths,

@@ -13,10 +13,11 @@ import '../../utils/storage-manager.js';
 // (it reads DSS_TEMP_CHAT_STORAGE_KEY / DSS_TEMP_CHAT_CHANGED_EVENT at load time,
 // no hardcoded fallback). Same arrangement as temporary-chat-sidebar-hide.spec.js.
 import '../../utils/temporary-chat-constants.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import TemporaryChatToggle from '../../content/temporary-chat-toggle.js';
 
-const STORAGE_KEY = globalThis.DSS_TEMP_CHAT_STORAGE_KEY;
-const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT_CHANGED_EVENT;
+const STORAGE_KEY = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY;
+const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
 const IS_ENABLED_KEY = StorageManager.KEYS.IS_ENABLED;
 const MSG = () => globalThis.DSS_SETTINGS_MSG;
 
@@ -253,7 +254,7 @@ describe('D — cross-tab enabled-flag sync via settings-changed broadcast', () 
     function createAnchorInDOM() {
         const parent = document.createElement('div');
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         parent.appendChild(anchor);
         document.body.appendChild(parent);
         return anchor;
@@ -357,7 +358,7 @@ describe('F — homepage-only guard in init()', () => {
         window.history.replaceState({}, '', '/a/chat/s/some-uuid');
 
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         document.body.appendChild(anchor);
 
         await loadToggle({ isEnabled: true });
@@ -382,7 +383,7 @@ describe('G — injectToggleRow', () => {
     function createAnchorInDOM() {
         const parent = document.createElement('div');
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         parent.appendChild(anchor);
         document.body.appendChild(parent);
         return anchor;
@@ -553,7 +554,7 @@ describe('J — removeToggleRow', () => {
     function createAnchorInDOM() {
         const parent = document.createElement('div');
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         parent.appendChild(anchor);
         document.body.appendChild(parent);
         return anchor;
@@ -608,7 +609,7 @@ describe('K — handleNavigation (SPA-aware)', () => {
     function createAnchorInDOM() {
         const parent = document.createElement('div');
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         parent.appendChild(anchor);
         document.body.appendChild(parent);
         return anchor;
@@ -694,7 +695,7 @@ describe('L — master switch gating (StorageManager.KEYS.IS_ENABLED)', () => {
     function createAnchorInDOM() {
         const parent = document.createElement('div');
         const anchor = document.createElement('div');
-        anchor.className = 'aaff8b8f';
+        anchor.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
         parent.appendChild(anchor);
         document.body.appendChild(parent);
         return anchor;

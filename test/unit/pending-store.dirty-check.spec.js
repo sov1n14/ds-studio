@@ -13,7 +13,7 @@ import '../../utils/temporary-chat-constants.js';
 import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 const SYNC_KEY = 'dss-pending-deletes-sync';
-const HEARTBEAT_INTERVAL_MS = globalThis.HEARTBEAT_INTERVAL_MS; // 60000
+const HEARTBEAT_INTERVAL_MS = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS; // 60000
 
 async function flushOp(promise) {
     await vi.runAllTimersAsync();

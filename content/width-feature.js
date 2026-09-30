@@ -35,7 +35,7 @@
 
     /** 委派共用存取器取得訊息型別常數（缺失即拋出並指名修法）。 */
     function _resolveSettingsMessageTypes() {
-        return globalThis.getSettingsMessageTypes();
+        return DSS_SETTINGS_MSG;
     }
 
     function _resolveFeatureToggle() {
@@ -182,7 +182,7 @@
                 const messageTypes = _resolveSettingsMessageTypes();
                 const featureToggle = _resolveFeatureToggle();
                 if (!messageTypes || !featureToggle) {
-                    throw new Error('width-feature 需要 utils/settings-message-constants.js 與 content/feature-toggle.js 先行載入');
+                    throw new Error('width-feature 需要 utils/message-constants.js 與 content/feature-toggle.js 先行載入');
                 }
 
                 this._messageListener = (message) => {

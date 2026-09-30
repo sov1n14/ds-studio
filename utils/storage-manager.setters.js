@@ -54,6 +54,14 @@
             return this._set({ [this.KEYS.AUTO_EXPAND_MESSAGES]: enabled });
         },
 
+        async saveAutoRetry(enabled) {
+            return this._set({ [this.KEYS.AUTO_RETRY]: enabled });
+        },
+
+        async saveAutoContinue(enabled) {
+            return this._set({ [this.KEYS.AUTO_CONTINUE]: enabled });
+        },
+
         async savePreventAutoScroll(enabled) {
             return this._set({ [this.KEYS.PREVENT_AUTO_SCROLL]: enabled });
         },

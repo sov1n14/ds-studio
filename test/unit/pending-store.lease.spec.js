@@ -3,14 +3,15 @@ import { createRequire } from 'module';
 import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 // Load the constants module as CommonJS so we can inspect its module.exports
-// object (requirement 1) AND trigger its Object.assign(globalThis, ...) that
-// publishes the flat top-level consts as globals. require() runs the file's
+// object (requirement 1) AND trigger its globalThis.DSS_TEMP_CHAT = ... that
+// publishes the consts under the DSS_TEMP_CHAT namespace. require() runs the file's
 // CJS export branch; import '...' alone would skip it.
 const require = createRequire(import.meta.url);
 const constantsExport = require('../../utils/temporary-chat-constants.js');
 
 const SYNC_KEY = 'dss-pending-deletes-sync';
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
+const DEVICE_ID_KEY = globalThis.DSS_TEMP_CHAT.DSS_DEVICE_ID_KEY;
 
 // fake-timer storage helpers. The in-memory chrome.storage mock resolves
 // get/set via setTimeout(0). Under vi.useFakeTimers() those macrotasks never
@@ -41,11 +42,11 @@ describe('TemporaryChatPendingStore lease support', () => {
 
     describe('1 lease constants', () => {
         it('L-const-1: LEASE_TTL_MS is 600000 as a flat global', () => {
-            expect(globalThis.LEASE_TTL_MS).toBe(600000);
+            expect(globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS).toBe(600000);
         });
 
         it('L-const-2: HEARTBEAT_INTERVAL_MS is 60000 as a flat global', () => {
-            expect(globalThis.HEARTBEAT_INTERVAL_MS).toBe(60000);
+            expect(globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS).toBe(60000);
         });
 
         it('L-const-3: both constants appear in the CommonJS export object', () => {
@@ -55,7 +56,7 @@ describe('TemporaryChatPendingStore lease support', () => {
     });
 
     describe('2 addPendingDelete stamps lastActiveAt', () => {
-        it('L-add-1: writes numeric lastActiveAt equal to now, beside chatUuid and attemptCount:0', async () => {
+        it('L-add-1: writes numeric lastActiveAt equal to now, beside chatUuid, attemptCount:0 and the local ownerDeviceId', async () => {
             vi.useFakeTimers();
             const T = 1700000000000;
             vi.setSystemTime(T);
@@ -63,7 +64,13 @@ describe('TemporaryChatPendingStore lease support', () => {
             await flushOp(TemporaryChatPendingStore.addPendingDelete('uuid-1'));
             const queue = await readQueueFake();
 
-            expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: T }]);
+            const localRead = chrome.storage.local.get(DEVICE_ID_KEY);
+            await vi.runAllTimersAsync();
+            const deviceId = (await localRead)[DEVICE_ID_KEY];
+
+            expect(typeof deviceId).toBe('string');
+            expect(deviceId).not.toBe('');
+            expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: T, ownerDeviceId: deviceId }]);
             expect(typeof queue[0].lastActiveAt).toBe('number');
         });
     });

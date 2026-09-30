@@ -1,3 +1,4 @@
+// 393 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *
@@ -9,6 +10,8 @@
  * 單一職責：僅匯出常數字串，不含任何邏輯或副作用。
  */
 
+// Stryker disable StringLiteral: 純常數模組，選擇器字串的變異只能用逐字比對來殺，屬反模式（tautological assertion）
+// NOTE: SVG path data in go-top.render.combined.js is a distinct case from selectors here — selectors rotate as DeepSeek updates its UI, while SVG paths are stable author-controlled values (the go-top path data is copied verbatim from DeepSeek's native chevron icon and flipped upward at render time via transform:scaleY(-1)). The Stryker disable on selectors does not extend a blanket exemption to SVG paths; those are tested by coordinate assertions in the mutant-killer spec.
 (function () {
     'use strict';
 
@@ -50,17 +53,10 @@
     /** 匯出 markdown 中的引用標記 */
     const MARKDOWN_CITE_SELECTOR = '.ds-markdown-cite';
 
-    /** 舊版工具列圖示按鈕 */
-    const ICON_BUTTON_SELECTOR = '.ds-icon-button';
 
     /** 新版設計的工具列圖示按鈕 */
     const ICON_BUTTON_ROLE_SELECTOR = '[role="button"].ds-button.ds-button--icon';
 
-    /** 工具列圖示按鈕（新舊變體合併） */
-    const ICON_BUTTON_ANY_SELECTOR = ICON_BUTTON_SELECTOR + ', ' + ICON_BUTTON_ROLE_SELECTOR;
-
-    /** 舊版圖示按鈕的停用狀態 class */
-    const ICON_BUTTON_DISABLED_CLASS = 'ds-icon-button--disabled';
 
     /** DeepSeek 通用 flex 列（工具列降級掃描） */
     const FLEX_ROW_SELECTOR = '.ds-flex';
@@ -74,8 +70,18 @@
     /** 浮動／下拉的定位根容器 */
     const FLOATING_POSITION_WRAPPER_SELECTOR = '.ds-floating-position-wrapper';
 
-    /** 抬升表面（elevated surface）降級根容器 */
-    const ELEVATED_SURFACE_SELECTOR = '.ds-elevated';
+    /** 重試按鈕主要選擇器（語意 ds-* class） */
+    const RETRY_BUTTON_SELECTOR = '.ds-button--warning.ds-button--circle.ds-button--xs';
+
+    /** 重試按鈕備援選擇器（hash class） */
+    const RETRY_BUTTON_FALLBACK_SELECTOR = '.a3b9bd76._76a2310';
+
+    /** 繼續生成按鈕主要選擇器（hash 容器下的 ds-button） */
+    const CONTINUE_BUTTON_SELECTOR = '._8e85838 > .ds-button[role="button"]';
+
+    /** 繼續生成按鈕備援選擇器（hash class） */
+    const CONTINUE_BUTTON_FALLBACK_SELECTOR = '._6eef0b0';
+
 
     /** 程式碼區塊容器 class（以 includes 比對） */
     const CODE_BLOCK_CLASS = 'md-code-block';
@@ -90,14 +96,22 @@
     //  混淆雜湊 class（DeepSeek 每次改版都可能更換，故集中於此）
     // ---------------------------------------------------------------
 
+    // ── AI 回覆訊息 ──
+
     /** AI 回覆訊息節點（語意 class + 雜湊 class 精確組合） */
     const ASSISTANT_MESSAGE_SELECTOR = '.ds-message._63c77b1';
+
+    // ── 使用者訊息 ──
 
     /** 使用者訊息的文字內容包裝 */
     const USER_CONTENT_SELECTOR = '.fbb737a4';
 
+    // ── 滾動區域 ──
+
     /** 訊息列表的可滾動根容器（與 SCROLL_AREA_CLASS 同一元素） */
     const SCROLL_ROOT_SELECTOR = '._765a5cd';
+
+    // ── Think block ──
 
     /** 思考區塊（think block）外層容器的裸 class */
     const THINK_BLOCK_CLASS = '_74c0879';
@@ -111,11 +125,60 @@
     /** 思考區塊內容中的分隔／標題列（位於 ds-think-content 內、markdown 之前） */
     const THINK_SEPARATOR_SELECTOR = '.' + THINK_SEPARATOR_CLASS;
 
+    /** think block 標題列的雜湊 class */
+    const THINK_HEADER_CLASS = '_245c867 _34a54ec';
+    /** 可點擊的 toggle class（由 THINK_HEADER_CLASS 衍生，雜湊輪換時僅需改一處） */
+    const THINK_HEADER_TOGGLE_CLASS = THINK_HEADER_CLASS.split(' ')[0];
+
+    /** think block 間距層的雜湊 class */
+    const THINK_SPACER_CLASS = 'c2b72bb8';
+
+    /** think block 內容外層的雜湊 class */
+    const THINK_CONTENT_OUTER_CLASS = 'e1675d8b';
+
+    /** think block 內容修飾器的雜湊 class */
+    const THINK_CONTENT_MODIFIER_CLASS = '_767406f';
+
+    /** think block 載入動畫的雜湊 class */
+    const THINK_LOADING_DOTS_CLASS = 'ddd26891 _9b52f6c';
+
+    /** think block 尾部的雜湊 class */
+    const THINK_FOOTER_CLASS = '_8f7678d';
+
+    /** think block 火花／原子圖示的雜湊 class */
+    const THINK_ICON_CLASS = '_970ac5e';
+
+    /** think block 標題列圖示行的雜湊 class */
+    const THINK_HEADER_ICON_ROW_CLASS = '_5ab5d64';
+
+    /** think block 狀態時間 span 的雜湊 class */
+    const THINK_TIME_CLASS = '_4d41763';
+
+    /** think block 分隔線的雜湊 class */
+    const THINK_DIVIDER_CLASS = 'c99b79f8';
+
+    /** think block 內容包裝層的雜湊 class */
+    const THINK_CONTENT_WRAPPER_CLASS = 'a510c7ce';
+
+    /** think block 內層內容的雜湊 class */
+    const THINK_INNER_CONTENT_CLASS = '_0652043';
+
+
+    // ── 標題列與內容欄 ──
+
     /** 聊天標題列容器（preset overlay 的定位母體） */
     const CHAT_HEADER_SELECTOR = '._2be88ba';
 
+    /** 新對話頁標題列修飾 class */
+    const NEW_CHAT_HEADER_MODIFIER_CLASS = '_1551317';
+
     /** 置中的內容欄外層包裝（對話區與輸入框共用） */
     const CONTENT_COLUMN_SELECTOR = '._871cbca';
+
+    /** 輸入區編輯器外層包裝選擇器 */
+    const INPUT_COMPOSER_WRAPPER_SELECTOR = '._77cefa5._3d616d3';
+
+    // ── 浮動按鈕列 ──
 
     /** 浮動按鈕列容器（原生 go-bottom 按鈕的直接父層） */
     const FLOATING_BUTTON_BAR_SELECTOR = '.aaff8b8f';
@@ -123,17 +186,14 @@
     /** 浮動按鈕列容器（限定 div 標籤的完整選擇器） */
     const FLOATING_BUTTON_BAR_DIV_SELECTOR = 'div' + FLOATING_BUTTON_BAR_SELECTOR;
 
-    /** 送出按鈕所在的工具列容器 */
-    const SEND_BUTTON_CONTAINER_SELECTOR = '.ba4f09d3';
 
-    /** 送出按鈕的直接父層 class（以 classList.contains 比對） */
-    const SEND_BUTTON_PARENT_CLASS = 'bf38813a';
+    // ── 訊息工具列 ──
 
     /** 訊息工具列群組容器 */
     const MESSAGE_TOOLBAR_SELECTOR = '.ds-flex._965abe9';
 
     /** think 區塊狀態列 */
-    const THINK_STATUS_SELECTOR = '._08cbf39';
+    const THINK_STATUS_SELECTOR = '._5255ff8';  // 雜湊已輪換：_08cbf39 被 DeepSeek 重新指派給搜尋結果計數元素
 
     /** think 區塊參考標籤 */
     const THINK_REFERENCE_LABEL_SELECTOR = '._442c8e7';
@@ -141,8 +201,9 @@
     /** think 區塊參考連結 */
     const THINK_REFERENCE_LINK_SELECTOR = 'a._04ab7b1';
 
-    /** 行動版移除的首頁元素 */
-    const HOMEPAGE_MOBILE_CLEANUP_SELECTOR = '._9579690';
+
+
+    // ── 編輯區域 ──
 
     /** 編輯訊息按鈕 */
     const EDIT_MESSAGE_BUTTON_CLASS = 'd4910adc';
@@ -153,8 +214,17 @@
     /** 被賦予計算後 max-height 的容器 */
     const EDIT_BOX_HEIGHT_CONTAINER_SELECTOR = '._646a522';
 
+    // ── Mobile Homepage Cleanup ──
+
+    /** 行動裝置首頁「下载应用」元素的雜湊 class */
+    const HOMEPAGE_MOBILE_CLEANUP_SELECTOR = '._9579690';
+
+    // ── 虛擬列表 ──
+
     /** 僅以雜湊定位的虛擬列表容器（範圍較 VIRTUAL_LIST_SELECTOR 廣，故獨立保留） */
     const VIRTUAL_LIST_CONTAINER_SELECTOR = '._6f2c522';
+
+    // ── Sidebar ──
 
     /** 側邊欄外層包裝 */
     const SIDEBAR_WRAPPER_SELECTOR = 'div.dc04ec1d';
@@ -168,8 +238,17 @@
     /** 側邊欄日期分組容器（同組共用一個日期標籤） */
     const SIDEBAR_DATE_GROUP_SELECTOR = 'div._3098d02';
 
+    /** 側邊欄日期標籤的雜湊 class */
+    const SIDEBAR_DATE_LABEL_CLASS = 'f3d18f6a';
+
     /** 側邊欄對話列連結（以 href 定位，class 改版時仍可存活） */
     const SIDEBAR_CHAT_LINK_SELECTOR = 'a[href*="/a/chat/s/"]';
+
+    /** 側邊欄對話標題的雜湊 class */
+    const SIDEBAR_TITLE_CLASS = 'c08e6e93';
+
+    /** 側邊欄對話動作按鈕的雜湊 class */
+    const SIDEBAR_ACTIONS_CLASS = '_254829d';
 
     /** 標題列（title row）包裝 */
     const CHAT_HEADER_TITLE_ROW_SELECTOR = '._1aa2651';
@@ -177,25 +256,44 @@
     /** 聊天標題節點雜湊降級 */
     const CHAT_TITLE_FALLBACK_SELECTOR = '._9986c0c';
 
+    // ── Go-top ──
+
     /** DeepSeek 原生回到頂端按鈕的定位 class */
     const GO_TOP_NATIVE_BUTTON_CLASS = '_0706cde';
 
+    /** 回到頂部錨點選擇器（精確雜湊 class 組合） */
+    const GO_TOP_ANCHOR_SELECTOR = '._9663006._2c189bc';
+
+    /** 回到頂部錨點選擇器（單一雜湊 class 降級） */
+    const GO_TOP_ANCHOR_FALLBACK1_SELECTOR = '._9663006';
+
     // ---------------------------------------------------------------
-    //  送出按鈕結構（桌面版 ds-icon-button / 行動版 ds-button 共用）
+    //  送出按鈕結構（ds-button 變體）
     // ---------------------------------------------------------------
 
-    /** 可能為送出按鈕的可點擊容器（桌面版圖示鈕與行動版按鈕兩種變體） */
-    const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-icon-button[role="button"], div.ds-button[role="button"]';
+    /** 可能為送出按鈕的可點擊容器 */
+    const SEND_BUTTON_ROLE_SELECTOR = 'div.ds-button[role="button"]';
 
+
+    /** 送出按鈕列容器的雜湊 class */
+    const SEND_BUTTON_ROW_CLASS = 'bf38813a';
     /** 送出圖示的 SVG path 起始字串；以屬性前綴比對，不序列化整個子樹 */
-    const SEND_BUTTON_ICON_PATH_PREFIX = 'M8.3125';
-    const SEND_BUTTON_ICON_SELECTOR = `svg path[d^="${SEND_BUTTON_ICON_PATH_PREFIX}"]`;
+    const SEND_BUTTON_ICON_SELECTOR = 'svg path[d^="M8.3125"]';
 
     /** 搜尋圖示的 SVG path 起始字串（語言無關的定位基準） */
     const SEARCH_ICON_PATH_PREFIX = 'M7.9995999336';
 
+    /** 浮動按鈕 */
+    const DS_BUTTON_FLOATING_CLASS = 'ds-button--floating';
+    /** 圓形按鈕 */
+    const DS_BUTTON_CIRCLE_CLASS = 'ds-button--circle';
+    /** 主要按鈕 */
+    const DS_BUTTON_PRIMARY_CLASS = 'ds-button--primary';
+    /** 實心按鈕 */
+    const DS_BUTTON_FILLED_CLASS = 'ds-button--filled';
+
     /** 編輯視窗「傳送」按鈕的變體 class（取消鈕為 outlined 變體，故不符） */
-    const EDIT_SEND_BUTTON_VARIANT_CLASSES = ['ds-button--primary', 'ds-button--filled'];
+    const EDIT_SEND_BUTTON_VARIANT_CLASSES = [DS_BUTTON_PRIMARY_CLASS, DS_BUTTON_FILLED_CLASS];
 
     /** 按鈕的文字內容標籤（純圖示按鈕不具備此節點） */
     const BUTTON_CONTENT_SELECTOR = 'span.ds-button__content';
@@ -209,6 +307,23 @@
     /** 展開按鈕圖示的裸 class */
     const EXPAND_BUTTON_ICON_CLASS = 'd630ec62';
 
+    /** 已確認排除的雜湊 class（位於 preset-overlay wrapper 外部） */
+    const STRAY_BUTTON_CLASS = '_57370c5';
+
+
+    // ---------------------------------------------------------------
+    //  按鈕變體 class（mobile-sidebar-swipe、go-top 等模組共用）
+    // ---------------------------------------------------------------
+
+    /** 膠囊型按鈕 */
+    const DS_BUTTON_CAPSULE_CLASS = 'ds-button--capsule';
+    /** 主要圖文按鈕 */
+    const DS_BUTTON_ICON_LABEL_PRIMARY_CLASS = 'ds-button--iconLabelPrimary';
+    /** 第三層圖文按鈕 */
+    const DS_BUTTON_ICON_LABEL_TERTIARY_CLASS = 'ds-button--iconLabelTertiary';
+    /** 加大按鈕 */
+    const DS_BUTTON_XL_CLASS = 'ds-button--xl';
+
     const DSSelectors = {
         VIRTUAL_LIST_SELECTOR, VIRTUAL_LIST_FALLBACK, SCROLL_AREA_CLASS,
         MESSAGE_CLASS, MESSAGE_SELECTOR,
@@ -217,34 +332,46 @@
         MARKDOWN_CLASS, MARKDOWN_SELECTOR,
         THINK_CONTENT_CLASS, THINK_CONTENT_SELECTOR,
         ASSISTANT_MAIN_CONTENT_SELECTOR, MARKDOWN_CITE_SELECTOR,
-        ICON_BUTTON_SELECTOR, ICON_BUTTON_ROLE_SELECTOR, ICON_BUTTON_ANY_SELECTOR,
-        ICON_BUTTON_DISABLED_CLASS, FLEX_ROW_SELECTOR,
+        ICON_BUTTON_ROLE_SELECTOR,
+        FLEX_ROW_SELECTOR,
         INPUT_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
         TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR,
-        FLOATING_POSITION_WRAPPER_SELECTOR, ELEVATED_SURFACE_SELECTOR, CODE_BLOCK_CLASS,
+        RETRY_BUTTON_SELECTOR, RETRY_BUTTON_FALLBACK_SELECTOR, CONTINUE_BUTTON_SELECTOR, CONTINUE_BUTTON_FALLBACK_SELECTOR,
+        FLOATING_POSITION_WRAPPER_SELECTOR, CODE_BLOCK_CLASS,
         THINK_BLOCK_CLASS, THINK_BLOCK_SELECTOR,
         THINK_SEPARATOR_CLASS, THINK_SEPARATOR_SELECTOR,
+        THINK_HEADER_CLASS, THINK_HEADER_TOGGLE_CLASS, THINK_SPACER_CLASS,
+        THINK_CONTENT_OUTER_CLASS, THINK_CONTENT_MODIFIER_CLASS,
+        THINK_LOADING_DOTS_CLASS, THINK_FOOTER_CLASS,
+        THINK_ICON_CLASS, THINK_HEADER_ICON_ROW_CLASS, THINK_TIME_CLASS, THINK_DIVIDER_CLASS,
+        THINK_CONTENT_WRAPPER_CLASS, THINK_INNER_CONTENT_CLASS,
         ASSISTANT_MESSAGE_SELECTOR, USER_CONTENT_SELECTOR,
-        SCROLL_ROOT_SELECTOR, CHAT_HEADER_SELECTOR,
-        CONTENT_COLUMN_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR, FLOATING_BUTTON_BAR_DIV_SELECTOR,
-        SEND_BUTTON_CONTAINER_SELECTOR, SEND_BUTTON_PARENT_CLASS,
+        SCROLL_ROOT_SELECTOR, CHAT_HEADER_SELECTOR, NEW_CHAT_HEADER_MODIFIER_CLASS,
+        CONTENT_COLUMN_SELECTOR, INPUT_COMPOSER_WRAPPER_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR, FLOATING_BUTTON_BAR_DIV_SELECTOR,
         MESSAGE_TOOLBAR_SELECTOR, THINK_STATUS_SELECTOR,
         THINK_REFERENCE_LABEL_SELECTOR, THINK_REFERENCE_LINK_SELECTOR,
-        HOMEPAGE_MOBILE_CLEANUP_SELECTOR, EDIT_MESSAGE_BUTTON_CLASS,
-        EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR,
+        EDIT_MESSAGE_BUTTON_CLASS,
+        EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR, HOMEPAGE_MOBILE_CLEANUP_SELECTOR,
         VIRTUAL_LIST_CONTAINER_SELECTOR,
         SIDEBAR_WRAPPER_SELECTOR, SIDEBAR_INNER_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
-        SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_CHAT_LINK_SELECTOR,
+        SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_DATE_LABEL_CLASS, SIDEBAR_CHAT_LINK_SELECTOR,
+        SIDEBAR_TITLE_CLASS, SIDEBAR_ACTIONS_CLASS,
         CHAT_HEADER_TITLE_ROW_SELECTOR, CHAT_TITLE_FALLBACK_SELECTOR,
         GO_TOP_NATIVE_BUTTON_CLASS,
+        GO_TOP_ANCHOR_SELECTOR, GO_TOP_ANCHOR_FALLBACK1_SELECTOR,
+                SEND_BUTTON_ROW_CLASS,
         SEND_BUTTON_ROLE_SELECTOR,
         SEND_BUTTON_ICON_SELECTOR,
         SEARCH_ICON_PATH_PREFIX,
         EDIT_SEND_BUTTON_VARIANT_CLASSES,
         BUTTON_CONTENT_SELECTOR, BUTTON_DISABLED_CLASS,
-        EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS,
+        EXPAND_BUTTON_CONTAINER_CLASS, EXPAND_BUTTON_ICON_CLASS, STRAY_BUTTON_CLASS,
+        DS_BUTTON_CAPSULE_CLASS, DS_BUTTON_ICON_LABEL_PRIMARY_CLASS,
+        DS_BUTTON_ICON_LABEL_TERTIARY_CLASS, DS_BUTTON_XL_CLASS,
+        DS_BUTTON_FLOATING_CLASS, DS_BUTTON_CIRCLE_CLASS, DS_BUTTON_PRIMARY_CLASS, DS_BUTTON_FILLED_CLASS,
     };
 
+    // Stryker disable all: equivalent mutants — module/window type checks are environment-dependent, untestable in Node
     // === Test export (no-op in browser) ===
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = DSSelectors;
@@ -256,3 +383,4 @@
         window.DSstudio.Selectors = DSSelectors;
     }
 })();
+// Stryker restore all

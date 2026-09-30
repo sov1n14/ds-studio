@@ -2,52 +2,23 @@
  * popup radio group - "Web Search" (websearchToggle)
  *
  * Requirement contract under test (updated - 'default' option removed):
- *   1. popup.html defines a radio group named "websearchToggle" with ONLY two
- *      values 'on'/'off' inside the "Features" card, in a new
- *      input-group placed after the preventAutoScrollToggle input-group;
- *      the group is labeled with data-i18n="websearchToggleLabel". The
- *      legacy 'default' radio and its i18n label key no longer exist.
- *   2. The 'on' radio is the pre-checked / default-selected option in the
- *      markup.
- *   3. popup.js holds a DOM ref websearchRadios = Array.from(...) over the
- *      websearchToggle radios.
- *   4. On popup load, applySettingsToDom() in popup.settings-view.js sets the
- *      checked radio from settings.websearchToggle, falling back to 'on' when
- *      the setting is missing. Normalization of the legacy stored value
- *      'default' happens in StorageManager and is certified by
- *      storage-manager.websearch-toggle.spec.js / settings-routes.spec.js.
- *   5. A change handler persists the selected value via
- *      StorageManager.saveWebsearchToggle(r.value), then runs
- *      refreshSyncStatus() and showSaveStatus(); the deselected radio is
- *      ignored (if (!r.checked) return;). Only 'on'/'off' can be persisted
- *      going forward, but this wiring itself is unchanged.
- *   6. The radios are gated by the master switch (applyMasterSwitchUI
- *      subControls), exactly like the other UI-adjustment controls. This
- *      behavior is UNCHANGED and its coverage is preserved as-is.
- *   7. popup.live-sync.js mirrors chrome.storage.onChanged updates for the
- *      websearchToggle key onto the radios' checked state, and must also
- *      normalize a legacy 'default' newValue to 'on', falling back to 'on'
- *      when newValue is missing.
+ *   1. popup.html defines a radio group named "websearchToggle" with ONLY two values 'on'/'off' inside the "Features" card, in a new input-group placed after the preventAutoScrollToggle input-group; the group is labeled with data-i18n="websearchToggleLabel". The legacy 'default' radio and its i18n label key no longer exist.
+ *   2. The 'on' radio is the pre-checked / default-selected option in the markup.
+ *   3. popup.js holds a DOM ref websearchRadios = Array.from(...) over the websearchToggle radios.
+ *   4. On popup load, applySettingsToDom() in popup.settings-view.js sets the checked radio from settings.websearchToggle, falling back to 'on' when the setting is missing. Normalization of the legacy stored value 'default' happens in StorageManager and is certified by storage-manager.websearch-toggle.spec.js / settings-routes.spec.js.
+ *   5. A change handler persists the selected value via StorageManager.saveWebsearchToggle(r.value), then runs refreshSyncStatus() and showSaveStatus(); the deselected radio is ignored (if (!r.checked) return;). Only 'on'/'off' can be persisted going forward, but this wiring itself is unchanged.
+ *   6. The radios are gated by the master switch (applyMasterSwitchUI subControls), exactly like the other UI-adjustment controls. This behavior is UNCHANGED and its coverage is preserved as-is.
+ *   7. popup.live-sync.js mirrors chrome.storage.onChanged updates for the websearchToggle key onto the radios' checked state, and must also normalize a legacy 'default' newValue to 'on', falling back to 'on' when newValue is missing.
  *
- * The storage-layer contract (KEYS.WEBSEARCH_TOGGLE = 'dsWebSearchToggle',
- * saveWebsearchToggle) is certified by storage-manager.websearch-toggle.spec.js
- * and is NOT re-asserted here.
+ * The storage-layer contract (KEYS.WEBSEARCH_TOGGLE = 'dsWebSearchToggle', saveWebsearchToggle) is certified by storage-manager.websearch-toggle.spec.js and is NOT re-asserted here.
  *
- * Testing strategy: static source-pattern assertions for markup/DOM-ref/
- * change-handler wiring (identical style to popup-prevent-auto-scroll-toggle.spec.js),
- * plus genuine runtime extraction via new Function(...) for (a) the existing
- * applyMasterSwitchUI behavior, (b) the load-restore block in
- * popup.settings-view.js, and (c) the live-sync normalization block in
- * popup.live-sync.js. The runtime extractions execute the real block against
- * real DOM radio elements / plain objects and assert on resulting .checked
- * values for a matrix of stored inputs - never on the internal statement
- * shape - so the test tolerates any implementation that produces the correct
- * outcome for 'on', 'off', missing, and legacy 'default' inputs.
+ * Testing strategy: static source-pattern assertions for markup/DOM-ref/change-handler wiring (identical style to popup-prevent-auto-scroll-toggle.spec.js), plus genuine runtime execution of (a) the real applyMasterSwitchUI against the real popup.html DOM via test/helpers/popup-master-switch-harness.js, and new Function(...) extraction of (b) the load-restore block in popup.settings-view.js and (c) the live-sync normalization block in popup.live-sync.js. The runtime runs execute the real code against real DOM radio elements / plain objects and assert on resulting .checked / .disabled values - never on the internal statement shape - so the test tolerates any implementation that produces the correct outcome for 'on', 'off', missing, and legacy 'default' inputs.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
+import { mountPopupHtml, buildApplyMasterSwitchUI } from "../helpers/popup-master-switch-harness.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -214,89 +185,33 @@ describe("popup.toggles.js - websearchToggle change handler persistence", () => 
 // (real runtime behavior, not text matching) - UNCHANGED, preserved as-is.
 // -----------------------------------------------------------------------------
 
-function makeCheckbox(disabled) {
-    const el = document.createElement("input");
-    el.type = "checkbox";
-    el.disabled = disabled || false;
-    return el;
-}
-
-function makeRadio(disabled) {
-    const el = document.createElement("input");
-    el.type = "radio";
-    el.disabled = disabled || false;
-    return el;
-}
-
-function makeRange() {
-    const el = document.createElement("input");
-    el.type = "range";
-    return el;
-}
-
-function extractApplyMasterSwitchUI() {
-    const code = readPopupJs();
-    const match = code.match(/function applyMasterSwitchUI\(isEnabled\)\s*\{[\s\S]*?\n {4}\}/);
-    if (!match) throw new Error("Could not locate applyMasterSwitchUI(isEnabled) in popup.js");
-    return match[0];
-}
-
-const CLOSURE_VAR_NAMES = [
-    "sidebarAutoHideToggle", "hideThinkingToggle", "showSystemTimeToggle",
-    "chatWidthToggle", "chatWidthSlider", "inputWidthToggle", "inputWidthSlider",
-    "preventAutoScrollToggle", "autoExpandMessagesToggle", "websearchRadios",
-];
-
-function buildApplyMasterSwitchUI(dom) {
-    const fnSource = extractApplyMasterSwitchUI();
-    const wrapperBody = fnSource + "\nreturn applyMasterSwitchUI;";
-    const factory = new Function(...CLOSURE_VAR_NAMES, wrapperBody);
-    return factory(...CLOSURE_VAR_NAMES.map((name) => dom[name]));
-}
-
 describe("applyMasterSwitchUI - websearchToggle radios master-switch disable behavior", () => {
     it("disables the websearch radios when isEnabled is false, same as the other subControls", () => {
-        const dom = {
-            sidebarAutoHideToggle: makeCheckbox(false),
-            hideThinkingToggle: makeCheckbox(false),
-            showSystemTimeToggle: makeCheckbox(false),
-            chatWidthToggle: makeCheckbox(false),
-            chatWidthSlider: makeRange(),
-            inputWidthToggle: makeCheckbox(false),
-            inputWidthSlider: makeRange(),
-            preventAutoScrollToggle: makeCheckbox(false),
-            websearchRadios: [makeRadio(false), makeRadio(false)],
-        };
-        const applyMasterSwitchUI = buildApplyMasterSwitchUI(dom);
+        mountPopupHtml();
+        const { applyMasterSwitchUI, refs } = buildApplyMasterSwitchUI();
+        expect(refs.websearchRadios, "popup.html must hold the two websearchToggle radios").toHaveLength(2);
+        for (const el of [refs.hideThinkingToggle, refs.preventAutoScrollToggle, ...refs.websearchRadios]) el.disabled = false;
 
         applyMasterSwitchUI(false);
 
-        expect(dom.hideThinkingToggle.disabled).toBe(true);
-        expect(dom.preventAutoScrollToggle.disabled).toBe(true);
-        for (const radio of dom.websearchRadios) {
+        expect(refs.hideThinkingToggle.disabled).toBe(true);
+        expect(refs.preventAutoScrollToggle.disabled).toBe(true);
+        for (const radio of refs.websearchRadios) {
             expect(radio.disabled).toBe(true);
         }
     });
 
     it("re-enables the websearch radios when isEnabled is true, same as the other subControls", () => {
-        const dom = {
-            sidebarAutoHideToggle: makeCheckbox(true),
-            hideThinkingToggle: makeCheckbox(true),
-            showSystemTimeToggle: makeCheckbox(true),
-            chatWidthToggle: makeCheckbox(true),
-            chatWidthSlider: makeRange(),
-            inputWidthToggle: makeCheckbox(true),
-            inputWidthSlider: makeRange(),
-            preventAutoScrollToggle: makeCheckbox(true),
-            websearchRadios: [makeRadio(true), makeRadio(true)],
-        };
-        const applyMasterSwitchUI = buildApplyMasterSwitchUI(dom);
+        mountPopupHtml();
+        const { applyMasterSwitchUI, refs } = buildApplyMasterSwitchUI();
+        expect(refs.websearchRadios, "popup.html must hold the two websearchToggle radios").toHaveLength(2);
+        for (const el of [refs.hideThinkingToggle, refs.preventAutoScrollToggle, ...refs.websearchRadios]) el.disabled = true;
 
         applyMasterSwitchUI(true);
 
-        expect(dom.hideThinkingToggle.disabled).toBe(false);
-        expect(dom.preventAutoScrollToggle.disabled).toBe(false);
-        for (const radio of dom.websearchRadios) {
+        expect(refs.hideThinkingToggle.disabled).toBe(false);
+        expect(refs.preventAutoScrollToggle.disabled).toBe(false);
+        for (const radio of refs.websearchRadios) {
             expect(radio.disabled).toBe(false);
         }
     });

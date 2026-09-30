@@ -233,8 +233,8 @@ describe('editor.js auto-save debounce wiring — source assertion', () => {
         const __dirname = dirname(fileURLToPath(import.meta.url));
         const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
 
-        expect(code).toContain('const debouncedSave = debounce(performSave, 500);');
-        expect(code).not.toContain('debounce(performSave, 600)');
+        expect(code).toContain('const debouncedSave = DSSDebounce(performSave, 500);');
+        expect(code).not.toContain('DSSDebounce(performSave, 600)');
     });
 
     it('textarea "input" handler sets isDirty and calls the debounced save (not performSave directly)', async () => {

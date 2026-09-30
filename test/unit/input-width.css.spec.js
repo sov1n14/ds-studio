@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import '../../utils/storage-manager.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import InputWidth from '../../content/input-width.js';
 
 describe('InputWidth logic (8.2.x, 9.x scenarios)', () => {
@@ -61,8 +62,8 @@ describe('InputWidth logic (8.2.x, 9.x scenarios)', () => {
         it('includes all input selectors', () => {
             const css = InputWidth.getCSS(60);
             expect(css).toContain('._871cbca');
-            expect(css).toContain('.aaff8b8f');
-            expect(css).toContain('._77cefa5._3d616d3');
+            expect(css).toContain(DSSelectors.FLOATING_BUTTON_BAR_SELECTOR);
+            expect(css).toContain(DSSelectors.INPUT_COMPOSER_WRAPPER_SELECTOR);
         });
 
         it('enforces !important on each property', () => {

@@ -53,7 +53,7 @@ When `harvestAllMessages()` returns `isComplete: false`, the export is never sup
 1. A footer line appended to the Markdown body: `> ⚠️ Export may be incomplete (<N> messages captured): <clause>.` — where `<N>` is the actual harvested item count and `<clause>` comes from `HarvestPolicy.describeIncompleteReason(reason)`.
 2. An on-page warning toast via `showHarvestToastIncomplete(capturedCount, clause)`, styled distinctly from the neutral progress toast and auto-dismissing after `HARVEST_INCOMPLETE_TOAST_AUTO_DISMISS_MS` (10000 ms).
 
-Before v4.19.0 the footer hardcoded the words "scroll-harvest timed out before reaching the end" for **every** failure reason, so a stalled or cancelled export misreported its own cause. The clause is now derived from the actual reason, and an unrecognized reason still embeds the raw string verbatim so it stays diagnosable.
+The clause is derived from the actual reason, so a stalled, cancelled, or scroll-interrupted export each reports its own cause, and an unrecognized reason embeds the raw string verbatim so it stays diagnosable.
 
 The on-page toast exists because the footer alone proved invisible in practice: in the reported truncation case it was line 12209 of a 12209-line file, and the user experienced the truncated export as no error at all.
 
@@ -82,7 +82,7 @@ The popup includes a Backup & Restore card with four buttons:
 
 The main export entry point. Returns `{ items: Element[], isComplete: boolean, reason?: string }` — an object containing the harvested DOM nodes, a completion flag, and a reason string. `isComplete` is true only when `reason === 'complete'`.
 
-Possible reasons: `'complete'`, `'stalled'`, `'cancelled'`, `'scroll_interrupted'`, `'no_container'`, `'no_messages'`, plus any reason propagated up from `GoToTop.scrollToTopAndWait()`. The `'timeout'` reason was removed in v4.19.0 along with the total-duration cap that produced it.
+Possible reasons: `'complete'`, `'stalled'`, `'cancelled'`, `'scroll_interrupted'`, `'no_container'`, `'no_messages'`, plus any reason propagated up from `GoToTop.scrollToTopAndWait()`.
 
 **Pre-harvest setup:**
 1. Enables PreventAutoScroll to suppress DeepSeek's live-scroll behavior. This call is unconditional, and so is the matching `disable()` in the teardown `finally` — which is why `disable()` is a no-op while persistent mode is on (v4.12.0), since the flag has no reference counting and an export would otherwise switch off a user-enabled permanent lock.
@@ -106,9 +106,9 @@ Possible reasons: `'complete'`, `'stalled'`, `'cancelled'`, `'scroll_interrupted
 
 **Termination (rewritten in v4.19.0):**
 
-The loop no longer owns its own stop decisions. Each iteration gathers an observation and calls `HarvestPolicy.decideNextStep()`, then obeys the verdict. `nowMs` is supplied by `harvest.js` from `Date.now()` — the policy module never reads a clock itself, which is what makes it testable without fake timers.
+Stop decisions belong to `HarvestPolicy`, not the loop. Each iteration gathers an observation and calls `HarvestPolicy.decideNextStep()`, then obeys the verdict. `nowMs` is supplied by `harvest.js` from `Date.now()` — the policy module never reads a clock itself, which is what makes it testable without fake timers.
 
-There is deliberately **no total-duration cap**. A harvest that keeps making progress runs as long as it needs to; the only time-based stop is `HARVEST_STALL_TIMEOUT_MS` (20000 ms) of *continuous* no-progress, and the cancel button is the user's escape hatch. See the History note below for why.
+There is deliberately **no total-duration cap**. A harvest that keeps making progress runs as long as it needs to; the only time-based stop is `HARVEST_STALL_TIMEOUT_MS` (20000 ms) of *continuous* no-progress, and the cancel button is the user's escape hatch. See "Why termination is progress-based" below.
 
 **Cancellation (v4.19.0):**
 
@@ -118,13 +118,13 @@ A native `AbortController` is created inside `harvestAllMessages()`, so its life
 - On success: restores scroll position, disables PreventAutoScroll (a no-op if the user has persistent mode on, v4.12.0), hides the toast.
 - On any early stop (`'stalled'`, `'cancelled'`, `'scroll_interrupted'`): exports the partial content with a reason-accurate warning footer and an on-page warning toast, then cleans up identically.
 
-**History — why the total timeout was removed:**
+**Why termination is progress-based:**
 
-Before v4.19.0 the loop aborted on a hard `HARVEST_TOTAL_TIMEOUT` of 120000 ms. That cap silently truncated long conversations: a reported export captured 500 messages and lost all of the newest ones, ending cleanly at a message boundary with only a buried footer to show for it.
+A fixed total-duration cap silently truncates long conversations: the export ends cleanly at a message boundary and loses all of the newest messages, with only a buried footer to show for it.
 
-The cap was exhausted by idling, not by loading. Every step awaited a stability check whose minimum cost was `HARVEST_STABLE_TICKS` (3) × `HARVEST_STABLE_INTERVAL` (150 ms) = 450 ms, paid even on steps where nothing had to load. That put a hard ceiling of roughly 120000 ÷ 450 ≈ 266 steps × 0.9 viewport ≈ 240 viewport-heights on the total reachable scroll, regardless of conversation length. Interruption and slowness were therefore one defect, not two.
+Such a cap is exhausted by idling, not by loading. Every step awaits a stability check whose minimum cost is `HARVEST_STABLE_TICKS` (3) × `HARVEST_STABLE_INTERVAL` (100 ms) = 300 ms, paid even on steps where nothing has to load, so any total cap puts a hard ceiling on reachable scroll distance regardless of conversation length. Interruption and slowness are therefore one defect, not two.
 
-The replacement is progress-based: stop only when nothing has changed for a continuous 20 s. Retuning the interval to 100 ms lowered the per-step floor to 300 ms as a side benefit, but the tick count stayed at 3 on purpose — resolving a stability wait early would scroll past content that has not rendered yet, and the scan never comes back up, so those messages would be lost permanently. Completeness outranks speed here.
+Termination is therefore progress-based: stop only when nothing has changed for a continuous 20 s. The tick count stays at 3 on purpose — resolving a stability wait early would scroll past content that has not rendered yet, and the scan never comes back up, so those messages would be lost permanently. Completeness outranks speed here.
 
 **Fallback:** If `GoToTop` or `PreventAutoScroll` are unavailable, Harvest falls back to a single-pass DOM query of `.ds-virtual-list-visible-items .ds-message` (capturing only currently visible messages).
 
@@ -142,13 +142,13 @@ Defined in `content/harvest.dom.js`:
 
 | Constant | Value | Description |
 |-|-|-|
-| `HARVEST_STABLE_TICKS` | 3 | Consecutive stable checks before proceeding. Do not lower — see the History note above |
-| `HARVEST_STABLE_INTERVAL` | 100 ms | Interval between stability checks (was 150 ms before v4.19.0) |
+| `HARVEST_STABLE_TICKS` | 3 | Consecutive stable checks before proceeding. Do not lower — see "Why termination is progress-based" above |
+| `HARVEST_STABLE_INTERVAL` | 100 ms | Interval between stability checks |
 | `HARVEST_BOTTOM_TOLERANCE` | 4 px | Tolerance for bottom detection |
 
-`HARVEST_TOTAL_TIMEOUT` (120000 ms) was **removed** in v4.19.0. Do not reintroduce a total-duration cap in any form — its absence is the bug fix.
+Termination stays progress-based: do not add a total-duration cap in any form.
 
-`HARVEST_SCROLL_STEP_FACTOR` (0.9) was **removed** from `harvest.js` in v4.19.1. The step is now derived from a live measurement, and the fallback ratio lives in `harvest.policy.js` as `SCROLL_STEP_FALLBACK_FACTOR`. Keeping a second copy here would create two sources of truth for one value.
+Since v4.19.1 the step is derived from a live measurement. The fallback ratio (0.9) is defined in `harvest.policy.js` as `SCROLL_STEP_FALLBACK_FACTOR`, the single source of this value; `harvest.js` keeps no copy of it, so one value never has two sources.
 
 Defined in `content/harvest.policy.js`:
 

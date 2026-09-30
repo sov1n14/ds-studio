@@ -59,6 +59,15 @@ function discoverBundleFiles() {
 }
 
 // ---------------------------------------------------------------------------
+// R6: every utils/storage-manager.*.js file on disk is a bundle part for loading purposes, whether it mixes a __DS_StorageManager_<name> global into the entry or publishes its own global (e.g. a pure helper module read by other parts). Such a file is invisible to R2, so without this list a helper part could be missing from a loader and only fail at runtime.
+// ---------------------------------------------------------------------------
+function discoverAllPartFiles() {
+    return fs.readdirSync(path.join(ROOT, 'utils'))
+        .filter((f) => /^storage-manager\..+\.js$/.test(f))
+        .map((f) => `utils/${f}`);
+}
+
+// ---------------------------------------------------------------------------
 // R5 helpers: extract an ordered list of storage-manager related file
 // references from each loader, normalized to "utils/storage-manager.X.js".
 // ---------------------------------------------------------------------------
@@ -130,10 +139,10 @@ describe('storage-manager loader contract', () => {
         expect(deadFiles, `Bundle files whose global nobody mixes in (dead weight): ${deadFiles.join(', ')}`).toEqual([]);
     });
 
-    const bundleFiles = [...bundleFilesByName.values()].sort();
+    const bundleFiles = [...new Set([...bundleFilesByName.values(), ...discoverAllPartFiles()])].sort();
 
     for (const loader of LOADERS) {
-        test(`${loader.name} loads every bundle file before the entry file (R5)`, () => {
+        test(`${loader.name} loads every bundle file before the entry file (R5, R6)`, () => {
             const order = loader.getOrder();
             const entryIndex = order.indexOf(ENTRY_FILE);
             // Some loaders (e.g. vitest.setup.js) intentionally preload only the

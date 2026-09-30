@@ -57,7 +57,7 @@ describe('context-invalidated — sendMessage sync throw on orphaned content scr
     it('R1: handOffToServiceWorker does not throw when sendMessage throws synchronously (Extension context invalidated)', () => {
         const uuid = 'deadbeef-1111-2222-3333-444444444444';
         setPathname(`/a/chat/s/${uuid}`);
-        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, uuid);
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, uuid);
         Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: null, // no token → handOffToServiceWorker path
@@ -91,13 +91,13 @@ describe('context-invalidated — sendMessage sync throw on orphaned content scr
         expect(mentionsCoordinator).toBe(true);
 
         // Local cleanup should still complete: tracked uuid cleared from sessionStorage
-        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY)).toBeNull();
     });
 
     it('R2 (control): with a normally resolving sendMessage, the same navigation does not log any coordinator error', () => {
         const uuid = 'deadbeef-1111-2222-3333-444444444444';
         setPathname(`/a/chat/s/${uuid}`);
-        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT_UUID_KEY, uuid);
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, uuid);
         Object.assign(TemporaryChatDelete.state, {
             trackedTemporaryUuid: uuid,
             capturedAuthToken: null,

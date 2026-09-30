@@ -26,6 +26,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 const { convertMessageNodeToMarkdown, exportConversationToMarkdown, _buildMarkdownHeader } = contentScript;
 
@@ -34,7 +35,7 @@ function makeUserMessage(text) {
     const msg = document.createElement('div');
     msg.className = 'ds-message';
     const inner = document.createElement('div');
-    inner.className = 'fbb737a4';
+    inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
     inner.textContent = text;
     Object.defineProperty(inner, 'innerText', { value: text, configurable: true });
     msg.appendChild(inner);
@@ -75,7 +76,7 @@ function makeAiMessageWithThinking(opts) {
     const labelDiv = document.createElement('div');
     labelDiv.className = 'ds-think-label';
     const labelSpan = document.createElement('span');
-    labelSpan.className = '_08cbf39';
+    labelSpan.className = DSSelectors.THINK_STATUS_SELECTOR.slice(1);
     labelSpan.textContent = thoughtLabel;
     labelDiv.appendChild(labelSpan);
     thinkWrapper.appendChild(labelDiv);
@@ -179,7 +180,7 @@ describe('convertMessageNodeToMarkdown', () => {
             const msg = document.createElement('div');
             msg.className = 'ds-message';
             const inner = document.createElement('div');
-            inner.className = 'fbb737a4';
+            inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             inner.textContent = '   ';
             Object.defineProperty(inner, 'innerText', { value: '   ', configurable: true });
             msg.appendChild(inner);
@@ -230,7 +231,7 @@ describe('convertMessageNodeToMarkdown', () => {
             expect(result).toContain('Main answer text');
         });
 
-        it('includes thought label (._08cbf39) in thinking section', () => {
+        it('includes thought label (._5255ff8) in thinking section', () => {
             const msg = makeAiMessageWithThinking({ thoughtLabel: 'Thought for 5 seconds' });
             const result = convertMessageNodeToMarkdown(msg, true, true);
             expect(result).toContain('Thought for 5 seconds');

@@ -141,6 +141,42 @@ describe('GoToTop', () => {
             GoToTop._applyStackedOffset(btn, nativeBtn);
             expect(btn.style.right).toBe('');
         });
+
+        // Layout model at the boundary (happy-dom performs no layout). Both buttons are
+        // `position: absolute; bottom: 100%` in the same wrapper, so an element's bottom edge sits
+        // margin-bottom px above the wrapper top. The native button occupies [nativeMB, nativeMB + height]
+        // above the wrapper top; go-top's bottom edge sits at its own margin-bottom. The requirement
+        // (docs/spec/03-ui-adjustments.md: "8px above the native button") is that the visible gap
+        // between go-top's bottom edge and the native button's top edge is exactly 8px.
+        function visibleGapAboveNative(btn, nativeMarginBottomPx, nativeHeightPx) {
+            const goTopBottomEdge = parseFloat(btn.style.marginBottom);
+            const nativeTopEdge = nativeMarginBottomPx + nativeHeightPx;
+            return goTopBottomEdge - nativeTopEdge;
+        }
+
+        it.each([0, 12, 20, 32])('keeps an 8px gap above the native button when its computed margin-bottom is %ipx', (nativeMarginBottomPx) => {
+            const btn = document.createElement('div');
+            const nativeBtn = document.createElement('div');
+            document.body.appendChild(nativeBtn);
+
+            Object.defineProperty(nativeBtn, 'offsetHeight', { value: 34, configurable: true });
+            vi.spyOn(window, 'getComputedStyle').mockReturnValue({ marginBottom: `${nativeMarginBottomPx}px`, right: '' });
+
+            GoToTop._applyStackedOffset(btn, nativeBtn);
+            expect(visibleGapAboveNative(btn, nativeMarginBottomPx, 34), `go-top margin-bottom was ${btn.style.marginBottom}`).toBe(8);
+        });
+
+        it.each(['', 'auto'])('falls back to the documented 62px offset (native 20px margin assumed) when native margin-bottom is unparseable (%j)', (rawMarginBottom) => {
+            const btn = document.createElement('div');
+            const nativeBtn = document.createElement('div');
+            document.body.appendChild(nativeBtn);
+
+            Object.defineProperty(nativeBtn, 'offsetHeight', { value: 34, configurable: true });
+            vi.spyOn(window, 'getComputedStyle').mockReturnValue({ marginBottom: rawMarginBottom, right: '' });
+
+            GoToTop._applyStackedOffset(btn, nativeBtn);
+            expect(btn.style.marginBottom).toBe('62px');
+        });
     });
 
     // ─────────────────────────────────────

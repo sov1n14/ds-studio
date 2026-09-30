@@ -2,9 +2,10 @@
  * Tests for the RESOLUTION side of the per-preset global-prompt-enabled feature.
  *
  * Scope: verifies that isGlobalPromptEnabled is derived from
- * StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag), i.e. from
- * the active preset's own globalPromptEnabled field, rather than solely from the
- * legacy device-local globalPromptEnabled settings key, and that this resolution:
+ * the globalPromptEnabled field of the preset the in-page overlay DISPLAYS (chat map ->
+ * pending -> pinned), falling back to the legacy device-local globalPromptEnabled key only
+ * when no preset is displayed -- never from a bare settings.activePresetId the overlay does
+ * not show -- and that this resolution:
  *   - discriminates correctly between two different active presets (headline criterion),
  *   - takes effect on the next injected message when the active preset is switched via
  *     the in-page overlay, with no page reload,
@@ -28,10 +29,11 @@
  * broadcast that background/settings-routes.js would send is delivered by the test,
  * since no background page runs here.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
+import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
 
 function makeTextarea(value) {
     const ta = document.createElement('textarea');
@@ -121,7 +123,13 @@ async function seedPresets(presets, activeId) {
     await chrome.storage.sync.set(item);
 }
 
-describe('isGlobalPromptEnabled resolution from the active preset (per-preset flag)', () => {
+describe('isGlobalPromptEnabled resolution from the displayed preset (per-preset flag)', () => {
+    // The global-prompt flag follows the preset the overlay DISPLAYS (chat map -> pending ->
+    // pinned), else the device-wide legacy flag -- never a bare settings.activePresetId the
+    // overlay does not show. overlayShownId records what the overlay dropdown was last told to
+    // display, so each case can assert display and injection agree.
+    let overlayShownId;
+
     beforeEach(async () => {
         // Wait for the module-load-time initSettings() bootstrap to fully settle
         // before resetting state -- otherwise its delayed isEnabled /
@@ -129,20 +137,48 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         // state writes run in the test body and silently clobber it mid-test.
         await waitForContentScriptBootstrap();
         Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        overlayShownId = undefined;
+        contentScript.PresetOverlay.dropdown = { setValue: (id) => { overlayShownId = id; }, setOptions: () => {} };
     });
 
-    it('[Req 1 and 4] a remote or cross-device change to the active preset globalPromptEnabled flag is reflected on the next injected message, without reload', async () => {
+    afterEach(() => {
+        contentScript.PresetOverlay.dropdown = null;
+    });
+
+    // Makes presetId the DISPLAYED preset the way a user sees it: pinned as default, then SPA
+    // navigation to a brand-new chat, which pre-selects the pinned preset on the overlay and
+    // resolves the global-prompt flag from it. The flag is pre-set to the opposite of what the
+    // case expects so a skipped resolution cannot pass on the beforeEach value.
+    async function displayPinnedPresetInNewChat(presetId, flagBeforeNavigation) {
+        await chrome.storage.local.set({ pinnedPresetId: presetId });
+        await chrome.storage.sync.set({ pinnedPresetId: presetId });
+        contentScript.state.isGlobalPromptEnabled = flagBeforeNavigation;
+        setPathname('/a/chat/s');
+        await contentScript.handleChatChange();
+        await flush();
+    }
+
+    it('[Req 1 and 4] a remote or cross-device change to the DISPLAYED (pinned) preset globalPromptEnabled flag is reflected on the next injected message, without reload', async () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'Global instruction';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
-        ], 'preset-A');
+            { id: 'preset-B', name: 'B', content: '', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
+        ]);
         await flush();
+        await displayPinnedPresetInNewChat('preset-A', false);
+        expect(overlayShownId, 'overlay must display pinned preset A in the new chat').toBe('preset-A');
 
         const ta1 = makeTextarea('first message');
         expect(contentScript.injectPrefix(ta1)).toBe(true);
         expect(ta1.value).toContain('Global instruction');
+
+        // Another tab on this device selects B, moving the device-wide activePresetId away
+        // from what THIS tab displays. B keeps globalPromptEnabled:true throughout, so only a
+        // resolution that follows the displayed preset A can observe the flip below.
+        await chrome.storage.local.set({ activePresetId: 'preset-B' });
+        await chrome.storage.sync.set({ activePresetId: 'preset-B' });
 
         const flippedPreset = { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 2, globalPromptEnabled: false };
         await chrome.storage.sync.set({ 'dsPreset_preset-A': flippedPreset });
@@ -152,10 +188,12 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         // round trip to actually settle, rather than guessing a tick count.
         await waitUntilGlobalPromptEnabledIs(false);
 
+        expect(overlayShownId, 'overlay must still display A after the remote change').toBe('preset-A');
         const ta2 = makeTextarea('second message');
         expect(contentScript.injectPrefix(ta2)).toBe(true);
         expect(ta2.value).not.toContain('Global instruction');
-    });
+        // Timeout above waitUntilState's 500-tick budget so a regression surfaces as its descriptive "Timed out waiting for" error, not a bare vitest timeout.
+    }, 15000);
 
     it('[Req 2, 3, 8] switching the active preset via the overlay changes the global-prompt segment on the very next message, while the preset own content prefix is always included', async () => {
         contentScript.state.isEnabled = true;
@@ -193,47 +231,55 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
         expect(ta2.value).toContain('Prefix B');
     });
 
-    it('[Req 5] the isEnabled master switch still blocks all injection even when the resolved active preset has globalPromptEnabled true', async () => {
+    it('[Req 5] the isEnabled master switch still blocks all injection even when the displayed preset has globalPromptEnabled true', async () => {
         contentScript.state.isEnabled = false;
         contentScript.state.globalDefaultPrompt = 'Global instruction';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: 'Own prefix', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
-        ], 'preset-A');
+        ]);
         await flush();
+        await displayPinnedPresetInNewChat('preset-A', false);
+        expect(overlayShownId).toBe('preset-A');
+        expect(contentScript.state.isGlobalPromptEnabled, 'precondition: displayed A resolves the flag to true').toBe(true);
 
         const ta = makeTextarea('message');
         expect(contentScript.injectPrefix(ta)).toBe(false);
         expect(ta.value).toBe('message');
     });
 
-    it('[Req 6] a preset object with no globalPromptEnabled field at all is treated as enabled, even overriding a stale legacy device flag', async () => {
+    it('[Req 6] a displayed preset object with no globalPromptEnabled field at all is treated as enabled, even overriding a stale legacy device flag', async () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = 'Global instruction';
 
-        // Stale legacy device-local flag says disabled; the active preset omits the field
+        // Stale legacy device-local flag says disabled; the displayed preset omits the field
         // entirely, so the resolver must default that preset to enabled and NOT fall back
         // to the stale legacy value.
         await chrome.storage.local.set({ globalPromptEnabled: false });
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 1 },
-        ], 'preset-A');
+        ]);
         await flush();
+        await displayPinnedPresetInNewChat('preset-A', false);
+        expect(overlayShownId).toBe('preset-A');
 
         const ta = makeTextarea('message');
         expect(contentScript.injectPrefix(ta)).toBe(true);
         expect(ta.value).toContain('Global instruction');
     });
 
-    it('[Req 7] an empty globalDefaultPrompt yields no global-prompt segment even when the resolved flag is true, existing behavior preserved', async () => {
+    it('[Req 7] an empty globalDefaultPrompt yields no global-prompt segment even when the displayed preset flag is true, existing behavior preserved', async () => {
         contentScript.state.isEnabled = true;
         contentScript.state.globalDefaultPrompt = '';
 
         await seedPresets([
             { id: 'preset-A', name: 'A', content: '', createdAt: 1, updatedAt: 1, globalPromptEnabled: true },
-        ], 'preset-A');
+        ]);
         await flush();
+        await displayPinnedPresetInNewChat('preset-A', false);
+        expect(overlayShownId).toBe('preset-A');
+        expect(contentScript.state.isGlobalPromptEnabled, 'precondition: displayed A resolves the flag to true').toBe(true);
 
         expect(contentScript.buildInjectionPrefix()).toBe('');
     });
@@ -249,11 +295,9 @@ describe('isGlobalPromptEnabled resolution from the active preset (per-preset fl
     // via window.history.replaceState + calling handleChatChange() directly, exactly as
     // content-script.binding.spec.js already does for this module.
 
+    // Durable chat-map layout as the SW writer leaves it (content scripts cannot mutate the map directly).
     async function seedBinding(uuid, presetId) {
-        await StorageManager.mutateChatPresetMap(map => {
-            map[uuid] = presetId;
-            return map;
-        });
+        await writeChatMapLayout([chrome.storage.sync, chrome.storage.local], StorageManager.KEYS, [{ [uuid]: presetId }]);
     }
 
     it('[BUG regression] navigating from a chat bound to a preset with globalPromptEnabled:false to an UNBOUND chat must fall back to the legacy device flag (true), not the stale preset flag', async () => {

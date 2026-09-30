@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * _tryRestoreMessage and applyToExisting: post-refresh restore, idempotency,
@@ -153,7 +154,7 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             const userMsg = document.createElement('div');
             userMsg.className = 'ds-message';
             const userContent = document.createElement('div');
-            userContent.className = 'fbb737a4';
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent.textContent = 'Guard test prompt';
             userMsg.appendChild(userContent);
             userItem.appendChild(userMsg);
@@ -176,10 +177,11 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
             const toolbar = document.createElement('div');
             toolbar.className = 'ds-flex';
             for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
-                const btn = document.createElement('button');
-                btn.className = 'ds-icon-button';
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
                 if (state === 'disabled') {
-                    btn.classList.add('ds-icon-button--disabled');
+                    btn.classList.add('ds-button--disabled');
                     btn.setAttribute('aria-disabled', 'true');
                 }
                 toolbar.appendChild(btn);
