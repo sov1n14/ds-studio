@@ -647,19 +647,44 @@ describe('send interception via Enter', () => {
         expect(state.markCalls).toBe(0);
     });
 
-    it('does not inject when isMobileDevice() returns true', () => {
+    /** Enter dispatched while navigator reports the given device; the overrides are own properties, deleted afterwards. */
+    function dispatchEnterOnDevice(textarea, device) {
+        for (const [key, value] of Object.entries(device)) {
+            Object.defineProperty(navigator, key, { configurable: true, get: () => value });
+        }
+        try {
+            return dispatchEnter(textarea);
+        } finally {
+            for (const key of Object.keys(device)) delete navigator[key];
+        }
+    }
+
+    it('does not inject on a real mobile device (Android Mobile UA with touch)', () => {
         resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
         const { textarea } = mountComposer('hello');
-        const origMaxTouchPoints = Object.getOwnPropertyDescriptor(Navigator.prototype, 'maxTouchPoints');
-        Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true });
-        const ev = dispatchEnter(textarea);
-        if (origMaxTouchPoints) {
-            Object.defineProperty(navigator, 'maxTouchPoints', origMaxTouchPoints);
-        } else {
-            Object.defineProperty(navigator, 'maxTouchPoints', { value: 0, configurable: true });
-        }
+        const ev = dispatchEnterOnDevice(textarea, {
+            maxTouchPoints: 5,
+            userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+            platform: 'Linux armv81',
+        });
         expect(ev.defaultPrevented).toBe(false);
         expect(textarea.value).toBe('hello');
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('injects on a Windows desktop that reports touch points (desktop Edge UA, maxTouchPoints 10) and marks the chat-creation attempt', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+        const ev = dispatchEnterOnDevice(textarea, {
+            maxTouchPoints: 10,
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0',
+            platform: 'Win32',
+        });
+        expect(ev.defaultPrevented, 'reported touch points alone must not route Enter to the native mobile path').toBe(true);
+        expect(textarea.value).toBe(
+            '<system-reminder>\nGLOBAL\n</system-reminder>\n\n<user-input>\nhello\n</user-input>'
+        );
+        expect(state.markCalls, 'the homepage send must arm the new-chat binding').toBe(1);
     });
 
     it('redispatchEnter fires a KeyboardEvent with correct properties', () => {

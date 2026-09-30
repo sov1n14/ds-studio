@@ -176,7 +176,7 @@ GoToTop **只**受 `isEnabled` 控制（沒有個別功能開關）。`init()` �
 
 ### 行動裝置防護
 
-`navigator.maxTouchPoints > 0`（實體觸控裝置）或 userAgent 符合 `/Mobi|Android|iPhone|iPad/i`（DevTools 行動裝置模擬）時，共用模組 `content/mobile-device.js` 的 `isMobileDevice()`（`globalThis.DSSMobileDevice`，經 `this._mobileDevice` 取用）回傳 `true`。`start()`、`enable()`、`_onTouchStart`、`_onTouchMove`、`_onTouchEnd` 都以此檢查為閘門——桌面裝置零額外負擔。
+共用模組 `content/mobile-device.js` 的 `isMobileDevice()` 依裝置外型判定：userAgent 符合 `/Mobi|Android|iPhone|iPad/i`（實體行動裝置與 DevTools 行動裝置模擬），或為桌面模式的 iPadOS（`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`）時回傳 `true`；以桌面 User-Agent 回報觸控點（`maxTouchPoints > 0`）的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面，回傳 `false`。`isMobileDevice()` 掛載於 `globalThis.DSSMobileDevice`，經 `this._mobileDevice` 取用。`start()`、`enable()`、`_onTouchStart`、`_onTouchMove`、`_onTouchEnd` 都以此檢查為閘門——桌面裝置零額外負擔。
 
 ### DOM 探索
 

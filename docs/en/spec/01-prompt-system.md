@@ -37,7 +37,7 @@
   - If both are empty, the `<system-reminder>` block is omitted entirely, but the `<user-input>` wrapper is still preserved.
   - The system does not auto-insert a `---` separator. Users have full control over injected content — any separators, line breaks, or formatting must be included in the prompt text.
 - **Injection triggers**: Injection occurs when:
-  - The user presses `Enter` (excluding `Shift + Enter` for line breaks and IME composition state).
+  - The user presses `Enter` (excluding `Shift + Enter` for line breaks and IME composition state). On mobile devices, as defined by `isMobileDevice()` in `content/mobile-device.js` (User-Agent matches `/Mobi|Android|iPhone|iPad/i`, or iPadOS in desktop mode with `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`), `Enter` is not intercepted and the browser's default newline behavior is preserved; a device with a desktop User-Agent that reports touch points (touchscreen laptop, pen device, touch-injecting software such as Android emulators) is a desktop, so `Enter` is intercepted and injected as usual.
   - The user clicks the on-screen send button (CSS selector: `div.ds-button[role="button"]`, also identifiable via the send-arrow SVG icon).
 - **Guard conditions**: Injection is skipped when:
   - The feature is disabled via the toggle.

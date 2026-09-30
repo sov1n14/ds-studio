@@ -70,7 +70,7 @@ function broadcast(changes, area = 'local') {
 // ── Navigator helpers ───────────────────────────────────────────────────────
 
 function stubMobileNavigator() {
-    vi.stubGlobal('navigator', { maxTouchPoints: 2, userAgent: 'Chrome Desktop' });
+    vi.stubGlobal('navigator', { maxTouchPoints: 5, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36', platform: 'Linux armv81' });
 }
 
 function stubDesktopNavigator() {

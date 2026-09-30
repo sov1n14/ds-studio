@@ -93,7 +93,7 @@
 ## 19. 行動裝置側欄滑動手勢 (Mobile Sidebar Swipe)
 
 - **目的**：在行動裝置上，讓使用者在畫面中央 80% 區域內透過左右滑動手勢控制側邊欄 — 向右滑動展開、向左滑動收合，解決行動版缺乏側邊欄快速切換機制的問題。
-- **僅行動裝置**：透過 `_isMobileDevice()` 判斷——`navigator.maxTouchPoints > 0`（實體觸控裝置）或 User-Agent 符合 `/Mobi|Android|iPhone|iPad/i`（Chrome DevTools 行動模擬）。桌面環境完全零開銷，不綁定任何事件監聽器。
+- **僅行動裝置**：透過 `content/mobile-device.js` 的 `isMobileDevice()` 依裝置外型判斷——User-Agent 符合 `/Mobi|Android|iPhone|iPad/i`（實體行動裝置與 Chrome DevTools 行動模擬），或為桌面模式的 iPadOS（`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`）時為行動裝置。僅具觸控能力（`maxTouchPoints > 0`）不構成行動裝置：以桌面 User-Agent 回報觸控點的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面。桌面環境完全零開銷，不綁定任何事件監聽器。
 - **觸發區域幾何**：觸控起點必須落在畫面正中央 80% × 80% 區域內（水平與垂直各扣除 10% 邊界）。此設計避免與 Chrome Android 系統返回手勢（螢幕邊緣觸發）及頂部狀態列／底部導航列的誤觸衝突：
   - `minX = innerWidth * 0.10`, `maxX = innerWidth * 0.90`
   - `minY = innerHeight * 0.10`, `maxY = innerHeight * 0.90`

@@ -93,7 +93,7 @@
 ## 19. Mobile Sidebar Swipe Gesture
 
 - **Purpose**: On mobile devices, allows users to swipe horizontally within the central 80% of the screen to open or close the sidebar (right-swipe opens, left-swipe closes), solving the lack of a quick sidebar toggle mechanism on mobile.
-- **Mobile Only**: Determined via `_isMobileDevice()` — `navigator.maxTouchPoints > 0` (physical touch device) or User-Agent matching `/Mobi|Android|iPhone|iPad/i` (Chrome DevTools mobile emulation). Desktop environments have zero overhead, with no event listeners bound.
+- **Mobile Only**: Determined by form factor via `isMobileDevice()` in `content/mobile-device.js` — the device is mobile when the User-Agent matches `/Mobi|Android|iPhone|iPad/i` (real mobile devices and Chrome DevTools mobile emulation) or it is iPadOS in desktop mode (`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`). Touch capability alone (`maxTouchPoints > 0`) does not make a device mobile: a device with a desktop User-Agent that reports touch points (touchscreen laptop, pen device, touch-injecting software such as Android emulators) is a desktop. Desktop environments have zero overhead, with no event listeners bound.
 - **Trigger Area Geometry**: The touch start point must fall within the central 80% × 80% area of the screen (10% margin excluded from each side horizontally and vertically). This design avoids conflicts with Chrome Android's system back gesture (triggered from screen edges) and accidental touches from the top status bar / bottom navigation bar:
   - `minX = innerWidth * 0.10`, `maxX = innerWidth * 0.90`
   - `minY = innerHeight * 0.10`, `maxY = innerHeight * 0.90`

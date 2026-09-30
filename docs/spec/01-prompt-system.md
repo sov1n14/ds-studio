@@ -37,7 +37,7 @@
   - 若兩者皆為空，則完全省略 `<system-reminder>` 區塊，但仍保留 `<user-input>` 包裹。
   - 系統不會自動插入 `---` 分隔線。使用者對注入內容有完整控制權 — 任何分隔線、換行或格式都必須包含在提示詞文字中。
 - **注入觸發**：在以下情況執行注入：
-  - 使用者按下 `Enter` 鍵（排除 `Shift + Enter` 換行及 IME 組字狀態）。
+  - 使用者按下 `Enter` 鍵（排除 `Shift + Enter` 換行及 IME 組字狀態）。行動裝置（依 `content/mobile-device.js` 的 `isMobileDevice()` 判定：User-Agent 符合 `/Mobi|Android|iPhone|iPad/i`，或 `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1` 的桌面模式 iPadOS）上不攔截 `Enter`，保留瀏覽器預設的換行行為；以桌面 User-Agent 回報觸控點的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面，`Enter` 照常攔截並注入。
   - 使用者點擊畫面上的發送按鈕（CSS 選擇器：`div.ds-button[role="button"]`，亦可透過送出箭頭 SVG 圖示識別）。
 - **防護條件**：以下情況跳過注入：
   - 透過開關停用功能。

@@ -176,7 +176,7 @@ After passing all five conditions, `_onTouchEnd` branches on the sign of `deltaX
 
 ### Mobile Guard
 
-`isMobileDevice()` from the shared `content/mobile-device.js` (`globalThis.DSSMobileDevice`, reached as `this._mobileDevice`) returns `true` when `navigator.maxTouchPoints > 0` (physical touch device) OR the userAgent matches `/Mobi|Android|iPhone|iPad/i` (DevTools mobile emulation). `start()`, `enable()`, `_onTouchStart`, `_onTouchMove`, and `_onTouchEnd` gate on this check — desktop devices have zero overhead.
+`isMobileDevice()` from the shared `content/mobile-device.js` (`globalThis.DSSMobileDevice`, reached as `this._mobileDevice`) decides by form factor: it returns `true` when the userAgent matches `/Mobi|Android|iPhone|iPad/i` (real mobile devices and DevTools mobile emulation) OR the device is iPadOS in desktop mode (`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`); a device with a desktop User-Agent that reports touch points (`maxTouchPoints > 0`; touchscreen laptop, pen device, touch-injecting software such as Android emulators) is a desktop and returns `false`. `start()`, `enable()`, `_onTouchStart`, `_onTouchMove`, and `_onTouchEnd` gate on this check — desktop devices have zero overhead.
 
 ### DOM Discovery
 
