@@ -96,6 +96,6 @@
 - [CRLF-safe edits](feedback_file-edits-crlf.md) — test files are CRLF; edit with node + normalization, not sed
 - [happy-dom layout model](reference_happydom_layout_model.md) — inject real CSS + geometry getters to model scrollWidth/flex stretch; gap via cs.gap
 - [Overlay failed-bind race](project_overlay_failed_bind_race.md) — prefix race reds only on unbound chat + immediate failure; bound/retry/timeout stay green
-- [Pinned-default dry-run flake](pitfall_pinned_default_dry_run_flake.md) — pinned-default spec test 1 flaked once in Stryker dry run; rerun before investigating
+- [Pinned-default dry-run flake](pitfall_pinned_default_dry_run_flake.md) — root cause: un-awaited initSettings bootstrap race; fixed 2026-09-30 with waitForContentScriptBootstrap
 - [Navigation stale prefix not real](project_navigation_stale_prefix_not_real.md) — stale recompute vs handleChatChange race does not reproduce; every branch awaits storage first
 - [GoTop render-combined equivalents](project_gotop_render_combined_equivalents.md) — 5 equivalent survivors and the one-debounce fake-timer observer harness
