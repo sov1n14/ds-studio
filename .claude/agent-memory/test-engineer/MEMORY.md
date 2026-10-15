@@ -86,16 +86,17 @@
 - [WebSearch toggle fix state](project_websearch_toggle_generic_fix_state.md) — as of 2026-08-17 the generic-candidates fix sat uncommitted in the working tree
 - [Red phase runner](red-phase-runner.md) — new spec for a missing module yields collection-level red with zero tests; report expected test count
 - [Session tooling quirks](session-tooling-quirks.md) — Edit/Write disabled in subagent sessions; Bash heredocs fail above ~8KB per command
-- [Spec file line endings](spec-file-line-endings.md) — spec files use CRLF; scripted string edits must handle \r\n
 - [Temp-chat delete negative assertions](temp-chat-delete-negative-assertions.md) — "does NOT delete" must assert DSS_FIBER_DELETE_SESSION postMessage plus surviving tracked state
 - [Testing harness quirks](testing-harness-quirks.md) — happy-dom supports pushState + PopStateEvent for real SPA routes; GoToTop has no observer field to assert
 - [Vitest dynamic import red](vitest_dynamic_import_red.md) — dynamic import() resolves at transform time, so a missing module fails the suite at collection
 - [Vitest harness pitfalls](vitest_harness_pitfalls.md) — runner cwd, shared chrome mock onChanged echo, ESM hoisting vs spec-local chrome mocks
 - [Vitest fake timers pitfalls](vitest-fake-timers-pitfalls.md) — storage mock deadlock, MutationObserver flakiness and dropped delivery under fake timers
 - [Vitest invocation](vitest-invocation.md) — package.json lives in test/, not repo root
-- [CRLF-safe edits](feedback_file-edits-crlf.md) — test files are CRLF; edit with node + normalization, not sed
+- [Line-ending-safe edits](feedback_file-edits-crlf.md) — spec EOL is mixed per file; detect in node, Git Bash grep misreports LF as CRLF
 - [happy-dom layout model](reference_happydom_layout_model.md) — inject real CSS + geometry getters to model scrollWidth/flex stretch; gap via cs.gap
 - [Overlay failed-bind race](project_overlay_failed_bind_race.md) — prefix race reds only on unbound chat + immediate failure; bound/retry/timeout stay green
 - [Pinned-default dry-run flake](pitfall_pinned_default_dry_run_flake.md) — root cause: un-awaited initSettings bootstrap race; fixed 2026-09-30 with waitForContentScriptBootstrap
 - [Navigation stale prefix not real](project_navigation_stale_prefix_not_real.md) — stale recompute vs handleChatChange race does not reproduce; every branch awaits storage first
 - [GoTop render-combined equivalents](project_gotop_render_combined_equivalents.md) — 5 equivalent survivors and the one-debounce fake-timer observer harness
+- [happy-dom :has() descendant bug](happy-dom-has-descendant.md) — :has(A B) evaluated as :has(A) in happy-dom 16.8.1
+- [Auto-open-sidebar observer equivalents](project_auto_open_sidebar_observer_equivalents.md) — isEnabled gate in observer callback makes disconnect/leak mutants click-equivalent
