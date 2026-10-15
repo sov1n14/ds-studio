@@ -59,6 +59,12 @@
                 const nativeStateChanged = nowNativelyCollapsed !== this._wasNativelyCollapsed;
                 this._wasNativelyCollapsed = nowNativelyCollapsed;
 
+                // React 原生切換改寫整個 className 抹除收合 class：指標不在側邊欄內時立即還原收合
+                if (this._wantsCollapsed && !this.isCollapsed() && !this._isPointerInside) {
+                    this.collapse();
+                    return;
+                }
+
                 if (nativeStateChanged && !nowNativelyCollapsed && this.isCollapsed()) {
                     // Native expand while our collapse is active — DeepSeek may have
                     // wiped the inner content's inline style (including our margin-left) or overridden the wrapper width. Re-apply full collapse state.

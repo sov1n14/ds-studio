@@ -193,3 +193,15 @@
 - **計時器**：任何時刻至多一個計時器；兩顆按鈕皆未生效時清除計時器，不執行任何輪次。
 - **按鈕定位**：僅以 `content/ds-selectors.js` 的選擇器定位，絕不以按鈕文字定位；主要選擇器命中時不嘗試備援。重試：`RETRY_BUTTON_SELECTOR`，備援 `RETRY_BUTTON_FALLBACK_SELECTOR`。繼續生成：`CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`），備援 `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`）。
 - **實作位置**：`content/auto-retry.js`（manifest 中緊接 `content/auto-click.delay.js` 之後載入）。`start()` 於模組載入時自動呼叫。MAIN-world 橋接為 `content/react-click-bridge.main.js`（獨立的 `content_scripts` 項目，`run_at: document_end`）。
+
+## 25. 自動開啟側欄 (Auto Open Sidebar) — v4.36.0
+
+- **開關位置**：彈出選單「Features」卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 i18n 鍵 `autoOpenSidebarLabel`），位於自動繼續生成之後、連網搜索單選群組之前；屬感知總開關的子控制項，總開關關閉時停用。
+- **儲存鍵**：`isAutoOpenSidebarEnabled`（`StorageManager.KEYS.AUTO_OPEN_SIDEBAR`，布林值，預設 `false`）。經 `StorageManager.saveAutoOpenSidebar(enabled)` 寫入 sync 與 local，`getSettings()` 以設定欄位 `autoOpenSidebar` 公開，與 `autoContinue` 同樣納入 JSON 備份與還原，popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
+- **閘控**：`content/auto-open-sidebar.js` 以自身鍵 `isAutoOpenSidebarEnabled` 呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。
+- **偵測**：生效時先掃描一次，再於 `document.body` 掛載 `MutationObserver`（`childList`、`subtree`、`attributes`，`attributeFilter: ['class']`），每批變更皆整頁重掃——按鈕的圖示 path 可能晚於按鈕節點插入，而 DeepSeek 依寬度斷點再收合時可能只改寫側欄 wrapper 的 `class`，因此不只檢查新增節點。收合狀態以側欄 wrapper（`SIDEBAR_WRAPPER_SELECTOR`，`div.dc04ec1d`）是否帶原生收合 class `SIDEBAR_NATIVE_COLLAPSED_CLASS`（`a02af2e6`）判定。停用時中斷並釋放觀察器與 `window` `resize` 監聽。
+- **觸發方式**：在收合期內對命中 `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR` 的按鈕派送冒泡的 `dss:react-click` 自訂事件，由 MAIN-world 橋接 `content/react-click-bridge.main.js` 呼叫按鈕的 React `onClick`（無 React `onClick` 時退回 `el.click()`），機制同 §24「觸發方式」。
+- **點擊規則**（v4.36.1）：每個「收合期」只點擊一次——收合期自 wrapper 取得 `SIDEBAR_NATIVE_COLLAPSED_CLASS` 起、失去該 class 止。使用者手動收合側欄後即開始新的收合期並再次點擊，因此開啟此功能等同讓側欄保持展開；DeepSeek 在窄螢幕下於收合、展開、再收合之間重用同一個軌道按鈕節點、只改寫 wrapper 的 `className`，以收合期而非節點判定可確保每次再收合都會被點擊。（v4.36.3）DeepSeek header 的漢堡按鈕（`SIDEBAR_HAMBURGER_BUTTON_SELECTOR`）存在且 `typeof checkVisibility === 'function' && checkVisibility()` 為真時不點擊：漢堡按鈕在桌面與窄版型皆掛載，但只有窄版型（約 768px 以下）可見，而軌道展開按鈕在兩種版型皆可見；窄版型下 DeepSeek 會在任何展開後約 0.5–1.2 秒自行收回側欄。此略過不消耗該收合期，同一收合期內漢堡按鈕一旦變為不可見即點擊；缺少 `checkVisibility` 方法的漢堡按鈕不阻擋。
+- **迴圈保險**（v4.36.1）：若新的收合期在上一次點擊後未滿 1500ms（`RECOLLAPSE_LOOP_WINDOW_MS`）即開始，且其間沒有 `window` `resize` 事件（窄螢幕下 DeepSeek 會立即再收合），停止點擊直到下一次 `resize`。
+- **按鈕定位**：僅以 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_OPEN_BUTTON_SELECTOR`（`div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])`）定位，絕不以按鈕文字定位。選擇器理由見 [content-interaction.md](../architecture/content-interaction.md#自動開啟側欄-autoopensidebar)。
+- **實作位置**：`content/auto-open-sidebar.js`（isolated world，manifest 中緊接 `content/auto-expand-messages.js` 之後載入，晚於 `content/feature-toggle.js` 與 `content/ds-selectors.js`）。`start()` 於模組載入時自動呼叫。

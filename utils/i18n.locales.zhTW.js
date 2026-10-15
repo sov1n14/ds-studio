@@ -26,6 +26,7 @@
     autoExpandMessagesLabel: '自動展開訊息',
     autoRetryLabel: '自動重試',
     autoContinueLabel: '自動繼續生成',
+    autoOpenSidebarLabel: '自動開啟側欄',
     preventAutoScrollLabel: '防止自動回滾',
     websearchToggleLabel: '連網搜索',
     websearchOnLabel: '開啟',

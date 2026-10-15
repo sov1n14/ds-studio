@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const autoExpandMessagesToggle  = document.getElementById('autoExpandMessagesToggle');
     const autoRetryToggle           = document.getElementById('autoRetryToggle');
     const autoContinueToggle        = document.getElementById('autoContinueToggle');
+    const autoOpenSidebarToggle     = document.getElementById('autoOpenSidebarToggle');
     const websearchRadios           = Array.from(document.querySelectorAll('input[name="websearchToggle"]'));
 
     let saveTimeout;
@@ -73,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoExpandMessagesToggle,
             autoRetryToggle,
             autoContinueToggle,
+            autoOpenSidebarToggle,
             ...websearchRadios,
         ];
         subControls.forEach(el => {
@@ -186,7 +188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         enableToggle, includeThinkingToggle, includeReferencesToggle,
         sidebarAutoHideToggle, hideThinkingToggle, showSystemTimeToggle,
         preventAutoScrollToggle, autoExpandMessagesToggle, websearchRadios,
-        autoRetryToggle, autoContinueToggle,
+        autoRetryToggle, autoContinueToggle, autoOpenSidebarToggle,
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
     }, settings);
@@ -249,6 +251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoExpandMessagesToggle,
             autoRetryToggle,
             autoContinueToggle,
+            autoOpenSidebarToggle,
             websearchRadios,
         },
         applyMasterSwitchUI,
@@ -300,6 +303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         autoExpandMessagesToggle,
         autoRetryToggle,
         autoContinueToggle,
+        autoOpenSidebarToggle,
         websearchRadios,
     });
     // 全域提示詞開關初始值：依目前活躍 preset（或裝置本機舊鍵）決定

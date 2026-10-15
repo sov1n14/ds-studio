@@ -18,6 +18,7 @@
 - **SPA 韌性**：
   - `document.body` 上的 `MutationObserver` 偵測側邊欄 DOM 節點是否被取代（SPA 導航），重新綁定事件並重新收合。
   - 側邊欄專屬的 `MutationObserver` 監控 DeepSeek 的原生收合/展開循環，在需要時重新套用自訂收合狀態。
+  - （v4.36.1）收合意圖存於 `_wantsCollapsed`、指標位置存於 `_isPointerInside`：DeepSeek 原生切換改寫 wrapper 整個 `className` 而抹除 `ds-sidebar-auto-hide-collapsed` 時，若意圖為收合且指標不在側邊欄內，側邊欄觀察器立即重新收合，不必等到下一次滑鼠離開。
 - **設定變更監聽**：以 `content/feature-toggle.js` 的 `registerFeatureToggle({ ownKey: 'dsSidebarAutoHide' })` 註冊，經 `chrome.runtime.onMessage` 接收 service worker 廣播的 `DSS_SETTINGS_CHANGED`，即時反映 `dsSidebarAutoHide` 與 `isEnabled` 的變化，無須重新整理頁面即可啟用/停用。
 - **啟動**：從儲存空間讀取 `dsSidebarAutoHide` 與 `isEnabled`，若兩者皆為 true 則啟用。
 

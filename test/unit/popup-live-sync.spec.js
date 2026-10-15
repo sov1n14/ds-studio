@@ -87,6 +87,7 @@ function makeDom(overrides = {}) {
         preventAutoScrollToggle: makeCheckbox(false),
         autoRetryToggle: makeCheckbox(false),
         autoContinueToggle: makeCheckbox(false),
+        autoOpenSidebarToggle: makeCheckbox(false),
         websearchRadios: makeWebsearchRadios(),
         ...overrides,
     };
@@ -320,6 +321,42 @@ describe('createLiveSyncListener — WEBSEARCH_TOGGLE radio group', () => {
 
         expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
         expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
+    });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// Group B3 — AUTO_OPEN_SIDEBAR ("isAutoOpenSidebarEnabled")
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('createLiveSyncListener — AUTO_OPEN_SIDEBAR', () => {
+    it.each([true, false])('a change of isAutoOpenSidebarEnabled to %s updates autoOpenSidebarToggle', (value) => {
+        const dom = makeDom({ autoOpenSidebarToggle: makeCheckbox(!value) });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ isAutoOpenSidebarEnabled: { oldValue: !value, newValue: value } }, 'local');
+
+        expect(dom.autoOpenSidebarToggle.checked).toBe(value);
+    });
+
+    it('unchecks autoOpenSidebarToggle when the key is removed (newValue undefined falls back to false)', () => {
+        const dom = makeDom({ autoOpenSidebarToggle: makeCheckbox(true) });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ isAutoOpenSidebarEnabled: { oldValue: true, newValue: undefined } }, 'local');
+
+        expect(dom.autoOpenSidebarToggle.checked).toBe(false);
+    });
+
+    it('leaves autoContinueToggle untouched (no cross-wiring)', () => {
+        const dom = makeDom({ autoOpenSidebarToggle: makeCheckbox(false), autoContinueToggle: makeCheckbox(false) });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ isAutoOpenSidebarEnabled: { oldValue: false, newValue: true } }, 'sync');
+
+        expect(dom.autoOpenSidebarToggle.checked).toBe(true);
+        expect(dom.autoContinueToggle.checked).toBe(false);
     });
 });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -683,6 +720,7 @@ describe('popup.js — Live Sync wiring block', () => {
             'chatWidthToggle', 'chatWidthSlider', 'chatWidthValue', 'chatWidthSliderContainer',
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
             'preventAutoScrollToggle', 'autoExpandMessagesToggle', 'websearchRadios',
+            'autoOpenSidebarToggle',
         ];
         for (const field of expectedDomFields) {
             expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));

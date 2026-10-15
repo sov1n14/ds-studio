@@ -26,6 +26,7 @@
     autoExpandMessagesLabel: 'Auto-expand messages',
     autoRetryLabel: 'Auto retry',
     autoContinueLabel: 'Auto continue generating',
+    autoOpenSidebarLabel: 'Auto open sidebar',
     preventAutoScrollLabel: 'Prevent Auto-Scroll',
     websearchToggleLabel: 'Web Search',
     websearchOnLabel: 'On',

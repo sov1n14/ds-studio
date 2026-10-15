@@ -10,6 +10,11 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.36.4](changelog/v4.md#4364---2026-10-16) | 自動開啟側欄移除 4.36.2 新增的軌道按鈕 `checkVisibility()` 閘門：實際頁面上收合軌道的展開按鈕在桌面與窄版型皆渲染且可見（34×34），該閘門從未改變行為；漢堡按鈕可見性（`SIDEBAR_HAMBURGER_BUTTON_SELECTOR`）成為唯一的窄版型判定 |
+| [4.36.3](changelog/v4.md#4363---2026-10-16) | 自動開啟側欄改以 DeepSeek header 漢堡按鈕的可見性判定窄版型（新增 `SIDEBAR_HAMBURGER_BUTTON_SELECTOR`，`DSSelectors` 匯出 94 → 95）：漢堡按鈕可見時不點擊且不消耗收合期，修正窄版型下仍點擊展開按鈕、DeepSeek 隨即自行收回側欄的問題；更正 4.36.2 的說明——收合軌道的展開按鈕在桌面與窄版型皆可見，其 `checkVisibility()` 閘門保留為次要檢查 |
+| [4.36.2](changelog/v4.md#4362---2026-10-16) | 自動開啟側欄只點擊實際可見的展開按鈕（`checkVisibility()`），修正 DeepSeek 窄版漢堡選單版面下點擊被 CSS 隱藏的軌道按鈕、把側欄以抽屜形式打開而看似點擊漢堡選單的問題；隱藏的按鈕不消耗收合期，變為可見後即點擊 |
+| [4.36.1](changelog/v4.md#4361---2026-10-16) | 自動開啟側欄改為每個收合期點擊一次（以側欄 wrapper 的原生收合 class `SIDEBAR_NATIVE_COLLAPSED_CLASS` 判定，觀察器同時監看 `class` 屬性），修正窄螢幕下 DeepSeek 重用同一按鈕節點時只點擊第一次的問題，並以 1500ms 迴圈保險在無視窗 resize 的立即再收合時停止點擊；側邊欄自動隱藏以 `_wantsCollapsed` 保存收合意圖，DeepSeek 改寫 wrapper `className` 抹除收合 class 後立即重新收合，不再維持展開直到滑鼠離開 |
+| [4.36.0](changelog/v4.md#4360---2026-10-15) | 「Features」卡片新增「自動開啟側欄」開關（`isAutoOpenSidebarEnabled`，預設關閉，受主開關連動、同步並納入備份還原）；開啟時 `content/auto-open-sidebar.js` 以 `MutationObserver` 偵測收合側欄的展開按鈕（`SIDEBAR_OPEN_BUTTON_SELECTOR`，以圖示 path 區分），每次出現即經 `dss:react-click` 點擊，包括使用者手動收合之後，讓側欄保持開啟 |
 | [4.35.5](changelog/v4.md#4355---2026-09-30) | 行動裝置改依裝置外型判定（User-Agent 符合 `/Mobi\|Android\|iPhone\|iPad/i`，或桌面模式 iPadOS：`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`）；以桌面 User-Agent 回報觸控點的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面：這類裝置按 `Enter` 送出時會注入提示詞前綴，新對話建立後仍綁定所選提示詞組；行動裝置側欄滑動與首頁「下载应用」清理在這類裝置上不啟用 |
 | [4.35.4](changelog/v4.md#4354---2026-09-27) | 自動繼續生成與自動重試現在會實際觸發「继续生成」與重試按鈕：DeepSeek 的 React `onClick` 只接受受信任事件，content script 改派送 `dss:react-click`，由新增的 MAIN world bridge `content/react-click-bridge.main.js` 以能通過檢查的合成事件呼叫 React `onClick` |
 | [4.35.3](changelog/v4.md#4353---2026-09-26) | 點擊「停止生成」不再注入提示詞（主輸入框送出按鈕僅以圖示路徑辨識）；對話中切換提示詞組時下拉選單不再逐次變寬（量測期間標籤 `flex: none`）；綁定失敗回滾時注入前綴隨標籤一起回滾（`updatePromptPrefixFromBinding()` 最後一次呼叫勝出）；潛在問題：觸發器 gap 與原生按鈕 margin-bottom 若為 0px 曾被誤當成預設值（下拉選單會多寬 4px、GoTop 間距會變成 28px），現改為照實採用；目前兩者實測值與預設值相同，畫面無可見差異 |

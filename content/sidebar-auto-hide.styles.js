@@ -47,6 +47,7 @@ ${this.SIDEBAR_INNER_SELECTOR} {
 
         collapse() {
             if (!this.sidebarEl || this.isCollapsed()) return;
+            this._wantsCollapsed = true;
             this.sidebarEl.classList.add(this.COLLAPSED_CLASS);
             this.sidebarEl.style.width = this.COLLAPSED_WIDTH + 'px';
             this.applyOverflow();
@@ -61,7 +62,9 @@ ${this.SIDEBAR_INNER_SELECTOR} {
         },
 
         expand() {
-            if (!this.sidebarEl || !this.isCollapsed()) return;
+            // React 改寫 className 可能已抹除 COLLAPSED_CLASS，故收合意圖仍在時也要展開
+            if (!this.sidebarEl || (!this._wantsCollapsed && !this.isCollapsed())) return;
+            this._wantsCollapsed = false;
             this.sidebarEl.classList.remove(this.COLLAPSED_CLASS);
             this.sidebarEl.style.overflow = '';
             // Clear margin-left on the current inner element (re-query in case replaced)

@@ -15,6 +15,7 @@
 - **CSS 過渡**：注入一個含 `transition: width 0.22s cubic-bezier(...)` 與 `transition: margin-left 0.22s cubic-bezier(...)` 的 `<style>` 元素，讓動畫平順。
 - **溢出處理**：外層容器套用 `overflow: hidden`（DeepSeek 原生收合啟用時例外，此時細長條需保持可見）。
 - **SPA 韌性**：`document.body` 上的 `MutationObserver` 偵測側邊欄 DOM 節點被替換（SPA 導航）時，重新綁定事件並重新收合。另有一個側邊欄專用的 `MutationObserver` 監看 DeepSeek 原生的收合／展開循環，必要時重新套用自訂收合狀態。
+- **收合意圖（v4.36.1）**：`collapse()`／`expand()` 將意圖寫入 `_wantsCollapsed`，`mouseenter`／`mouseleave` 以 `_isPointerInside` 追蹤指標是否在側邊欄內。DeepSeek 每次原生切換都會改寫 wrapper 的整個 `className`，抹除擴充功能的 `ds-sidebar-auto-hide-collapsed` class；側邊欄觀察器在意圖為收合、該 class 缺失且指標不在側邊欄內時立即重新呼叫 `collapse()`，`expand()` 則在該 class 或意圖任一表示收合時照常展開。
 - **總開關感知**：`isEnabled`（總開關）變為 `false` 時，模組一律停用，不論自身開關為何。變為 `true` 時，模組重新讀取自身開關，為 true 則啟用。
 - **功能開關整合**：使用 `content/feature-toggle.js` 的 `registerFeatureToggle`，以 `ownKey: STORAGE_KEY` 委派總開關與自身開關的閘控。設定經 `DSS_GET_SETTINGS` 自 background 取得，後續變更則透過 `DSS_SETTINGS_CHANGED` 廣播接收。
 - **啟動**：`start()` 設定 resize 處理器後，呼叫 `registerFeatureToggle`，由其負責初始狀態讀取與變更訂閱。

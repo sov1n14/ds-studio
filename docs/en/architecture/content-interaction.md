@@ -205,7 +205,7 @@ Buttons are located only through the selectors in `content/ds-selectors.js`, nev
 The React `onClick` on DeepSeek's buttons acts only when `e.nativeEvent.isTrusted === true` and `e.nativeEvent instanceof Event`; `element.click()` from an isolated-world content script is an untrusted event and is ignored, and the isolated world cannot read the element's `__reactProps$*` expando. `content/react-click-bridge.main.js` therefore runs in the page's MAIN world:
 
 - **Loading**: statically loaded by its own manifest `content_scripts` entry with `"world": "MAIN"` (unlike the web_accessible_resources scripts injected via `main-world-injector.js`), `matches: ["*://chat.deepseek.com/*"]`, `run_at: document_end`; the static MAIN-world declaration requires Chrome 111 (manifest `minimum_chrome_version`).
-- **Listening**: a self-installing IIFE listens for `dss:react-click` on `document`; `auto-retry.js` and this file each declare the event name (no shared loader across worlds).
+- **Listening**: a self-installing IIFE listens for `dss:react-click` on `document`; `auto-retry.js`, `auto-open-sidebar.js`, and this file each declare the event name (no shared loader across worlds).
 - **Triggering**: reads `onClick` from the target element's own `__reactProps$*` and calls it with a minimal synthetic event: `nativeEvent` is `Object.create(Event.prototype, { isTrusted: { value: true } })` (passing the check above), plus `target` / `currentTarget` and no-op `preventDefault` / `stopPropagation`.
 - **Fallback**: when the element has no React `onClick`, it calls `el.click()`.
 - **Error handling**: the listener body is wrapped in try/catch and logs `console.error('[DSS] react-click-bridge:', err)` when the React `onClick` throws.
@@ -214,3 +214,43 @@ The React `onClick` on DeepSeek's buttons acts only when `e.nativeEvent.isTruste
 ### Load Order
 
 In the manifest, `content/auto-click.delay.js` loads before `content/auto-retry.js`; `start()` throws a named load-order error when `DSSFeatureToggle` or `DSSAutoClickDelay` is absent.
+
+## Auto Open Sidebar (AutoOpenSidebar)
+
+`content/auto-open-sidebar.js` (isolated world) clicks the "open sidebar" button on DeepSeek's collapsed rail once each time the sidebar collapses, keeping the sidebar open.
+
+### Storage Key
+
+- `isAutoOpenSidebarEnabled` (boolean, default `false`) — `KEYS.AUTO_OPEN_SIDEBAR`, written to sync and local by `StorageManager.saveAutoOpenSidebar(enabled)`; the `getSettings()` field is `autoOpenSidebar`, included in JSON export and import (restore) like `autoContinue`.
+
+### Popup Toggle
+
+The `#autoOpenSidebarToggle` checkbox in the Features card (label `autoOpenSidebarLabel`) sits after `#autoContinueToggle` and before the web search radio group, and writes through `StorageManager.saveAutoOpenSidebar()`. It is a master-switch-aware sub-control, and `popup/popup.live-sync.js` reflects storage changes to it live.
+
+### Gating (registerFeatureToggle)
+
+`start()` calls `registerFeatureToggle({ ownKey, onEnable, onDisable })` once with its own key `isAutoOpenSidebarEnabled`; `enable()` resets the episode state, registers a `window` `resize` listener, scans once, and then starts the observer; `disable()` disconnects the observer, removes the `resize` listener, and resets the episode state. The module does not read storage directly.
+
+### Detection and Clicking
+
+- **Collapsed episode**: The collapsed state is read from whether the sidebar wrapper (`SIDEBAR_WRAPPER_SELECTOR`, `div.dc04ec1d`) carries the native-collapsed class `SIDEBAR_NATIVE_COLLAPSED_CLASS` (`a02af2e6`) from the Sidebar block of `content/ds-selectors.js`. An episode starts when the wrapper gains that class and ends when it loses it; `_scanExisting()` resets `_hasClickedThisEpisode` while not collapsed, and clicks at most once per episode.
+- **Observer**: While active, a `MutationObserver` (`childList`, `subtree`, `attributes` with `attributeFilter: ['class']`) on `document.body` rescans the whole page on every mutation batch; the button's icon path can be inserted after the button node, and DeepSeek's width breakpoints re-collapse the sidebar by rewriting only the wrapper's `class`, so checking only added nodes is not enough. Errors thrown by a scan are logged with `console.error('[DSS] auto-open-sidebar:', err)`.
+- **Clicking**: When the current episode has not been clicked yet, it dispatches the bubbling `dss:react-click` custom event on the button matched by `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR`; the [React Click Bridge](#react-click-bridge) calls the button's React `onClick` (falling back to `element.click()` when there is no React `onClick`).
+- **No click in the narrow layout** (v4.36.3): Each scan first looks up DeepSeek's header hamburger button with `SIDEBAR_HAMBURGER_BUTTON_SELECTOR` (`div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])`) from the Sidebar block of `content/ds-selectors.js`. The hamburger is mounted in both the desktop and narrow layouts, but its `checkVisibility()` is true only in the narrow layout (about 768px and below); the collapsed rail's open button is rendered and visible (34×34) in both layouts, so its own visibility cannot tell the layouts apart. When the hamburger exists and `typeof checkVisibility === 'function' && checkVisibility()` is true, the click is skipped without consuming the episode (neither `_hasClickedThisEpisode` nor `_lastClickAt` changes), so the button is clicked once the hamburger becomes hidden within the same episode; a hamburger lacking the `checkVisibility` method does not block the click. In the narrow layout DeepSeek re-closes the sidebar by itself about 0.5–1.2 s after any open, which is why auto-open does not click there.
+- **Loop breaker**: If a new collapsed episode begins less than 1500ms after the previous click (`RECOLLAPSE_LOOP_WINDOW_MS`) with no `window` `resize` event in between, it sets `_isSuppressedUntilResize` and stops clicking; the next `resize` lifts the suppression and clears the last click time. This prevents an open-collapse loop with DeepSeek re-collapsing immediately at narrow widths.
+- **Behaviour**: A manual collapse by the user also starts a new episode and is clicked again, so enabling the feature effectively keeps the sidebar open. At narrow widths DeepSeek reuses the same rail button node across collapse, open, and re-collapse and only rewrites the wrapper's `className`, so whether a click already happened is tracked per episode rather than per DOM node.
+
+### Button Location
+
+`SIDEBAR_OPEN_BUTTON_SELECTOR` in the Sidebar block of `content/ds-selectors.js`:
+
+```
+div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])
+```
+
+- **Why the icon path**: The button sits in DeepSeek's collapsed rail (`div.ca6d4be1`) next to the search and new-chat buttons, and all three share the identical class string including the hash class, so only the icon path distinguishes the open-sidebar button.
+- **Excluded variants**: The expanded-state sidebar toggle uses `ds-button--iconLabelTertiary`, and the mobile hamburger button uses `ds-button--xl` with a different icon path, so neither matches this selector.
+
+### Load Order
+
+In the manifest, `content/auto-open-sidebar.js` loads right after `content/auto-expand-messages.js`, after `content/ds-selectors.js` and `content/feature-toggle.js`; `start()` logs a `console.warn` and skips registration when `DSSFeatureToggle` is absent.

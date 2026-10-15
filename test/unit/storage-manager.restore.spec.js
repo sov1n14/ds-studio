@@ -318,3 +318,41 @@ describe('restoreSettings - autoRetry / autoContinue end-state', () => {
         expect(settings.autoContinue).toBe(false);
     });
 });
+
+/**
+ * autoOpenSidebar backup restore, asserted on the stored key and the getSettings() end-state. Same convention as autoRetry / autoContinue.
+ */
+describe('restoreSettings - autoOpenSidebar end-state', () => {
+    const KEY = 'isAutoOpenSidebarEnabled';
+    const readLocal = async () => (await chrome.storage.local.get(KEY))[KEY];
+
+    beforeEach(() => {
+        chrome.storage.local.store = {};
+        chrome.storage.sync.store = {};
+        vi.restoreAllMocks();
+    });
+
+    it('restores autoOpenSidebar=true from a backup', async () => {
+        await StorageManager.restoreSettings({ autoOpenSidebar: true }, false);
+        expect(await readLocal()).toBe(true);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(true);
+    });
+
+    it('restores an explicit false over a current true', async () => {
+        await StorageManager._set({ [KEY]: true });
+        await StorageManager.restoreSettings({ autoOpenSidebar: false }, false);
+        expect(await readLocal()).toBe(false);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(false);
+    });
+
+    it('a backup lacking the field leaves the current true value untouched', async () => {
+        await StorageManager._set({ [KEY]: true });
+        await StorageManager.restoreSettings({ hideThinking: true }, false);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(true);
+    });
+
+    it('mergePresetsOnly=true does not restore it', async () => {
+        await StorageManager.restoreSettings({ autoOpenSidebar: true }, true);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(false);
+    });
+});

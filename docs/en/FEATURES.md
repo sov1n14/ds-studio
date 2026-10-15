@@ -12,6 +12,7 @@
 - [Back to Top Button](#back-to-top-button)
 - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
 - [Auto Retry and Auto Continue](#auto-retry-and-auto-continue)
+- [Auto Open Sidebar](#auto-open-sidebar)
 - [Exporting Conversations](#exporting-conversations)
 - [Quote Reply](#quote-reply)
 - [Edit Message Cleanup](#edit-message-cleanup)
@@ -200,6 +201,18 @@ The popup menu's **Features** card provides two independent toggles, both off by
 - **Master Switch Linkage**: Both toggles are controlled by the master switch. When the master switch is off, or both toggles are off, the round timer is stopped entirely and consumes no resources.
 - **Sync and Backup**: Like the other feature toggles, both states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
 
+## Auto Open Sidebar
+
+The **Auto open sidebar** toggle in the popup menu's **Features** card (storage key `isAutoOpenSidebarEnabled`, off by default) keeps DeepSeek's sidebar open:
+
+- **How It Works**: While the toggle is on, every time the sidebar collapses, the extension immediately clicks the "open sidebar" button on the collapsed rail once.
+- **Stays Open**: Every collapse is clicked, including after you collapse the sidebar manually, so enabling this feature effectively keeps the sidebar expanded; turn the toggle off first when you want the sidebar collapsed.
+- **Button Location**: The button is located by CSS selector only, never by button text, so the interface language does not matter; each collapse is clicked only once, never repeatedly.
+- **Narrow Window Guard**: When the window is too narrow, DeepSeek collapses the sidebar again right after it opens; if the sidebar collapses again within 1.5 seconds of a click with no window resize in between, the extension stops clicking until you next resize the window.
+- **No Click in the Hamburger Layout**: When the window is narrow enough for DeepSeek to show the hamburger menu button in the header (about 768px and below), DeepSeek closes the sidebar again by itself about 0.5–1.2 seconds after it opens, so the extension does not click the open button while the hamburger menu button is visible, and the sidebar never pops open as a drawer on its own; once the window widens and the hamburger menu button hides, clicking resumes as usual.
+- **Master Switch Linkage**: Controlled by the master switch; when the master switch is off, the toggle is disabled and no automatic click happens.
+- **Sync and Backup**: Like the other feature toggles, the state syncs to the cloud, is included in backup and restore, and reflects changes from other devices or tabs live while the popup is open.
+
 ## Exporting Conversations
 
 You can export the conversation history from the current DeepSeek chat room as a Markdown (`.md`) file.
@@ -293,6 +306,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - Collapse thinking process
 - Auto expand messages
 - Auto retry and auto continue generating
+- Auto open sidebar
 - Prevent auto-scroll
 - Web search toggle
 - System time injection

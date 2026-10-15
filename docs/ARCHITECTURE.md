@@ -91,6 +91,7 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.bind.js      ─  滑動手勢事件綁定
 │   ├── mobile-sidebar-swipe.lifecycle.js ─  行動裝置滑動的啟用／停用生命週期
 │   ├── auto-expand-messages.js ─  以 MutationObserver 自動點擊收合的展開按鈕（v4.32.0）
+│   ├── auto-open-sidebar.js   ─  以 MutationObserver 偵測收合側欄的展開按鈕，每次出現即派送 dss:react-click 事件讓側欄保持開啟（v4.36.0）
 │   ├── auto-click.delay.js    ─  自動點擊輪次的 0–3 秒隨機延遲（0.1 秒級距，v4.35.0）
 │   ├── auto-retry.js          ─  自動重試／自動繼續生成的共用輪次迴圈：各自受開關閘控，每輪隨機延遲後在重試與繼續生成按鈕上派送 dss:react-click 事件（v4.11.0，v4.35.0 改版，v4.35.4 改為事件觸發）
 │   ├── react-click-bridge.main.js ‡ ─  MAIN-world 橋接：收到 dss:react-click 時以能通過 isTrusted 檢查的合成 nativeEvent 呼叫按鈕的 React onClick，無 onClick 時退回 click()（v4.35.4）

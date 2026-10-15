@@ -18,6 +18,7 @@
 - **SPA Resilience**:
   - A `MutationObserver` on `document.body` detects whether the sidebar DOM node has been replaced (SPA navigation), rebinding events and re-collapsing.
   - A sidebar-specific `MutationObserver` monitors DeepSeek's native collapse/expand cycle, reapplying the custom collapse state when needed.
+  - (v4.36.1) The collapse intent lives in `_wantsCollapsed` and the pointer position in `_isPointerInside`: when a DeepSeek native toggle rewrites the wrapper's whole `className` and wipes `ds-sidebar-auto-hide-collapsed`, the sidebar observer re-collapses immediately if the intent is collapsed and the pointer is not inside the sidebar, without waiting for the next mouse leave.
 - **Settings Change Listener**: Registers via `registerFeatureToggle({ ownKey: 'dsSidebarAutoHide' })` from `content/feature-toggle.js`, receiving the service worker's `DSS_SETTINGS_CHANGED` broadcast over `chrome.runtime.onMessage` to reflect changes to `dsSidebarAutoHide` and `isEnabled` in real time, enabling/disabling without a page refresh.
 - **Startup**: Reads `dsSidebarAutoHide` and `isEnabled` from storage; enables if both are true.
 

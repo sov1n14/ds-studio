@@ -26,8 +26,8 @@ describe('DSSelectors — composite values', () => {
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 92 keys', () => {
-        expect(Object.keys(S)).toHaveLength(92);
+    it('exports exactly 95 keys', () => {
+        expect(Object.keys(S)).toHaveLength(95);
     });
     it('does not export the rejected websearch hash classes (ARCHITECTURE.md rejected signals)', () => {
         expect(S).not.toHaveProperty('WEBSEARCH_TOGGLE_CLASS');

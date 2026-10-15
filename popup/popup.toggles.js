@@ -57,6 +57,7 @@ function createToggleManager(ctx) {
      * @param {HTMLElement} elements.autoExpandMessagesToggle
      * @param {HTMLElement} elements.autoRetryToggle
      * @param {HTMLElement} elements.autoContinueToggle
+     * @param {HTMLElement} elements.autoOpenSidebarToggle
      * @param {HTMLElement[]} elements.websearchRadios
      */
     function bindToggles(elements) {
@@ -72,6 +73,7 @@ function createToggleManager(ctx) {
             autoExpandMessagesToggle,
             autoRetryToggle,
             autoContinueToggle,
+            autoOpenSidebarToggle,
             websearchRadios,
         } = elements;
 
@@ -167,6 +169,14 @@ function createToggleManager(ctx) {
         if (autoContinueToggle) {
             autoContinueToggle.addEventListener('change', async () => {
                 await StorageManager.saveAutoContinue(autoContinueToggle.checked);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        }
+
+        if (autoOpenSidebarToggle) {
+            autoOpenSidebarToggle.addEventListener('change', async () => {
+                await StorageManager.saveAutoOpenSidebar(autoOpenSidebarToggle.checked);
                 await refreshSyncStatus();
                 showSaveStatus();
             });

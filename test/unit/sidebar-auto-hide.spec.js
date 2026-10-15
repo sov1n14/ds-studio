@@ -938,6 +938,80 @@ describe('Group L - observeSidebar() native-expand re-collapse', () => {
     });
 });
 // ---------------------------------------------------------------------------
+//  Group U - collapse intent survives a React className rewrite
+//  Live (DevTools): the wrapper flips 'dc04ec1d a02af2e6' <-> 'dc04ec1d' on every native toggle, and React rewrites the whole className, wiping COLLAPSED_CLASS. Group L only models the native rail node being removed, never the className rewrite.
+// ---------------------------------------------------------------------------
+
+describe('Group U - collapse intent survives a React className rewrite', () => {
+    const REACT_EXPANDED_CLASSNAME = 'dc04ec1d';
+    let sidebar;
+
+    /** Real-timer wait: lets the sidebar MutationObserver deliver (happy-dom window timer) and the module's hover timers elapse. */
+    const wait = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    beforeEach(() => {
+        createSidebarInner(createSidebar());
+        SidebarAutoHide.enable();
+        sidebar = SidebarAutoHide.sidebarEl;
+    });
+
+    it('U1: pointer outside - the class wipe is undone immediately (class, 60px, overflow hidden) with no mouse event', async () => {
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'precondition: enable() collapsed the sidebar').toBe(true);
+
+        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        await wait();
+
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'COLLAPSED_CLASS re-applied after the React rewrite').toBe(true);
+        expect(sidebar.style.width, 'collapsed width').toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+        expect(sidebar.style.overflow, 'collapsed overflow').toBe('hidden');
+    });
+
+    it('U2: pointer inside - the class wipe is not undone while hovering; mouseleave collapses again', async () => {
+        sidebar.dispatchEvent(new MouseEvent('mouseenter'));
+        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        await wait();
+
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'no re-collapse while the pointer is inside').toBe(false);
+
+        sidebar.dispatchEvent(new MouseEvent('mouseleave'));
+        await wait(SidebarAutoHide.LEAVE_DELAY_MS + 50);
+
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'collapsed after mouseleave').toBe(true);
+        expect(sidebar.style.width, 'collapsed width after mouseleave').toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+    });
+
+    it('U3: hover expand still works when the class was wiped while the pointer was inside', async () => {
+        SidebarAutoHide.originalWidth = 250;
+
+        sidebar.dispatchEvent(new MouseEvent('mouseenter'));
+        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        await wait(SidebarAutoHide.ENTER_DELAY_MS + 50);
+
+        expect(sidebar.style.width, 'expand() restored the original width').toBe('250px');
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'not collapsed').toBe(false);
+        expect(sidebar.style.overflow, 'overflow not hidden').not.toBe('hidden');
+    });
+
+    it('U4: after a hover expand and a mouseleave collapse, a later class wipe is undone with no further mouse event', async () => {
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'precondition: enable() collapsed the sidebar').toBe(true);
+
+        sidebar.dispatchEvent(new MouseEvent('mouseenter'));
+        await wait(SidebarAutoHide.ENTER_DELAY_MS + 50);
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'expanded by hover').toBe(false);
+
+        sidebar.dispatchEvent(new MouseEvent('mouseleave'));
+        await wait(SidebarAutoHide.LEAVE_DELAY_MS + 50);
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'collapsed again after mouseleave').toBe(true);
+
+        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        await wait();
+
+        expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'COLLAPSED_CLASS re-applied after the React rewrite (pointer already left)').toBe(true);
+        expect(sidebar.style.width, 'collapsed width').toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
+    });
+});
+
+// ---------------------------------------------------------------------------
 //  Group M - bindEvents() return values
 // ---------------------------------------------------------------------------
 

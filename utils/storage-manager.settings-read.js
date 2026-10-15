@@ -22,6 +22,7 @@
         autoExpandMessages: 'AUTO_EXPAND_MESSAGES',
         autoRetry: 'AUTO_RETRY',
         autoContinue: 'AUTO_CONTINUE',
+        autoOpenSidebar: 'AUTO_OPEN_SIDEBAR',
         preventAutoScroll: 'PREVENT_AUTO_SCROLL',
         websearchToggle: 'WEBSEARCH_TOGGLE',
         isShowSystemTime: 'SHOW_SYSTEM_TIME',

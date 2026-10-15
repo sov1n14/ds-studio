@@ -205,7 +205,7 @@ Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊�
 DeepSeek 按鈕的 React `onClick` 只在 `e.nativeEvent.isTrusted === true` 且 `e.nativeEvent instanceof Event` 時動作；isolated world 內容腳本的 `element.click()` 屬不受信任事件而被忽略，isolated world 也讀不到元素上的 `__reactProps$*` expando。`content/react-click-bridge.main.js` 因此在頁面 MAIN world 執行：
 
 - **載入方式**：由 manifest 中獨立的 `content_scripts` 項目以 `"world": "MAIN"` 靜態載入（有別於經 `main-world-injector.js` 注入的 web_accessible_resources 腳本），`matches: ["*://chat.deepseek.com/*"]`、`run_at: document_end`；靜態 MAIN world 宣告需要 Chrome 111（manifest `minimum_chrome_version`）。
-- **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js` 與本檔各自宣告（跨 world 無共用載入器）。
+- **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js`、`auto-open-sidebar.js` 與本檔各自宣告（跨 world 無共用載入器）。
 - **觸發**：讀取目標元素自身 `__reactProps$*` 上的 `onClick`，以最小 synthetic event 呼叫：`nativeEvent` 為 `Object.create(Event.prototype, { isTrusted: { value: true } })`（通過上述檢查），另帶 `target` / `currentTarget` 與空實作的 `preventDefault` / `stopPropagation`。
 - **備援**：元素沒有 React `onClick` 時呼叫 `el.click()`。
 - **錯誤處理**：監聽器本體以 try/catch 包覆，React `onClick` 拋錯時以 `console.error('[DSS] react-click-bridge:', err)` 記錄。
@@ -214,3 +214,43 @@ DeepSeek 按鈕的 React `onClick` 只在 `e.nativeEvent.isTrusted === true` 且
 ### 載入順序
 
 manifest 中 `content/auto-click.delay.js` 先於 `content/auto-retry.js` 載入；`start()` 在 `DSSFeatureToggle` 或 `DSSAutoClickDelay` 缺席時拋出具名的載入順序錯誤。
+
+## 自動開啟側欄 (AutoOpenSidebar)
+
+`content/auto-open-sidebar.js`（isolated world）在 DeepSeek 每次收合側欄時點擊一次收合軌道上的「展開側邊欄」按鈕，讓側欄保持開啟。
+
+### Storage 鍵
+
+- `isAutoOpenSidebarEnabled`（boolean，預設 `false`）——`KEYS.AUTO_OPEN_SIDEBAR`，由 `StorageManager.saveAutoOpenSidebar(enabled)` 寫入 sync 與 local；`getSettings()` 欄位為 `autoOpenSidebar`，與 `autoContinue` 同樣納入 JSON 匯出與匯入還原。
+
+### Popup 開關
+
+Features 卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 `autoOpenSidebarLabel`）位於 `#autoContinueToggle` 之後、連網搜索單選群組之前，經 `StorageManager.saveAutoOpenSidebar()` 寫入；屬感知總開關的子控制項，並由 `popup/popup.live-sync.js` 即時反映 storage 變更。
+
+### 閘控 (registerFeatureToggle)
+
+`start()` 以自身鍵 `isAutoOpenSidebarEnabled` 呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`；`enable()` 重設收合期狀態、註冊 `window` `resize` 監聽、掃描一次再啟動觀察器；`disable()` 中斷觀察器、移除 `resize` 監聽並重設收合期狀態。本模組不直接讀取 storage。
+
+### 偵測與點擊
+
+- **收合期**：收合狀態以側欄 wrapper（`SIDEBAR_WRAPPER_SELECTOR`，`div.dc04ec1d`）是否帶 `content/ds-selectors.js` 側欄區塊的原生收合 class `SIDEBAR_NATIVE_COLLAPSED_CLASS`（`a02af2e6`）判定。收合期自 wrapper 取得該 class 起、失去該 class 止；`_scanExisting()` 在非收合狀態時重設 `_hasClickedThisEpisode`，收合期內只點擊一次。
+- **觀察器**：生效期間在 `document.body` 上掛載 `MutationObserver`（`childList`、`subtree`、`attributes`，`attributeFilter: ['class']`），每批變更皆整頁重掃；按鈕的圖示 path 可能晚於按鈕節點插入，而 DeepSeek 依寬度斷點再收合時只改寫 wrapper 的 `class`，因此不只檢查新增節點。掃描拋出的錯誤以 `console.error('[DSS] auto-open-sidebar:', err)` 記錄。
+- **點擊**：收合期內尚未點擊時，對命中 `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR` 的按鈕派送冒泡的 `dss:react-click` 自訂事件，由 [React 點擊橋接](#react-點擊橋接-react-click-bridge)呼叫按鈕的 React `onClick`（無 React `onClick` 時退回 `element.click()`）。
+- **窄版型不點擊**（v4.36.3）：每次掃描先以 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_HAMBURGER_BUTTON_SELECTOR`（`div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])`）查找 DeepSeek header 的漢堡按鈕。漢堡按鈕在桌面與窄版型皆掛載，但只有窄版型（約 768px 以下）的 `checkVisibility()` 為真；收合軌道的展開按鈕則在兩種版型皆渲染且可見（34×34），無法以自身可見性區分版型。漢堡按鈕存在且 `typeof checkVisibility === 'function' && checkVisibility()` 為真時略過點擊且不消耗收合期（`_hasClickedThisEpisode` 與 `_lastClickAt` 皆不變），同一收合期內漢堡按鈕一旦變為不可見即點擊；缺少 `checkVisibility` 方法的漢堡按鈕不阻擋點擊。窄版型下 DeepSeek 會在任何展開後約 0.5–1.2 秒自行收回側欄，因此自動開啟不在該版型點擊。
+- **迴圈保險**：若新的收合期在上一次點擊後未滿 1500ms（`RECOLLAPSE_LOOP_WINDOW_MS`）即開始，且其間沒有 `window` `resize` 事件，設定 `_isSuppressedUntilResize` 並停止點擊；下一次 `resize` 解除保險並清除上次點擊時間。此保險避免窄螢幕下 DeepSeek 立即再收合時與本模組形成開合迴圈。
+- **行為**：使用者手動收合側欄也會開始新的收合期並再次點擊，因此開啟此功能等同讓側欄保持開啟。DeepSeek 在窄螢幕下於收合、展開、再收合之間重用同一個軌道按鈕節點、只改寫 wrapper 的 `className`，因此以收合期而非 DOM 節點判定是否已點擊。
+
+### 按鈕定位
+
+`content/ds-selectors.js` 側欄區塊的 `SIDEBAR_OPEN_BUTTON_SELECTOR`：
+
+```
+div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])
+```
+
+- **為何以圖示 path 區分**：此按鈕位於 DeepSeek 的收合軌道（`div.ca6d4be1`），與搜尋、新對話按鈕相鄰，三者的 class 字串完全相同（含雜湊 class），只有圖示 path 能區分展開側欄按鈕。
+- **排除的變體**：展開狀態下的側欄切換按鈕使用 `ds-button--iconLabelTertiary`，行動版漢堡選單按鈕使用 `ds-button--xl` 且圖示 path 不同，兩者皆不符合此選擇器。
+
+### 載入順序
+
+manifest 中 `content/auto-open-sidebar.js` 緊接 `content/auto-expand-messages.js` 之後載入，晚於 `content/ds-selectors.js` 與 `content/feature-toggle.js`；`start()` 在 `DSSFeatureToggle` 缺席時以 `console.warn` 記錄並略過註冊。

@@ -213,3 +213,96 @@ describe('i18n - label keys', () => {
         ]).toEqual(['自動重試', '自動繼續生成', 'Auto retry', 'Auto continue generating']);
     });
 });
+
+// ── 7. "Auto open sidebar" (#autoOpenSidebarToggle, KEYS.AUTO_OPEN_SIDEBAR) ──
+// Same contract as autoRetry / autoContinue: own storage key "isAutoOpenSidebarEnabled" (default false), saveAutoOpenSidebar(bool) writes it to both storage areas, getSettings().autoOpenSidebar mirrors it, and the Features-card checkbox is a master-switch sub-control.
+
+const AUTO_OPEN_SIDEBAR_KEY = 'isAutoOpenSidebarEnabled';
+
+async function readRawKey(area, key) {
+    return (await chrome.storage[area].get(key))[key];
+}
+
+describe('auto open sidebar - storage schema and setter', () => {
+    it('KEYS.AUTO_OPEN_SIDEBAR is "isAutoOpenSidebarEnabled" and defaults to false', () => {
+        expect(StorageManager.KEYS.AUTO_OPEN_SIDEBAR).toBe(AUTO_OPEN_SIDEBAR_KEY);
+        expect(StorageManager.DEFAULTS).toHaveProperty(AUTO_OPEN_SIDEBAR_KEY, false);
+    });
+
+    it('fresh install: getSettings().autoOpenSidebar is false', async () => {
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(false);
+    });
+
+    it.each([true, false])('saveAutoOpenSidebar(%s) stores the value in both sync and local', async (value) => {
+        expect(typeof StorageManager.saveAutoOpenSidebar, 'StorageManager.saveAutoOpenSidebar is not a function').toBe('function');
+        await StorageManager.saveAutoOpenSidebar(!value);
+        await StorageManager.saveAutoOpenSidebar(value);
+        expect(await readRawKey('sync', AUTO_OPEN_SIDEBAR_KEY)).toBe(value);
+        expect(await readRawKey('local', AUTO_OPEN_SIDEBAR_KEY)).toBe(value);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(value);
+    });
+
+    it('saving it leaves autoRetry / autoContinue false (independent key)', async () => {
+        expect(typeof StorageManager.saveAutoOpenSidebar, 'StorageManager.saveAutoOpenSidebar is not a function').toBe('function');
+        await StorageManager.saveAutoOpenSidebar(true);
+        const settings = await StorageManager.getSettings();
+        expect(settings.autoOpenSidebar).toBe(true);
+        expect(settings.autoRetry).toBe(false);
+        expect(settings.autoContinue).toBe(false);
+    });
+});
+
+describe('auto open sidebar - popup', () => {
+    it('Features card holds checkbox #autoOpenSidebarToggle with label data-i18n="autoOpenSidebarLabel"', () => {
+        const card = findFeaturesCard(parsePopupHtml());
+        const input = card.querySelector('#autoOpenSidebarToggle');
+        expect(input, '#autoOpenSidebarToggle missing from the Features card').not.toBeNull();
+        expect(input.type).toBe('checkbox');
+        const label = card.querySelector('label[for="autoOpenSidebarToggle"]');
+        expect(label, 'label[for=autoOpenSidebarToggle] missing from the Features card').not.toBeNull();
+        expect(label.getAttribute('data-i18n')).toBe('autoOpenSidebarLabel');
+    });
+
+    it.each([true, false])('applySettingsToDom sets the checkbox to %s from settings.autoOpenSidebar', async (value) => {
+        const dom = buildPopupDom();
+        expect(dom.autoOpenSidebarToggle, '#autoOpenSidebarToggle missing from popup.html').toBeDefined();
+        dom.autoOpenSidebarToggle.checked = !value;
+        const settings = { ...(await StorageManager.getSettings()), autoContinue: !value, autoOpenSidebar: value };
+        window.__DS_PopupSettingsView.applySettingsToDom(dom, settings);
+        expect(dom.autoOpenSidebarToggle.checked).toBe(value);
+        expect(dom.autoContinueToggle.checked, 'no cross-wiring with autoContinue').toBe(!value);
+    });
+
+    it('checking the checkbox stores true, unchecking stores false', async () => {
+        const dom = buildPopupDom();
+        expect(dom.autoOpenSidebarToggle, '#autoOpenSidebarToggle missing from popup.html').toBeDefined();
+        buildToggleManager().bindToggles(dom);
+
+        dom.autoOpenSidebarToggle.checked = true;
+        await fireChangeAndSettle(dom.autoOpenSidebarToggle);
+        expect(await readRawKey('local', AUTO_OPEN_SIDEBAR_KEY)).toBe(true);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(true);
+
+        dom.autoOpenSidebarToggle.checked = false;
+        await fireChangeAndSettle(dom.autoOpenSidebarToggle);
+        expect(await readRawKey('local', AUTO_OPEN_SIDEBAR_KEY)).toBe(false);
+        expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(false);
+    });
+
+    it('master switch off disables the checkbox, on re-enables it', () => {
+        const dom = buildPopupDom();
+        expect(dom.autoOpenSidebarToggle, '#autoOpenSidebarToggle missing from popup.html').toBeDefined();
+        const { applyMasterSwitchUI } = buildApplyMasterSwitchUI();
+        applyMasterSwitchUI(false);
+        expect(dom.autoOpenSidebarToggle.disabled).toBe(true);
+        applyMasterSwitchUI(true);
+        expect(dom.autoOpenSidebarToggle.disabled).toBe(false);
+    });
+
+    it('both locales define autoOpenSidebarLabel with the agreed copy', () => {
+        expect([
+            globalThis.__DS_I18N_Locales_zhTW.autoOpenSidebarLabel,
+            globalThis.__DS_I18N_Locales_en.autoOpenSidebarLabel,
+        ]).toEqual(['自動開啟側欄', 'Auto open sidebar']);
+    });
+});

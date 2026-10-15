@@ -25,6 +25,8 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 | Zero Is Not Missing: Fallback Inputs | exercises code that substitutes a default when a parsed or read value is missing, such as a computed-style number where 0 is a legitimate value | [zero-is-not-missing.md](references/zero-is-not-missing.md) |
 | Host-Page Controls: Assert Activation, Not Dispatch | asserts that the extension clicked or triggered a host-page button or control, or builds a fixture for a page element whose handler (React `onClick`, `isTrusted` guard) decides whether to act | [assert-activation-not-dispatch.md](references/assert-activation-not-dispatch.md) |
 | Environment Detection: Test With Real Device Profiles | stubs `navigator` (`userAgent`, `platform`, `maxTouchPoints`) or any environment signal to exercise device, platform, or browser detection, or builds a fixture labeled mobile, desktop, or another device class | [realistic-device-profiles.md](references/realistic-device-profiles.md) |
+| Host Re-Renders Overwrite Extension State | writes a class, attribute, or flag onto a host-page element and later reads it back, or simulates a host state change (native toggle, React re-render) on elements the extension tracks | [host-rerenders-overwrite-extension-state.md](references/host-rerenders-overwrite-extension-state.md) |
+| Visibility Guards Need a Live Capture | stubs `checkVisibility`, `getBoundingClientRect`, or computed `display` to exercise a guard that decides by whether a host element is visible, or models a responsive layout such as narrow versus desktop | [visibility-guards-need-live-capture.md](references/visibility-guards-need-live-capture.md) |
 
 ## Adding a New Lesson
 

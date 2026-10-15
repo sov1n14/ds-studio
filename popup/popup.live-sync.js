@@ -123,6 +123,10 @@ function createLiveSyncListener(ctx) {
             applyToggle(dom.autoContinueToggle, changes[KEYS.AUTO_CONTINUE].newValue ?? false);
         }
 
+        if (changes[KEYS.AUTO_OPEN_SIDEBAR]) {
+            applyToggle(dom.autoOpenSidebarToggle, changes[KEYS.AUTO_OPEN_SIDEBAR].newValue ?? false);
+        }
+
         if (changes[KEYS.CHAT_WIDTH] || changes[KEYS.CHAT_WIDTH_ENABLED]) {
             const isSliderEnabled = changes[KEYS.CHAT_WIDTH_ENABLED]
                 ? changes[KEYS.CHAT_WIDTH_ENABLED].newValue

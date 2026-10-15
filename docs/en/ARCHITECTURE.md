@@ -91,6 +91,7 @@ ds-studio/
 │   ├── mobile-sidebar-swipe.bind.js      ─  Event binding for swipe gesture
 │   ├── mobile-sidebar-swipe.lifecycle.js ─  Enable/disable lifecycle for mobile swipe
 │   ├── auto-expand-messages.js ─  MutationObserver-based auto-click of collapsed expand buttons (v4.32.0)
+│   ├── auto-open-sidebar.js   ─  MutationObserver-based detection of the collapsed sidebar's open button; dispatches a dss:react-click event on every appearance to keep the sidebar open (v4.36.0)
 │   ├── auto-click.delay.js    ─  0–3 s random delay for auto-click rounds, in 0.1 s steps (v4.35.0)
 │   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, dispatches a dss:react-click event on the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0, event-triggered since v4.35.4)
 │   ├── react-click-bridge.main.js ‡ ─  MAIN-world bridge: on dss:react-click, calls the button's React onClick with a synthetic nativeEvent that passes the isTrusted check, falling back to click() when there is no onClick (v4.35.4)

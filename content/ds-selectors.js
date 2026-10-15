@@ -229,6 +229,9 @@
     /** 側邊欄外層包裝 */
     const SIDEBAR_WRAPPER_SELECTOR = 'div.dc04ec1d';
 
+    /** DeepSeek 側欄 wrapper 原生收合時的 class；React 每次切換會整個改寫 className */
+    const SIDEBAR_NATIVE_COLLAPSED_CLASS = 'a02af2e6';
+
     /** 側邊欄內層內容 */
     const SIDEBAR_INNER_SELECTOR = 'div.b8812f16.a2f3d50e';
 
@@ -249,6 +252,12 @@
 
     /** 側邊欄對話動作按鈕的雜湊 class */
     const SIDEBAR_ACTIONS_CLASS = '_254829d';
+
+    /** 收合軌道上的「展開側邊欄」按鈕（語意 class 加側欄圖示 path 前綴；排除展開態 tertiary 與行動版 xl 變體） */
+    const SIDEBAR_OPEN_BUTTON_SELECTOR = 'div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])';
+
+    /** 窄版型 header 的漢堡按鈕；可見時代表行動版型，自動開啟側欄不點擊 */
+    const SIDEBAR_HAMBURGER_BUTTON_SELECTOR = 'div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])';
 
     /** 標題列（title row）包裝 */
     const CHAT_HEADER_TITLE_ROW_SELECTOR = '._1aa2651';
@@ -355,7 +364,8 @@
         VIRTUAL_LIST_CONTAINER_SELECTOR,
         SIDEBAR_WRAPPER_SELECTOR, SIDEBAR_INNER_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_SELECTOR,
         SIDEBAR_DATE_GROUP_SELECTOR, SIDEBAR_DATE_LABEL_CLASS, SIDEBAR_CHAT_LINK_SELECTOR,
-        SIDEBAR_TITLE_CLASS, SIDEBAR_ACTIONS_CLASS,
+        SIDEBAR_TITLE_CLASS, SIDEBAR_ACTIONS_CLASS, SIDEBAR_OPEN_BUTTON_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_CLASS,
+        SIDEBAR_HAMBURGER_BUTTON_SELECTOR,
         CHAT_HEADER_TITLE_ROW_SELECTOR, CHAT_TITLE_FALLBACK_SELECTOR,
         GO_TOP_NATIVE_BUTTON_CLASS,
         GO_TOP_ANCHOR_SELECTOR, GO_TOP_ANCHOR_FALLBACK1_SELECTOR,
