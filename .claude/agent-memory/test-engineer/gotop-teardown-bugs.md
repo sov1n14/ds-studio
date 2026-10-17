@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-On 2026-07-26, team-lead asked for RED-phase tests (project's red-green protocol) for two confirmed GoToTop teardown bugs. Tests live in `test/unit/go-top.enable.spec.js`, new describe `disable — teardown correctness (regression)`. See [[project-test-harness]] for how to run them.
+On 2026-07-26, team-lead asked for RED-phase tests (project's red-green protocol) for two confirmed GoToTop teardown bugs. Tests live in `test/unit/go-top.enable.spec.js`, new describe `disable — teardown correctness (regression)`. See [[project_test_harness]] for how to run them.
 
 **Bug 1 — route-change debounce survives disable():** an SPA route change starts `_onRouteChange()`'s ~100ms settling window. If `disable()` is called inside that window (before the debounce fires), the pending timer still fires afterward and re-injects a `.dsw-gotop` button. Observed failure: `document.querySelector('.dsw-gotop')` was NOT null after disable + time advance — a real button was still in the DOM. Test: "an SPA route change immediately before disable must not resurrect the button".
 

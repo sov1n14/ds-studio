@@ -1,7 +1,7 @@
 /**
- * Standalone in-memory Chrome storage mock.
- * Used by test/setup/vitest.setup.js in place of a real chrome.storage area
- * (e.g. for onChanged area discrimination, quota error simulation, etc.).
+ * Standalone in-memory Chrome storage mock. Used by test/setup/vitest.setup.js in place of a real chrome.storage area (e.g. for onChanged area discrimination, quota error simulation, etc.).
+ *
+ * Values cross the storage boundary by copy, as in real chrome.storage: set() stores a structuredClone of the caller's items, and every get() result and onChanged payload is a fresh clone, so mutating a read result or an already-written object never changes what is stored.
  */
 export class InMemoryStorageMock {
     constructor(areaName = 'local') {
@@ -16,7 +16,7 @@ export class InMemoryStorageMock {
             keys = null;
         }
         let result = {};
-        if (keys === null) {
+        if (keys == null) {
             result = { ...this._data };
         } else if (Array.isArray(keys)) {
             keys.forEach(k => {
@@ -29,6 +29,7 @@ export class InMemoryStorageMock {
                 result[k] = k in this._data ? this._data[k] : keys[k];
             });
         }
+        result = structuredClone(result);
         if (callback) {
             setTimeout(() => callback(result), 0);
             return;
@@ -39,32 +40,26 @@ export class InMemoryStorageMock {
 
     set(items, callback) {
         if (this._simulateQuotaError) {
-            // Simulate QUOTA_BYTES_PER_ITEM quota exceeded: data is NOT stored,
-            // lastError is set for the callback to observe.
-            if (typeof globalThis.chrome !== 'undefined' && globalThis.chrome.runtime) {
-                globalThis.chrome.runtime.lastError = { message: 'QUOTA_BYTES_PER_ITEM quota exceeded' };
-            }
-            if (callback) {
-                setTimeout(() => {
+            // Simulate QUOTA_BYTES_PER_ITEM quota exceeded: data is NOT stored. As in real chrome.storage, the promise form rejects and never touches lastError; the callback form exposes lastError only while its own callback runs.
+            const message = 'QUOTA_BYTES_PER_ITEM quota exceeded';
+            if (!callback) return new Promise((_, reject) => setTimeout(() => reject(new Error(message)), 0));
+            setTimeout(() => {
+                const runtime = globalThis.chrome?.runtime;
+                if (runtime) runtime.lastError = { message };
+                try {
                     callback();
-                    // Clear lastError after callback (matches real Chrome behaviour)
-                    if (typeof globalThis.chrome !== 'undefined' && globalThis.chrome.runtime) {
-                        delete globalThis.chrome.runtime.lastError;
-                    }
-                }, 0);
-            } else {
-                return new Promise((resolve, reject) => {
-                    setTimeout(() => reject(new Error('Quota exceeded')), 0);
-                });
-            }
+                } finally {
+                    if (runtime) delete runtime.lastError;
+                }
+            }, 0);
             return;
         }
 
         const changes = {};
         Object.keys(items).forEach(k => {
             const oldValue = this._data[k];
-            this._data[k] = items[k];
-            changes[k] = { oldValue, newValue: items[k] };
+            this._data[k] = structuredClone(items[k]);
+            changes[k] = { oldValue, newValue: this._data[k] };
         });
         this._notify(changes, this._areaName);
         if (callback) {
@@ -119,7 +114,7 @@ export class InMemoryStorageMock {
 
     _notify(changes, areaName) {
         this._listeners.forEach(l => {
-            try { l(changes, areaName); } catch (e) { /* swallow */ }
+            try { l(structuredClone(changes), areaName); } catch (e) { /* swallow */ }
         });
     }
 

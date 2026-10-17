@@ -6,9 +6,10 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 
-const CONTAINER_CLASS = '_08f18f6';
-const ICON_CLASS = 'd630ec62';
+const CONTAINER_CLASS = DSSelectors.EXPAND_BUTTON_CONTAINER_CLASS;
+const ICON_CLASS = DSSelectors.EXPAND_BUTTON_ICON_CLASS;
 const OWN_KEY = 'dsAutoExpandMessages';
 
 // ─────────────────────────────────────────────────────────────────────────────

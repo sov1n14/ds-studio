@@ -185,5 +185,60 @@ describe('GoToTop', () => {
 
             await expect(GoToTop.scrollToTopAndWait()).resolves.toEqual({ success: true });
         });
+
+        it('no throw when window.DSstudio itself is undefined (optional chaining on DSstudio)', async () => {
+            const origDSstudio = window.DSstudio;
+            delete window.DSstudio;
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+                await expect(GoToTop.scrollToTopAndWait()).resolves.toEqual({ success: true });
+            } finally {
+                window.DSstudio = origDSstudio;
+            }
+        });
+
+        it('PAS with isEnabled returning null still gets disabled on cleanup (?? false fallback)', async () => {
+            const pas = {
+                enable: vi.fn(),
+                disable: vi.fn(),
+                isEnabled: () => null,
+            };
+            window.DSstudio.PreventAutoScroll = pas;
+            const container = createScrollContainer();
+            GoToTop._scrollContainer = container;
+            vi.spyOn(GoToTop, '_getAnchor')
+                .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+            await GoToTop.scrollToTopAndWait();
+            // With ?? false, wasAlreadyEnabled=false, so cleanup calls disable
+            // With ?? true (mutant), wasAlreadyEnabled=true, cleanup skips disable
+            expect(pas.disable).toHaveBeenCalled();
+        });
+
+        it('observes subtree mutations on the scroll container', async () => {
+            vi.useFakeTimers();
+            let observeOptions;
+            const OrigMO = globalThis.MutationObserver;
+            globalThis.MutationObserver = class {
+                constructor(cb) { this._cb = cb; }
+                observe(target, opts) { observeOptions = opts; }
+                disconnect() {}
+            };
+            try {
+                const container = createScrollContainer();
+                GoToTop._scrollContainer = container;
+                vi.spyOn(GoToTop, '_getAnchor')
+                    .mockReturnValue(makeAnchorAtTop({ top: 0, bottom: 50, height: 50 }));
+                const promise = GoToTop.scrollToTopAndWait({ timeout: 5000 });
+                await vi.advanceTimersByTimeAsync(5000);
+                await promise;
+                expect(observeOptions).toEqual({ childList: true, subtree: true });
+            } finally {
+                globalThis.MutationObserver = OrigMO;
+                vi.useRealTimers();
+            }
+        });
     });
 });

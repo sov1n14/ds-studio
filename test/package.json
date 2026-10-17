@@ -7,11 +7,14 @@
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:mutation": "cd .. && npx --prefix test stryker run test/stryker.config.json"
   },
   "devDependencies": {
-    "vitest": "^3.2.4",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@vitest/ui": "^3.2.4",
-    "happy-dom": "^16.0.0"
+    "happy-dom": "^16.0.0",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,235 +1,85 @@
 /**
- * service-worker.js -- retry-never-drop + exponential backoff + periodic alarm + lastActiveAt.
- * All tests assert CORRECT behavior that does NOT yet exist. They MUST fail against current code.
+ * background/service-worker.js — retry never drops, exponential backoff from the incremented attempt count, periodic alarm, lastActiveAt preserved on failure.
+ *
+ * Real background/pending-store.js and real background/service-worker.js share the in-memory chrome.storage fixture (deep-copy get/set). Mocked trust boundaries only: chrome.storage.onChanged registration (SW listener captured, so seeding never starts a sweep), chrome.tabs, chrome.alarms (Map-backed, so the scheduled alarm is observable end state), fetch. StorageManager and the route installers are stubbed because they are off the sweep path.
+ *
+ * Expired lease = lastActiveAt 0 unless a test ages a nonzero lease past the TTL with two sweeps.
  */
-import '../../utils/deepseek-api.js';
-import '../../utils/temporary-chat-constants.js';
-import '../../background/service-worker-constants.js';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { RETRY_ALARM_NAME, NOW, alarms, setClock, expired, settle, seedQueue, readQueue, fetchedUuids, readLocalDeviceId, store, installServiceWorkerHarness } from '../helpers/service-worker-harness.js';
+import { describe, it, expect } from 'vitest';
 
-const RETRY_ALARM_NAME = globalThis.RETRY_ALARM_NAME;
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
-const EXPIRED = 0;
+installServiceWorkerHarness();
 
-function flushMicrotasks() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
-}
-async function flushAll(times = 5) {
-    for (let i = 0; i < times; i++) await flushMicrotasks();
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
+
+async function failedSweepOn(entries) {
+    await seedQueue(entries);
+    globalThis.fetch.mockResolvedValue({ ok: false });
+    chrome.runtime.onStartup.callListeners();
+    await settle();
 }
 
-let pendingStoreStub;
+describe('never-drop: a failed delete keeps the entry regardless of attempt count', () => {
+    it.each([[2, 3], [10, 11], [99, 100]])('attemptCount %i + fetch fail -> still queued with attemptCount %i', async (before, after) => {
+        await failedSweepOn([expired('u1', before)]);
 
-beforeAll(async () => {
-    globalThis.importScripts = vi.fn();
-    globalThis.StorageManager = {
-        isSyncedWithCloud: vi.fn().mockResolvedValue(true),
-        retrySync: vi.fn(),
-    };
-    pendingStoreStub = {
-        getPendingDeletes: vi.fn().mockResolvedValue([]),
-        savePendingDeletes: vi.fn().mockResolvedValue(undefined),
-        getOpenUuids: vi.fn().mockResolvedValue([]),
-        clearOpenUuids: vi.fn().mockResolvedValue(undefined),
-        getLastAuthToken: vi.fn().mockResolvedValue(null),
-        recordLeaseObservation: vi.fn(async (_uuid, lastActiveAt) => lastActiveAt),
-        isLeaseExpired: (entry, now, lastSeenChange) =>
-            !Number.isFinite(lastSeenChange) || now - lastSeenChange > LEASE_TTL_MS,
-        refreshLease: vi.fn(),
-        releaseLease: vi.fn(async (uuid) => {
-            const queue = await pendingStoreStub.getPendingDeletes();
-            const entry = queue.find((e) => e.chatUuid === uuid);
-            if (entry) entry.lastActiveAt = 0;
-        }),
-    };
-    globalThis.TemporaryChatPendingStore = pendingStoreStub;
-    globalThis.DSSSettingsRoutes = { install: vi.fn() };
-    globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
-    globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
-    globalThis.fetch = vi.fn();
-
-    await import('../../background/service-worker.js');
-});
-
-beforeEach(() => {
-    pendingStoreStub.getPendingDeletes.mockReset().mockResolvedValue([]);
-    pendingStoreStub.savePendingDeletes.mockReset().mockResolvedValue(undefined);
-    pendingStoreStub.getOpenUuids.mockReset().mockResolvedValue([]);
-    pendingStoreStub.clearOpenUuids.mockReset().mockResolvedValue(undefined);
-    pendingStoreStub.getLastAuthToken.mockReset().mockResolvedValue(null);
-    pendingStoreStub.recordLeaseObservation.mockReset().mockImplementation(async (_uuid, lastActiveAt) => lastActiveAt);
-    pendingStoreStub.refreshLease.mockReset();
-    pendingStoreStub.releaseLease.mockClear();
-    globalThis.StorageManager.isSyncedWithCloud.mockReset().mockResolvedValue(true);
-    globalThis.StorageManager.retrySync.mockReset();
-    globalThis.fetch.mockReset();
-    chrome.alarms.create.mockClear?.();
-    chrome.alarms.clear.mockClear?.();
-});
-
-describe('never-drop: items remain in queue regardless of attempt count', () => {
-    it('attemptCount 2 + fetch fail -> item stays (not dropped)', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 2, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([
-            expect.objectContaining({ chatUuid: 'u1', attemptCount: 3 }),
-        ]);
-    });
-
-    it('attemptCount 10 + fetch fail -> stays with attemptCount 11', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 10, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([
-            expect.objectContaining({ chatUuid: 'u1', attemptCount: 11 }),
-        ]);
-    });
-
-    it('attemptCount 99 + fetch fail -> stays with attemptCount 100', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 99, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(pendingStoreStub.savePendingDeletes).toHaveBeenCalledWith([
-            expect.objectContaining({ chatUuid: 'u1', attemptCount: 100 }),
-        ]);
+        expect(await readQueue()).toEqual([{ chatUuid: 'u1', attemptCount: after, lastActiveAt: 0 }]);
     });
 });
 
-describe('exponential backoff alarm delay', () => {
-    it('attemptCount 1 -> 2 min (0.5 * 2^2 after increment)', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 1, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
+describe('exponential backoff: retry alarm period follows the incremented attempt count', () => {
+    it.each([
+        ['attemptCount 1 -> 2 after failure -> 0.5 * 2^2 = 2 min', [1], 2],
+        ['attemptCount 3 -> 4 after failure -> 0.5 * 2^4 = 8 min', [3], 8],
+        ['attemptCount 6 -> 7 after failure -> capped at 30 min', [6], 30],
+        ['multiple entries [5, 1] -> shortest backoff wins (2 min)', [5, 1], 2],
+    ])('%s', async (_label, counts, minutes) => {
+        await failedSweepOn(counts.map((n, i) => expired('u' + i, n)));
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(chrome.alarms.create).toHaveBeenCalledWith(
-            RETRY_ALARM_NAME,
-            expect.objectContaining({ periodInMinutes: 2 }),
-        );
-    });
-
-    it('attemptCount 3 -> 8 min (0.5 * 2^4 after increment)', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 3, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(chrome.alarms.create).toHaveBeenCalledWith(
-            RETRY_ALARM_NAME,
-            expect.objectContaining({ periodInMinutes: 8 }),
-        );
-    });
-
-    it('attemptCount 6 -> capped at 30 min', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 6, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(chrome.alarms.create).toHaveBeenCalledWith(
-            RETRY_ALARM_NAME,
-            expect.objectContaining({ periodInMinutes: 30 }),
-        );
-    });
-
-    it('multiple items: uses shortest backoff', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 5, lastActiveAt: EXPIRED },
-            { chatUuid: 'u2', attemptCount: 1, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
-
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        expect(chrome.alarms.create).toHaveBeenCalledWith(
-            RETRY_ALARM_NAME,
-            expect.objectContaining({ periodInMinutes: 2 }),
-        );
+        expect(alarms.get(RETRY_ALARM_NAME)).toEqual({ periodInMinutes: minutes });
     });
 });
 
-describe('periodic alarm (periodInMinutes, not delayInMinutes)', () => {
-    it('alarm uses periodInMinutes, not delayInMinutes', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: false });
+describe('periodic alarm', () => {
+    it('the retry alarm is periodic (periodInMinutes), never a one-shot delayInMinutes', async () => {
+        await failedSweepOn([expired('u1')]);
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        const createCall = chrome.alarms.create.mock.calls.find(
-            (c) => c[0] === RETRY_ALARM_NAME
-        );
-        expect(createCall).toBeDefined();
-        const alarmOptions = createCall[1];
-        expect(alarmOptions).toHaveProperty('periodInMinutes');
-        expect(alarmOptions).not.toHaveProperty('delayInMinutes');
+        const info = alarms.get(RETRY_ALARM_NAME);
+        expect(info).toHaveProperty('periodInMinutes');
+        expect(info).not.toHaveProperty('delayInMinutes');
     });
 
-    it('alarm cleared when queue empty after successful deletes', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
-        globalThis.fetch.mockResolvedValue({ ok: true });
+    it('a sweep that empties the queue leaves no retry alarm behind', async () => {
+        alarms.set(RETRY_ALARM_NAME, { periodInMinutes: 0.5 });
+        await seedQueue([expired('u1')]);
 
         chrome.alarms.onAlarm.callListeners({ name: RETRY_ALARM_NAME });
-        await flushAll();
+        await settle();
 
-        expect(chrome.alarms.clear).toHaveBeenCalledWith(RETRY_ALARM_NAME);
+        expect(await readQueue()).toEqual([]);
+        expect(alarms.has(RETRY_ALARM_NAME)).toBe(false);
     });
 });
 
-describe('lastActiveAt preserved on re-queue after failed delete', () => {
-    it('failed delete re-queues item with original lastActiveAt intact', async () => {
-        pendingStoreStub.getPendingDeletes.mockResolvedValue([
-            { chatUuid: 'u1', attemptCount: 0, lastActiveAt: EXPIRED },
-        ]);
-        pendingStoreStub.getLastAuthToken.mockResolvedValue('Bearer tok');
+describe('lastActiveAt preserved on failure', () => {
+    it('a failed delete of a TTL-expired entry keeps its original nonzero lastActiveAt (not bumped to now)', async () => {
+        // Created by this device, so the own-device LEASE_TTL_MS applies.
+        const original = NOW - 5000;
+        setClock(original);
+        await store.addPendingDelete('u1');
+        setClock(NOW);
+        const ownerDeviceId = await readLocalDeviceId();
+        expect(ownerDeviceId, 'precondition: local device ID exists').toEqual(expect.any(String));
+        chrome.alarms.onAlarm.callListeners({ name: RETRY_ALARM_NAME }); // first local observation at NOW
+        await settle();
+        expect(globalThis.fetch, 'precondition: not expired on first observation').not.toHaveBeenCalled();
+
+        setClock(NOW + LEASE_TTL_MS + 1);
         globalThis.fetch.mockResolvedValue({ ok: false });
+        chrome.alarms.onAlarm.callListeners({ name: RETRY_ALARM_NAME });
+        await settle();
 
-        chrome.runtime.onStartup.callListeners();
-        await flushAll();
-
-        const savedQueue = pendingStoreStub.savePendingDeletes.mock.calls[0][0];
-        const requeued = savedQueue.find((e) => e.chatUuid === 'u1');
-        expect(requeued).toBeDefined();
-        expect(requeued).toHaveProperty('lastActiveAt');
-        expect(requeued.lastActiveAt).toBe(EXPIRED);
+        expect(fetchedUuids(), 'precondition: expired entry was attempted').toEqual(['u1']);
+        expect(await readQueue()).toEqual([{ chatUuid: 'u1', attemptCount: 1, lastActiveAt: original, ownerDeviceId }]);
     });
 });

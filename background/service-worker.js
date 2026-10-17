@@ -5,15 +5,18 @@
 importScripts(
     '../utils/logger.js',
     '../utils/storage-manager.keys.js',
-    '../utils/storage-manager.chunk-lock.js',
     '../utils/storage-manager.rw.js',
     '../utils/storage-manager.sync.js',
+    '../utils/storage-manager.sync.retry.js',
+    '../utils/storage-manager.restore.js',
     '../utils/storage-manager.tombstone.js',
     '../utils/storage-manager.preset-merge.js',
     '../utils/storage-manager.preset-recency.js',
     '../utils/storage-manager.presets.js',
     '../utils/storage-manager.chatmap.diff.js',
+    '../utils/storage-manager.chatmap.ops.js',
     '../utils/storage-manager.chatmap.js',
+    '../utils/storage-manager.chatmap.client.js',
     '../utils/storage-manager.local.js',
     '../utils/storage-manager.init.js',
     '../utils/storage-manager.setters.js',
@@ -22,13 +25,12 @@ importScripts(
     '../utils/deepseek-api.js',
     '../utils/temporary-chat-constants.js',
     'pending-store.js',
-    '../utils/settings-message-constants.js',
-    '../utils/editor-window-constants.js',
+    '../utils/message-constants.js',
     'service-worker-constants.js',
-    '../utils/url-constants.js',
     'settings-routes.js',
     'pending-store-routes.js',
-    'editor-window-routes.js'
+    'editor-window-routes.js',
+    'chat-map-routes.js'
 );
 
 // 註冊設定訊息路由與變更廣播（頂層呼叫，確保 worker 重啟後仍存活）
@@ -39,6 +41,9 @@ DSSPendingStoreRoutes.install();
 
 // 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSEditorWindowRoutes.install();
+
+// 註冊 chat→preset 綁定表路由，並使本 worker 的 StorageManager 成為唯一寫入者（頂層呼叫，確保 worker 重啟後仍存活）
+DSSChatMapRoutes.install({ storageManager: StorageManager });
 
 // 指數退避上限（分鐘）
 const BACKOFF_CAP_MINUTES = 30;
@@ -75,7 +80,10 @@ async function scheduleRetryAlarm(pendingItems) {
 /**
  * 補救待刪佇列：讀取 sync 佇列，以本機 token 逐筆刪除，僅確認成功才移除。
  * 租約未過期的項目（本機仍活躍的對話）一律跳過並原封保留於佇列。
+ * 本機建立的項目適用 LEASE_TTL_MS；其他裝置建立或無擁有者的項目適用 FOREIGN_LEASE_TTL_MS（已釋放者仍立即可刪）。
  * 失敗項目永不丟棄，僅累加 attemptCount 並保留原始 lastActiveAt。
+ * 寫回僅套用本輪差量（於 store 互斥鎖內重讀最新佇列），不以開頭快照覆寫，
+ * 以免蓋掉掃描期間的續約或新增項目。
  */
 async function remediatePendingDeletes() {
     const pending = await TemporaryChatPendingStore.getPendingDeletes();
@@ -97,50 +105,45 @@ async function remediatePendingDeletes() {
         }
     } catch { /* fail-open：tabs.query 失敗時以空集合繼續 */ }
 
+    // 每輪掃描自 storage.local 重讀本機裝置 ID，用以區分本機與外來項目
+    const localDeviceId = await TemporaryChatPendingStore.getLocalDeviceId();
     const now = Date.now();
-    const stillPending = [];
-    let hasChanged = false;
-    let hasTabGuarded = false;
+    const deletedUuids = [];
+    const failedUuids = [];
 
     for (const item of pending) {
         // 觀察並記錄 lastActiveAt 變更時間點，取得本機觀察時間戳
         const lastSeenChange = await TemporaryChatPendingStore.recordLeaseObservation(item.chatUuid, item.lastActiveAt);
         // 租約未過期 → 本機仍活躍，跳過並原封保留
-        if (!TemporaryChatPendingStore.isLeaseExpired(item, now, lastSeenChange)) {
-            stillPending.push(item);
-            continue;
-        }
+        const ttlMs = TemporaryChatPendingStore.resolveLeaseTtl(item, localDeviceId);
+        if (!TemporaryChatPendingStore.isLeaseExpired(item, now, lastSeenChange, ttlMs)) continue;
 
-        // 分頁防護：使用者正在檢視此對話 → 跳過刪除，代為續約，原封保留
+        // 分頁防護：使用者正在檢視此對話 → 跳過刪除，代為續約（refreshLease 自行於鎖內寫入）
         if (localTabUuids.has(item.chatUuid)) {
             await TemporaryChatPendingStore.refreshLease(item.chatUuid);
-            stillPending.push(item);
-            hasTabGuarded = true;
             continue;
         }
 
         const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
         if (isOk) {
             // 刪除成功 → 清除觀察紀錄 key
-            try { await chrome.storage.local.remove(DSS_LAST_SEEN_CHANGE_KEY_PREFIX + item.chatUuid); } catch {}
-            hasChanged = true;
+            try { await chrome.storage.local.remove(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX + item.chatUuid); } catch {}
+            deletedUuids.push(item.chatUuid);
             continue;
         }
 
         // 失敗 → 累加嘗試次數，保留原始 lastActiveAt，永不丟棄
-        const nextCount = (item.attemptCount ?? 0) + 1;
-        stillPending.push({ ...item, attemptCount: nextCount });
-        hasChanged = true;
+        failedUuids.push(item.chatUuid);
     }
 
-    if (hasChanged || hasTabGuarded) await TemporaryChatPendingStore.savePendingDeletes(stillPending);
+    const stillPending = await TemporaryChatPendingStore.applySweepResult({ deletedUuids, failedUuids });
     await scheduleRetryAlarm(stillPending);
 
     // 掃除孤兒 seen-change key：僅保留仍在佇列中的 UUID
     try {
         const pendingUuids = new Set(stillPending.map(e => e.chatUuid));
         const all = await chrome.storage.local.get(null);
-        const orphans = Object.keys(all).filter(k => k.startsWith(DSS_LAST_SEEN_CHANGE_KEY_PREFIX) && !pendingUuids.has(k.slice(DSS_LAST_SEEN_CHANGE_KEY_PREFIX.length)));
+        const orphans = Object.keys(all).filter(k => k.startsWith(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX) && !pendingUuids.has(k.slice(DSS_TEMP_CHAT.DSS_LAST_SEEN_CHANGE_KEY_PREFIX.length)));
         if (orphans.length > 0) await chrome.storage.local.remove(orphans);
     } catch (err) {
         console.error('[DSS] remediate sweep:', err);
@@ -186,7 +189,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // 監聯來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除
 chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type !== DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
+    if (msg?.type !== DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
     // 讀取佇列以計算正確退避週期
     TemporaryChatPendingStore.getPendingDeletes().then((items) => scheduleRetryAlarm(items));
     return false;
@@ -219,7 +222,7 @@ async function broadcastPendingUuids() {
     if (!Array.isArray(tabs)) return; // 查詢結果非陣列（環境無 tabs API）時視為無分頁可送
     for (const tab of tabs) {
         if (typeof tab.id !== 'number') continue;
-        Promise.resolve(chrome.tabs.sendMessage(tab.id, { type: DSS_MSG_PENDING_UUIDS_CHANGED, uuids }))
+        Promise.resolve(chrome.tabs.sendMessage(tab.id, { type: DSS_TEMP_CHAT.DSS_MSG_PENDING_UUIDS_CHANGED, uuids }))
             .catch(() => {}); // 無 content script 的分頁會 reject，靜默忽略
     }
 }
@@ -227,7 +230,7 @@ async function broadcastPendingUuids() {
 // 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
-    if (!(DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
+    if (!(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
     if (isRemediationInFlight) return;                       // 重入防護
     (async () => {
         isRemediationInFlight = true;

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createNativeButton,
@@ -47,7 +48,7 @@ describe('GoToTop', () => {
                 'ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ' +
                 'ds-button--m ds-button--icon-relative-m ds-button--floating'
             );
-            expect(GoToTop.NATIVE_BTN_CLASSES).not.toContain('_0706cde');
+            expect(GoToTop.NATIVE_BTN_CLASSES).not.toContain(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS);
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-height: 34px');
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-color');
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-hover-color');
@@ -84,7 +85,7 @@ describe('GoToTop', () => {
             expect(btn.classList.contains('ds-button--icon-relative-m')).toBe(true);
             expect(btn.classList.contains('ds-button--floating')).toBe(true);
             // Must NOT carry the hash class
-            expect(btn.classList.contains('_0706cde')).toBe(false);
+            expect(btn.classList.contains(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS)).toBe(false);
         });
 
         it('template path: sets NATIVE_BTN_INLINE_STYLE via setAttribute("style", ...)', () => {
@@ -103,6 +104,17 @@ describe('GoToTop', () => {
             expect(btn.querySelector('.ds-button__icon')).not.toBeNull();
         });
 
+        it('template path: has exactly the three native child layers in native order, the last being the icon layer', () => {
+            // Mirrors the native go-bottom structure (createNativeButton fixture / docs: three child layers).
+            const btn = GoToTop._createButtonElement(null);
+            expect(Array.from(btn.children, (el) => el.className)).toEqual([
+                'ds-button__background',
+                'ds-button__border',
+                'ds-button__icon ds-button__icon--last-child',
+            ]);
+            expect(btn.children[2].querySelector('svg')).not.toBeNull();
+        });
+
         it('template path: no <span> tail element', () => {
             const btn = GoToTop._createButtonElement(null);
             expect(btn.querySelector('span')).toBeNull();
@@ -118,6 +130,18 @@ describe('GoToTop', () => {
 
         // ── Clone (main) path ────────────────────────────────────────────────
 
+        it('clone path: copies the live native styling (variant classes and inline variables), not the hardcoded template', () => {
+            // DeepSeek may ship a different size variant; the clone-first strategy must follow the live native button.
+            const nativeBtn = createNativeButton();
+            nativeBtn.classList.replace('ds-button--m', 'ds-button--l');
+            nativeBtn.style.setProperty('--dsl-button-height', '40px');
+            const btn = GoToTop._createButtonElement(nativeBtn);
+            expect(btn.classList.contains('ds-button--l')).toBe(true);
+            expect(btn.classList.contains('ds-button--m')).toBe(false);
+            expect(btn.style.getPropertyValue('--dsl-button-height').trim()).toBe('40px');
+            expect(btn.classList.contains('_0706cde')).toBe(false);
+        });
+
         it('clone path: clones the native button (same tag)', () => {
             const nativeBtn = createNativeButton();
             const btn = GoToTop._createButtonElement(nativeBtn);
@@ -126,10 +150,10 @@ describe('GoToTop', () => {
 
         it('clone path: removes _0706cde from cloned element', () => {
             const nativeBtn = createNativeButton();
-            expect(nativeBtn.classList.contains('_0706cde')).toBe(true);
+            expect(nativeBtn.classList.contains(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS)).toBe(true);
 
             const btn = GoToTop._createButtonElement(nativeBtn);
-            expect(btn.classList.contains('_0706cde')).toBe(false);
+            expect(btn.classList.contains(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS)).toBe(false);
         });
 
         it('clone path: preserves all stable ds-* classes from native', () => {
@@ -215,6 +239,28 @@ describe('GoToTop', () => {
 
         it('does not throw when nativeBtn is null', () => {
             expect(() => GoToTop._createButtonElement(null)).not.toThrow();
+        });
+    });
+
+    describe('_iconSvg markup', () => {
+        it('is one well-formed 14x14 svg with a single path of pure path data and no stray text', () => {
+            const markup = GoToTop._iconSvg();
+            const host = document.createElement('div');
+            host.innerHTML = markup;
+            expect(host.children).toHaveLength(1);
+            const svg = host.firstElementChild;
+            expect(svg.tagName.toLowerCase()).toBe('svg');
+            expect(svg.getAttribute('width')).toBe('14');
+            expect(svg.getAttribute('height')).toBe('14');
+            expect(svg.getAttribute('viewBox')).toBe('0 0 14 14');
+            expect(svg.getAttribute('style')).toContain('scaleY(-1)');
+            expect(host.textContent.trim()).toBe('');
+            const paths = svg.querySelectorAll('path');
+            expect(paths).toHaveLength(1);
+            expect(paths[0].getAttribute('fill')).toBe('currentColor');
+            // SVG path data grammar: command letters, numbers, whitespace; closed with Z.
+            const d = paths[0].getAttribute('d');
+            expect(d).toMatch(/^M[MLCZ0-9.\s-]+Z$/);
         });
     });
 });

@@ -9,4 +9,4 @@ Backlog B9 says to push the 'default' -> 'on' normalization down into StorageMan
 
 **Why:** the camelCase getSettings() surface and the raw-key message route look interchangeable but are not; assuming one implies the other turns a real red into a "pre-satisfied" false report.
 
-**How to apply:** any "normalize on read" requirement needs an assertion on BOTH surfaces. Red for the route lives in test/unit/settings-routes.spec.js under the DSS_GET_SETTINGS describe. See [[messaging-spec-harness]].
+**How to apply:** any "normalize on read" requirement needs an assertion on BOTH surfaces. Red for the route lives in test/unit/settings-routes.spec.js under the DSS_GET_SETTINGS describe. See [[project_messaging_spec_harness]].

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import { resetGoToTopState, createWrapperWithoutNativeButton } from '../helpers/go-top-fixtures.js';
 
@@ -62,9 +63,9 @@ describe('GoToTop', () => {
             // Add .aaff8b8f wrapper so _tryConnectDom sees the DOM as ready
             // (Change A: gating now requires INJECT_PARENT_SELECTOR or native button)
             const outerWrapper = document.createElement('div');
-            outerWrapper.className = '_871cbca';
+            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
             const injectParent = document.createElement('div');
-            injectParent.className = 'aaff8b8f';
+            injectParent.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
             outerWrapper.appendChild(injectParent);
             document.body.appendChild(outerWrapper);
 
@@ -234,9 +235,9 @@ describe('GoToTop', () => {
 
             // Add .aaff8b8f wrapper so _tryConnectDom gates injection correctly (Change A)
             const outerWrapper = document.createElement('div');
-            outerWrapper.className = '_871cbca';
+            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
             const injectParent = document.createElement('div');
-            injectParent.className = 'aaff8b8f';
+            injectParent.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
             outerWrapper.appendChild(injectParent);
             document.body.appendChild(outerWrapper);
 

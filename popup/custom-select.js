@@ -18,7 +18,6 @@
     }
 
     // 防抖工具來自 utils/debounce.js（由 popup.html 於本檔之前載入）
-    const _debounce = DSSDebounce;
 
     function createPresetCustomSelect({
         triggerEl,
@@ -73,7 +72,7 @@
             _renderList();
         }
 
-        const _debouncedFilter = _debounce(_applyFilter, 400);
+        const _debouncedFilter = DSSDebounce(_applyFilter, 400);
 
         // ── Render ───────────────────────────────────────────────────
 

@@ -5,8 +5,7 @@
  * early — no prefix injection and no preventDefault(). This preserves the
  * browser's default new-line behavior on mobile devices.
  *
- * Detection logic (content-script.js ~line 432):
- *   navigator.maxTouchPoints > 0 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+ * Mobile is the form factor from the user agent (Android / iPhone / iPad / Mobi), not reported touch points: a Windows desktop that reports touch points is a desktop and its Enter MUST be intercepted and prefixed.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -21,6 +20,11 @@ const DESKTOP_UA =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
     '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+// Exact UA from the bug-report runtime log: a Windows desktop with no touch hardware that reports maxTouchPoints 10.
+const WINDOWS_TOUCH_EDGE_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0';
+
 const MOBILE_UA =
     'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 ' +
     '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
@@ -30,30 +34,17 @@ const MOBILE_UA =
 // ---------------------------------------------------------------------------
 
 /**
- * Override navigator.maxTouchPoints and navigator.userAgent for the duration
- * of a test. Returns a restore function.
+ * Override navigator.maxTouchPoints, navigator.userAgent and navigator.platform for the duration of a test. Returns a restore function.
  */
-function mockNavigator({ maxTouchPoints, userAgent }) {
-    const originalMaxTouchPoints = Object.getOwnPropertyDescriptor(Navigator.prototype, 'maxTouchPoints');
-    const originalUserAgent = Object.getOwnPropertyDescriptor(Navigator.prototype, 'userAgent');
+function mockNavigator({ maxTouchPoints, userAgent, platform = '' }) {
+    const fields = { maxTouchPoints, userAgent, platform };
+    for (const [key, value] of Object.entries(fields)) {
+        Object.defineProperty(navigator, key, { configurable: true, get: () => value });
+    }
 
-    Object.defineProperty(navigator, 'maxTouchPoints', {
-        configurable: true,
-        get: () => maxTouchPoints,
-    });
-
-    Object.defineProperty(navigator, 'userAgent', {
-        configurable: true,
-        get: () => userAgent,
-    });
-
+    // The overrides are own properties of the navigator instance; deleting them re-exposes the prototype getters.
     return function restore() {
-        if (originalMaxTouchPoints) {
-            Object.defineProperty(Navigator.prototype, 'maxTouchPoints', originalMaxTouchPoints);
-        }
-        if (originalUserAgent) {
-            Object.defineProperty(Navigator.prototype, 'userAgent', originalUserAgent);
-        }
+        for (const key of Object.keys(fields)) delete navigator[key];
     };
 }
 
@@ -128,17 +119,19 @@ describe('isMobileDevice Enter key guard', () => {
     });
 
     // -----------------------------------------------------------------------
-    // TC-2: Mobile — maxTouchPoints > 0 — Enter does NOT trigger injection
+    // TC-2: Windows desktop reporting touch points — touch points are not mobile — Enter IS intercepted and prefixed
     // -----------------------------------------------------------------------
-    it('TC-2 MOBILE (touch): Enter is NOT intercepted when maxTouchPoints=5', () => {
+    it('TC-2 DESKTOP WITH TOUCH POINTS: Enter is intercepted and the prefix injected on a Windows desktop reporting maxTouchPoints=10', () => {
         restoreNavigator = mockNavigator({
-            maxTouchPoints: 5,
-            userAgent: DESKTOP_UA,
+            maxTouchPoints: 10,
+            userAgent: WINDOWS_TOUCH_EDGE_UA,
+            platform: 'Win32',
         });
 
-        dispatchKeydown(textarea);
+        const ev = dispatchKeydown(textarea);
 
-        expect(preventDefaultSpy).not.toHaveBeenCalled();
+        expect(ev.defaultPrevented, 'the native send must be swallowed so the prefixed text is sent instead').toBe(true);
+        expect(textarea.value, 'the global default prompt must be injected in front of the user text').toMatch(/sys[\s\S]*hello world/);
     });
 
     // -----------------------------------------------------------------------

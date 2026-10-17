@@ -162,7 +162,6 @@
   // ============================================================
   //  Export to global scope
   // ============================================================
-  // Export: try both globalThis (vitest/happy-dom) and window (browser)
-  try { globalThis.dsI18n = i18n; } catch (_) {}
-  try { window.dsI18n = i18n; } catch (_) {}
+  // 匯出至全域（globalThis 在瀏覽器等同 window）
+  try { globalThis.dsI18n = i18n; } catch (_) {}
 })();

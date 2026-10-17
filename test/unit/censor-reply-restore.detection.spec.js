@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore } from '../helpers/censor-reply-restore-fixtures.js';
+import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * DOM inspection: censored-toolbar detection, toolbar lookup, and reading
@@ -14,25 +15,6 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
     beforeEach(resetCensorReplyRestore);
 
     describe('_isCensored()', () => {
-        // ── Legacy DOM helpers (.ds-icon-button) ───────────────────────────────
-
-        function createLegacyToolbar(btnStates) {
-            const toolbar = document.createElement('div');
-            toolbar.className = 'ds-flex';
-            for (let i = 0; i < btnStates.length; i++) {
-                const btn = document.createElement('button');
-                btn.className = 'ds-icon-button';
-                if (btnStates[i] === 'disabled') {
-                    btn.classList.add('ds-icon-button--disabled');
-                    btn.setAttribute('aria-disabled', 'true');
-                } else if (btnStates[i] === 'enabled-disabled') {
-                    btn.setAttribute('aria-disabled', 'true');
-                }
-                toolbar.appendChild(btn);
-            }
-            return toolbar;
-        }
-
         // ── New DOM helpers ([role="button"].ds-button.ds-button--icon) ────────
 
         /**
@@ -60,19 +42,6 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             }
             return toolbar;
         }
-
-        // ── Legacy DOM tests ───────────────────────────────────────────────────
-        // True parameter variation: same builder, same assertion, differing button states/expectation.
-
-        it.each([
-            ['returns true when buttons[1] and buttons[4] both have ds-icon-button--disabled + aria-disabled', ['enabled', 'disabled', 'enabled', 'enabled', 'disabled'], true],
-            ['returns false when button[1] is enabled', ['enabled', 'enabled', 'enabled', 'enabled', 'disabled'], false],
-            ['returns false when button[4] is enabled', ['enabled', 'disabled', 'enabled', 'enabled', 'enabled'], false],
-            ['returns false when there are fewer than 5 buttons', ['enabled', 'disabled', 'enabled'], false]
-        ])('(legacy) %s', (_name, btnStates, expected) => {
-            const toolbar = createLegacyToolbar(btnStates);
-            expect(CensorReplyRestore._isCensored(toolbar)).toBe(expected);
-        });
 
         // ── New DOM tests ──────────────────────────────────────────────────────
 
@@ -106,7 +75,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
          * Builds a virtual-list item containing an assistant message element
          * and optionally a separate toolbar sibling inside the same container.
          */
-        function buildVirtualItem({ toolbarClassName, buttonCount, useNewDom }) {
+        function buildVirtualItem({ toolbarClassName, buttonCount }) {
             const container = document.createElement('div');
             container.setAttribute('data-virtual-list-item-key', 'asst-1');
 
@@ -118,12 +87,8 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             toolbar.className = toolbarClassName;
             for (let i = 0; i < buttonCount; i++) {
                 const btn = document.createElement('div');
-                if (useNewDom) {
-                    btn.setAttribute('role', 'button');
-                    btn.className = 'ds-button ds-button--icon';
-                } else {
-                    btn.className = 'ds-icon-button';
-                }
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
                 toolbar.appendChild(btn);
             }
             container.appendChild(toolbar);
@@ -139,18 +104,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         it('(primary) finds .ds-flex._965abe9 container containing new-style ds-button children', () => {
             const { msgEl, toolbar } = buildVirtualItem({
                 toolbarClassName: 'ds-flex _965abe9 _54866f7',
-                buttonCount: 5,
-                useNewDom: true
-            });
-            const result = CensorReplyRestore._getToolbarGroup(msgEl);
-            expect(result).toBe(toolbar);
-        });
-
-        it('(primary) finds .ds-flex._965abe9 container containing legacy ds-icon-button children', () => {
-            const { msgEl, toolbar } = buildVirtualItem({
-                toolbarClassName: 'ds-flex _965abe9',
-                buttonCount: 5,
-                useNewDom: false
+                buttonCount: 5
             });
             const result = CensorReplyRestore._getToolbarGroup(msgEl);
             expect(result).toBe(toolbar);
@@ -159,8 +113,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         it('(fallback) finds .ds-flex with 5 new-style buttons when no .ds-flex._965abe9 exists', () => {
             const { msgEl, toolbar } = buildVirtualItem({
                 toolbarClassName: 'ds-flex some-other-class',
-                buttonCount: 5,
-                useNewDom: true
+                buttonCount: 5
             });
             const result = CensorReplyRestore._getToolbarGroup(msgEl);
             expect(result).toBe(toolbar);
@@ -169,8 +122,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
         it('(fallback) returns null when the only .ds-flex has fewer than 5 buttons', () => {
             const { msgEl } = buildVirtualItem({
                 toolbarClassName: 'ds-flex some-other-class',
-                buttonCount: 3,
-                useNewDom: true
+                buttonCount: 3
             });
             const result = CensorReplyRestore._getToolbarGroup(msgEl);
             expect(result).toBeNull();
@@ -199,7 +151,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             const userMsg = document.createElement('div');
             userMsg.className = 'ds-message';
             const userContent = document.createElement('div');
-            userContent.className = 'fbb737a4';
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent.textContent = userPromptText;
             userMsg.appendChild(userContent);
             userItem.appendChild(userMsg);
@@ -272,7 +224,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             const userMsg1 = document.createElement('div');
             userMsg1.className = 'ds-message';
             const userContent1 = document.createElement('div');
-            userContent1.className = 'fbb737a4';
+            userContent1.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent1.textContent = 'First user';
             userMsg1.appendChild(userContent1);
             user1.appendChild(userMsg1);
@@ -291,7 +243,7 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             const userMsg2 = document.createElement('div');
             userMsg2.className = 'ds-message';
             const userContent2 = document.createElement('div');
-            userContent2.className = 'fbb737a4';
+            userContent2.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
             userContent2.textContent = 'Second user';
             userMsg2.appendChild(userContent2);
             user2.appendChild(userMsg2);
@@ -315,5 +267,165 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
             document.body.appendChild(orphanMsg);
             expect(CensorReplyRestore._getPrecedingUserPromptKey(orphanMsg)).toBeNull();
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Mutant-killing boundary and fallback tests
+// ---------------------------------------------------------------------------
+
+describe('CensorReplyRestore — mutant-killing boundary tests', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    describe('_isCensored() — exactly 4 buttons boundary (kills < 5 → < 4 mutant)', () => {
+        it('returns false when toolbar has exactly 4 buttons with censored pattern positions', () => {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'ds-flex _965abe9 _54866f7';
+            // 4 buttons: [enabled, disabled, enabled, disabled]
+            // Even though buttons[1] is disabled, there are only 4 buttons total (< 5)
+            const states = ['enabled', 'disabled', 'enabled', 'disabled'];
+            for (const state of states) {
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
+                if (state === 'disabled') {
+                    btn.classList.add('ds-button--disabled');
+                }
+                toolbar.appendChild(btn);
+            }
+            expect(CensorReplyRestore._isCensored(toolbar)).toBe(false);
+        });
+    });
+
+    describe('_getToolbarGroup() — parentElement fallback path', () => {
+        it('finds toolbar via parentElement when no [data-virtual-list-item-key] ancestor exists', () => {
+            // messageEl has no virtual-list-item-key ancestor, so closest() returns null
+            // Falls back to messageEl.parentElement
+            const parent = document.createElement('div');
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'ds-message _63c77b1';
+            parent.appendChild(msgEl);
+
+            const toolbar = document.createElement('div');
+            toolbar.className = 'ds-flex _965abe9 _54866f7';
+            for (let i = 0; i < 5; i++) {
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
+                toolbar.appendChild(btn);
+            }
+            parent.appendChild(toolbar);
+            document.body.appendChild(parent);
+
+            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBe(toolbar);
+        });
+    });
+
+    describe('_getToolbarGroup() — exactly 4 icon buttons boundary (kills >= 5 → >= 4 mutant)', () => {
+        it('returns null when fallback .ds-flex has exactly 4 icon buttons', () => {
+            const container = document.createElement('div');
+            container.setAttribute('data-virtual-list-item-key', 'asst-boundary');
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'ds-message _63c77b1';
+            container.appendChild(msgEl);
+
+            // No _965abe9 toolbar, only a generic ds-flex with 4 buttons (below threshold)
+            const flex = document.createElement('div');
+            flex.className = 'ds-flex some-other-class';
+            for (let i = 0; i < 4; i++) {
+                const btn = document.createElement('div');
+                btn.setAttribute('role', 'button');
+                btn.className = 'ds-button ds-button--icon';
+                flex.appendChild(btn);
+            }
+            container.appendChild(flex);
+            document.body.appendChild(container);
+
+            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBeNull();
+        });
+    });
+
+    describe('_getPrecedingUserPromptKey() — skips non-message siblings', () => {
+        it('skips a non-message div between user and assistant items and still finds the user message', () => {
+            const container = document.createElement('div');
+            container.className = 'ds-virtual-list-visible-items';
+
+            // User item
+            const userItem = document.createElement('div');
+            userItem.setAttribute('data-virtual-list-item-key', 'user-1');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'ds-message';
+            const userContent = document.createElement('div');
+            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
+            userContent.textContent = 'User prompt here';
+            userMsg.appendChild(userContent);
+            userItem.appendChild(userMsg);
+            container.appendChild(userItem);
+
+            // Non-message sibling (e.g. a divider or ad injection)
+            const divider = document.createElement('div');
+            divider.setAttribute('data-virtual-list-item-key', 'divider-1');
+            // No .ds-message child inside
+            const innerDiv = document.createElement('div');
+            innerDiv.className = 'some-divider-class';
+            innerDiv.textContent = '---';
+            divider.appendChild(innerDiv);
+            container.appendChild(divider);
+
+            // Assistant item
+            const asstItem = document.createElement('div');
+            asstItem.setAttribute('data-virtual-list-item-key', 'asst-1');
+            const asstMsg = document.createElement('div');
+            asstMsg.className = 'ds-message _63c77b1';
+            asstItem.appendChild(asstMsg);
+            container.appendChild(asstItem);
+
+            document.body.appendChild(container);
+
+            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBe('User prompt here');
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Mutant-killing: _getToolbarGroup toolbar condition (kills toolbar → false on line 27)
+// ---------------------------------------------------------------------------
+
+describe('CensorReplyRestore — _getToolbarGroup toolbar condition mutant killer', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('returns the primary toolbar when it matches MESSAGE_TOOLBAR_SELECTOR but has fewer than 5 icon buttons', () => {
+        // The primary path (line 27) finds the toolbar via MESSAGE_TOOLBAR_SELECTOR (.ds-flex._965abe9).
+        // The fallback path (lines 31-34) requires >= 5 icon buttons in any .ds-flex.
+        // By giving the toolbar only 3 buttons, the fallback would NOT find it.
+        // With real code: primary selector finds it, if (toolbar) → return toolbar ✓
+        // With mutant (if (false)): primary skipped, fallback scans, 3 buttons < 5 → returns null ✗
+        const container = document.createElement('div');
+        container.setAttribute('data-virtual-list-item-key', 'asst-toolbar-mutant');
+
+        const msgEl = document.createElement('div');
+        msgEl.className = 'ds-message _63c77b1';
+        container.appendChild(msgEl);
+
+        // Toolbar matches primary selector but has only 3 icon buttons
+        const toolbar = document.createElement('div');
+        toolbar.className = 'ds-flex _965abe9';
+        for (let i = 0; i < 3; i++) {
+            const btn = document.createElement('div');
+            btn.setAttribute('role', 'button');
+            btn.className = 'ds-button ds-button--icon';
+            toolbar.appendChild(btn);
+        }
+        container.appendChild(toolbar);
+        document.body.appendChild(container);
+
+        const result = CensorReplyRestore._getToolbarGroup(msgEl);
+        expect(result).toBe(toolbar);
     });
 });

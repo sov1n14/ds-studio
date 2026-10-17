@@ -18,6 +18,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 import { evalPopupScript, readProjectFile } from '../helpers/popup-script-loader.js';
+import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
 
 const K = StorageManager.KEYS;
 
@@ -73,6 +74,7 @@ function makeDom(overrides = {}) {
         includeReferencesToggle: makeCheckbox(true),
         sidebarAutoHideToggle: makeCheckbox(false),
         hideThinkingToggle: makeCheckbox(false),
+        autoExpandMessagesToggle: makeCheckbox(false),
         showSystemTimeToggle: makeCheckbox(false),
         chatWidthToggle: makeCheckbox(false),
         chatWidthSlider: makeSlider('70'),
@@ -83,6 +85,9 @@ function makeDom(overrides = {}) {
         inputWidthValue: makeSpan('70%'),
         inputWidthSliderContainer: makeDiv(),
         preventAutoScrollToggle: makeCheckbox(false),
+        autoRetryToggle: makeCheckbox(false),
+        autoContinueToggle: makeCheckbox(false),
+        autoOpenSidebarToggle: makeCheckbox(false),
         websearchRadios: makeWebsearchRadios(),
         ...overrides,
     };
@@ -200,6 +205,9 @@ describe('createLiveSyncListener — simple toggle keys', () => {
         ['SIDEBAR_AUTO_HIDE', 'sidebarAutoHideToggle'],
         ['HIDE_THINKING', 'hideThinkingToggle'],
         ['PREVENT_AUTO_SCROLL', 'preventAutoScrollToggle'],
+        ['AUTO_EXPAND_MESSAGES', 'autoExpandMessagesToggle'],
+        ['AUTO_RETRY', 'autoRetryToggle'],
+        ['AUTO_CONTINUE', 'autoContinueToggle'],
     ];
 
     it.each(cases)('updates %s -> dom.%s checkbox', (keyName, domField) => {
@@ -313,6 +321,42 @@ describe('createLiveSyncListener — WEBSEARCH_TOGGLE radio group', () => {
 
         expect(dom.websearchRadios.find((r) => r.value === 'on').checked).toBe(true);
         expect(dom.websearchRadios.find((r) => r.value === 'off').checked).toBe(false);
+    });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// Group B3 — AUTO_OPEN_SIDEBAR ("isAutoOpenSidebarEnabled")
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('createLiveSyncListener — AUTO_OPEN_SIDEBAR', () => {
+    it.each([true, false])('a change of isAutoOpenSidebarEnabled to %s updates autoOpenSidebarToggle', (value) => {
+        const dom = makeDom({ autoOpenSidebarToggle: makeCheckbox(!value) });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ isAutoOpenSidebarEnabled: { oldValue: !value, newValue: value } }, 'local');
+
+        expect(dom.autoOpenSidebarToggle.checked).toBe(value);
+    });
+
+    it('unchecks autoOpenSidebarToggle when the key is removed (newValue undefined falls back to false)', () => {
+        const dom = makeDom({ autoOpenSidebarToggle: makeCheckbox(true) });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ isAutoOpenSidebarEnabled: { oldValue: true, newValue: undefined } }, 'local');
+
+        expect(dom.autoOpenSidebarToggle.checked).toBe(false);
+    });
+
+    it('leaves autoContinueToggle untouched (no cross-wiring)', () => {
+        const dom = makeDom({ autoOpenSidebarToggle: makeCheckbox(false), autoContinueToggle: makeCheckbox(false) });
+        const { ctx } = buildCtx({ dom });
+        const listener = startAndCapture(ctx);
+
+        listener({ isAutoOpenSidebarEnabled: { oldValue: false, newValue: true } }, 'sync');
+
+        expect(dom.autoOpenSidebarToggle.checked).toBe(true);
+        expect(dom.autoContinueToggle.checked).toBe(false);
     });
 });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -509,8 +553,11 @@ describe('createLiveSyncListener — preset list reload', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('createLiveSyncListener — chat preset map reload', () => {
+    // Durable chat-map layout as the SW writer leaves it; the popup is a client and cannot mutate the map directly.
+    const seedStoredMap = (map) => writeChatMapLayout([chrome.storage.sync, chrome.storage.local], K, [map]);
+
     it('reloads chatPresetMap when CHAT_PRESET_MAP_META changes', async () => {
-        await StorageManager.mutateChatPresetMap(() => ({ uuidA: 'p1' }));
+        await seedStoredMap({ uuidA: 'p1' });
 
         const { ctx, state } = buildCtx();
         useVirtualTime();
@@ -523,7 +570,7 @@ describe('createLiveSyncListener — chat preset map reload', () => {
     });
 
     it('reloads chatPresetMap when a chatPresetMap_* chunk key changes', async () => {
-        await StorageManager.mutateChatPresetMap(() => ({ uuidB: 'p2' }));
+        await seedStoredMap({ uuidB: 'p2' });
 
         const { ctx, state } = buildCtx();
         useVirtualTime();
@@ -672,7 +719,8 @@ describe('popup.js — Live Sync wiring block', () => {
             'sidebarAutoHideToggle', 'hideThinkingToggle',
             'chatWidthToggle', 'chatWidthSlider', 'chatWidthValue', 'chatWidthSliderContainer',
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
-            'preventAutoScrollToggle', 'websearchRadios',
+            'preventAutoScrollToggle', 'autoExpandMessagesToggle', 'websearchRadios',
+            'autoOpenSidebarToggle',
         ];
         for (const field of expectedDomFields) {
             expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));

@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { evalPopupScript } from '../helpers/popup-script-loader.js';
-import '../../utils/editor-window-constants.js';
+import '../../utils/message-constants.js';
 
 const BASE_URL = 'chrome-extension://EXTID/popup/editor/editor.html';
 const GLOBAL_KEY = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.global;
@@ -28,9 +28,9 @@ const PRESET_KEY = globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS.preset;
 
 beforeAll(() => {
     // popup.editor-window.js reads globalThis.DSS_EDITOR_WINDOW.STORAGE_KEYS behind a
-    // fail-fast throw, so utils/editor-window-constants.js MUST load first (matches
+    // fail-fast throw, so utils/message-constants.js MUST load first (matches
     // the runtime load order declared in popup.html).
-    evalPopupScript('utils/editor-window-constants.js');
+    evalPopupScript('utils/message-constants.js');
     evalPopupScript('popup/popup.editor-window.js');
     if (typeof window.__DS_PopupEditorWindow?.createEditorWindowManager !== 'function') {
         throw new Error('createEditorWindowManager was not exposed on window.__DS_PopupEditorWindow');

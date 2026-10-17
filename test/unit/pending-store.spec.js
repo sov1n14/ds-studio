@@ -4,6 +4,15 @@ import TemporaryChatPendingStore from '../../background/pending-store.js';
 const SYNC_KEY = 'dss-pending-deletes-sync';
 const LOCAL_OPEN_KEY = 'dss-open-temp-uuids';
 const LOCAL_TOKEN_KEY = 'dss-last-auth-token';
+const DEVICE_ID_KEY = globalThis.DSS_TEMP_CHAT.DSS_DEVICE_ID_KEY;
+
+// The device ID addPendingDelete generated and persisted in storage.local; asserted non-empty so a missing ownerDeviceId can never match an undefined read.
+async function readLocalDeviceId() {
+    const deviceId = (await chrome.storage.local.get(DEVICE_ID_KEY))[DEVICE_ID_KEY];
+    expect(typeof deviceId).toBe('string');
+    expect(deviceId).not.toBe('');
+    return deviceId;
+}
 
 describe('TemporaryChatPendingStore', () => {
     beforeEach(() => {
@@ -13,13 +22,14 @@ describe('TemporaryChatPendingStore', () => {
 
     // ── Group A: pending-delete sync queue ──────────────────────────────────
     describe('A — pending-delete sync queue', () => {
-        it('A1: addPendingDelete writes {chatUuid, attemptCount:0, lastActiveAt}', async () => {
+        it('A1: addPendingDelete writes {chatUuid, attemptCount:0, lastActiveAt, ownerDeviceId: local device ID}', async () => {
             vi.useFakeTimers({ toFake: ['Date'] });
             vi.setSystemTime(1700000000000);
             try {
                 await TemporaryChatPendingStore.addPendingDelete('uuid-1');
                 const queue = await TemporaryChatPendingStore.getPendingDeletes();
-                expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: 1700000000000 }]);
+                const ownerDeviceId = await readLocalDeviceId();
+                expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: 1700000000000, ownerDeviceId }]);
             } finally {
                 vi.useRealTimers();
             }
@@ -40,7 +50,8 @@ describe('TemporaryChatPendingStore', () => {
                 await TemporaryChatPendingStore.addPendingDelete('uuid-2');
                 await TemporaryChatPendingStore.removePendingDelete('uuid-1');
                 const queue = await TemporaryChatPendingStore.getPendingDeletes();
-                expect(queue).toEqual([{ chatUuid: 'uuid-2', attemptCount: 0, lastActiveAt: 1700000000000 }]);
+                const ownerDeviceId = await readLocalDeviceId();
+                expect(queue).toEqual([{ chatUuid: 'uuid-2', attemptCount: 0, lastActiveAt: 1700000000000, ownerDeviceId }]);
             } finally {
                 vi.useRealTimers();
             }
@@ -53,7 +64,8 @@ describe('TemporaryChatPendingStore', () => {
                 await TemporaryChatPendingStore.addPendingDelete('uuid-1');
                 await TemporaryChatPendingStore.removePendingDelete('does-not-exist');
                 const queue = await TemporaryChatPendingStore.getPendingDeletes();
-                expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: 1700000000000 }]);
+                const ownerDeviceId = await readLocalDeviceId();
+                expect(queue).toEqual([{ chatUuid: 'uuid-1', attemptCount: 0, lastActiveAt: 1700000000000, ownerDeviceId }]);
             } finally {
                 vi.useRealTimers();
             }
@@ -153,15 +165,20 @@ describe('TemporaryChatPendingStore', () => {
 
     // ── Group E: privacy — no token ever reaches sync storage ────────────────
     describe('E — privacy: sync storage never contains the auth token', () => {
-        it('E1: after trackForDeletion + setLastAuthToken, sync store contains only {chatUuid, attemptCount, lastActiveAt}', async () => {
+        it('E1: after trackForDeletion + setLastAuthToken, sync store entries carry only {chatUuid, attemptCount, lastActiveAt, ownerDeviceId} and no token', async () => {
             await TemporaryChatPendingStore.trackForDeletion('uuid-priv');
             await TemporaryChatPendingStore.setLastAuthToken('Bearer super-secret-token');
 
             const syncData = await chrome.storage.sync.get(null);
             const queue = syncData[SYNC_KEY];
             expect(Array.isArray(queue)).toBe(true);
+            expect(queue).toHaveLength(1);
+            // ownerDeviceId is the random local device UUID (not a credential), so it is the only field added to sync.
+            const ownerDeviceId = await readLocalDeviceId();
             queue.forEach((entry) => {
-                expect(Object.keys(entry).sort()).toEqual(['attemptCount', 'chatUuid', 'lastActiveAt']);
+                expect(Object.keys(entry).sort()).toEqual(['attemptCount', 'chatUuid', 'lastActiveAt', 'ownerDeviceId']);
+                expect(entry.ownerDeviceId).toBe(ownerDeviceId);
+                expect(entry.ownerDeviceId).not.toContain('super-secret-token');
             });
 
             // Deep-scan the whole sync store for the token string — must never appear.

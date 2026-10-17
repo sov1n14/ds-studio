@@ -47,6 +47,9 @@ const SidebarAutoHide = {
     _activeDropdownEl: null,
     _unregisterToggle: null,
     _domRetryCancel: null,
+    // 收合意圖：React 改寫 className 會抹除 COLLAPSED_CLASS，故另存意圖供 observer 還原
+    _wantsCollapsed: false,
+    _isPointerInside: false,
 
     getSidebar() {
         return document.querySelector(this.SIDEBAR_WRAPPER_SELECTOR);
@@ -73,6 +76,7 @@ const SidebarAutoHide = {
 
     handleMouseEnter() {
         if (!this.enabled) return;
+        this._isPointerInside = true;
         if (this.leaveTimer) {
             clearTimeout(this.leaveTimer);
             this.leaveTimer = null;
@@ -86,6 +90,7 @@ const SidebarAutoHide = {
 
     handleMouseLeave() {
         if (!this.enabled) return;
+        this._isPointerInside = false;
         if (this.enterTimer) {
             clearTimeout(this.enterTimer);
             this.enterTimer = null;
@@ -128,6 +133,9 @@ const SidebarAutoHide = {
     },
 
     disable() {
+        // 意圖狀態於啟用判斷前重設：未啟用時直接呼叫 collapse() 也不會殘留過期意圖
+        this._wantsCollapsed = false;
+        this._isPointerInside = false;
         if (!this.enabled) return;
         this.enabled = false;
 

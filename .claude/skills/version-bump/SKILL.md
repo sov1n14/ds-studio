@@ -43,6 +43,28 @@ The following change types are **not** considered code changes and therefore **d
 
 > **Rule of thumb**: If the change does not affect the runtime behavior of the final product, it is not a code change and no version bump is needed.
 
+## Pre-Bump Quality Gate
+
+Before finalizing a version bump, mutation testing must pass on the changed scope:
+
+| Timing | Command | Scope |
+|-|-|-|
+| Every version bump | `npx --prefix test stryker run test/stryker.config.json --mutate <touched-files-glob>` | Files changed in this commit |
+| Release or full audit | `npm run test:mutation --prefix test` | Full `utils/` + `content/` |
+
+A surviving mutant that the lead classifies as "weak assertion" must be killed (test-engineer) before the bump proceeds. Equivalent mutants (lead judgment) are acceptable.
+
+### Selector Health Check (Capture Sweep)
+
+Before finalizing a version bump, run the DOM capture sweep to verify selectors still match live DeepSeek elements:
+
+| Timing | Command | Expected |
+|-|-|-|
+| Every version bump | `node tools/capture.mjs && node tools/report.mjs` | No new zero-match selectors vs previous sweep |
+| After suspected DeepSeek build update | Same | Identifies rotated CSS hash classes |
+
+Runtime: ~60 seconds (headed browser required, uses persistent profile at `tools/.pw-profile/`). Review the report's "matched nowhere" list — any selector dropping to zero matches is a rotation candidate requiring update in `content/ds-selectors.js`.
+
 ## Verification Checklist
 
 Before marking a task complete, verify:

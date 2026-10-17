@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DS studio — Temporary Chat Fiber Delete (MAIN world script)
  * 單一職責：接收來自 ISOLATED world 的刪除請求，透過 React Fiber 尋找並呼叫 onDeleteSession。
  * 注入於 MAIN world，擁有存取頁面 React 實例的權限。
@@ -6,6 +6,7 @@
 (function () {
     'use strict';
 
+    // Cross-ref: ds-selectors.js SIDEBAR_WRAPPER_SELECTOR — update both on DeepSeek rebuild
     const SIDEBAR_SELECTOR = 'div.dc04ec1d';
 
     /**

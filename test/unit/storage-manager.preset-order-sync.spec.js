@@ -84,5 +84,20 @@ describe('Preset order sync — _pickPresetOrderByRecency & savePromptPresets or
             const result = await StorageManager._get([K.PRESET_INDEX]);
             expect(result[K.PRESET_INDEX]).toEqual(['b', 'a']);
         });
+
+        it('_get preserves local order when sync storage lacks PRESET_ORDER_META', async () => {
+            await chrome.storage.local.set({
+                [K.PRESET_INDEX]: ['x', 'y', 'z'],
+                [K.PRESET_ORDER_META]: { order: ['x', 'y', 'z'], orderUpdatedAt: 500 },
+            });
+            // sync has preset index but NO PRESET_ORDER_META key
+            await chrome.storage.sync.set({
+                [K.PRESET_INDEX]: ['z', 'y', 'x'],
+            });
+
+            const result = await StorageManager._get([K.PRESET_INDEX]);
+            // Fallback orderUpdatedAt is 0 < local 500, so local order wins
+            expect(result[K.PRESET_INDEX]).toEqual(['x', 'y', 'z']);
+        });
     });
 });

@@ -5,13 +5,10 @@
 (function (root) {
     'use strict';
 
-    const __DS_SwipeMobileDevice = globalThis.DSSMobileDevice
-        || (typeof require !== 'undefined' ? require('./mobile-device.js') : null);
-
     const bundle = {
     _onTouchStart(e) {
         if (!this.enabled) return;
-        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
+        if (!this._mobileDevice.isMobileDevice()) return;
 
         const touch = e.touches[0];
         if (!touch) return;
@@ -42,7 +39,7 @@
      */
     _onTouchMove(e) {
         if (!this.enabled) return;
-        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
+        if (!this._mobileDevice.isMobileDevice()) return;
         if (!this._startPoint) return;
 
         const touch = e.touches[0];
@@ -67,7 +64,7 @@
      */
     _onTouchEnd() {
         if (!this.enabled) return;
-        if (!__DS_SwipeMobileDevice.isMobileDevice()) return;
+        if (!this._mobileDevice.isMobileDevice()) return;
         if (!this._startPoint) return;
 
         const deltaX = this._deltaX;

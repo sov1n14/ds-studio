@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createWrapperWithoutNativeButton,
@@ -116,21 +117,27 @@ describe('GoToTop', () => {
             expect(GoToTop._scrollContainer).toBe(dsScrollArea);
         });
 
-        it('validates scrollHeight > clientHeight before caching .ds-scroll-area', () => {
+        it('returns and caches the .ds-scroll-area ancestor even when it does not overflow', () => {
+            // A short conversation fits without scrolling. The .ds-scroll-area is still
+            // the correct scroll container — non-overflow means "content is short", not
+            // "container is invalid". Mirrors harvest.spec.js's strategy-1 non-overflow case.
             const dsScrollArea = document.createElement('div');
             dsScrollArea.className = 'ds-scroll-area';
             Object.defineProperty(dsScrollArea, 'scrollHeight', { value: 100, configurable: true });
             Object.defineProperty(dsScrollArea, 'clientHeight', { value: 200, configurable: true });
             document.body.appendChild(dsScrollArea);
 
+            // Anchor is nested two levels deep so strategy 1 must actually traverse
+            // the ancestor chain rather than match on a single hop.
+            const messageRow = document.createElement('div');
+            dsScrollArea.appendChild(messageRow);
             const anchor = document.createElement('span');
-            document.body.appendChild(anchor);
+            messageRow.appendChild(anchor);
 
             GoToTop._scrollContainer = null;
-            const fallback = document.scrollingElement || document.documentElement;
             const result = GoToTop._findScrollContainer(anchor);
-            expect(result).toBe(fallback);
-            expect(GoToTop._scrollContainer).toBeNull();
+            expect(result).toBe(dsScrollArea);
+            expect(GoToTop._scrollContainer).toBe(dsScrollArea);
         });
 
         it('walks up from anchor to find overflow-y:auto ancestor', () => {
@@ -342,7 +349,7 @@ describe('GoToTop', () => {
 
         it('falls back to INJECT_PARENT_FALLBACK selector when .aaff8b8f is absent', () => {
             const outerWrapper = document.createElement('div');
-            outerWrapper.className = '_871cbca';
+            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
             const firstChild = document.createElement('div');
             const injectParent = document.createElement('div');
             outerWrapper.appendChild(firstChild);

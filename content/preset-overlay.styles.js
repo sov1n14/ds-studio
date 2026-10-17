@@ -40,7 +40,7 @@
         style.textContent = [
             /* 為 #dss-preset-overlay 建立 absolute 定位的 containing block；
                ._1551317 為新對話頁，刻意跳過以避免不必要掛載。 */
-            selectors.CHAT_HEADER_SELECTOR + ':not(._1551317){position:relative!important}',
+            selectors.CHAT_HEADER_SELECTOR + ':not(.' + selectors.NEW_CHAT_HEADER_MODIFIER_CLASS + '){position:relative!important}',
 
             /* overlay 容器基底定位：脫離 flow（absolute）+ 垂直置中。
                水平定位（left / width）由 reposition() 依 computePlacement 結果寫入 inline style。 */

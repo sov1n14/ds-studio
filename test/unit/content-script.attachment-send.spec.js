@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +60,7 @@ function makeInputArea(textareaValue, buttonInfo) {
 
     if (buttonInfo) {
         var actionsRow = document.createElement('div');
-        actionsRow.className = 'bf38813a';
+        actionsRow.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
         actionsRow.appendChild(buttonInfo.button);
         container.appendChild(actionsRow);
     }
@@ -221,5 +222,273 @@ describe('Send interception: attachment-only (empty textarea) via Enter keydown'
 
         expect(area.textarea.value).toBe('');
         expect(ev.defaultPrevented).toBe(false);
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// Scenario: attachment button vs send button discrimination
+// ---------------------------------------------------------------------------
+
+describe('Send interception: attachment button must not trigger injection', function () {
+    var cleanup;
+
+    beforeEach(function () {
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
+        contentScript.state.isShowSystemTime = false;
+    });
+
+    afterEach(function () {
+        if (cleanup) { cleanup(); cleanup = null; }
+    });
+
+    it('clicking the attachment button leaves the textarea unchanged (no prefix injected)', function () {
+        var row = document.createElement('div');
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
+
+        var attachBtn = document.createElement("div");
+        attachBtn.setAttribute("role", "button");
+        attachBtn.className = "ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25";
+        var attachBg = document.createElement("div");
+        attachBg.className = "ds-button__background";
+        var attachIconWrap = document.createElement("div");
+        attachIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var attachIconDiv = document.createElement("div");
+        attachIconDiv.className = "ds-icon";
+        var attachSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var attachPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        attachPathEl.setAttribute("d", "M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z");
+        attachSvg.appendChild(attachPathEl);
+        attachIconDiv.appendChild(attachSvg);
+        attachIconWrap.appendChild(attachIconDiv);
+        attachBtn.appendChild(attachBg);
+        attachBtn.appendChild(attachIconWrap);
+        attachBtn.tabIndex = 0;
+
+        var fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.style.display = 'none';
+
+        var sendWrapper = document.createElement("div");
+        sendWrapper.style.width = "fit-content";
+        var sendBtn = document.createElement("div");
+        sendBtn.setAttribute("role", "button");
+        sendBtn.className = "ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b bd74640a";
+        var sendBg = document.createElement("div");
+        sendBg.className = "ds-button__background";
+        var sendIconWrap = document.createElement("div");
+        sendIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var sendSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var sendPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        sendPathEl.setAttribute("d", "M8.3125 0.980206C8.66767 1.05312 8.97902 1.2042 9.2627 1.43235C9.48724 1.613 9.73029 1.85795 9.97949 2.10716L14.707 6.8347L13.293 8.24876L9 3.95579V15.0417H7V3.95579L2.70703 8.24876L1.29297 6.8347L6.02051 2.10716C6.26971 1.85795 6.51277 1.613 6.7373 1.43235C6.97662 1.23988 7.28445 1.04404 7.6875 0.980206C7.8973 0.947029 8.1031 0.955183 8.3125 0.980206Z");
+        sendSvg.appendChild(sendPathEl);
+        sendIconWrap.appendChild(sendSvg);
+        sendBtn.appendChild(sendBg);
+        sendBtn.appendChild(sendIconWrap);
+        sendWrapper.appendChild(sendBtn);
+
+        row.appendChild(attachBtn);
+        row.appendChild(fileInput);
+        row.appendChild(sendWrapper);
+
+        var container = document.createElement('div');
+        var textarea = document.createElement('textarea');
+        textarea.value = 'user message';
+        container.appendChild(textarea);
+        container.appendChild(row);
+        cleanup = mountInDocument(container);
+
+        var ev = dispatchClick(attachBtn);
+
+        expect(textarea.value).toBe('user message');
+        expect(ev.defaultPrevented).toBe(false);
+    });
+
+    it('clicking the send button from the same row still triggers injection', function () {
+        var row = document.createElement('div');
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
+
+        var attachBtn = document.createElement("div");
+        attachBtn.setAttribute("role", "button");
+        attachBtn.className = "ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25";
+        var attachBg = document.createElement("div");
+        attachBg.className = "ds-button__background";
+        var attachIconWrap = document.createElement("div");
+        attachIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var attachIconDiv = document.createElement("div");
+        attachIconDiv.className = "ds-icon";
+        var attachSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var attachPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        attachPathEl.setAttribute("d", "M5.5498 9.75V5H6.9502V9.75C6.9502 10.3299 7.4201 10.7998 8 10.7998C8.5799 10.7998 9.0498 10.3299 9.0498 9.75V4.5C9.0498 2.9536 7.7964 1.7002 6.25 1.7002C4.7036 1.7002 3.4502 2.9536 3.4502 4.5V9.75C3.4502 12.2629 5.4871 14.2998 8 14.2998C10.5129 14.2998 12.5498 12.2629 12.5498 9.75V4H13.9502V9.75C13.9502 13.0361 11.2861 15.7002 8 15.7002C4.71391 15.7002 2.0498 13.0361 2.0498 9.75V4.5C2.04981 2.1804 3.9304 0.299806 6.25 0.299805C8.5696 0.299805 10.4502 2.1804 10.4502 4.5V9.75C10.4502 11.1031 9.3531 12.2002 8 12.2002C6.6469 12.2002 5.5498 11.1031 5.5498 9.75Z");
+        attachSvg.appendChild(attachPathEl);
+        attachIconDiv.appendChild(attachSvg);
+        attachIconWrap.appendChild(attachIconDiv);
+        attachBtn.appendChild(attachBg);
+        attachBtn.appendChild(attachIconWrap);
+
+        var sendWrapper = document.createElement("div");
+        sendWrapper.style.width = "fit-content";
+        var sendBtn = document.createElement("div");
+        sendBtn.setAttribute("role", "button");
+        sendBtn.className = "ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b bd74640a";
+        var sendBg = document.createElement("div");
+        sendBg.className = "ds-button__background";
+        var sendIconWrap = document.createElement("div");
+        sendIconWrap.className = "ds-button__icon ds-button__icon--last-child";
+        var sendSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        var sendPathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        sendPathEl.setAttribute("d", "M8.3125 0.980206C8.66767 1.05312 8.97902 1.2042 9.2627 1.43235C9.48724 1.613 9.73029 1.85795 9.97949 2.10716L14.707 6.8347L13.293 8.24876L9 3.95579V15.0417H7V3.95579L2.70703 8.24876L1.29297 6.8347L6.02051 2.10716C6.26971 1.85795 6.51277 1.613 6.7373 1.43235C6.97662 1.23988 7.28445 1.04404 7.6875 0.980206C7.8973 0.947029 8.1031 0.955183 8.3125 0.980206Z");
+        sendSvg.appendChild(sendPathEl);
+        sendIconWrap.appendChild(sendSvg);
+        sendBtn.appendChild(sendBg);
+        sendBtn.appendChild(sendIconWrap);
+        sendWrapper.appendChild(sendBtn);
+
+        row.appendChild(attachBtn);
+        row.appendChild(sendWrapper);
+
+        var container = document.createElement('div');
+        var textarea = document.createElement('textarea');
+        textarea.value = 'user message';
+        container.appendChild(textarea);
+        container.appendChild(row);
+        cleanup = mountInDocument(container);
+
+        var ev = dispatchClick(sendSvg);
+
+        expect(textarea.value).toContain('<user-input>');
+        expect(textarea.value).toContain('user message');
+        expect(ev.defaultPrevented).toBe(true);
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// Bug regression: findSendButtonForTextarea returns null when attachment
+// button precedes send button in DOM order (Enter path)
+// ---------------------------------------------------------------------------
+
+describe('Regression: Enter path — attachment button preceding send button in DOM', function () {
+    var cleanup;
+
+    beforeEach(function () {
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
+        contentScript.state.isShowSystemTime = false;
+    });
+
+    afterEach(function () {
+        if (cleanup) { cleanup(); cleanup = null; }
+    });
+
+    it('BUG-1: Enter on empty textarea finds the send button even when attachment button comes first in DOM order', function () {
+        // Build a composer area where the attachment button (also div.ds-button[role=button])
+        // precedes the send button in DOM order — matching the real DeepSeek layout.
+        var container = document.createElement('div');
+        var textarea = document.createElement('textarea');
+        textarea.value = '';
+        container.appendChild(textarea);
+
+        var actionsRow = document.createElement('div');
+        actionsRow.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
+
+        // Attachment button: matches div.ds-button[role="button"] but has NO send icon SVG
+        var attachBtn = document.createElement('div');
+        attachBtn.setAttribute('role', 'button');
+        attachBtn.className = 'ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25';
+        var attachIconWrap = document.createElement('div');
+        attachIconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+        var attachIconDiv = document.createElement('div');
+        attachIconDiv.className = 'ds-icon';
+        var attachSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        var attachPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        // Paperclip icon — does NOT start with M8.3125
+        attachPath.setAttribute('d', 'M5.5498 9.75V5H6.9502V9.75');
+        attachSvg.appendChild(attachPath);
+        attachIconDiv.appendChild(attachSvg);
+        attachIconWrap.appendChild(attachIconDiv);
+        attachBtn.appendChild(attachIconWrap);
+
+        // Send button: matches div.ds-button[role="button"] AND has the send icon SVG
+        var sendWrapper = document.createElement('div');
+        sendWrapper.style.width = 'fit-content';
+        var sendBtn = document.createElement('div');
+        sendBtn.setAttribute('role', 'button');
+        sendBtn.className = 'ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b';
+        var sendIconWrap = document.createElement('div');
+        sendIconWrap.className = 'ds-button__icon ds-button__icon--last-child';
+        var sendSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        var sendPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        sendPath.setAttribute('d', 'M8.3125 0L16.625 8.3125L8.3125 16.625');
+        sendSvg.appendChild(sendPath);
+        sendIconWrap.appendChild(sendSvg);
+        sendBtn.appendChild(sendIconWrap);
+        sendWrapper.appendChild(sendBtn);
+
+        // Attachment button FIRST, then send button — this is the bug trigger
+        actionsRow.appendChild(attachBtn);
+        actionsRow.appendChild(sendWrapper);
+        container.appendChild(actionsRow);
+
+        cleanup = mountInDocument(container);
+        textarea.focus();
+
+        var ev = dispatchEnterKeydown(textarea);
+
+        // Expected: injection occurs (prefix injected into textarea)
+        // Actual (bug): findSendButtonForTextarea returns null because querySelector
+        // always finds the attachment button first, which fails isSendButtonCandidate
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).toBe('<system-reminder>\nsys\n</system-reminder>');
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// Bug regression: triple event cascade (pointerdown + mousedown + click)
+// causes double injection on attachment-only sends
+// ---------------------------------------------------------------------------
+
+describe('Regression: Click path — triple event cascade corrupts attachment-only injection', function () {
+    var cleanup;
+
+    beforeEach(function () {
+        Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
+        contentScript.state.isEnabled = true;
+        contentScript.state.globalDefaultPrompt = 'sys';
+        contentScript.state.isShowSystemTime = false;
+    });
+
+    afterEach(function () {
+        if (cleanup) { cleanup(); cleanup = null; }
+    });
+
+    it('BUG-2: pointerdown + mousedown + click on send button with empty textarea injects the prefix exactly once', function () {
+        var buttonInfo = makeSendButton({ disabled: false });
+        var area = makeInputArea('', buttonInfo);
+        cleanup = mountInDocument(area.container);
+
+        // A physical click fires pointerdown, mousedown, click synchronously.
+        // The isInjecting guard only activates during rAF, so all three events
+        // run their handler before any rAF callback fires.
+        var ev1 = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
+        buttonInfo.svg.dispatchEvent(ev1);
+
+        var ev2 = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        buttonInfo.svg.dispatchEvent(ev2);
+
+        var ev3 = new MouseEvent('click', { bubbles: true, cancelable: true });
+        buttonInfo.svg.dispatchEvent(ev3);
+
+        // The prefix should appear exactly once — not duplicated or wrapped
+        var expectedPrefix = '<system-reminder>\nsys\n</system-reminder>';
+        expect(area.textarea.value).toBe(expectedPrefix);
+
+        // Verify no double-wrapping: <user-input> must NOT appear
+        // (attachment-only sends don't wrap in <user-input>)
+        expect(area.textarea.value).not.toContain('<user-input>');
     });
 });

@@ -37,12 +37,12 @@
          */
         function handleAuthMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== globalThis.DSS_AUTH_CAPTURED_TYPE) return;
+            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_AUTH_CAPTURED_TYPE) return;
             state.capturedAuthToken = e.data.authorization || null;
             if (!e.data.authorization) return;
             // 委派 SW 的待刪佇列路由；fire-and-forget，失敗僅記錄
             Promise.resolve(chrome.runtime.sendMessage({
-                type: globalThis.DSS_MSG_SET_LAST_AUTH_TOKEN,
+                type: globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN,
                 token: e.data.authorization,
             }))
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })
@@ -55,7 +55,7 @@
          */
         function handleCreateMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== globalThis.DSS_CHAT_CREATE_MESSAGE_TYPE) return;
+            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_CHAT_CREATE_MESSAGE_TYPE) return;
             if (!readEnabledFlag()) return;
             state.createDetected = true;
             tracking.checkCoOccurrence();
@@ -67,7 +67,7 @@
          */
         function handleCompletionMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== globalThis.DSS_CHAT_COMPLETION_MESSAGE_TYPE) return;
+            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_CHAT_COMPLETION_MESSAGE_TYPE) return;
             if (!readEnabledFlag()) return;
             state.isCompletionDetected = true;
             tracking.checkCoOccurrence();
@@ -80,7 +80,7 @@
          */
         function handleHistoryNavMessage(e) {
             if (e.source !== window) return;
-            if (e.data?.type !== globalThis.DSS_HISTORY_NAV_TYPE) return;
+            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_HISTORY_NAV_TYPE) return;
             // 建構合成事件，使 handleNavigationEvent 可直接重用
             handleNavigationEvent({
                 destination: { url: e.data.url },
@@ -107,6 +107,11 @@
          */
         function handleNavigationEvent(event) {
             const destinationUrl = event.destination?.url || '';
+
+            // 匯出對話時 <a download> 點擊會觸發 navigate 事件，但使用者並未離開頁面。
+            // 透過 downloadRequest（瀏覽器標示檔案下載）或 blob: scheme 偵測，直接跳出避免誤刪。
+            const isDownload = event.downloadRequest != null || destinationUrl.startsWith('blob:');
+            if (isDownload) return;
             const isReload = (event.navigationType === 'reload');
             const isSameUrl = (destinationUrl === window.location.href);
             const isReloadOrSameUrl = isReload || isSameUrl;
@@ -120,6 +125,10 @@
             state.suppressNextUnloadDelete = isReload || state.isKeyboardRefresh;
             state.isKeyboardRefresh = false;
 
+            // 擴充功能 context 已失效時跳出刪除與追蹤分支，避免後續 chrome API 呼叫擲出。
+            // 刷新偵測必須在此之前完成：失效後的刷新仍需武裝 beforeunload 抑制旗標，否則會誤刪。
+            if (!chrome.runtime?.id) return;
+
             const fromUuid = extractUuidFromUrl();
 
             // 目的地 UUID：即使目的地 URL 與目前 URL 僅差異於 query/hash，
@@ -132,15 +141,17 @@
             if (isLeavingTracked) {
                 if (state.capturedAuthToken) {
                     deleteTrackedAndClear({ keepalive: false });
+                    return;
                 } else {
                     // 無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
                     handOffToServiceWorker(fromUuid);
+                    return;
                 }
             }
 
             // 標記新建立的臨時對話：有待定旗標且目的地是對話頁面
             if (state.isPendingCreate && readEnabledFlag()) {
-                const destinationUuid = extractUuidFromUrl(new URL(destinationUrl).pathname);
+                const destinationUuid = extractUuidFromUrl(destinationUrl);
                 if (destinationUuid) {
                     tracking.trackUuid(destinationUuid);
                 }
@@ -157,6 +168,14 @@
                 (e.metaKey && e.key.toLowerCase() === 'r')) {
                 state.isKeyboardRefresh = true;
             }
+        }
+
+        /**
+         * 失效 toast 發出的「刻意刷新」事件：武裝 beforeunload 抑制旗標。
+         * toast 的 location.reload() 不保證先觸發 navigate 事件，故需此獨立通道。
+         */
+        function handleIntentionalReload() {
+            state.suppressNextUnloadDelete = true;
         }
 
         /**
@@ -200,6 +219,7 @@
             handleWindowMessage,
             handleNavigationEvent,
             handleRefreshKeydown,
+            handleIntentionalReload,
             handleBeforeUnload,
             handleToggleChanged,
         };

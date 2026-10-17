@@ -1,67 +1,90 @@
 /**
- * Tests for StorageManager.pruneOrphanChatBindings — orphan chat-binding cleanup.
+ * pruneOrphanChatBindings under the single-writer design. Requirement: a client StorageManager calls pruneOrphanChatBindings() with no argument; the service worker reads dsPresetIndex from storage itself and drops every chat binding whose preset id is not in it. An empty index is a no-op (never a "drop everything"). Bindings with a falsy preset id are kept. initialize() on a client triggers the prune, and a failed prune dispatch only warns: initialize() still resolves and the settings still load.
  *
- * Contract under test (requirement, not implementation):
- *   1. initialize() drops every chatPresetMap entry whose preset id is absent
- *      from dsPresetIndex.
- *   2. Bindings pointing at a preset id still present in dsPresetIndex survive.
- *   3. The mutator performs NO storage write when nothing needs pruning.
+ * Real client and SW StorageManagers through the real background/chat-map-routes.js (test/helpers/chat-map-writer-harness.js); only chrome.storage and chrome.runtime messaging are doubled. Assertions read durable storage.sync end-state.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import StorageManager from '../../utils/storage-manager.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createChatMapWriterHarness, restoreChromeBoundaries, within, CONTEXT_INVALIDATED } from '../helpers/chat-map-writer-harness.js';
 
 const LIVE = { id: 'p-live', name: 'Live', content: 'c', createdAt: 1000, updatedAt: 1000 };
 
+let h;
+let client;
+
+beforeEach(async () => {
+    h = await createChatMapWriterHarness({ clientCount: 1 });
+    [client] = h.clients;
+});
+
 afterEach(() => {
+    restoreChromeBoundaries();
     vi.restoreAllMocks();
 });
 
-describe('pruneOrphanChatBindings via initialize()', () => {
-    it('removes chatPresetMap entries whose preset id is absent from dsPresetIndex', async () => {
-        await StorageManager.savePromptPresets([LIVE]);
-        await StorageManager.bindChatToPreset('uuid-orphan', 'p-deleted');
+describe('pruneOrphanChatBindings() dispatched to the SW writer', () => {
+    it('drops bindings whose preset id is absent from the stored dsPresetIndex and keeps the rest', async () => {
+        await h.seedPresetIndex(['p1', 'p2']);
+        await h.seedChatMap([{ a: 'p1', b: 'gone' }, { c: 'p2', d: 'gone' }]);
 
-        await StorageManager.initialize();
+        await client.pruneOrphanChatBindings();
 
-        const map = await StorageManager.getChatPresetMap();
-        expect(map['uuid-orphan']).toBeUndefined();
+        const stored = await h.readStored();
+        expect(stored.map).toEqual({ a: 'p1', c: 'p2' });
+        expect(h.layoutProblems(stored)).toEqual([]);
     });
 
-    it('keeps chatPresetMap entries whose preset id is still in dsPresetIndex', async () => {
-        await StorageManager.savePromptPresets([LIVE]);
-        await StorageManager.bindChatToPreset('uuid-live', LIVE.id);
-        await StorageManager.bindChatToPreset('uuid-orphan', 'p-deleted');
+    it('uses the index the SW reads from storage, not a list the caller passes', async () => {
+        await h.seedPresetIndex(['p1']);
+        await h.seedChatMap([{ a: 'p1', b: 'p-other' }]);
 
-        await StorageManager.initialize();
+        await client.pruneOrphanChatBindings(['p-other']);
 
-        expect(await StorageManager.getChatPresetMap()).toEqual({ 'uuid-live': LIVE.id });
+        expect((await h.readStored()).map).toEqual({ a: 'p1' });
+    });
+
+    it('an empty dsPresetIndex is a no-op: storage is left untouched', async () => {
+        await h.seedPresetIndex([]);
+        await h.seedChatMap([{ a: 'p1', b: 'gone' }]);
+        const before = await h.sync.get(null);
+
+        await client.pruneOrphanChatBindings();
+
+        expect(await h.sync.get(null)).toEqual(before);
+    });
+
+    it('keeps bindings whose preset id is falsy', async () => {
+        await h.seedPresetIndex(['p1']);
+        await h.seedChatMap([{ empty: '', nul: null, a: 'p1', b: 'gone' }]);
+
+        await client.pruneOrphanChatBindings();
+
+        expect((await h.readStored()).map).toEqual({ empty: '', nul: null, a: 'p1' });
     });
 });
 
-describe('pruneOrphanChatBindings — mutator write contract', () => {
-    it('writes nothing when every binding is still valid', async () => {
-        await StorageManager.savePromptPresets([LIVE]);
-        await StorageManager.bindChatToPreset('uuid-live', LIVE.id);
+describe('initialize() on a client', () => {
+    it('prunes orphan bindings through the SW', async () => {
+        await client.savePromptPresets([LIVE]);
+        await h.seedChatMap([{ 'uuid-live': LIVE.id, 'uuid-orphan': 'p-deleted' }]);
 
-        const syncSet = vi.spyOn(chrome.storage.sync, 'set');
-        const localSet = vi.spyOn(chrome.storage.local, 'set');
-        const syncRemove = vi.spyOn(chrome.storage.sync, 'remove');
+        await client.initialize();
 
-        await StorageManager.pruneOrphanChatBindings([LIVE.id]);
-
-        expect(syncSet).not.toHaveBeenCalled();
-        expect(localSet).not.toHaveBeenCalled();
-        expect(syncRemove).not.toHaveBeenCalled();
-        expect(await StorageManager.getChatPresetMap()).toEqual({ 'uuid-live': LIVE.id });
+        expect((await h.readStored()).map).toEqual({ 'uuid-live': LIVE.id });
     });
 
-    it('writes the pruned map when an orphan binding exists', async () => {
-        await StorageManager.savePromptPresets([LIVE]);
-        await StorageManager.bindChatToPreset('uuid-live', LIVE.id);
-        await StorageManager.bindChatToPreset('uuid-orphan', 'p-deleted');
+    it('resolves and still loads settings when the prune dispatch rejects', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        await client.savePromptPresets([LIVE]);
+        await client.saveActivePresetId(LIVE.id);
+        await h.seedChatMap([{ 'uuid-orphan': 'p-deleted' }]);
+        h.transport.failAlways('reject', CONTEXT_INVALIDATED);
 
-        await StorageManager.pruneOrphanChatBindings([LIVE.id]);
+        const outcome = await within(client.initialize(), 3000, 'initialize with a failing prune dispatch').then(() => 'resolved', (err) => err);
+        expect(outcome).toBe('resolved');
 
-        expect(await StorageManager.getChatPresetMap()).toEqual({ 'uuid-live': LIVE.id });
+        const settings = await client.getSettings();
+        expect(settings.activePresetId).toBe(LIVE.id);
+        expect(settings.promptPresets.map((p) => p.id)).toEqual([LIVE.id]);
+        expect((await h.readStored()).map, 'the failed prune must not have changed the map').toEqual({ 'uuid-orphan': 'p-deleted' });
     });
 });

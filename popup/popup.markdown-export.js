@@ -40,7 +40,7 @@ function createMarkdownExportManager(ctx) {
 
             // 內容腳本收到匯出指令後會同步回覆 ack；沒有 ack 代表分頁尚未注入內容腳本
             const ack = await DSSTabControl.sendToTab(activeTab.id, {
-                action: "EXPORT_MARKDOWN",
+                action: DSS_CONTENT_MSG.EXPORT_MARKDOWN,
                 includeThinking:   includeThinkingToggle   ? includeThinkingToggle.checked   : true,
                 includeReferences: includeReferencesToggle ? includeReferencesToggle.checked : true
             });

@@ -8,21 +8,23 @@
     const __DS_SwipeRetryUntil = globalThis.DSSRetryUntil
         || (typeof require !== 'undefined' ? require('./retry-until.js') : null);
 
+    const __Sel = (globalThis).DSstudio?.Selectors || {};
+
     const bundle = {
     _findButton() {
         // 主選擇器（開啟側邊欄按鈕）
         const primary = document.querySelector(
-            'div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]'
+            `div.${__Sel.DS_BUTTON_CAPSULE_CLASS}.${__Sel.DS_BUTTON_ICON_LABEL_PRIMARY_CLASS}[role="button"]`
         );
         if (primary) return primary;
 
         // 降級路徑：逐一嘗試各 class 組合
         const fallbacks = [
-            '.ds-button--capsule.ds-button--iconLabelPrimary',
-            '.ds-button--capsule.ds-button--icon',
-            '.ds-button--iconLabelPrimary.ds-button--icon',
-            '.ds-button--capsule[role="button"]',
-            '.ds-button--xl[role="button"]',
+            `.${__Sel.DS_BUTTON_CAPSULE_CLASS}.${__Sel.DS_BUTTON_ICON_LABEL_PRIMARY_CLASS}`,
+            `.${__Sel.DS_BUTTON_CAPSULE_CLASS}.ds-button--icon`,
+            `.${__Sel.DS_BUTTON_ICON_LABEL_PRIMARY_CLASS}.ds-button--icon`,
+            `.${__Sel.DS_BUTTON_CAPSULE_CLASS}[role="button"]`,
+            `.${__Sel.DS_BUTTON_XL_CLASS}[role="button"]`,
         ];
         for (const sel of fallbacks) {
             const el = document.querySelector(sel);
@@ -39,19 +41,19 @@
     _findCloseButton() {
         // 主選擇器：透過 :has(path[fill-rule]) 精準定位關閉按鈕（排除搜尋按鈕）
         const primary = document.querySelector(
-            'div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]:has(path[fill-rule])'
+            `div.${__Sel.DS_BUTTON_CAPSULE_CLASS}.${__Sel.DS_BUTTON_ICON_LABEL_TERTIARY_CLASS}[role="button"]:has(path[fill-rule])`
         );
         if (primary) return primary;
 
         // 降級路徑一：取最後一個 iconLabelTertiary 按鈕（關閉按鈕排在搜尋按鈕之後）
         const all = document.querySelectorAll(
-            'div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]'
+            `div.${__Sel.DS_BUTTON_CAPSULE_CLASS}.${__Sel.DS_BUTTON_ICON_LABEL_TERTIARY_CLASS}[role="button"]`
         );
         if (all.length > 1) return all[all.length - 1];
 
         // 降級路徑二：備用選擇器組合
         const fallback = document.querySelector(
-            '.ds-button--iconLabelTertiary.ds-button--icon:has(path[fill-rule])'
+            `.${__Sel.DS_BUTTON_ICON_LABEL_TERTIARY_CLASS}.ds-button--icon:has(path[fill-rule])`
         );
         if (fallback) return fallback;
 

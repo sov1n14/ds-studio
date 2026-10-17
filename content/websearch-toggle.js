@@ -149,7 +149,7 @@ const WebSearchToggle = {
     /** 於呼叫時解析相依模組，同時支援瀏覽器全域與單元測試的 require。 */
     _resolveDeps() {
         return {
-            messageTypes: globalThis.getSettingsMessageTypes(),
+            messageTypes: DSS_SETTINGS_MSG,
             featureToggle: globalThis.DSSFeatureToggle
                 || (typeof require !== 'undefined' ? require('./feature-toggle.js') : null),
         };
@@ -185,7 +185,7 @@ const WebSearchToggle = {
         try {
             const { messageTypes, featureToggle } = this._resolveDeps();
             if (!messageTypes || !featureToggle) {
-                throw new Error('content/websearch-toggle.js 需要 utils/settings-message-constants.js 與 content/feature-toggle.js 先行載入');
+                throw new Error('content/websearch-toggle.js 需要 utils/message-constants.js 與 content/feature-toggle.js 先行載入');
             }
 
             this._setupSettingsListener();

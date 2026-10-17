@@ -11,8 +11,9 @@
  * import) bound to that test's stubs -- same pattern as width-feature.spec.js.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 import '../../content/ds-selectors.js';
+const { THINK_BLOCK_CLASS, THINK_HEADER_TOGGLE_CLASS } = require('../../content/ds-selectors.js');
 import '../../utils/storage-manager.js';
 import StorageManager from '../../utils/storage-manager.js';
 
@@ -21,9 +22,9 @@ const OWN_KEY = StorageManager.KEYS.HIDE_THINKING;
 
 function createExpandedContainer() {
     const container = document.createElement('div');
-    container.className = '_74c0879';
+    container.className = THINK_BLOCK_CLASS;
     const header = document.createElement('div');
-    header.className = '_245c867';
+    header.className = THINK_HEADER_TOGGLE_CLASS;
     header.click = vi.fn(() => {
         // simulate DeepSeek toggling: remove think-content child to mark collapsed
         const content = container.querySelector('.ds-think-content');
@@ -38,9 +39,9 @@ function createExpandedContainer() {
 
 function createCollapsedContainer() {
     const container = document.createElement('div');
-    container.className = '_74c0879';
+    container.className = THINK_BLOCK_CLASS;
     const header = document.createElement('div');
-    header.className = '_245c867';
+    header.className = THINK_HEADER_TOGGLE_CLASS;
     header.click = vi.fn();
     container.appendChild(header);
     // No .ds-think-content child = collapsed
@@ -117,12 +118,36 @@ describe('HideThinking', () => {
         vi.restoreAllMocks();
     });
 
+    describe('isExpanded()', () => {
+        it('returns false for null input', () => {
+            expect(HideThinking.isExpanded(null)).toBe(false);
+        });
+
+        it('returns false for undefined input', () => {
+            expect(HideThinking.isExpanded(undefined)).toBe(false);
+        });
+
+        it('returns a strict boolean true (not merely truthy) for an expanded container', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            const result = HideThinking.isExpanded(container);
+            expect(result).toBe(true);
+        });
+
+        it('returns a strict boolean false (not merely falsy) for a collapsed container', () => {
+            const container = createCollapsedContainer();
+            document.body.appendChild(container);
+            const result = HideThinking.isExpanded(container);
+            expect(result).toBe(false);
+        });
+    });
+
     describe('tryCollapseButton()', () => {
         it('clicks an expanded button that is connected to the DOM', () => {
             const container = createExpandedContainer();
             document.body.appendChild(container);
             HideThinking.tryCollapseButton(container);
-            const header = container.querySelector('._245c867');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
             expect(header.click).toHaveBeenCalledOnce();
         });
 
@@ -130,14 +155,14 @@ describe('HideThinking', () => {
             const container = createCollapsedContainer();
             document.body.appendChild(container);
             HideThinking.tryCollapseButton(container);
-            const header = container.querySelector('._245c867');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
             expect(header.click).not.toHaveBeenCalled();
         });
 
         it('does not click when element is disconnected from DOM', () => {
             const container = createExpandedContainer();
             HideThinking.tryCollapseButton(container);
-            const header = container.querySelector('._245c867');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
             expect(header.click).not.toHaveBeenCalled();
         });
 
@@ -145,20 +170,27 @@ describe('HideThinking', () => {
             const container = createExpandedContainer();
             document.body.appendChild(container);
             container.dataset.htCollapsed = '1';
-            const header = container.querySelector('._245c867');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
             HideThinking.tryCollapseButton(container);
             expect(header.click).not.toHaveBeenCalled();
         });
 
         it('does not click when container has no header element', () => {
             const container = document.createElement('div');
-            container.className = '_74c0879';
+            container.className = THINK_BLOCK_CLASS;
             const content = document.createElement('div');
             content.className = 'ds-think-content';
             container.appendChild(content);
             document.body.appendChild(container);
             // No crash expected, no click expected
             expect(() => HideThinking.tryCollapseButton(container)).not.toThrow();
+        });
+
+        it('sets dataset.htCollapsed to exactly the string "1" after collapsing', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            HideThinking.tryCollapseButton(container);
+            expect(container.dataset.htCollapsed).toBe('1');
         });
     });
 
@@ -171,9 +203,9 @@ describe('HideThinking', () => {
 
             HideThinking.applyToExisting();
 
-            expect(expanded1.querySelector('._245c867').click).toHaveBeenCalledOnce();
-            expect(expanded2.querySelector('._245c867').click).toHaveBeenCalledOnce();
-            expect(collapsed.querySelector('._245c867').click).not.toHaveBeenCalled();
+            expect(expanded1.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+            expect(expanded2.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+            expect(collapsed.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).not.toHaveBeenCalled();
         });
     });
 
@@ -184,7 +216,84 @@ describe('HideThinking', () => {
             wrapper.appendChild(container);
             document.body.appendChild(wrapper);
             HideThinking.scanRoot(wrapper);
-            expect(container.querySelector('._245c867').click).toHaveBeenCalledOnce();
+            expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+        });
+
+        it('does not crash when passed a text node (non-Element)', () => {
+            const textNode = document.createTextNode('hello');
+            document.body.appendChild(textNode);
+            expect(() => HideThinking.scanRoot(textNode)).not.toThrow();
+        });
+
+        it('collapses an expanded container passed directly as root (self-match)', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            HideThinking.scanRoot(container);
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            expect(header.click).toHaveBeenCalledOnce();
+        });
+
+        it('does not treat root as a container when root lacks the container class', () => {
+            const root = document.createElement('div');
+            const thinkContent = document.createElement('div');
+            thinkContent.className = 'ds-think-content';
+            const header = document.createElement('div');
+            header.className = THINK_HEADER_TOGGLE_CLASS;
+            header.click = vi.fn();
+            root.appendChild(header);
+            root.appendChild(thinkContent);
+            document.body.appendChild(root);
+
+            HideThinking.scanRoot(root);
+
+            expect(header.click).not.toHaveBeenCalled();
+            expect(root.dataset.htCollapsed).toBeUndefined();
+        });
+    });
+
+    describe('restoreAll()', () => {
+        it('removes the data-ht-collapsed attribute from elements', () => {
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            HideThinking.tryCollapseButton(container);
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(true);
+
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            header.click.mockClear();
+
+            HideThinking.restoreAll();
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(false);
+        });
+
+        it('does not click header for elements disconnected during iteration', () => {
+            const container1 = createExpandedContainer();
+            const container2 = createExpandedContainer();
+            document.body.appendChild(container1);
+            document.body.appendChild(container2);
+
+            HideThinking.tryCollapseButton(container1);
+            HideThinking.tryCollapseButton(container2);
+
+            const header1 = container1.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            const header2 = container2.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            header1.click.mockClear();
+            header2.click.mockClear();
+
+            header1.click.mockImplementation(() => container2.remove());
+
+            HideThinking.restoreAll();
+
+            expect(header1.click).toHaveBeenCalledOnce();
+            expect(header2.click).not.toHaveBeenCalled();
+        });
+
+        it('does not throw when a marked container has no header child', () => {
+            const container = document.createElement('div');
+            container.setAttribute('data-ht-collapsed', '1');
+            document.body.appendChild(container);
+
+            expect(() => HideThinking.restoreAll()).not.toThrow();
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(false);
         });
     });
 
@@ -197,13 +306,13 @@ describe('HideThinking', () => {
 
             expect(HideThinking.enabled).toBe(true);
             expect(HideThinking._observer).not.toBeNull();
-            expect(container.querySelector('._245c867').click).toHaveBeenCalledOnce();
+            expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
         });
 
         it('disable() re-expands all blocks that were collapsed by enable()', () => {
             const container = createExpandedContainer();
             document.body.appendChild(container);
-            const header = container.querySelector('._245c867');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
 
             HideThinking.enable();
             expect(header.click).toHaveBeenCalledTimes(1); // collapsed by enable
@@ -221,7 +330,7 @@ describe('HideThinking', () => {
             const container = createExpandedContainer();
             document.body.appendChild(container);
             await new Promise((resolve) => setTimeout(resolve, 0));
-            expect(container.querySelector('._245c867').click).toHaveBeenCalledOnce();
+            expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
         });
 
         it('does not double-enable when enable() is called twice', () => {
@@ -240,8 +349,8 @@ describe('HideThinking', () => {
             HideThinking.enable();
 
             // Reset click counts after enable() has already clicked them
-            expandedContainer.querySelector('._245c867').click.mockClear();
-            newContainer.querySelector('._245c867').click.mockClear();
+            expandedContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click.mockClear();
+            newContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click.mockClear();
 
             // Simulate user manually re-expanding by adding back the .ds-think-content child.
             // This triggers a childList mutation, but the added node is .ds-think-content (not a
@@ -256,7 +365,7 @@ describe('HideThinking', () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // The re-expanded container should NOT be clicked again
-            expect(expandedContainer.querySelector('._245c867').click).not.toHaveBeenCalled();
+            expect(expandedContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).not.toHaveBeenCalled();
 
             // Now add a new container to verify the observer is still working for childList mutations
             const anotherContainer = createExpandedContainer();
@@ -264,7 +373,78 @@ describe('HideThinking', () => {
             await new Promise((resolve) => setTimeout(resolve, 0));
 
             // This new container SHOULD be clicked because it was added to the DOM
-            expect(anotherContainer.querySelector('._245c867').click).toHaveBeenCalledOnce();
+            expect(anotherContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+        });
+
+        it('sets enabled to true when enable() is called from disabled state', () => {
+            expect(HideThinking.enabled).toBe(false);
+            HideThinking.enable();
+            expect(HideThinking.enabled).toBe(true);
+        });
+
+        it('does not create a second observer when _startObserver is called again', () => {
+            HideThinking.enable();
+            const firstObserver = HideThinking._observer;
+            HideThinking._startObserver();
+            expect(HideThinking._observer).toBe(firstObserver);
+        });
+
+        it('observer skips scanRoot when enabled is set to false without stopping observer', async () => {
+            HideThinking.enable();
+            HideThinking.enabled = false;
+
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            expect(header.click).not.toHaveBeenCalled();
+        });
+
+        it('observer does not process text nodes as elements', async () => {
+            HideThinking.enable();
+            const scanRootSpy = vi.spyOn(HideThinking, 'scanRoot');
+            scanRootSpy.mockClear();
+
+            document.body.appendChild(document.createTextNode('just text'));
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(scanRootSpy).not.toHaveBeenCalled();
+            scanRootSpy.mockRestore();
+        });
+
+        it('observer fires callback when a child element is added (childList: true)', async () => {
+            HideThinking.enable();
+            const spy = vi.spyOn(HideThinking, 'scanRoot');
+            spy.mockClear();
+
+            const el = document.createElement('div');
+            document.body.appendChild(el);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(spy).toHaveBeenCalled();
+            spy.mockRestore();
+        });
+
+        it('does not throw when _stopObserver is called with no active observer', () => {
+            expect(HideThinking._observer).toBeNull();
+            expect(() => HideThinking._stopObserver()).not.toThrow();
+        });
+
+        it('disable() is a no-op when already disabled, leaving marked elements untouched', () => {
+            HideThinking.enable();
+            HideThinking.disable();
+            expect(HideThinking.enabled).toBe(false);
+
+            const container = createExpandedContainer();
+            document.body.appendChild(container);
+            container.setAttribute('data-ht-collapsed', '1');
+            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+
+            HideThinking.disable();
+
+            expect(container.hasAttribute('data-ht-collapsed')).toBe(true);
+            expect(header.click).not.toHaveBeenCalled();
         });
     });
 

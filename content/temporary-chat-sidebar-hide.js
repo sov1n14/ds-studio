@@ -13,11 +13,11 @@
 
     const STYLE_ID = 'ds-temp-chat-sidebar-hide-style';
     const HIDDEN_CLASS = 'ds-temp-chat-hidden';
-    const MSG_GET = globalThis.DSS_MSG_GET_PENDING_UUIDS;
-    const MSG_CHANGED = globalThis.DSS_MSG_PENDING_UUIDS_CHANGED;
+    const MSG_GET = globalThis.DSS_TEMP_CHAT.DSS_MSG_GET_PENDING_UUIDS;
+    const MSG_CHANGED = globalThis.DSS_TEMP_CHAT.DSS_MSG_PENDING_UUIDS_CHANGED;
     const GROUP_SELECTOR = _selectors.SIDEBAR_DATE_GROUP_SELECTOR;
     const CHAT_LINK_SELECTOR = _selectors.SIDEBAR_CHAT_LINK_SELECTOR;
-    const WRAPPER_SELECTOR = _selectors.SIDEBAR_WRAPPER_SELECTOR || 'div.dc04ec1d';
+    const WRAPPER_SELECTOR = _selectors.SIDEBAR_WRAPPER_SELECTOR;
 
     // 執行期狀態（僅存活於本分頁生命期）
     const queuedUuids = new Set();

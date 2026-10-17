@@ -5,7 +5,7 @@ import TemporaryChatPendingStore from '../../background/pending-store.js';
 const require = createRequire(import.meta.url);
 require('../../utils/temporary-chat-constants.js');
 
-const LEASE_TTL_MS = globalThis.LEASE_TTL_MS;
+const LEASE_TTL_MS = globalThis.DSS_TEMP_CHAT.LEASE_TTL_MS;
 
 async function flushOp(promise) {
     await vi.runAllTimersAsync();

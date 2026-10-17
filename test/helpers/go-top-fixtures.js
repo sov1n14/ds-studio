@@ -8,6 +8,7 @@ import { vi } from 'vitest';
 // before this line produces `ReferenceError: StorageManager is not defined`
 // at collection time.
 import '../../utils/storage-manager.js';
+import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 
 // ─── Shared fixture helpers ───────────────────────────────────────────────
@@ -19,9 +20,9 @@ import GoToTop from '../../content/go-top.js';
  */
 export function createWrapperWithoutNativeButton() {
     const outerWrapper = document.createElement('div');
-    outerWrapper.className = '_871cbca';
+    outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
     const injectParent = document.createElement('div');
-    injectParent.className = 'aaff8b8f';
+    injectParent.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
     const inputArea = document.createElement('div');
     injectParent.appendChild(inputArea);
     outerWrapper.appendChild(injectParent);
@@ -98,6 +99,7 @@ export function resetGoToTopState() {
     GoToTop._scrollPromise = null;
     GoToTop._scrollReject = null;
     GoToTop._observer = null;
+    if (GoToTop._wrapperObserver) GoToTop._wrapperObserver.disconnect();
     GoToTop._wrapperObserver = null;
     GoToTop._wrapperObserverTimer = null;
     GoToTop._scrollListener = null;

@@ -35,11 +35,11 @@ describe('popup.js slider debounce wiring — source assertions', () => {
     const code = getPopupCode();
 
     it('wires debouncedSaveChatWidth with a 500ms delay', () => {
-        expect(code).toMatch(/const debouncedSaveChatWidth = debounce\(async \(widthValue\) => \{[\s\S]*?\}, 500\);/);
+        expect(code).toMatch(/const debouncedSaveChatWidth = DSSDebounce\(async \(widthValue\) => \{[\s\S]*?\}, 500\);/);
     });
 
     it('wires debouncedSaveInputWidth with a 500ms delay', () => {
-        expect(code).toMatch(/const debouncedSaveInputWidth = debounce\(async \(widthValue\) => \{[\s\S]*?\}, 500\);/);
+        expect(code).toMatch(/const debouncedSaveInputWidth = DSSDebounce\(async \(widthValue\) => \{[\s\S]*?\}, 500\);/);
     });
 
     it('chatWidthSlider "input" handler is not wrapped by the debounce call', () => {

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
+import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
+import { waitForContentScriptBootstrap } from '../helpers/overlay-consistency-harness.js';
 
 const s = () => contentScript.state;
 
@@ -19,15 +21,13 @@ describe('pinned default preset preselection (new-chat path only)', () => {
         await chrome.storage.sync.set(item);
     }
 
+    // Durable chat-map layout as the SW writer leaves it (content scripts cannot mutate the map directly).
     async function seedBinding(uuid, presetId) {
-        await StorageManager.mutateChatPresetMap(map => {
-            map[uuid] = presetId;
-            return map;
-        });
+        await writeChatMapLayout([chrome.storage.sync, chrome.storage.local], StorageManager.KEYS, [{ [uuid]: presetId }]);
     }
 
     beforeEach(async () => {
-        await new Promise(r => setTimeout(r, 0));
+        await waitForContentScriptBootstrap();
         Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
 
         await chrome.storage.local.remove([

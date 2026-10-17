@@ -82,14 +82,13 @@ function buildScenario({ presets, activePresetId, confirmResult = true }) {
 
     const globalPromptToggle = makeCheckbox();
 
+    // Boundary stub following the client contract: unbindChatsForPresets(ids) resolves with the map left after dropping every binding to those ids.
     const PresetManagerStorageMock = {
         savePromptPresets: vi.fn().mockResolvedValue(undefined),
         saveActivePresetId: vi.fn().mockResolvedValue(undefined),
-        mutateChatPresetMap: vi.fn(async (mutator) => {
-            const map = { ..._chatPresetMap };
-            mutator(map);
-            _chatPresetMap = map;
-            return map;
+        unbindChatsForPresets: vi.fn(async (presetIds) => {
+            const ids = new Set(presetIds);
+            return Object.fromEntries(Object.entries(_chatPresetMap).filter(([, presetId]) => !ids.has(presetId)));
         }),
     };
 

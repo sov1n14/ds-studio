@@ -5,7 +5,7 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
     let SM;
 
     // The in-memory chrome.storage mock settles every read and write on its own
-    // setTimeout(0), and the write-lock queue chains one timer turn per link, so a
+    // setTimeout(0), and the chatPresetMap write queue chains one timer turn per link, so a
     // long queue (test 1 fires 50) drained on real timers cost seconds of wall clock
     // (~15ms per turn under happy-dom). drained() runs the whole pending timer chain
     // in virtual time - identical drain, no real clock. The argument promise is
@@ -19,6 +19,8 @@ describe('StorageManager write queue (promise-chain serialization)', () => {
         vi.resetModules();
         const mod = await import('../../utils/storage-manager.js');
         SM = mod.default ?? mod;
+        // chatPresetMap mutations are writer-only (service-worker role).
+        SM.enableChatMapWriterMode();
         vi.useFakeTimers();
     });
 

@@ -15,15 +15,19 @@
  * events dispatched on it, event.defaultPrevented, and the return value.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../content/ds-selectors.js';
+const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/prompt-injector.send-button.js';
 import '../../content/prompt-injector.controller.js';
 import {
     makeMobileSendButton,
+    makeActionsRowWithStopButton,
     makeEditSendButtonInContainer,
+    makeEditSendButtonStandalone,
     mountInDocument,
     dispatchClick,
+    dispatchPointerdown,
 } from '../helpers/send-button-fixtures.js';
 
 const { createPromptInjector } = globalThis.__DS_PromptInjector;
@@ -213,6 +217,24 @@ describe('injectPrefix success', () => {
         expect(ta.value).toBe('Current Time: STUB-TIME\n\n<system-reminder>\nGLOBAL\n</system-reminder>');
         expect(ta.value).not.toContain('<user-input>');
     });
+
+    it('fires an input event that bubbles', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const ta = makeTextarea('hello');
+        let inputBubbles = null;
+        ta.addEventListener('input', (e) => { inputBubbles = e.bubbles; });
+        injectPrefix(ta);
+        expect(inputBubbles).toBe(true);
+    });
+
+    it('fires a change event that bubbles', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const ta = makeTextarea('hello');
+        let changeBubbles = null;
+        ta.addEventListener('change', (e) => { changeBubbles = e.bubbles; });
+        injectPrefix(ta);
+        expect(changeBubbles).toBe(true);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -257,6 +279,15 @@ describe('injectPrefix re-injection', () => {
 
         expect(ta.value).toBe('<user-input>\nhello\n</user-input>');
     });
+
+    it('treats the entire value as raw text when </user-input> is not at string end (dollar anchor)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const ta = makeTextarea('<user-input>\nhello\n</user-input>\ntrailing');
+
+        injectPrefix(ta);
+
+        expect(ta.value).toContain('trailing');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -294,7 +325,7 @@ describe('send interception via click', () => {
         if (opts.disabled) button.classList.add('ds-button--disabled');
 
         const row = document.createElement('div');
-        row.className = 'bf38813a';
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
         row.appendChild(button);
 
         const inputArea = document.createElement('div');
@@ -345,6 +376,35 @@ describe('send interception via click', () => {
         expect(state.isInjecting).toBe(false);
     });
 
+    it('resets the injecting flag when rAF callback finds an empty textarea (React cleared input)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+
+        dispatchClick(svg);
+
+        // Simulate React re-render clearing the textarea before rAF fires
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        nativeSetter.call(textarea, '');
+
+        flushRaf();
+
+        expect(state.isInjecting).toBe(false);
+    });
+
+    it('resets the injecting flag when textarea is removed from DOM before rAF fires', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+
+        dispatchClick(svg);
+
+        // Simulate textarea being removed from DOM (querySelector returns null)
+        textarea.parentNode.removeChild(textarea);
+
+        flushRaf();
+
+        expect(state.isInjecting).toBe(false);
+    });
+
     it('does nothing while an injection is already in flight', () => {
         resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', isInjecting: true });
         const { textarea, svg } = mountComposer('hello');
@@ -377,6 +437,67 @@ describe('send interception via click', () => {
         expect(textarea.value).not.toContain('<user-input>');
     });
 
+        it('stopPropagation prevents parent listeners from firing on intercepted click', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+        let parentFired = false;
+        document.body.addEventListener('click', () => { parentFired = true; }, { once: true });
+        dispatchClick(svg);
+        expect(parentFired).toBe(false);
+    });
+
+    it('stopImmediatePropagation prevents other same-element capture listeners from firing', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+        let secondListenerFired = false;
+        document.addEventListener('click', () => { secondListenerFired = true; }, { capture: true, once: true });
+        dispatchClick(svg);
+        expect(secondListenerFired).toBe(false);
+    });
+
+    it('intercepts pointerdown on the send button the same as click', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+        const ev = dispatchPointerdown(svg);
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).toContain('<user-input>');
+    });
+
+    it('intercepts mousedown on the send button the same as click', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('hello');
+        const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        svg.dispatchEvent(ev);
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).toContain('<user-input>');
+    });
+
+    it('does not click the button when textarea becomes empty before rAF fires', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, button, svg } = mountComposer('hello');
+        const clickSpy = vi.spyOn(button, 'click');
+        dispatchClick(svg);
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        nativeSetter.call(textarea, '');
+        flushRaf();
+        expect(clickSpy).not.toHaveBeenCalled();
+        clickSpy.mockRestore();
+    });
+
+
+    it('resets the injecting flag when rAF callback finds whitespace-only textarea', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, button, svg } = mountComposer('hello');
+        const clickSpy = vi.spyOn(button, 'click');
+        dispatchClick(svg);
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        nativeSetter.call(textarea, '   ');
+        flushRaf();
+        expect(state.isInjecting).toBe(false);
+        expect(clickSpy).not.toHaveBeenCalled();
+        clickSpy.mockRestore();
+    });
+
     it('injects into the edit-window textarea when the edit Send button is clicked', () => {
         resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
         const { container, span, textarea } = makeEditSendButtonInContainer('edit message');
@@ -388,6 +509,69 @@ describe('send interception via click', () => {
         expect(textarea.value).toBe(
             '<system-reminder>\nGLOBAL\n</system-reminder>\n\n<user-input>\nedit message\n</user-input>'
         );
+    });
+
+
+    it('clicks the send button in the rAF callback after click interception', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { button, svg } = mountComposer('hello');
+        const clickSpy = vi.spyOn(button, 'click');
+        dispatchClick(svg);
+        flushRaf();
+        expect(clickSpy).toHaveBeenCalled();
+        clickSpy.mockRestore();
+    });
+
+    it('does not crash when click target has no send button ancestor', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const plain = document.createElement('div');
+        document.body.appendChild(plain);
+        expect(() => dispatchClick(plain)).not.toThrow();
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('does not crash when click handler finds no textarea for an edit send button', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { button, span } = makeEditSendButtonStandalone('');
+        cleanup = mountInDocument(button);
+
+        expect(() => dispatchClick(span)).not.toThrow();
+    });
+
+    it('treats whitespace-only textarea as empty for click handler text detection', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea, svg } = mountComposer('   ');
+
+        const ev = dispatchClick(svg);
+
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).not.toBe('   ');
+    });
+
+    it('lets a click on the Stop button through untouched: no injection, no suppression, no chat-creation mark', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { row, svg } = makeActionsRowWithStopButton();
+        const inputArea = document.createElement('div');
+        const textarea = makeTextarea('');
+        inputArea.appendChild(textarea);
+        inputArea.appendChild(row);
+        cleanup = mountInDocument(inputArea);
+
+        const ev = dispatchClick(svg);
+        flushRaf();
+
+        expect(textarea.value).toBe('');
+        expect(ev.defaultPrevented).toBe(false);
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('marks chat creation attempt for empty-textarea click with enabled send button', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { svg } = mountComposer('');
+
+        dispatchClick(svg);
+
+        expect(state.markCalls).toBe(1);
     });
 });
 
@@ -417,7 +601,7 @@ describe('send interception via Enter', () => {
     function mountComposer(value) {
         const { button } = makeMobileSendButton();
         const row = document.createElement('div');
-        row.className = 'bf38813a';
+        row.className = DSSelectors.SEND_BUTTON_ROW_CLASS;
         row.appendChild(button);
 
         const inputArea = document.createElement('div');
@@ -454,6 +638,77 @@ describe('send interception via Enter', () => {
         expect(state.markCalls).toBe(0);
     });
 
+        it('does not inject when isComposing is true (IME in progress)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+        const ev = dispatchEnter(textarea, { isComposing: true });
+        expect(ev.defaultPrevented).toBe(false);
+        expect(textarea.value).toBe('hello');
+        expect(state.markCalls).toBe(0);
+    });
+
+    /** Enter dispatched while navigator reports the given device; the overrides are own properties, deleted afterwards. */
+    function dispatchEnterOnDevice(textarea, device) {
+        for (const [key, value] of Object.entries(device)) {
+            Object.defineProperty(navigator, key, { configurable: true, get: () => value });
+        }
+        try {
+            return dispatchEnter(textarea);
+        } finally {
+            for (const key of Object.keys(device)) delete navigator[key];
+        }
+    }
+
+    it('does not inject on a real mobile device (Android Mobile UA with touch)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+        const ev = dispatchEnterOnDevice(textarea, {
+            maxTouchPoints: 5,
+            userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+            platform: 'Linux armv81',
+        });
+        expect(ev.defaultPrevented).toBe(false);
+        expect(textarea.value).toBe('hello');
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('injects on a Windows desktop that reports touch points (desktop Edge UA, maxTouchPoints 10) and marks the chat-creation attempt', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+        const ev = dispatchEnterOnDevice(textarea, {
+            maxTouchPoints: 10,
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0',
+            platform: 'Win32',
+        });
+        expect(ev.defaultPrevented, 'reported touch points alone must not route Enter to the native mobile path').toBe(true);
+        expect(textarea.value).toBe(
+            '<system-reminder>\nGLOBAL\n</system-reminder>\n\n<user-input>\nhello\n</user-input>'
+        );
+        expect(state.markCalls, 'the homepage send must arm the new-chat binding').toBe(1);
+    });
+
+    it('redispatchEnter fires a KeyboardEvent with correct properties', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+        let receivedEvent = null;
+        const handler = (e) => {
+            if (state.isInjecting) receivedEvent = e;
+        };
+        textarea.addEventListener('keydown', handler, { capture: true });
+        dispatchEnter(textarea);
+        const queued = rafQueue.splice(0, rafQueue.length);
+        queued.forEach(cb => cb(0));
+        expect(receivedEvent).not.toBeNull();
+        expect(receivedEvent.key).toBe('Enter');
+        expect(receivedEvent.code).toBe('Enter');
+        expect(receivedEvent.keyCode).toBe(13);
+        // which is deprecated and not implemented by happy-dom; skip assertion
+        expect(receivedEvent.bubbles).toBe(true);
+        expect(receivedEvent.cancelable).toBe(true);
+        expect(receivedEvent.composed).toBe(true);
+        textarea.removeEventListener('keydown', handler, { capture: true });
+    });
+
     it('ignores Enter while an injection is already in flight', () => {
         resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL', isInjecting: true });
         const { textarea } = mountComposer('hello');
@@ -462,5 +717,58 @@ describe('send interception via Enter', () => {
 
         expect(ev.defaultPrevented).toBe(false);
         expect(textarea.value).toBe('hello');
+    });
+
+    it('ignores non-Enter keys entirely', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('hello');
+
+        const ev = new KeyboardEvent('keydown', {
+            key: 'a', code: 'KeyA',
+            bubbles: true, cancelable: true,
+        });
+        textarea.dispatchEvent(ev);
+
+        expect(ev.defaultPrevented).toBe(false);
+        expect(textarea.value).toBe('hello');
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('does not inject when a non-textarea element has focus', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const div = document.createElement('div');
+        div.tabIndex = 0;
+        document.body.appendChild(div);
+        div.focus();
+
+        const ev = new KeyboardEvent('keydown', {
+            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+            bubbles: true, cancelable: true,
+        });
+        div.dispatchEvent(ev);
+
+        expect(ev.defaultPrevented).toBe(false);
+        expect(state.markCalls).toBe(0);
+    });
+
+    it('treats whitespace-only textarea as empty for Enter handler (trim detection)', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('   ');
+
+        const ev = dispatchEnter(textarea);
+
+        // With trim: whitespace = empty, attachment-only path injects prefix-only
+        // Without trim: whitespace = non-empty, injectPrefix inner trim catches it and returns false
+        expect(ev.defaultPrevented).toBe(true);
+        expect(textarea.value).not.toBe('   ');
+    });
+
+    it('marks chat creation attempt for empty textarea with enabled send button on Enter', () => {
+        resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
+        const { textarea } = mountComposer('');
+
+        dispatchEnter(textarea);
+
+        expect(state.markCalls).toBe(1);
     });
 });

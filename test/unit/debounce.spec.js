@@ -185,3 +185,59 @@ describe("utils/debounce.js — independence and return value", () => {
         expect(slow).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("utils/debounce.js — clearTimeout guard (mutant killer)", () => {
+    it("calling debounced twice rapidly clears the first timer so fn fires only once", () => {
+        const fn = vi.fn();
+        const debounced = debounce(fn, 200);
+
+        debounced("a");
+        debounced("b");
+
+        // After full delay, fn should have been called exactly once with last args
+        vi.advanceTimersByTime(200);
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn).toHaveBeenCalledWith("b");
+
+        // Wait another full window — no extra invocation from the first call
+        vi.advanceTimersByTime(200);
+        expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("first call's timer is genuinely cancelled, not just overridden", () => {
+        // If clearTimeout is removed (mutant: if(timer) → noop), both timers fire
+        const fn = vi.fn();
+        const debounced = debounce(fn, 100);
+
+        debounced("first");
+        vi.advanceTimersByTime(50);
+        debounced("second");
+
+        // At t=100 from start, the first timer would fire if not cleared
+        vi.advanceTimersByTime(50);
+        expect(fn).not.toHaveBeenCalled();
+
+        // At t=150 from start (100ms after second call), fn fires once
+        vi.advanceTimersByTime(50);
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn).toHaveBeenCalledWith("second");
+    });
+});
+
+describe("utils/debounce.js — CommonJS export (mutant killer)", () => {
+    it("module.exports is the same debounce function as globalThis.DSSDebounce", () => {
+        // In the test (Node/Vitest) environment, module.exports should be set
+        const exported = require("../../utils/debounce.js");
+        expect(exported).toBe(globalThis.DSSDebounce);
+    });
+
+    it("exported function produces a working debounced wrapper", () => {
+        const exported = require("../../utils/debounce.js");
+        const fn = vi.fn();
+        const debounced = exported(fn, 100);
+
+        debounced("test");
+        vi.advanceTimersByTime(100);
+        expect(fn).toHaveBeenCalledWith("test");
+    });
+});

@@ -8,9 +8,10 @@
  *     判定委派 content/mobile-device.js 的共用實作。
  *   - 以 _isHomepage() 防護所有生命週期函式。
  *   - 主開關閘控委派 content/feature-toggle.js 的共用管線（本功能無自身開關）。
- *   - MutationObserver 監聽 document.body 子樹變更，即時清除目標元素。
+ *   - MutationObserver 監聯 document.body 子樹變更，即時清除目標元素。
  */
 // 共用模組（瀏覽器：由 manifest 於前載入設定 globalThis；Node.js 測試：直接 require）
+// Stryker disable all: equivalent — module-loading shim, require path only exercised in Node test
 const __DS_CleanupMobileDevice = globalThis.DSSMobileDevice
     || (typeof require !== 'undefined' ? require('./mobile-device.js') : null);
 const __DS_CleanupFeatureToggle = globalThis.DSSFeatureToggle
@@ -22,6 +23,7 @@ if (!__DS_CleanupMobileDevice || !__DS_CleanupFeatureToggle) {
 // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
 const __DS_MobileHomepageSelectors = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+// Stryker restore all
 const MobileHomepageCleanup = {
     // === 狀態 ===
     enabled: false,
@@ -52,7 +54,7 @@ const MobileHomepageCleanup = {
     // ─────────────────────────────
 
     /**
-     * 啟動 MutationObserver，監聽 document.body 子樹變更。
+     * 啟動 MutationObserver，監聯 document.body 子樹變更。
      * 每次 DOM 異動後，若模組啟用且在首頁，立即清除目標元素。
      * 若 Observer 已存在則直接返回，避免重複建立。
      */
@@ -60,6 +62,7 @@ const MobileHomepageCleanup = {
         if (this._observer) return;
 
         this._observer = new MutationObserver(() => {
+            // Stryker disable next-line ConditionalExpression: equivalent — observer disconnected synchronously in disable(), guard is defense-in-depth
             if (!this.enabled) return;
             if (!this._isHomepage()) return;
             this._removeTargetElements();
@@ -106,6 +109,7 @@ const MobileHomepageCleanup = {
      * Guard：未啟用時直接返回。
      */
     disable() {
+        // Stryker disable next-line ConditionalExpression: equivalent — disable() when !enabled is safe no-op
         if (!this.enabled) return;
 
         this.enabled = false;
@@ -127,6 +131,7 @@ const MobileHomepageCleanup = {
      * 初始化模組：確認為行動裝置後，將主開關閘控交給共用管線。
      */
     start() {
+        // Stryker disable next-line ConditionalExpression: equivalent — enable() has identical isMobileDevice() guard
         if (!__DS_CleanupMobileDevice.isMobileDevice()) return;
 
         this._unregisterToggle = __DS_CleanupFeatureToggle.registerFeatureToggle({
@@ -140,6 +145,7 @@ const MobileHomepageCleanup = {
 MobileHomepageCleanup.start();
 
 // === Test export (no-op in browser) ===
+// Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = MobileHomepageCleanup;
 }
@@ -149,3 +155,4 @@ if (typeof window !== 'undefined') {
     window.DSstudio = window.DSstudio || {};
     window.DSstudio.MobileHomepageCleanup = MobileHomepageCleanup;
 }
+// Stryker restore all

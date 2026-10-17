@@ -18,7 +18,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import '../../utils/temporary-chat-constants.js';
 import StorageManager from '../../utils/storage-manager.js';
 import { resetStorageOnChangedListeners } from '../setup/vitest.setup.js';
-import '../../utils/settings-message-constants.js';
+import '../../utils/message-constants.js';
 import '../../background/settings-routes.js';
 
 const MSG = () => globalThis.DSS_SETTINGS_MSG;
@@ -239,7 +239,7 @@ describe('background/settings-routes', () => {
         it('forwards the temporary-chat enabled flag change from the local area', async () => {
             chrome.tabs.query.mockResolvedValue([{ id: 11 }]);
 
-            await change({ [globalThis.DSS_TEMP_CHAT_STORAGE_KEY]: { oldValue: false, newValue: true } }, 'local');
+            await change({ [globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY]: { oldValue: false, newValue: true } }, 'local');
 
             expect(chrome.tabs.sendMessage).toHaveBeenCalledTimes(1);
         });

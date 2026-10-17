@@ -112,6 +112,11 @@ describe('StorageManager CRUD (3.x scenarios)', () => {
     });
 
     describe('chatPresetMap bind/unbind — 3.3.x removal interaction', () => {
+        // bind/unbind mutate chatPresetMap, which is writer-only (service-worker role).
+        beforeEach(() => {
+            StorageManager.enableChatMapWriterMode();
+        });
+
         it('bindChatToPreset persists UUID→presetId mapping', async () => {
             await StorageManager.bindChatToPreset('uuid-1', 'preset-a');
             const settings = await StorageManager.getSettings();

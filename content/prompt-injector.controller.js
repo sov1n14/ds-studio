@@ -14,10 +14,12 @@
 
     // 共用 DOM 選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
     const selectors = root.DSstudio?.Selectors ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
     // 送出按鈕辨識部件（瀏覽器：prompt-injector.send-button.js 於前載入；Node.js 測試：直接 require）
     const sendButton = root.__DS_PromptInjectorSendButton ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./prompt-injector.send-button.js') : {});
 
     const {
@@ -30,6 +32,7 @@
 
     // 行動裝置判定共用工具（瀏覽器：content/mobile-device.js 於前載入；Node.js 測試：直接 require）
     const mobileDevice = root.DSSMobileDevice ||
+    // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./mobile-device.js') : {});
     const { isMobileDevice } = mobileDevice;
 
@@ -90,6 +93,7 @@
         // 攔截原始事件，改由本模組於注入完成後自行重送
         function suppressEvent(e) {
             e.preventDefault();
+            // Stryker disable next-line CallExpression: equivalent — stopImmediatePropagation on next line is a superset
             e.stopPropagation();
             e.stopImmediatePropagation();
         }
@@ -124,7 +128,7 @@
         function redispatchClick(button, capturedTextarea, isEditSendButton) {
             requestAnimationFrame(() => {
                 const ta = isEditSendButton ? capturedTextarea : document.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
-                if (!ta || ta.value.trim() === '') return;
+                if (!ta || ta.value.trim() === '') { ctx.setIsInjecting(false); return; }
                 ctx.setIsInjecting(true);
                 button.click();
                 ctx.setIsInjecting(false);
@@ -160,7 +164,7 @@
             document.addEventListener(eventType, (e) => {
                 if (ctx.getIsInjecting()) return;
 
-                // 同時比對桌面版（ds-icon-button）與行動版（ds-button）送出按鈕
+                // 比對送出按鈕（ds-button）
                 const button = e.target.closest(selectors.SEND_BUTTON_ROLE_SELECTOR);
                 if (!button) return;
 
@@ -177,6 +181,8 @@
                 if (!injectPrefix(textarea, isSendableWithoutText)) return;
                 if (!hasText) ctx.markChatCreationAttempt();
 
+                // 同步設定注入旗標，防止同一次實體點擊的後續事件（mousedown/click）重複注入
+                ctx.setIsInjecting(true);
                 suppressEvent(e);
                 redispatchClick(button, textarea, isEditSendButton);
             }, { capture: true });
@@ -185,6 +191,7 @@
         return { buildInjectionPrefix, injectPrefix };
     }
 
+    // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_PromptInjector = { createPromptInjector };
 
     if (typeof module !== 'undefined' && module.exports) {
@@ -192,3 +199,4 @@
     }
 
 })(globalThis);
+// Stryker restore all

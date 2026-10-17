@@ -11,4 +11,4 @@ In this repo's vitest setup (test/vitest config using Vite), `await import('../.
 
 **How to apply:** This is still a valid, observable red for TDD purposes (module genuinely does not exist) — report it as such, quoting the "Failed to resolve import ... Does the file exist?" line. Don't mistake "no tests ran, 1 suite failed" for a broken spec; check whether the failure reason is exactly "module not found" for the target production file before treating it as a test-authoring defect.
 
-See pattern used in [[editor-window-routes-spec]] (test/unit/editor-window-routes.spec.js), following test/unit/pending-store-routes.spec.js's capture-listener-via-addListener-spy idiom.
+See pattern used in [editor-window-routes.spec.js](../../../test/unit/editor-window-routes.spec.js), following test/unit/pending-store-routes.spec.js's capture-listener-via-addListener-spy idiom.

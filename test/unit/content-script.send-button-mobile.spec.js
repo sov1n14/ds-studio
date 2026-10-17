@@ -1,23 +1,17 @@
 /**
- * Regression tests for the send-button interception fix (mobile layout).
+ * Regression tests for the send-button interception (mobile layout).
  *
- * Bug: On mobile layout DeepSeek uses `div.ds-button[role="button"]` for the
- * send button, whereas desktop uses `div.ds-icon-button[role="button"]`.
- * The original selector only matched the desktop variant, so tapping the mobile
- * send button never triggered prefix injection.
+ * The send button selector targets div.ds-button[role="button"]. The former
+ * div.ds-icon-button variant is dead on the live page (matched zero elements).
  *
- * Fix: The selector in the pointerdown/mousedown/click handler was broadened to:
- *   e.target.closest('div.ds-icon-button[role="button"], div.ds-button[role="button"]')
- *
- * These tests verify that both variants are detected and that a non-send button
- * (missing the M8.3125 SVG path) is correctly ignored.
+ * These tests verify the surviving ds-button variant is detected and that a
+ * non-send button (missing the M8.3125 SVG path) is correctly ignored.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import {
-    makeDesktopSendButton,
     makeMobileSendButton,
     makeOtherButton,
     makeEditSendButtonInContainer,
@@ -51,20 +45,6 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
             cleanup = null;
         }
         textarea = null;
-    });
-
-    // -----------------------------------------------------------------------
-    // TC-1: Desktop send button (ds-icon-button) — must trigger injection
-    // -----------------------------------------------------------------------
-    it('TC-1 DESKTOP: tapping inner svg of ds-icon-button[role=button] triggers injection', () => {
-        const { button, svg } = makeDesktopSendButton();
-        cleanup = mountInDocument(button, textarea);
-
-        dispatchPointerdown(svg);
-
-        // After injection, textarea value must be wrapped
-        expect(textarea.value).toContain('<user-input>');
-        expect(textarea.value).toContain('hello world');
     });
 
     // -----------------------------------------------------------------------

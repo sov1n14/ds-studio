@@ -12,15 +12,33 @@
     let intervalId = null;
     let currentUuid = null;
 
+    /** 判斷錯誤是否源自擴充情境失效。 */
+    function isContextInvalidatedError(err) {
+        return Boolean(err?.message?.includes('Extension context invalidated'));
+    }
+
     /** 發送單次心跳；fire-and-forget，情境已卸載時吞掉錯誤僅記錄警告，絕不拋入計時器。 */
     function sendHeartbeat(chatUuid) {
-        const type = globalThis.DSS_MSG_HEARTBEAT;
+        const type = globalThis.DSS_TEMP_CHAT.DSS_MSG_HEARTBEAT;
         try {
             Promise.resolve(chrome.runtime.sendMessage({ type, uuid: chatUuid }))
-                .catch((err) => console.warn('[DSS] temporary-chat-heartbeat send:', err));
+                .catch((err) => {
+                    // 非同步 rejection 同樣可能源自情境失效：停止心跳並顯示 toast；其餘錯誤僅記錄警告、心跳續行
+                    if (isContextInvalidatedError(err)) {
+                        stop();
+                        globalThis.DSSInvalidationToast?.show();
+                    } else {
+                        console.warn('[DSS] temporary-chat-heartbeat send:', err);
+                    }
+                });
         } catch (err) {
-            console.warn('[DSS] temporary-chat-heartbeat send:', err);
-            stop();
+            // 與非同步路徑一致：情境失效時停止心跳並顯示 toast；其餘錯誤僅記錄警告、心跳續行
+            if (isContextInvalidatedError(err)) {
+                stop();
+                globalThis.DSSInvalidationToast?.show();
+            } else {
+                console.warn('[DSS] temporary-chat-heartbeat send:', err);
+            }
         }
     }
 
@@ -42,10 +60,10 @@
 
         stop();
         currentUuid = chatUuid;
-        sendHeartbeat(chatUuid);
-
-        const intervalMs = globalThis.HEARTBEAT_INTERVAL_MS;
+        // 先設定計時器再首發：首發若因情境失效而 stop()，計時器會一併被清除，不會殘留以 null UUID 發送
+        const intervalMs = globalThis.DSS_TEMP_CHAT.HEARTBEAT_INTERVAL_MS;
         intervalId = setInterval(() => sendHeartbeat(currentUuid), intervalMs);
+        sendHeartbeat(chatUuid);
     }
 
     /** 停止心跳並忘記當前 UUID；未執行中時呼叫亦安全。 */

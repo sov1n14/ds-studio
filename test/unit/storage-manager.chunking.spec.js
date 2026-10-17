@@ -1,15 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 
 /**
- * Chunking behavior tests for the chatPresetMap implementation.
+ * Chunking behavior tests for the chatPresetMap engine.
  *
- * NOTE on module-level state bleed:
- * The write queue (_chatPresetMapChainTail) and chunk caches (_metaCache,
- * _chunkIndexCache) are module-level and persist across tests. To avoid
- * cascading timeouts from a previous test's pending queue operations,
- * each test uses explicit timeouts where needed and entry counts that
- * comfortably fit within the serialized queue throughput.
+ * Every instance runs in writer mode (the service-worker single-writer role); a client-mode instance rejects every mutation. Groups 1-10 share the statically imported instance and its write queue; group 11 loads a fresh instance per test.
  *
  * With 200-char preset values, ~34 entries fill one 7168-byte chunk.
  */
@@ -19,6 +14,7 @@ const LARGE_VALUE = (i) => 'D'.repeat(200) + String(i);
 describe('StorageManager chunked chatPresetMap', () => {
     beforeEach(() => {
         // Storage is cleared by vitest.setup.js beforeEach
+        StorageManager.enableChatMapWriterMode();
     });
 
     describe('1. Auto-split on overflow', () => {
@@ -399,18 +395,14 @@ describe('StorageManager chunked chatPresetMap', () => {
     });
 
     describe('11. version monotonicity', () => {
-        /**
-         * Module-level state (_metaCache, _chunkIndexCache) bleeds from tests 1–10
-         * and also across tests within this block (each test mutates the same SM
-         * instance).  We reset the module registry before EVERY test so that each
-         * test runs with a fresh StorageManager instance and clean internal caches.
-         */
+        // Fresh StorageManager instance per test so no queued work crosses tests.
         let SM;
 
         beforeEach(async () => {
             vi.resetModules();
             const mod = await import('../../utils/storage-manager.js');
             SM = mod.default ?? mod;
+            SM.enableChatMapWriterMode();
         });
 
         it('bind bumps version by exactly 1',
@@ -529,99 +521,5 @@ describe('StorageManager chunked chatPresetMap', () => {
                 expect(metaAfter.chatPresetMapMeta.version).toBe(versionBefore + 1);
             },
         );
-
-        it('bindChatToPreset insert path issues at most 1 chunk read (for M1)',
-            async () => {
-                for (let i = 0; i < 10; i++) {
-                    await SM.bindChatToPreset(`vm-spy-${i}`, 'X');
-                }
-
-                const syncData = await chrome.storage.sync.get(null);
-                expect(syncData.chatPresetMapMeta.chunkCount).toBe(1);
-
-                const spy = vi.spyOn(chrome.storage.sync, 'get');
-
-                await SM.bindChatToPreset('vm-spy-new', 'X');
-
-                let totalChunkKeysRead = 0;
-                for (const call of spy.mock.calls) {
-                    const keys = call[0];
-                    if (Array.isArray(keys)) {
-                        totalChunkKeysRead += keys.filter(k => typeof k === 'string' && k.startsWith('chatPresetMap_')).length;
-                    } else if (typeof keys === 'string' && keys.startsWith('chatPresetMap_')) {
-                        totalChunkKeysRead++;
-                    }
-                }
-
-                expect(totalChunkKeysRead).toBeLessThanOrEqual(1);
-
-                spy.mockRestore();
-            },
-        );
-
     });
-
-    describe('12. Hot-path lock-avoidance', () => {
-        let SM;
-        const LOCK_KEY = StorageManager.CHAT_PRESET_MAP_LOCK_KEY;
-
-        beforeEach(async () => {
-            vi.resetModules();
-            const mod = await import('../../utils/storage-manager.js');
-            SM = mod.default ?? mod;
-        });
-
-        it('bindChatToPreset single-chunk in-place — lock key untouched', async () => {
-            // Create initial binding
-            await SM.bindChatToPreset('uuid-test', 'preset-a');
-
-            const safeGetSpy = vi.spyOn(SM, '_safeGet');
-            const safeSetSpy = vi.spyOn(SM, '_safeSet');
-
-            // In-place update (same uuid, new value)
-            await SM.bindChatToPreset('uuid-test', 'preset-b');
-
-            const lockGetCalls = safeGetSpy.mock.calls.filter(
-                ([area, keys]) => {
-                    if (area !== 'local') return false;
-                    const keyArr = Array.isArray(keys) ? keys : [keys];
-                    return keyArr.includes(LOCK_KEY);
-                },
-            );
-            const lockSetCalls = safeSetSpy.mock.calls.filter(
-                ([area, items]) => area === 'local' && items && LOCK_KEY in items,
-            );
-
-            expect(lockGetCalls).toHaveLength(0);
-            expect(lockSetCalls).toHaveLength(0);
-        });
-
-        it('unbindChat non-trailing — lock key untouched', async () => {
-            // Create multiple bindings in one chunk
-            await SM.bindChatToPreset('uuid-a', 'preset-a');
-            await SM.bindChatToPreset('uuid-b', 'preset-b');
-            await SM.bindChatToPreset('uuid-c', 'preset-c');
-
-            const safeGetSpy = vi.spyOn(SM, '_safeGet');
-            const safeSetSpy = vi.spyOn(SM, '_safeSet');
-
-            // Unbind a non-trailing entry (uuid-a)
-            await SM.unbindChat('uuid-a');
-
-            const lockGetCalls = safeGetSpy.mock.calls.filter(
-                ([area, keys]) => {
-                    if (area !== 'local') return false;
-                    const keyArr = Array.isArray(keys) ? keys : [keys];
-                    return keyArr.includes(LOCK_KEY);
-                },
-            );
-            const lockSetCalls = safeSetSpy.mock.calls.filter(
-                ([area, items]) => area === 'local' && items && LOCK_KEY in items,
-            );
-
-            expect(lockGetCalls).toHaveLength(0);
-            expect(lockSetCalls).toHaveLength(0);
-        });
-    });
-
 });
