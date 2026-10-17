@@ -226,6 +226,8 @@
                         .then(syncMapFromStorage, err => {
                             console.error('[DSS] preset-overlay onSelectChange: chatPresetMap 持久化失敗，回滾:', err);
                             return syncMapFromStorage().then(map => {
+                                // 失敗可能在使用者已導覽至其他對話後才抵達：此時僅更新 map，不得改寫新對話的顯示與 activePresetId
+                                if (ctx.getCurrentChatUuid() !== currentChatUuid) return;
                                 const storedId = map?.[currentChatUuid] || '';
                                 this.updateActiveId(storedId);
                                 // 失敗的選擇不得殘留為 activePresetId：還原為儲存中的綁定

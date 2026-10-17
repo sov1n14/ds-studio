@@ -208,7 +208,7 @@ The chat→preset binding map (`chatPresetMap_<n>` chunks, `chatPresetMapMeta`, 
 - A synchronous throw from `chrome.runtime.sendMessage` is converted into a rejection.
 - "Receiving end does not exist" (the message was not delivered because the worker had no listener yet) is retried exactly once after ~100 ms (`NO_RECEIVER_RETRY_DELAY_MS`). Any other transport error, such as a closed port, rejects without retry, because the message may already have been applied.
 - Each send times out after 10 s (`SEND_TIMEOUT_MS`) and rejects.
-- The page overlay (`preset-overlay.controller.js`) updates its in-memory map optimistically, then overwrites it with `getChatPresetMap()` after the write settles; on rejection it re-reads the map, re-renders the selected preset, and recomputes the injection prefix, rolling the optimistic change back.
+- The page overlay (`preset-overlay.controller.js`) updates its in-memory map optimistically, then overwrites it with `getChatPresetMap()` after the write settles; on rejection it re-reads the map, re-renders the selected preset, and recomputes the injection prefix, rolling the optimistic change back; if the user has left that chat by the time the rejection arrives, it only refreshes the in-memory map.
 - `initialize()` logs a warning (`init:migrate-legacy-failed`, `init:prune-orphans-failed`) and continues when the migrate or prune dispatch fails.
 - `content/content-script.js` logs a failed initial `ChatBinding.handleChatChange()` and still wires navigation detection and the body observer.
 - `retrySync()` logs `sync:republish-parked-failed` when the republish dispatch fails; the keys stay parked for the next retry.

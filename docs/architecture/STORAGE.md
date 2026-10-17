@@ -208,7 +208,7 @@ flowchart TB
 - `chrome.runtime.sendMessage` 的同步拋出會轉為拒絕。
 - 「Receiving end does not exist」（訊息未送達，因為 worker 當時尚無監聽器）會在約 100 ms 後恰好重試一次（`NO_RECEIVER_RETRY_DELAY_MS`）。其他任何傳輸錯誤（例如 port 已關閉）直接拒絕、不重試，因為該訊息可能已被套用。
 - 每次傳送在 10 秒（`SEND_TIMEOUT_MS`）後逾時並拒絕。
-- 頁面覆蓋層（`preset-overlay.controller.js`）先樂觀更新其記憶體內的 map，待寫入完成後再以 `getChatPresetMap()` 覆寫；被拒絕時會重新讀取 map、重新渲染所選提示詞組並重新計算注入前綴，藉此回滾樂觀變更。
+- 頁面覆蓋層（`preset-overlay.controller.js`）先樂觀更新其記憶體內的 map，待寫入完成後再以 `getChatPresetMap()` 覆寫；被拒絕時會重新讀取 map、重新渲染所選提示詞組並重新計算注入前綴，藉此回滾樂觀變更；拒絕抵達時若使用者已離開該對話，則只更新記憶體內的 map。
 - migrate 或 prune 分派失敗時，`initialize()` 記錄警告（`init:migrate-legacy-failed`、`init:prune-orphans-failed`）並繼續執行。
 - `content/content-script.js` 會記錄初始 `ChatBinding.handleChatChange()` 的失敗，並仍接上導航偵測與 body 觀察器。
 - republish 分派失敗時，`retrySync()` 記錄 `sync:republish-parked-failed`；這些鍵保持擱置，等待下一次重試。

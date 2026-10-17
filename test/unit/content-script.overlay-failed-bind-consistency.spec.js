@@ -10,7 +10,9 @@
  * Timing that matters for the unbound-chat cases: the overlay recomputes the prefix optimistically at click time, and that recompute reads settings through chrome.storage (one macrotask per read in the in-memory fake). The immediate transports below return their failure within microtasks, so the rollback settles while the optimistic read is still in flight -- the order observed live.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GLOBAL, preset, settle, transports, FAILURE_MODES, storedMap, shownLabel, shownValue, clickOption, storedActivePresetId, injected, navigateTo, unrelatedPresetEditArrives, setUpOverlayScenario, openChat } from '../helpers/overlay-consistency-harness.js';
+import { GLOBAL, preset, settle, transports, FAILURE_MODES, storedMap, shownLabel, shownValue, clickOption, storedActivePresetId, injected, navigateTo, unrelatedPresetEditArrives, setUpOverlayScenario, openChat, contentScript, flush } from '../helpers/overlay-consistency-harness.js';
+import { PORT_CLOSED } from '../helpers/chat-map-writer-harness.js';
+import { setPathname } from '../helpers/set-pathname.js';
 
 const CHAT_X = '11111111-1111-1111-1111-111111111111';
 const CHAT_Y = '22222222-2222-2222-2222-222222222222';
@@ -160,6 +162,66 @@ describe('overlay selection vs injected prefix after a chat-map write from the o
         expect(chrome.runtime.sendMessage, 'guard: the bind must actually have been dispatched').toHaveBeenCalled();
         await expectUnboundChatXShowsAndInjectsNoPreset(placeholder);
     });
+
+    it('bind rejected only after navigating to another bound chat: chat Y keeps showing, persisting, and injecting its own preset', async () => {
+        // C excludes the global prompt while A includes it, so A's activePresetId leaking into chat Y is observable in the injection.
+        const cOff = preset('preset-C', 'Charlie', 'PREFIX-C', false);
+        await openChat(`/a/chat/s/${CHAT_X}`, [A, B, cOff], { [CHAT_X]: 'preset-A', [CHAT_Y]: 'preset-C' });
+        await expectChatXShowsAndInjectsA();
+
+        // The bind stays in flight (slow or busy SW) while the user leaves chat X; it rejects only once chat Y is open.
+        let rejectBind;
+        const isChatXBindToB = (msg) => msg.type === DSS_CHAT_MAP_MSG.BIND && msg.uuid === CHAT_X && msg.presetId === 'preset-B';
+        chrome.runtime.sendMessage = vi.fn((msg) => (isChatXBindToB(msg) ? new Promise((_, reject) => { rejectBind = reject; }) : transports.success(msg)));
+        clickOption('preset-B');
+        await flush();
+        expect(typeof rejectBind, 'guard: the bind of chat X to B must be in flight').toBe('function');
+
+        // Chat Y's map read queues behind the in-flight bind (same-context FIFO), so navigation resumes only once the bind settles, ahead of the rollback's own map read.
+        setPathname(`/a/chat/s/${CHAT_Y}`);
+        const navigation = contentScript.handleChatChange();
+        await flush();
+        rejectBind(new Error(PORT_CLOSED));
+        await navigation;
+        await settle();
+
+        expect(storedMap(), 'the failed bind left both stored bindings intact').toEqual({ [CHAT_X]: 'preset-A', [CHAT_Y]: 'preset-C' });
+        expect.soft(shownValue(), "chat X's rollback must not repaint chat Y's overlay").toBe('preset-C');
+        expect.soft(shownLabel()).toBe('Charlie');
+        expect.soft(await storedActivePresetId(), "chat X's stored binding must not overwrite chat Y's activePresetId").toBe('preset-C');
+        const text = injected();
+        expect.soft(text, "chat Y injects its own preset's content").toContain('PREFIX-C');
+        expect.soft(text, 'overlay shows C (globalPromptEnabled: false), so the global default prompt must NOT be injected').not.toContain(GLOBAL);
+    }, 15000);
+
+    it('bind rejected only after opening a new chat: the new chat keeps showing no preset and display and injection agree', async () => {
+        await openChatXBoundTo([A, B, C], 'preset-A');
+        await expectChatXShowsAndInjectsA();
+
+        // The bind stays in flight (slow or busy SW) while the user opens a new chat; it rejects only once the new chat is open.
+        let rejectBind;
+        chrome.runtime.sendMessage = vi.fn((msg) => (msg.type === DSS_CHAT_MAP_MSG.BIND ? new Promise((_, reject) => { rejectBind = reject; }) : transports.success(msg)));
+        clickOption('preset-B');
+        await flush();
+        expect(typeof rejectBind, 'guard: the bind of chat X to B must be in flight').toBe('function');
+
+        // The new chat's settings read queues behind the in-flight bind (same-context FIFO), so navigation resumes ahead of the rollback's map read and the rollback lands after the new chat is open.
+        setPathname('/a/chat/s');
+        const navigation = contentScript.handleChatChange();
+        await flush();
+        rejectBind(new Error(PORT_CLOSED));
+        await navigation;
+        await settle();
+        expect.soft(shownValue(), "chat X's rollback must not repaint the new chat's overlay with A").toBe('');
+        await unrelatedPresetEditArrives(C);
+
+        expect(storedMap()[CHAT_X], 'the failed bind left chat X on A').toBe('preset-A');
+        expect.soft(shownValue(), 'the new chat still shows no preset after a re-render').toBe('');
+        expect.soft(await storedActivePresetId(), "chat X's stored binding must not become the new chat's activePresetId").not.toBe('preset-A');
+        const text = injected();
+        expect.soft(text, 'no preset content is injected in the new chat').not.toMatch(/PREFIX-[ABC]/);
+        expect.soft(text, "no preset shown -> legacy flag (true) decides; B's false flag must not strip the global prompt").toContain(GLOBAL);
+    }, 15000);
 
     it('control: a successful bind on an unbound chat shows, injects, and persists B', async () => {
         await openChatXUnbound();
