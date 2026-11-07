@@ -121,3 +121,61 @@ export function installDelayedNativeThinkToggle(block, mountDelayMs, bodyNodes =
     });
     return clicks;
 }
+
+/**
+ * Mounts a finished two-message conversation (real user prompt, real reply with a think block) in the virtual-list structure the harvest scans; the container does not overflow (scrollHeight === clientHeight), so every message is mounted and the harvest needs no scrolling.
+ * `state`: 'expanded' leaves the think block open; 'collapsed' collapses it through its header the way hide-thinking and the user do.
+ * Returns the reply's thinkParts plus `clicks`, the native toggle's per-click spy (cleared after the initial collapse).
+ */
+export function mountThinkConversation(state) {
+    const scrollArea = document.createElement('div');
+    scrollArea.className = 'ds-virtual-list ds-scroll-area';
+    Object.defineProperty(scrollArea, 'scrollHeight', { value: 400, configurable: true });
+    Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
+    Object.defineProperty(scrollArea, 'scrollTop', { value: 0, writable: true, configurable: true });
+    scrollArea.scrollBy = () => {};
+    scrollArea.scrollTo = () => {};
+    const listItems = document.createElement('div');
+    listItems.className = 'ds-virtual-list-items';
+    const visibleItems = document.createElement('div');
+    visibleItems.className = 'ds-virtual-list-visible-items';
+    listItems.appendChild(visibleItems);
+    scrollArea.appendChild(listItems);
+
+    const { userMessage } = loadMessagesWithoutThinkBlock();
+    const parts = thinkParts(loadThinkMessage('open'));
+    [userMessage, parts.msg].forEach((msg, key) => {
+        const wrapper = document.createElement('div');
+        wrapper.setAttribute('data-virtual-list-item-key', String(key));
+        wrapper.appendChild(msg);
+        visibleItems.appendChild(wrapper);
+    });
+    document.body.appendChild(scrollArea);
+
+    const clicks = installNativeThinkToggle(parts.block);
+    if (state === 'collapsed') {
+        parts.header.click();
+        clicks.mockClear();
+    }
+    return { ...parts, clicks };
+}
+
+function collectThinkBodyMounts(records, mounted) {
+    records.forEach((record) => record.addedNodes.forEach((node) => {
+        if (node.nodeType === 1 && (node.matches('.ds-think-content') || node.querySelector('.ds-think-content'))) mounted.push(node);
+    }));
+}
+
+/** Records every think step node mounted into `block` from now on (any route, not only a header click); `stop()` returns the mounted nodes. */
+export function watchThinkBodyMounts(block) {
+    const mounted = [];
+    const observer = new MutationObserver((records) => collectThinkBodyMounts(records, mounted));
+    observer.observe(block, { childList: true, subtree: true });
+    return {
+        stop() {
+            collectThinkBodyMounts(observer.takeRecords(), mounted);
+            observer.disconnect();
+            return mounted;
+        },
+    };
+}

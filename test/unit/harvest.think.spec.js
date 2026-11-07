@@ -16,6 +16,7 @@ import { loadThinkMessage, thinkParts, thinkBodyNodes, installNativeThinkToggle,
 
 const MODULE_FILE = path.resolve(__dirname, '../../content/harvest.think.js');
 const { _cloneMessageWithThinkingExpanded } = think;
+const Selectors = globalThis.DSstudio.Selectors;
 
 /** A body mount delay far below the ~2 s mount wait of the requirement. */
 const SHORT_MOUNT_DELAY_MS = 300;
@@ -159,6 +160,91 @@ describe('_cloneMessageWithThinkingExpanded', () => {
         expect(thinkBodyNodes(expandedMsg.block), 'the expanded block does not show the same body nodes after the clone').toEqual(expandedBody);
         expect(expandedClicks, 'the already expanded block was toggled').not.toHaveBeenCalled();
         expect(collapsedClicks, 'the collapsed block was not expanded once and restored once').toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('_cloneMessageWithThinkingExpanded with several blocks or a changed block shape', () => {
+    /** Markup of the think body nodes of the `index`-th block of a clone. */
+    function cloneBodyHtml(clone, index) {
+        return thinkBodyNodes(clone.children[index]).map((n) => n.outerHTML);
+    }
+
+    /** Two collapsed captured blocks inside the first block's message, in DOM order. */
+    function twoCollapsedBlocks() {
+        const first = collapsedBlock();
+        const second = collapsedBlock();
+        first.block.after(second.block);
+        attach(first.msg);
+        return { first, second, msg: first.msg };
+    }
+
+    it('does not treat a think block without a header in the header position as collapsed: resolves with a plain clone and leaves the block untouched', async () => {
+        const b = collapsedBlock();
+        b.block.prepend(document.createElement('span'));
+        attach(b.msg);
+        expect(Array.from(b.msg.querySelectorAll(Selectors.THINK_BLOCK_SELECTOR)), 'harness: the block is still recognised as a think block').toEqual([b.block]);
+        const markupBefore = b.msg.outerHTML;
+
+        const run = track(_cloneMessageWithThinkingExpanded(b.msg));
+        await vi.runAllTimersAsync();
+
+        expect(run.settled).toBe(true);
+        expect(run.error, 'a think block with no header was handled as a collapsed block').toBeUndefined();
+        expect(run.value).not.toBe(b.msg);
+        expect(run.value.outerHTML, 'the clone differs from the message as shown').toBe(markupBefore);
+        expect(b.msg.outerHTML, 'the live message changed').toBe(markupBefore);
+    });
+
+    it('waits for every collapsed block when one body mounts at once and the other only after a delay', async () => {
+        const { first, second, msg } = twoCollapsedBlocks();
+        installNativeThinkToggle(first.block, first.body);
+        installDelayedNativeThinkToggle(second.block, SHORT_MOUNT_DELAY_MS, second.body);
+
+        const run = track(_cloneMessageWithThinkingExpanded(msg));
+        await vi.advanceTimersByTimeAsync(SETTLE_WITHIN_MS);
+
+        expect(run.settled, 'the clone did not settle within ' + SETTLE_WITHIN_MS + ' ms').toBe(true);
+        expect(run.error).toBeUndefined();
+        expect(cloneBodyHtml(run.value, 0), 'the clone lacks the body that mounted at once').toEqual(first.bodyHtml);
+        expect(cloneBodyHtml(run.value, 1), 'the clone was taken before the delayed body mounted').toEqual(second.bodyHtml);
+        expectCollapsedAsCaptured(first, 'first block after the clone');
+        expectCollapsedAsCaptured(second, 'second block after the clone');
+    });
+
+    it('waits for the slower of two bodies that both mount after a delay', async () => {
+        const LATER_MOUNT_DELAY_MS = 3 * SHORT_MOUNT_DELAY_MS;
+        const { first, second, msg } = twoCollapsedBlocks();
+        installDelayedNativeThinkToggle(first.block, SHORT_MOUNT_DELAY_MS, first.body);
+        installDelayedNativeThinkToggle(second.block, LATER_MOUNT_DELAY_MS, second.body);
+
+        const run = track(_cloneMessageWithThinkingExpanded(msg));
+        await vi.advanceTimersByTimeAsync(SETTLE_WITHIN_MS);
+
+        expect(run.settled, 'the clone did not settle within ' + SETTLE_WITHIN_MS + ' ms of bodies mounting after ' + SHORT_MOUNT_DELAY_MS + ' and ' + LATER_MOUNT_DELAY_MS + ' ms').toBe(true);
+        expect(run.error).toBeUndefined();
+        expect(cloneBodyHtml(run.value, 0)).toEqual(first.bodyHtml);
+        expect(cloneBodyHtml(run.value, 1), 'the clone was taken as soon as the faster body mounted').toEqual(second.bodyHtml);
+        expectCollapsedAsCaptured(first, 'first block after the clone');
+        expectCollapsedAsCaptured(second, 'second block after the clone');
+    });
+
+    it('still resolves and collapses the other blocks when a block lost its header while expanded', async () => {
+        const { first, second, msg } = twoCollapsedBlocks();
+        installNativeThinkToggle(first.block, first.body);
+        installNativeThinkToggle(second.block, second.body);
+        // A host re-render drops the first block's header right after it expanded, so nothing is left to click on that block.
+        first.header.addEventListener('click', () => first.header.remove(), { once: true });
+
+        const run = track(_cloneMessageWithThinkingExpanded(msg));
+        await vi.runAllTimersAsync();
+
+        expect(first.header.isConnected, 'harness: the first header is gone').toBe(false);
+        expect(first.body.every((n) => n.parentNode === first.block), 'harness: the first body mounted').toBe(true);
+        expect(run.settled).toBe(true);
+        expect(run.error, 'the restore failed on the block that lost its header').toBeUndefined();
+        expect(Array.from(run.value.children[0].children).map((n) => n.outerHTML), 'the clone lacks the first block body').toEqual(expect.arrayContaining(first.bodyHtml));
+        expect(cloneBodyHtml(run.value, 1)).toEqual(second.bodyHtml);
+        expectCollapsedAsCaptured(second, 'second block after the clone');
     });
 });
 

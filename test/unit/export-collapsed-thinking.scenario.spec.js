@@ -8,7 +8,7 @@
  *
  * Runs under jsdom: the think-block selectors are structural (multi-level :has()), which happy-dom mis-evaluates. jsdom has no innerText, so the spec installs a textContent-backed getter for its own run.
  *
- * DOM: real DeepSeek messages from test/helpers/think-block-fixtures.js inside the virtual-list structure the harvest scans. DeepSeek's header toggle is modelled by installNativeThinkToggle: a header click detaches or re-inserts the think body nodes. The conversation fits the viewport (scrollHeight === clientHeight), so every message is mounted and the harvest needs no scrolling.
+ * DOM: real DeepSeek messages from test/helpers/think-block-fixtures.js inside the virtual-list structure the harvest scans (mountThinkConversation). DeepSeek's header toggle is modelled by installNativeThinkToggle: a header click detaches or re-inserts the think body nodes. The conversation fits the viewport (scrollHeight === clientHeight), so every message is mounted and the harvest needs no scrolling.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/message-constants.js';
@@ -19,7 +19,7 @@ import '../../content/harvest.toast.js';
 import '../../content/harvest.dom.js';
 import '../../content/harvest.js';
 import contentScript from '../../content/content-script.js';
-import { loadThinkMessage, loadMessagesWithoutThinkBlock, thinkParts, thinkBodyNodes, installNativeThinkToggle } from '../helpers/think-block-fixtures.js';
+import { loadThinkMessage, thinkParts, thinkBodyNodes, mountThinkConversation, watchThinkBodyMounts } from '../helpers/think-block-fixtures.js';
 
 const { exportConversationToMarkdown } = contentScript;
 
@@ -55,63 +55,6 @@ function thinkingLines(markdown) {
         if (lines[i].slice(1).trim() !== '') out.push(lines[i]);
     }
     return out;
-}
-
-/**
- * Mounts a finished two-message conversation (real user prompt, real reply with a think block) in the virtual-list structure the harvest scans; the container does not overflow.
- * `state`: 'expanded' leaves the think block open; 'collapsed' collapses it through its header the way hide-thinking and the user do.
- */
-function mountConversation(state) {
-    const scrollArea = document.createElement('div');
-    scrollArea.className = 'ds-virtual-list ds-scroll-area';
-    Object.defineProperty(scrollArea, 'scrollHeight', { value: 400, configurable: true });
-    Object.defineProperty(scrollArea, 'clientHeight', { value: 400, configurable: true });
-    Object.defineProperty(scrollArea, 'scrollTop', { value: 0, writable: true, configurable: true });
-    scrollArea.scrollBy = () => {};
-    scrollArea.scrollTo = () => {};
-    const listItems = document.createElement('div');
-    listItems.className = 'ds-virtual-list-items';
-    const visibleItems = document.createElement('div');
-    visibleItems.className = 'ds-virtual-list-visible-items';
-    listItems.appendChild(visibleItems);
-    scrollArea.appendChild(listItems);
-
-    const { userMessage } = loadMessagesWithoutThinkBlock();
-    const parts = thinkParts(loadThinkMessage('open'));
-    [userMessage, parts.msg].forEach((msg, key) => {
-        const wrapper = document.createElement('div');
-        wrapper.setAttribute('data-virtual-list-item-key', String(key));
-        wrapper.appendChild(msg);
-        visibleItems.appendChild(wrapper);
-    });
-    document.body.appendChild(scrollArea);
-
-    const clicks = installNativeThinkToggle(parts.block);
-    if (state === 'collapsed') {
-        parts.header.click();
-        clicks.mockClear();
-    }
-    return { ...parts, clicks };
-}
-
-/** Records every think step node mounted into `block` from now on (any route, not only a header click). */
-function watchBodyMounts(block) {
-    const mounted = [];
-    const observer = new MutationObserver((records) => {
-        records.forEach((record) => record.addedNodes.forEach((node) => {
-            if (node.nodeType === 1 && (node.matches('.ds-think-content') || node.querySelector('.ds-think-content'))) mounted.push(node);
-        }));
-    });
-    observer.observe(block, { childList: true, subtree: true });
-    return {
-        stop() {
-            observer.takeRecords().forEach((record) => record.addedNodes.forEach((node) => {
-                if (node.nodeType === 1 && (node.matches('.ds-think-content') || node.querySelector('.ds-think-content'))) mounted.push(node);
-            }));
-            observer.disconnect();
-            return mounted;
-        },
-    };
 }
 
 /** Runs the real export (real Harvest) under fake timers, so no assertion depends on a delay value; returns the downloaded Markdown. */
@@ -163,7 +106,7 @@ afterEach(() => {
 describe('export with a natively collapsed think block', () => {
     it('harness: the real Harvest module is installed and the collapsed fixture shows no think body', () => {
         expect(typeof window.DSstudio.Harvest?.harvestAllMessages).toBe('function');
-        const { block } = mountConversation('collapsed');
+        const { block } = mountThinkConversation('collapsed');
         expect(showsThinking(block)).toBe(false);
         expect(thinkBodyNodes(block)).toEqual([]);
     });
@@ -171,7 +114,7 @@ describe('export with a natively collapsed think block', () => {
     it('includes the full thinking section when "include thinking" is on, then leaves the block collapsed as it was', async () => {
         const { status, steps } = expectedThinkingTexts();
         expect(steps, 'fixture: the expanded capture holds three think steps').toHaveLength(3);
-        const { block, header, spacer, footer } = mountConversation('collapsed');
+        const { block, header, spacer, footer } = mountThinkConversation('collapsed');
         const headerHtml = header.outerHTML;
 
         const markdown = await runExport(true);
@@ -189,20 +132,20 @@ describe('export with a natively collapsed think block', () => {
     });
 
     it('exports the same thinking section as the same block expanded', async () => {
-        mountConversation('expanded');
+        mountThinkConversation('expanded');
         const expandedLines = thinkingLines(await runExport(true));
         expect(expandedLines.length, 'harness: the expanded block exports a thinking section').toBeGreaterThan(0);
 
         document.body.innerHTML = '';
-        mountConversation('collapsed');
+        mountThinkConversation('collapsed');
         const collapsedLines = thinkingLines(await runExport(true));
 
         expect(collapsedLines, 'collapsing the block on screen changed the exported thinking section').toEqual(expandedLines);
     });
 
     it('never expands the collapsed block when "include thinking" is off', async () => {
-        const { block, clicks } = mountConversation('collapsed');
-        const watcher = watchBodyMounts(block);
+        const { block, clicks } = mountThinkConversation('collapsed');
+        const watcher = watchThinkBodyMounts(block);
 
         const markdown = await runExport(false);
         await flush();
@@ -218,7 +161,7 @@ describe('export with a natively collapsed think block', () => {
 describe('export with an expanded think block', () => {
     it('exports the thinking section and leaves the block expanded with the same body nodes', async () => {
         const { status, steps } = expectedThinkingTexts();
-        const { block, clicks } = mountConversation('expanded');
+        const { block, clicks } = mountThinkConversation('expanded');
         const bodyBefore = thinkBodyNodes(block);
         expect(bodyBefore.length, 'fixture: the expanded block shows its body').toBeGreaterThan(0);
 
@@ -272,7 +215,7 @@ describe('scenario: hide-thinking enabled with its observer running', () => {
     it('exports the thinking of a block hide-thinking collapsed, leaves it collapsed, and hide-thinking can still restore it', async () => {
         const { status, steps } = expectedThinkingTexts();
         await loadEnabledHideThinking();
-        const { block } = mountConversation('expanded');
+        const { block } = mountThinkConversation('expanded');
         await flush();
         expect(showsThinking(block), 'fixture: hide-thinking collapsed the newly rendered block').toBe(false);
 
