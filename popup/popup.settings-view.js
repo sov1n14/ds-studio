@@ -27,6 +27,8 @@ function applySettingsToDom(dom, settings) {
         autoRetryToggle,
         autoContinueToggle,
         autoOpenSidebarToggle,
+        autoCopyReplyToggle,
+        autoCopyCodeToggle,
         websearchRadios = [],
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
@@ -43,6 +45,8 @@ function applySettingsToDom(dom, settings) {
     if (autoRetryToggle)         autoRetryToggle.checked         = settings.autoRetry;
     if (autoContinueToggle)      autoContinueToggle.checked      = settings.autoContinue;
     if (autoOpenSidebarToggle)   autoOpenSidebarToggle.checked   = settings.autoOpenSidebar;
+    if (autoCopyReplyToggle)     autoCopyReplyToggle.checked     = settings.autoCopyReply;
+    if (autoCopyCodeToggle)      autoCopyCodeToggle.checked      = settings.autoCopyCode;
 
     // 舊版 'default' 值由 StorageManager 的讀取路徑統一校正，此處僅處理尚未設定的情況
     if (websearchRadios.length) {

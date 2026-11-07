@@ -205,7 +205,7 @@ Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊�
 DeepSeek 按鈕的 React `onClick` 只在 `e.nativeEvent.isTrusted === true` 且 `e.nativeEvent instanceof Event` 時動作；isolated world 內容腳本的 `element.click()` 屬不受信任事件而被忽略，isolated world 也讀不到元素上的 `__reactProps$*` expando。`content/react-click-bridge.main.js` 因此在頁面 MAIN world 執行：
 
 - **載入方式**：由 manifest 中獨立的 `content_scripts` 項目以 `"world": "MAIN"` 靜態載入（有別於經 `main-world-injector.js` 注入的 web_accessible_resources 腳本），`matches: ["*://chat.deepseek.com/*"]`、`run_at: document_end`；靜態 MAIN world 宣告需要 Chrome 111（manifest `minimum_chrome_version`）。
-- **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js`、`auto-open-sidebar.js` 與本檔各自宣告（跨 world 無共用載入器）。
+- **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js`、`auto-open-sidebar.js`、`auto-copy.js` 與本檔各自宣告（跨 world 無共用載入器）。
 - **觸發**：讀取目標元素自身 `__reactProps$*` 上的 `onClick`，以最小 synthetic event 呼叫：`nativeEvent` 為 `Object.create(Event.prototype, { isTrusted: { value: true } })`（通過上述檢查），另帶 `target` / `currentTarget` 與空實作的 `preventDefault` / `stopPropagation`。
 - **備援**：元素沒有 React `onClick` 時呼叫 `el.click()`。
 - **錯誤處理**：監聽器本體以 try/catch 包覆，React `onClick` 拋錯時以 `console.error('[DSS] react-click-bridge:', err)` 記錄。
@@ -254,3 +254,27 @@ div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.6727
 ### 載入順序
 
 manifest 中 `content/auto-open-sidebar.js` 緊接 `content/auto-expand-messages.js` 之後載入，晚於 `content/ds-selectors.js` 與 `content/feature-toggle.js`；`start()` 在 `DSSFeatureToggle` 缺席時以 `console.warn` 記錄並略過註冊。
+
+## 自動複製 (AutoCopy)
+
+自動複製的行為規則見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，儲存鍵見 [STORAGE.md](STORAGE.md) ；本節說明兩個檔案的分工與實作細節。
+
+### 模組分工
+
+- **`content/reply-completion.js`**（`DSstudio.ReplyCompletion`）：純判斷模組，不修改 DOM。`newToolbarsFromRecords(records)` 回傳本批次新出現、依文件順序且不重複的訊息工具列；`isStoppedReply(toolbar)` 的檢查範圍為 `toolbar.parentElement`。判定規則與實作限制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+- **`content/auto-copy.js`**（`DSstudio.AutoCopy`）：持有兩個閘門 `_isReplyOn`、`_isCodeOn` 與觀察器，負責找出目標按鈕與派送事件。
+
+### 閘控 (registerFeatureToggle)
+
+`start()` 註冊兩個閘門，`onEnable` / `onDisable` 設定對應閘門並同步觀察器。各閘門的生效條件見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，鍵名定義於 `utils/storage-manager.keys.js`。
+
+### 觀察與觸發
+
+- **觀察器**：`content/auto-copy.js` 以 `body` 為根節點，因為新對話頁尚無訊息列表，切換對話時列表可能整個重新掛載；「新出現」的判斷已由 `ReplyCompletion` 限定於虛擬列表項目內。掛載與中斷條件見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+- **批次處理**：每批 `MutationRecord` 先交給 `newToolbarsFromRecords`，再略過 `isStoppedReply` 為真的工具列。回覆按鈕以 `ROLE_BUTTON_DIV_SELECTOR` 定位，程式碼區塊按鈕則在工具列所屬的 `VIRTUAL_ITEM_KEY_SELECTOR` 項目內以 `.md-code-block-banner` 定位；選取規則與順序見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+- **點擊**：派送機制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，橋接端見 [React 點擊橋接](#react-點擊橋接-react-click-bridge) 。
+- **錯誤處理**：`MutationObserver` 回呼以 try/catch 包覆，處理拋出的錯誤以 `console.error('[DSS] auto-copy:處理新工具列失敗:', error)` 記錄並維持觀察。
+
+### 載入順序
+
+`start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。

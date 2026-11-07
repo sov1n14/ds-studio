@@ -27,6 +27,8 @@
     autoRetryLabel: 'Auto retry',
     autoContinueLabel: 'Auto continue generating',
     autoOpenSidebarLabel: 'Auto open sidebar',
+    autoCopyReplyLabel: 'Auto copy reply content',
+    autoCopyCodeLabel: 'Auto copy code block content',
     preventAutoScrollLabel: 'Prevent Auto-Scroll',
     websearchToggleLabel: 'Web Search',
     websearchOnLabel: 'On',

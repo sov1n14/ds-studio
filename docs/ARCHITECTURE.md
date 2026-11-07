@@ -96,6 +96,8 @@ ds-studio/
 │   ├── auto-click.delay.js    ─  自動點擊輪次的 0–3 秒隨機延遲（0.1 秒級距，v4.35.0）
 │   ├── auto-retry.js          ─  自動重試／自動繼續生成的共用輪次迴圈：各自受開關閘控，每輪隨機延遲後在重試與繼續生成按鈕上派送 dss:react-click 事件（v4.11.0，v4.35.0 改版，v4.35.4 改為事件觸發）
 │   ├── react-click-bridge.main.js ‡ ─  MAIN-world 橋接：收到 dss:react-click 時以能通過 isTrusted 檢查的合成 nativeEvent 呼叫按鈕的 React onClick，無 onClick 時退回 click()（v4.35.4）
+│   ├── reply-completion.js    ─  純判斷：從 MutationRecord 找出新出現的訊息工具列、判斷回覆是否被停止，供自動複製使用（v4.37.0）
+│   ├── auto-copy.js           ─  回覆完成時依兩個開關對該回覆與其程式碼區塊的複製按鈕派送 dss:react-click 事件（v4.37.0）
 │   ├── editor-window-autoclose.js ─  window focus → 送出 DSS_CLOSE_EDITOR_WINDOWS 訊息，關閉所有開啟中的編輯視窗（v4.29.0）
 │   ├── go-top.css           ─  GoToTop 與匯出 toast 樣式
 │   ├── prevent-auto-scroll-bridge.js  ─  抑制自動捲動的 isolated-world 橋接（含持續模式，v4.12.0）

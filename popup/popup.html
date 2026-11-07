@@ -1,4 +1,4 @@
-<!-- 351 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
+<!-- 369 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -184,6 +184,18 @@
                             <input type="radio" name="websearchToggle" value="off">
                             <span data-i18n="websearchOffLabel">關閉</span>
                         </label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoCopyReplyToggle">
+                        <label for="autoCopyReplyToggle" data-i18n="autoCopyReplyLabel">自動複製回覆內容</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoCopyCodeToggle">
+                        <label for="autoCopyCodeToggle" data-i18n="autoCopyCodeLabel">自動複製程式碼區塊內容</label>
                     </div>
                 </div>
             </div>

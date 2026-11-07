@@ -127,6 +127,14 @@ function createLiveSyncListener(ctx) {
             applyToggle(dom.autoOpenSidebarToggle, changes[KEYS.AUTO_OPEN_SIDEBAR].newValue ?? false);
         }
 
+        if (changes[KEYS.AUTO_COPY_REPLY]) {
+            applyToggle(dom.autoCopyReplyToggle, changes[KEYS.AUTO_COPY_REPLY].newValue ?? false);
+        }
+
+        if (changes[KEYS.AUTO_COPY_CODE]) {
+            applyToggle(dom.autoCopyCodeToggle, changes[KEYS.AUTO_COPY_CODE].newValue ?? false);
+        }
+
         if (changes[KEYS.CHAT_WIDTH] || changes[KEYS.CHAT_WIDTH_ENABLED]) {
             const isSliderEnabled = changes[KEYS.CHAT_WIDTH_ENABLED]
                 ? changes[KEYS.CHAT_WIDTH_ENABLED].newValue

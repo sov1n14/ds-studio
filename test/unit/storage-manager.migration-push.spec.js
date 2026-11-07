@@ -36,6 +36,9 @@ async function populateDefaults() {
         [K.AUTO_RETRY]: false,
         [K.AUTO_CONTINUE]: false,
         [K.AUTO_OPEN_SIDEBAR]: false,
+        // Literal keys: the KEYS constants for the auto-copy toggles may not exist yet (red phase).
+        isAutoCopyReplyEnabled: false,
+        isAutoCopyCodeEnabled: false,
         [K.PREVENT_AUTO_SCROLL]: false,
         [K.WEBSEARCH_TOGGLE]: 'default',
         [K.CHAT_WIDTH]: 70,
@@ -229,6 +232,20 @@ describe('StorageManager migration push regression', () => {
             // dsLocalAuth either does not exist or does not include websearchToggle
             const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
             expect(authList).not.toContain(K.WEBSEARCH_TOGGLE);
+        });
+
+        it.each(['isAutoCopyReplyEnabled', 'isAutoCopyCodeEnabled'])('pushes a missing %s key to sync and does not mark it as LOCAL_AUTHORITATIVE (synced auto-copy toggle)', async (key) => {
+            await populateDefaults();
+
+            await chrome.storage.local.set({ [key]: true });
+            await chrome.storage.sync.remove(key);
+
+            await expect(StorageManager.initialize()).resolves.toBeUndefined();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            const localAfter = await chrome.storage.local.get(null);
+            expect(syncAfter[key], `sync ${key} after initialize()`).toBe(true);
+            expect(localAfter[K.LOCAL_AUTHORITATIVE] || []).not.toContain(key);
         });
 
         it('regression guard (report.md §4.3 Step 3): never pushes isEnabled/globalPromptEnabled to sync, even when missing from sync and present in local', async () => {

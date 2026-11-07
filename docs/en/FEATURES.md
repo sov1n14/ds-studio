@@ -13,6 +13,7 @@
 - [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
 - [Auto Retry and Auto Continue](#auto-retry-and-auto-continue)
 - [Auto Open Sidebar](#auto-open-sidebar)
+- [Auto Copy Reply and Code Blocks](#auto-copy-reply-and-code-blocks)
 - [Exporting Conversations](#exporting-conversations)
 - [Quote Reply](#quote-reply)
 - [Edit Message Cleanup](#edit-message-cleanup)
@@ -213,6 +214,23 @@ The **Auto open sidebar** toggle in the popup menu's **Features** card (storage 
 - **Master Switch Linkage**: Controlled by the master switch; when the master switch is off, the toggle is disabled and no automatic click happens.
 - **Sync and Backup**: Like the other feature toggles, the state syncs to the cloud, is included in backup and restore, and reflects changes from other devices or tabs live while the popup is open.
 
+## Auto Copy Reply and Code Blocks
+
+Two checkboxes in the popup menu's **Features** card (both off by default) press DeepSeek's own copy buttons automatically when a reply finishes:
+
+| Toggle | Storage Key | What Is Copied |
+|-|-|-|
+| **Auto copy reply content** | `isAutoCopyReplyEnabled` | The first button of the reply message's toolbar (copies the whole reply) |
+| **Auto copy code block content** | `isAutoCopyCodeEnabled` | The copy button of every code block in that reply, pressed one by one in order of appearance |
+
+- **When It Triggers**: When a reply finishes and its message toolbar appears inside an already-shown message; code blocks are copied only when the reply finishes, never while it is streaming.
+- **Both On**: The reply is copied first, then each code block in order, so the clipboard ends up holding the content of the last code block.
+- **Never Copied**: Messages already on the page at load, old messages scrolled back into view, and stopped or aborted replies (the "Continue generating" button is present).
+- **Window Focus Limitation**: The browser rejects clipboard writes while the DeepSeek tab is not focused (the console shows `NotAllowedError: Document is not focused`), so auto copy takes effect only while that tab is focused; a reply that finishes while the tab is in the background or the window is unfocused is not copied.
+- **Button Location**: Buttons are located by CSS selectors and structure only, never by button text, so the interface language does not matter.
+- **Master Switch Linkage**: Both toggles are controlled by the master switch; when the master switch is off, they are disabled and nothing is copied.
+- **Sync and Backup**: Like the other feature toggles, the states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
+
 ## Exporting Conversations
 
 You can export the conversation history from the current DeepSeek chat room as a Markdown (`.md`) file.
@@ -307,6 +325,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - Auto expand messages
 - Auto retry and auto continue generating
 - Auto open sidebar
+- Auto copy reply and code blocks
 - Prevent auto-scroll
 - Web search toggle
 - System time injection

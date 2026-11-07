@@ -96,6 +96,8 @@ ds-studio/
 │   ├── auto-click.delay.js    ─  0–3 s random delay for auto-click rounds, in 0.1 s steps (v4.35.0)
 │   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, dispatches a dss:react-click event on the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0, event-triggered since v4.35.4)
 │   ├── react-click-bridge.main.js ‡ ─  MAIN-world bridge: on dss:react-click, calls the button's React onClick with a synthetic nativeEvent that passes the isTrusted check, falling back to click() when there is no onClick (v4.35.4)
+│   ├── reply-completion.js    ─  Pure decisions: finds newly appeared message toolbars from MutationRecords and tells whether a reply was stopped, for auto copy (v4.37.0)
+│   ├── auto-copy.js           ─  When a reply finishes, dispatches dss:react-click on the copy buttons of that reply and its code blocks, per the two toggles (v4.37.0)
 │   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)

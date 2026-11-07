@@ -27,6 +27,8 @@
     autoRetryLabel: '自動重試',
     autoContinueLabel: '自動繼續生成',
     autoOpenSidebarLabel: '自動開啟側欄',
+    autoCopyReplyLabel: '自動複製回覆內容',
+    autoCopyCodeLabel: '自動複製程式碼區塊內容',
     preventAutoScrollLabel: '防止自動回滾',
     websearchToggleLabel: '連網搜索',
     websearchOnLabel: '開啟',

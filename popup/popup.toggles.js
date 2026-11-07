@@ -58,6 +58,8 @@ function createToggleManager(ctx) {
      * @param {HTMLElement} elements.autoRetryToggle
      * @param {HTMLElement} elements.autoContinueToggle
      * @param {HTMLElement} elements.autoOpenSidebarToggle
+     * @param {HTMLElement} elements.autoCopyReplyToggle
+     * @param {HTMLElement} elements.autoCopyCodeToggle
      * @param {HTMLElement[]} elements.websearchRadios
      */
     function bindToggles(elements) {
@@ -74,6 +76,8 @@ function createToggleManager(ctx) {
             autoRetryToggle,
             autoContinueToggle,
             autoOpenSidebarToggle,
+            autoCopyReplyToggle,
+            autoCopyCodeToggle,
             websearchRadios,
         } = elements;
 
@@ -177,6 +181,22 @@ function createToggleManager(ctx) {
         if (autoOpenSidebarToggle) {
             autoOpenSidebarToggle.addEventListener('change', async () => {
                 await StorageManager.saveAutoOpenSidebar(autoOpenSidebarToggle.checked);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        }
+
+        if (autoCopyReplyToggle) {
+            autoCopyReplyToggle.addEventListener('change', async () => {
+                await StorageManager.saveAutoCopyReply(autoCopyReplyToggle.checked);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        }
+
+        if (autoCopyCodeToggle) {
+            autoCopyCodeToggle.addEventListener('change', async () => {
+                await StorageManager.saveAutoCopyCode(autoCopyCodeToggle.checked);
                 await refreshSyncStatus();
                 showSaveStatus();
             });

@@ -205,7 +205,7 @@ Buttons are located only through the selectors in `content/ds-selectors.js`, nev
 The React `onClick` on DeepSeek's buttons acts only when `e.nativeEvent.isTrusted === true` and `e.nativeEvent instanceof Event`; `element.click()` from an isolated-world content script is an untrusted event and is ignored, and the isolated world cannot read the element's `__reactProps$*` expando. `content/react-click-bridge.main.js` therefore runs in the page's MAIN world:
 
 - **Loading**: statically loaded by its own manifest `content_scripts` entry with `"world": "MAIN"` (unlike the web_accessible_resources scripts injected via `main-world-injector.js`), `matches: ["*://chat.deepseek.com/*"]`, `run_at: document_end`; the static MAIN-world declaration requires Chrome 111 (manifest `minimum_chrome_version`).
-- **Listening**: a self-installing IIFE listens for `dss:react-click` on `document`; `auto-retry.js`, `auto-open-sidebar.js`, and this file each declare the event name (no shared loader across worlds).
+- **Listening**: a self-installing IIFE listens for `dss:react-click` on `document`; `auto-retry.js`, `auto-open-sidebar.js`, `auto-copy.js`, and this file each declare the event name (no shared loader across worlds).
 - **Triggering**: reads `onClick` from the target element's own `__reactProps$*` and calls it with a minimal synthetic event: `nativeEvent` is `Object.create(Event.prototype, { isTrusted: { value: true } })` (passing the check above), plus `target` / `currentTarget` and no-op `preventDefault` / `stopPropagation`.
 - **Fallback**: when the element has no React `onClick`, it calls `el.click()`.
 - **Error handling**: the listener body is wrapped in try/catch and logs `console.error('[DSS] react-click-bridge:', err)` when the React `onClick` throws.
@@ -254,3 +254,27 @@ div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.6727
 ### Load Order
 
 In the manifest, `content/auto-open-sidebar.js` loads right after `content/auto-expand-messages.js`, after `content/ds-selectors.js` and `content/feature-toggle.js`; `start()` logs a `console.warn` and skips registration when `DSSFeatureToggle` is absent.
+
+## Auto Copy (AutoCopy)
+
+The behavior rules for auto copy are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370), and the storage keys are in [STORAGE.md](STORAGE.md); this section covers the split between the two modules and their implementation details.
+
+### Module Split
+
+- **`content/reply-completion.js`** (`DSstudio.ReplyCompletion`): a pure-decision module that never modifies the DOM. `newToolbarsFromRecords(records)` returns the message toolbars newly appeared in the batch, in document order and without duplicates; `isStoppedReply(toolbar)` checks the scope `toolbar.parentElement`. The completion rules and implementation constraints are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **`content/auto-copy.js`** (`DSstudio.AutoCopy`): holds the two gates `_isReplyOn` and `_isCodeOn` and the observer, and finds the target buttons and dispatches the events.
+
+### Gating (registerFeatureToggle)
+
+`start()` registers the two gates, and `onEnable` / `onDisable` set the matching gate and sync the observer. The conditions that activate each gate are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370), and the key names are defined in `utils/storage-manager.keys.js`.
+
+### Observing and Triggering
+
+- **Observer**: `content/auto-copy.js` roots the observer at `body` because a new-chat page has no message list yet and switching chats may remount the whole list; the "newly appeared" decision is already restricted to virtual-list items by `ReplyCompletion`. Attach and detach conditions are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **Batch Handling**: Each batch goes to `newToolbarsFromRecords` first, then toolbars for which `isStoppedReply` is true are skipped. The reply button is located by `ROLE_BUTTON_DIV_SELECTOR`, and code block buttons by `.md-code-block-banner` inside the `VIRTUAL_ITEM_KEY_SELECTOR` item that owns the toolbar; the selection rules and order are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **Clicking**: The dispatch mechanism is in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370), and the bridge that handles it is described in [React Click Bridge](#react-click-bridge).
+- **Error Handling**: The `MutationObserver` callback is wrapped in try/catch; an error thrown while handling is logged as `console.error('[DSS] auto-copy:處理新工具列失敗:', error)` and observation continues.
+
+### Load Order
+
+`start()` throws a named load-order error when `DSSFeatureToggle`, `DSstudio.ReplyCompletion`, or `KEYS` is absent; the manifest position is in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).

@@ -1,4 +1,4 @@
-// 344 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
+// 354 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
 /**
  * DS studio — Popup Controller（入口）
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
@@ -43,6 +43,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const autoRetryToggle           = document.getElementById('autoRetryToggle');
     const autoContinueToggle        = document.getElementById('autoContinueToggle');
     const autoOpenSidebarToggle     = document.getElementById('autoOpenSidebarToggle');
+    const autoCopyReplyToggle       = document.getElementById('autoCopyReplyToggle');
+    const autoCopyCodeToggle        = document.getElementById('autoCopyCodeToggle');
     const websearchRadios           = Array.from(document.querySelectorAll('input[name="websearchToggle"]'));
 
     let saveTimeout;
@@ -75,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoRetryToggle,
             autoContinueToggle,
             autoOpenSidebarToggle,
+            autoCopyReplyToggle, autoCopyCodeToggle,
             ...websearchRadios,
         ];
         subControls.forEach(el => {
@@ -189,6 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         sidebarAutoHideToggle, hideThinkingToggle, showSystemTimeToggle,
         preventAutoScrollToggle, autoExpandMessagesToggle, websearchRadios,
         autoRetryToggle, autoContinueToggle, autoOpenSidebarToggle,
+        autoCopyReplyToggle, autoCopyCodeToggle,
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
     }, settings);
@@ -252,6 +256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoRetryToggle,
             autoContinueToggle,
             autoOpenSidebarToggle,
+            autoCopyReplyToggle, autoCopyCodeToggle,
             websearchRadios,
         },
         applyMasterSwitchUI,
@@ -304,6 +309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         autoRetryToggle,
         autoContinueToggle,
         autoOpenSidebarToggle,
+        autoCopyReplyToggle, autoCopyCodeToggle,
         websearchRadios,
     });
     // 全域提示詞開關初始值：依目前活躍 preset（或裝置本機舊鍵）決定

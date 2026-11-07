@@ -111,3 +111,6 @@
 - [E2E live calibration](e2e-live-calibration.md) — native widths at 1280 viewport, export speed, sabotage-copy proof, batch-2 send guard and sync-first restore order
 - [Scoped Stryker runs](stryker-runs.md) — ~7-8 min, full table printed, ENOENT crash when Playwright writes test/test-results concurrently
 - [E2E batch 3 live facts](e2e-batch3-live-facts.md) — edit box key pinning, real-send capture, auto-click synthetic buttons, heredoc backslash trap
+- [Scratch oracle self-check](feedback_scratch-and-oracle-check.md) — run red specs against a reference oracle and wrong oracles before reporting red
+- [Auto-copy harness](project_auto_copy_harness.md) — jsdom chat pane, every button guarded, label log for order; two-batch new toolbar; assumed setter/field names
+- [Mutation proof without prod edits](reference_mutation_proof_without_prod_edits.md) — vite transform + fs patch scratch config; new Function load envs; DEFAULTS survivors cause

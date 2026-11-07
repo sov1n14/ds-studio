@@ -97,6 +97,8 @@
 | `isAutoRetryEnabled` | boolean | `false` | （v4.35.0）自動重試是否啟用。開啟時，共用輪次迴圈在每輪 0–3 秒隨機延遲後點擊頁面上的重試按鈕。受主開關連動。 |
 | `isAutoContinueEnabled` | boolean | `false` | （v4.35.0）自動繼續生成是否啟用。開啟時，同一輪次迴圈在每輪 0–3 秒隨機延遲後點擊頁面上的「繼續生成」按鈕。受主開關連動。 |
 | `isAutoOpenSidebarEnabled` | boolean | `false` | （v4.36.0）自動開啟側欄是否啟用。開啟時以 MutationObserver 偵測收合側欄的展開按鈕，每次出現即點擊，讓側欄保持開啟。受主開關連動。 |
+| `isAutoCopyReplyEnabled` | boolean | `false` | （v4.37.0）自動複製回覆內容是否啟用。開啟時，回覆完成後自動按下該回覆工具列的複製按鈕。受主開關連動。行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370)。 |
+| `isAutoCopyCodeEnabled` | boolean | `false` | （v4.37.0）自動複製程式碼區塊內容是否啟用。開啟時，回覆完成後依序按下該回覆每個程式碼區塊的複製按鈕。受主開關連動。行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370)。 |
 | `dsPreventAutoScroll` | boolean | `false` | （v4.12.0）防止自動回滾是否常駐啟用。開啟時 `PreventAutoScroll` 全時抑制向下自動捲動，而非僅在「回到頂部」與 Markdown 匯出期間生效。 |
 | `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
 | `dsWebSearchToggle` | string | `'on'` | （v4.13.0，v4.17.0 改為二態）連網搜索按鈕的**預設值**：`'on'` 使頁面智能搜索按鈕為 `aria-pressed="true"`、`'off'` 為 `"false"`。每個啟動事件只套用一次 —— 進場、本鍵變更、主開關由關轉開（v4.17.1）—— 之後使用者手動切換的結果會保留到下一個啟動事件；只在狀態不符時點擊。讀取到舊版殘留的 `'default'` 值一律當作 `'on'`（不寫回）。受主開關連動。 |

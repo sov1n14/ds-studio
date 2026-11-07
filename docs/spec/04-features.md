@@ -205,3 +205,15 @@
 - **迴圈保險**（v4.36.1）：若新的收合期在上一次點擊後未滿 1500ms（`RECOLLAPSE_LOOP_WINDOW_MS`）即開始，且其間沒有 `window` `resize` 事件（窄螢幕下 DeepSeek 會立即再收合），停止點擊直到下一次 `resize`。
 - **按鈕定位**：僅以 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_OPEN_BUTTON_SELECTOR`（`div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])`）定位，絕不以按鈕文字定位。選擇器理由見 [content-interaction.md](../architecture/content-interaction.md#自動開啟側欄-autoopensidebar)。
 - **實作位置**：`content/auto-open-sidebar.js`（isolated world，manifest 中緊接 `content/auto-expand-messages.js` 之後載入，晚於 `content/feature-toggle.js` 與 `content/ds-selectors.js`）。`start()` 於模組載入時自動呼叫。
+
+## 26. 自動複製回覆與程式碼區塊 (Auto Copy) — v4.37.0
+
+- **開關位置**：彈出選單「Features」卡片中的 `#autoCopyReplyToggle`（標籤 i18n 鍵 `autoCopyReplyLabel`）與 `#autoCopyCodeToggle`（`autoCopyCodeLabel`）核取方塊，位於連網搜索單選群組之後、卡片末端；兩者皆屬感知總開關的子控制項，總開關關閉時停用。
+- **儲存鍵**：`isAutoCopyReplyEnabled`（`KEYS.AUTO_COPY_REPLY`）與 `isAutoCopyCodeEnabled`（`KEYS.AUTO_COPY_CODE`），布林值，預設 `false`。經 `StorageManager.saveAutoCopyReply(enabled)` / `saveAutoCopyCode(enabled)` 寫入 sync 與 local，`getSettings()` 以設定欄位 `autoCopyReply` / `autoCopyCode` 公開，納入 JSON 備份與還原（「僅合併提示詞組」模式不還原），popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
+- **閘控**：`content/auto-copy.js` 對兩個自身鍵各呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，各鍵僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。任一閘門開啟時才在 `document.body` 掛載單一 `MutationObserver`（`childList`、`subtree`），兩個閘門皆關閉時中斷。
+- **完成判定**：`content/reply-completion.js` 的 `DSstudio.ReplyCompletion.newToolbarsFromRecords(records)` 從每批變更找出新出現的訊息工具列（`MESSAGE_TOOLBAR_SELECTOR`）。新回覆或重新生成時，DeepSeek 先掛載不含工具列的虛擬列表項目，之後才把工具列加入該已掛載項目，因此「工具列被加入已存在的虛擬列表項目」視為回覆完成；與項目同批加入的工具列（頁面載入、捲動使舊訊息重新掛載）不計。`isStoppedReply(toolbar)` 在工具列外層包裝內含「繼續生成」按鈕（`CONTINUE_BUTTON_SELECTOR` 或 `CONTINUE_BUTTON_FALLBACK_SELECTOR`）時為真，被停止或中斷的回覆整個略過。僅以選擇器判定，不比對按鈕文字。
+- **複製目標**：回覆複製為工具列的第一個直接子層 `role="button"`；程式碼區塊複製為該工具列所屬虛擬列表項目內每個程式碼區塊 banner 的第一個 `role="button"` div（第二個為下載），依文件順序。程式碼區塊只在回覆完成時複製，不在串流生成期間複製。
+- **順序**：每個新工具列先複製回覆（開關開啟時），再依序複製各程式碼區塊（開關開啟時）；兩者皆開時剪貼簿最後留下的是最後一個程式碼區塊的內容。
+- **觸發方式**：在目標按鈕上派送冒泡的 `dss:react-click` 自訂事件，由 MAIN-world 橋接 `content/react-click-bridge.main.js` 呼叫按鈕的 React `onClick`，機制同 §24「觸發方式」；不呼叫 `button.click()`。
+- **已知限制**：瀏覽器在 DeepSeek 分頁沒有焦點時拒絕剪貼簿寫入（實測 `NotAllowedError: Document is not focused`），自動複製只在分頁取得焦點時生效；擴充功能不嘗試補救，也不重試。
+- **實作位置**：`content/reply-completion.js`（純判斷，不建立 observer、不持有可變狀態）與 `content/auto-copy.js`（isolated world），manifest 中依序緊接 `content/auto-retry.js` 之後、`content/editor-window-autoclose.js` 之前載入，晚於 `content/ds-selectors.js`、`content/feature-toggle.js` 與 `utils/storage-manager.keys.js`。`start()` 於模組載入時自動呼叫。架構細節見 [content-interaction.md](../architecture/content-interaction.md#自動複製-autocopy)。

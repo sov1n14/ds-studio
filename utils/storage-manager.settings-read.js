@@ -23,6 +23,8 @@
         autoRetry: 'AUTO_RETRY',
         autoContinue: 'AUTO_CONTINUE',
         autoOpenSidebar: 'AUTO_OPEN_SIDEBAR',
+        autoCopyReply: 'AUTO_COPY_REPLY',
+        autoCopyCode: 'AUTO_COPY_CODE',
         preventAutoScroll: 'PREVENT_AUTO_SCROLL',
         websearchToggle: 'WEBSEARCH_TOGGLE',
         isShowSystemTime: 'SHOW_SYSTEM_TIME',

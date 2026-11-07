@@ -88,6 +88,8 @@ function makeDom(overrides = {}) {
         autoRetryToggle: makeCheckbox(false),
         autoContinueToggle: makeCheckbox(false),
         autoOpenSidebarToggle: makeCheckbox(false),
+        autoCopyReplyToggle: makeCheckbox(false),
+        autoCopyCodeToggle: makeCheckbox(false),
         websearchRadios: makeWebsearchRadios(),
         ...overrides,
     };
@@ -720,7 +722,7 @@ describe('popup.js — Live Sync wiring block', () => {
             'chatWidthToggle', 'chatWidthSlider', 'chatWidthValue', 'chatWidthSliderContainer',
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
             'preventAutoScrollToggle', 'autoExpandMessagesToggle', 'websearchRadios',
-            'autoOpenSidebarToggle',
+            'autoOpenSidebarToggle', 'autoCopyReplyToggle', 'autoCopyCodeToggle',
         ];
         for (const field of expectedDomFields) {
             expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));

@@ -10,6 +10,7 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.37.0](changelog/v4.md#4370---2026-11-08) | 「Features」卡片新增「自動複製回覆內容」與「自動複製程式碼區塊內容」兩個開關（`isAutoCopyReplyEnabled`、`isAutoCopyCodeEnabled`，預設關閉，受主開關連動、同步並納入備份還原）；回覆完成（工具列被加入已顯示的訊息）時，`content/auto-copy.js` 經 `dss:react-click` 按下回覆的複製按鈕與各程式碼區塊的複製按鈕（兩者皆開時先回覆再程式碼區塊），頁面既有訊息、捲動重新掛載的舊訊息與被停止的回覆不複製；新增 `content/reply-completion.js` 與 `content/auto-copy.js`；已知限制：DeepSeek 分頁沒有焦點時瀏覽器拒絕剪貼簿寫入，自動複製只在分頁取得焦點時生效 |
 | [4.36.8](changelog/v4.md#4368---2026-11-08) | 修正開啟訊息編輯視窗時，提示詞前綴（主輸入框送出按鈕）與引用回覆被送進編輯框而非主輸入框：主輸入框選擇器 `INPUT_TEXTAREA_SELECTOR` 改為只匹配 `textarea[name="search"]`，新增 `ANY_TEXTAREA_SELECTOR` 供編輯視窗路徑使用（`DSSelectors` 匯出 96 → 97）；更正 `SCROLL_ROOT_SELECTOR` 的 JSDoc 與過時的「遮罩」註解（匯出進度 UI 為不阻擋操作的 toast） |
 | [4.36.7](changelog/v4.md#4367---2026-11-08) | 修正「匯出包含思考過程」搭配「隱藏思考過程」時匯出缺少思考區塊：匯出含思考時，擷取每則訊息前暫時展開已收合的思考區塊（無論由「隱藏思考過程」或使用者手動收合），複製後還原原本的收合狀態，匯出內容不再受顯示層影響；新增 `content/harvest.think.js` |
 | [4.36.6](changelog/v4.md#4366---2026-11-08) | 選擇器強化：多數雜湊 class 選擇器改為 `ds-*` 語意 class 與結構式 `:has()` 選擇器（`DSSelectors` 匯出 95 → 96）；修正回到頂端按鈕克隆原生外層、副本被誤認為原生按鈕而使 stacked → solo 從未觸發（改為克隆內層 `[role=button]`，後備排除 `.dsw-gotop`），並修正樣板 hover 變數拼字 `--dsl-button-hover-color` → `--dsl-button-color-hover`；移除新對話結構步驟與 censor 無效分支，censor 工具列後備改計算直接圖示子節點 |
