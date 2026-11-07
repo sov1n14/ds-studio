@@ -107,7 +107,7 @@ On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control
   - After the extension is updated or reloaded, clicking the "Refresh" button on the on-page "DS Studio has been updated" toast to reload the page (v4.34.2). Closing the tab instead still deletes the temporary conversation.
   - Navigating to the current URL (typing the current URL in the address bar and pressing Enter, which is equivalent to re-entering the page).
   - Entering or leaving a non-temporary history conversation.
-- **Independent operation**: This feature is not controlled by the master switch (top-right); it is independently controlled by its own homepage toggle.
+- **Relation to the master switch**: The homepage toggle row follows the master switch; it is removed when the master switch is off and re-injected when it turns on. The toggle's enabled value and the leave-then-delete logic are not controlled by the master switch and keep their last value while the master switch is off.
 
 ### Cross-Device Protection (v4.31.1)
 

@@ -181,7 +181,7 @@
   - `DSS_SET_SETTINGS`（`{ values: object }`）：寫入 `chrome.storage.local`；values 非物件、為陣列或無任何鍵即拒絕。
   - **變更廣播**：同一個 `install()` 註冊 `chrome.storage.onChanged`，受監看鍵變更時以 `{ type: DSS_SETTINGS_CHANGED, area, changes }` 原樣轉發給所有 `*://chat.deepseek.com/*` 分頁。受監看範圍為：`local` 區的任一 `StorageManager.KEYS` 值、額外的 `dss-temporary-chat-enabled`，以及不分區的 `dsPreset_` / `chatPresetMap_` 前綴鍵。個別分頁送出失敗即略過，不影響其餘分頁。
 - **content 端共用管線**（`content/feature-toggle.js`）：`registerFeatureToggle({ ownKey, onEnable, onDisable })` 登記一項功能，向 background 索取 `isEnabled` 與該功能自身鍵，生效條件為「總開關 !== `false` 且自身鍵 !== `false`」（未儲存視為開啟）。全體功能共用單一 `chrome.runtime.onMessage` 監聽器，於第一次註冊時才掛上；僅在生效狀態真正轉換時才呼叫回呼，且單一回呼拋錯不中斷其他功能。初始讀取失敗時將 `masterValue` 釘為 `false`，讓功能維持休眠而非在設定未知下啟用。回傳的 `unregister()` 可重複呼叫。目前以 `ownKey: null`（僅跟隨總開關）註冊者包含 `content/go-top.js` 與 `content/quote-reply.js`。
-- **臨時對話啟用旗標**（`content/temporary-chat-enabled-flag.js`）：因其開關獨立於總開關，直接使用同一組訊息而不經 `registerFeatureToggle` —— `initFromStorage()` 以 `DSS_GET_SETTINGS` 取 `dss-temporary-chat-enabled`，`write()` 以 `DSS_SET_SETTINGS` 落盤（先更新記憶體快取，呼叫端在 await 前即可讀到新值），`startSync()` 以 `DSS_SETTINGS_CHANGED` 收斂並通知訂閱者。僅 boolean `true` 視為啟用，`'true'` 等真值字串一律為停用。
+- **臨時對話啟用旗標**（`content/temporary-chat-enabled-flag.js`）：因其開關獨立於總開關（開關列本身仍隨總開關顯示與隱藏），直接使用同一組訊息而不經 `registerFeatureToggle` —— `initFromStorage()` 以 `DSS_GET_SETTINGS` 取 `dss-temporary-chat-enabled`，`write()` 以 `DSS_SET_SETTINGS` 落盤（先更新記憶體快取，呼叫端在 await 前即可讀到新值），`startSync()` 以 `DSS_SETTINGS_CHANGED` 收斂並通知訂閱者。僅 boolean `true` 視為啟用，`'true'` 等真值字串一律為停用。
 
 ## 24. 自動重試與自動繼續生成 (Auto Retry and Auto Continue) — v4.35.0
 
