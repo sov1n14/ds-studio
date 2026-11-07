@@ -108,3 +108,5 @@
 - [GoTop template hover var red](gotop-template-hover-var-red.md) — solo template hover var name bug; derive expected inline vars from snapshot native control
 - [jsdom per-file env](reference_jsdom_per_file_env.md) — docblock opt-in for :has() selector specs; innerText / location / scrollIntoView gaps and stubs
 - [Export collapsed-thinking scenario](export_collapsed_thinking_scenario.md) — real-Harvest export harness in jsdom; combined form + harvest-wrapper probe for display-state tests
+- [E2E live calibration](e2e-live-calibration.md) — native widths at 1280 viewport, export speed, sabotage-copy proof of non-vacuous E2E specs
+- [Scoped Stryker runs](stryker-runs.md) — ~7-8 min, full table printed, ENOENT crash when Playwright writes test/test-results concurrently

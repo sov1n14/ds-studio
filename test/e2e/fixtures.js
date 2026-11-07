@@ -2,10 +2,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, test as base, expect } from '@playwright/test';
+import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
+import { getExtensionWorker } from './helpers/extension.js';
+import { createSettingsSession } from './helpers/settings.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROFILE_DIR = path.join(REPO_ROOT, '.browser-profile');
-const DEEPSEEK_URL = 'https://chat.deepseek.com/';
 
 export const test = base.extend({
     // One logged-in Chrome (with the unpacked extension) shared by the whole worker.
@@ -27,18 +29,33 @@ export const test = base.extend({
         await use(profileContext);
     },
 
-    serviceWorker: [async ({ profileContext }, use) => {
-        const worker = profileContext.serviceWorkers()[0] ?? await profileContext.waitForEvent('serviceworker');
-        await use(worker);
-    }, { scope: 'worker' }],
+    // The extension worker, never a DeepSeek page worker; re-resolved per test because idle MV3 workers stop.
+    serviceWorker: async ({ profileContext }, use) => {
+        await use(await getExtensionWorker(profileContext));
+    },
 
-    extensionId: [async ({ serviceWorker }, use) => {
+    extensionId: async ({ serviceWorker }, use) => {
         await use(new URL(serviceWorker.url()).host);
-    }, { scope: 'worker' }],
+    },
+
+    // Settings session: `await settings.set({...})` writes chrome.storage.local; every touched key is restored after the test.
+    settings: async ({ profileContext }, use) => {
+        const session = createSettingsSession(profileContext);
+        try {
+            await use(session);
+        } finally {
+            await session.restore();
+        }
+    },
+
+    // `await openConversation(uuid)` loads a kept conversation in `page` and waits for its messages.
+    openConversation: async ({ page }, use) => {
+        await use((uuid) => openConversation(page, uuid));
+    },
 
     page: async ({ context }, use) => {
         const page = await context.newPage();
-        await page.goto(DEEPSEEK_URL);
+        await page.goto(`${DEEPSEEK_ORIGIN}/`);
         await use(page);
         await page.close();
     },
