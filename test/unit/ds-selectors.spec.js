@@ -1,45 +1,108 @@
-﻿/**
- * content/ds-selectors.js — value contract tests.
- * Composite derivation and export shape only; literal-value pins removed (tautological).
+// @vitest-environment jsdom
+/**
+ * content/ds-selectors.js — export contract tests.
+ * Invariants only: no literal-value pins (tautological) and no string-composition pins (structural selectors are composed freely).
+ * jsdom, not happy-dom, because happy-dom mis-parses relative :has() arguments (testing-pitfalls: DOM Fixture Completeness).
  */
 import { describe, it, expect, beforeAll } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 
-let S;
+const S = require('../../content/ds-selectors.js');
 
-beforeAll(() => {
-    S = require('../../content/ds-selectors.js');
-});
+/** Names removed when hashed-class selectors became structural; a consumer still reading one would get undefined. */
+const REMOVED_EXPORTS = [
+    'ASSISTANT_MESSAGE_SELECTOR',
+    'RETRY_BUTTON_FALLBACK_SELECTOR',
+    'NEW_CHAT_HEADER_MODIFIER_CLASS',
+    'SIDEBAR_NATIVE_COLLAPSED_CLASS',
+    'EXPAND_BUTTON_CONTAINER_CLASS',
+    'EXPAND_BUTTON_ICON_CLASS',
+];
+
+const selectorEntries = Object.entries(S).filter(([key]) => /_(SELECTOR|FALLBACK)$/.test(key));
+const classEntries = Object.entries(S).filter(([key]) => /_CLASS$/.test(key));
+
+/**
+ * Bracket balance outside quoted strings. The parser auto-closes a bracket left open at end of input, so an
+ * unclosed :has( never throws; once another selector is appended to it, the appended part silently moves inside.
+ */
+function hasBalancedBrackets(selector) {
+    const stack = [];
+    let quote = null;
+    for (const ch of selector) {
+        if (quote) { if (ch === quote) quote = null; continue; }
+        if (ch === '"' || ch === "'") quote = ch;
+        else if (ch === '(' || ch === '[') stack.push(ch);
+        else if (ch === ')' && stack.pop() !== '(') return false;
+        else if (ch === ']' && stack.pop() !== '[') return false;
+    }
+    return stack.length === 0 && quote === null;
+}
 
 describe('DSSelectors — composite values', () => {
-    it('THINK_BLOCK_SELECTOR is dot-prefixed THINK_BLOCK_CLASS', () => {
-        expect(S.THINK_BLOCK_SELECTOR).toBe('.' + S.THINK_BLOCK_CLASS);
-    });
-    it('THINK_SEPARATOR_SELECTOR is dot-prefixed THINK_SEPARATOR_CLASS', () => {
-        expect(S.THINK_SEPARATOR_SELECTOR).toBe('.' + S.THINK_SEPARATOR_CLASS);
-    });
-    it('FLOATING_BUTTON_BAR_DIV_SELECTOR is div + FLOATING_BUTTON_BAR_SELECTOR', () => {
-        expect(S.FLOATING_BUTTON_BAR_DIV_SELECTOR).toBe('div' + S.FLOATING_BUTTON_BAR_SELECTOR);
-    });
     it('THINK_HEADER_TOGGLE_CLASS is the first word of THINK_HEADER_CLASS', () => {
         expect(S.THINK_HEADER_TOGGLE_CLASS).toBe(S.THINK_HEADER_CLASS.split(' ')[0]);
     });
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 95 keys', () => {
-        expect(Object.keys(S)).toHaveLength(95);
+    it('exports exactly 96 keys (guards accidental export removal)', () => {
+        expect(Object.keys(S)).toHaveLength(96);
     });
     it('does not export the rejected websearch hash classes (ARCHITECTURE.md rejected signals)', () => {
         expect(S).not.toHaveProperty('WEBSEARCH_TOGGLE_CLASS');
         expect(S).not.toHaveProperty('WEBSEARCH_LABEL_CLASS');
     });
+    it.each(REMOVED_EXPORTS)('does not export %s (removed by the structural rewrite)', (name) => {
+        expect(S).not.toHaveProperty(name);
+    });
     it('every value is a string except EDIT_SEND_BUTTON_VARIANT_CLASSES', () => {
         for (const [key, value] of Object.entries(S)) {
             if (key === 'EDIT_SEND_BUTTON_VARIANT_CLASSES') {
-                expect(Array.isArray(value)).toBe(true);
+                expect(Array.isArray(value), key).toBe(true);
             } else {
-                expect(typeof value).toBe('string');
+                expect(typeof value, key).toBe('string');
             }
         }
+    });
+    it('no exported value is empty or blank', () => {
+        for (const [key, value] of Object.entries(S)) {
+            const parts = Array.isArray(value) ? value : [value];
+            expect(parts.length, key).toBeGreaterThan(0);
+            for (const part of parts) expect(part.trim(), key).not.toBe('');
+        }
+    });
+});
+
+describe('DSSelectors — selector syntax', () => {
+    beforeAll(() => {
+        expect(selectorEntries.length).toBeGreaterThan(0);
+        expect(classEntries.length).toBeGreaterThan(0);
+    });
+    it.each(selectorEntries)('%s parses as a CSS selector', (key, selector) => {
+        expect(() => document.querySelector(selector), selector).not.toThrow();
+    });
+    it.each(selectorEntries)('%s closes every bracket it opens', (key, selector) => {
+        expect(hasBalancedBrackets(selector), selector).toBe(true);
+    });
+    it.each(classEntries)('%s holds only bare class tokens', (key, value) => {
+        for (const token of value.split(/\s+/)) {
+            expect(() => document.querySelector('.' + token), token).not.toThrow();
+        }
+    });
+});
+
+describe('DSSelectors — floating button bar on real markup', () => {
+    const FIXTURE = path.resolve(__dirname, '../fixtures/ds-snapshots/conv2-finished-message-list.html');
+
+    it('FLOATING_BUTTON_BAR_DIV_SELECTOR resolves to one div, the parent of the native go-bottom button', () => {
+        document.body.innerHTML = fs.readFileSync(FIXTURE, 'utf8');
+        const matches = document.querySelectorAll(S.FLOATING_BUTTON_BAR_DIV_SELECTOR);
+        const nativeButton = document.querySelector('.' + S.GO_TOP_NATIVE_BUTTON_CLASS);
+        expect(nativeButton, 'fixture holds the native go-bottom button').not.toBeNull();
+        expect(matches).toHaveLength(1);
+        expect(matches[0].tagName).toBe('DIV');
+        expect(matches[0]).toBe(nativeButton.parentElement);
     });
 });

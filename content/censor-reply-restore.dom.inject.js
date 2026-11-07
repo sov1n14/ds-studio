@@ -103,11 +103,7 @@
             if (!markdownEl) {
                 markdownEl = document.createElement('div');
                 markdownEl.className = selectors.MARKDOWN_CLASS;
-                if (thinkBody) {
-                    thinkBody.after(markdownEl);
-                } else {
-                    thinkContentEl.appendChild(markdownEl);
-                }
+                thinkContentEl.appendChild(markdownEl);
             }
             markdownEl.innerHTML = this._renderMarkdown(thinkContent);
             markdownEl.setAttribute('style', '--ds-md-zoom: 1.143;');

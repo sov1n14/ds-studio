@@ -1,11 +1,17 @@
+// @vitest-environment jsdom
 /**
  * Unit tests for the export surface of content/content-script.js
+ *
+ * Runs under jsdom: the think-block selectors are structural (multi-level `:has()` anchored at .ds-message), which happy-dom mis-evaluates; jsdom matched Chrome on the captured DeepSeek snapshots. jsdom has no innerText, so the spec installs a textContent-backed getter for its own run.
+ *
+ * Message fixtures are copies of live DeepSeek markup (test/helpers/think-block-fixtures.js): a user message and a think-less reply from a finished conversation, and a finished reply whose expanded think block holds three think steps, a "搜索到 15 个网页" search row and a "浏览 4 个页面" row with four reference links.
  *
  * Coverage map:
  *   1 _buildMarkdownHeader            - structure, contains export timestamp
  *   2 convertMessageNodeToMarkdown    - user message branch
  *                                       AI main-only branch
  *                                       AI with thinking (includeThinking=true/false)
+ *                                       think status label, reference row, order, hash rotation
  *                                       includeReferences flag forwarded
  *                                       null/empty node guard
  *                                       always appends --- separator
@@ -23,72 +29,60 @@
  *                                       fallback (no Harvest): alerts when no DOM messages
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
-import DSSelectors from '../../content/ds-selectors.js';
+import { loadThinkMessage, loadMessagesWithoutThinkBlock, thinkParts, stripHashedClasses } from '../helpers/think-block-fixtures.js';
 
 const { convertMessageNodeToMarkdown, exportConversationToMarkdown, _buildMarkdownHeader } = contentScript;
 
+// jsdom does not implement innerText; the export reads it for user messages.
+const hadOwnInnerText = Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'innerText');
+beforeAll(() => {
+    if (!hadOwnInnerText) {
+        Object.defineProperty(HTMLElement.prototype, 'innerText', { configurable: true, get() { return this.textContent; } });
+    }
+});
+afterAll(() => {
+    if (!hadOwnInnerText) delete HTMLElement.prototype.innerText;
+});
+
+/** Real user message showing `text` as its prompt. */
 function makeUserMessage(text) {
     if (text === undefined) text = 'Hello world';
-    const msg = document.createElement('div');
-    msg.className = 'ds-message';
-    const inner = document.createElement('div');
-    inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-    inner.textContent = text;
-    Object.defineProperty(inner, 'innerText', { value: text, configurable: true });
-    msg.appendChild(inner);
-    return msg;
+    const { userMessage } = loadMessagesWithoutThinkBlock();
+    userMessage.querySelector('.ds-collapsible-text span').textContent = text;
+    return userMessage;
 }
 
+/** Real think-less reply whose answer markdown holds `htmlContent`. */
 function makeAiMessage(htmlContent) {
     if (htmlContent === undefined) htmlContent = '<p>Answer</p>';
-    const msg = document.createElement('div');
-    msg.className = 'ds-message';
-    const md = document.createElement('div');
-    md.className = 'ds-markdown ds-assistant-message-main-content';
-    md.innerHTML = htmlContent;
-    msg.appendChild(md);
+    const { assistantMessage } = loadMessagesWithoutThinkBlock();
+    assistantMessage.querySelector('.ds-assistant-message-main-content').innerHTML = htmlContent;
+    return assistantMessage;
+}
+
+/** Real finished reply with an expanded think block; the first think step, the answer and the header status label are replaceable. */
+function makeAiMessageWithThinking(opts) {
+    opts = opts || {};
+    const msg = loadThinkMessage('open');
+    const { block, statusSpan } = thinkParts(msg);
+    if (opts.thinkHtml) block.querySelector('.ds-think-content .ds-markdown').innerHTML = opts.thinkHtml;
+    if (opts.mainHtml) msg.querySelector('.ds-assistant-message-main-content').innerHTML = opts.mainHtml;
+    if (opts.thoughtLabel) statusSpan.textContent = opts.thoughtLabel;
     return msg;
 }
 
-function makeAiMessageWithThinking(opts) {
-    opts = opts || {};
-    const thinkHtml = opts.thinkHtml || '<p>Think step</p>';
-    const mainHtml = opts.mainHtml || '<p>Main answer</p>';
-    const thoughtLabel = opts.thoughtLabel || 'Thought for 3 seconds';
-
-    const msg = document.createElement('div');
-    msg.className = 'ds-message';
-
-    const thinkWrapper = document.createElement('div');
-    thinkWrapper.className = 'ds-think-wrapper';
-
-    const thinkContent = document.createElement('div');
-    thinkContent.className = 'ds-think-content';
-    const thinkMd = document.createElement('div');
-    thinkMd.className = 'ds-markdown';
-    thinkMd.innerHTML = thinkHtml;
-    thinkContent.appendChild(thinkMd);
-    thinkWrapper.appendChild(thinkContent);
-
-    const labelDiv = document.createElement('div');
-    labelDiv.className = 'ds-think-label';
-    const labelSpan = document.createElement('span');
-    labelSpan.className = DSSelectors.THINK_STATUS_SELECTOR.slice(1);
-    labelSpan.textContent = thoughtLabel;
-    labelDiv.appendChild(labelSpan);
-    thinkWrapper.appendChild(labelDiv);
-
-    msg.appendChild(thinkWrapper);
-
-    const mainMd = document.createElement('div');
-    mainMd.className = 'ds-markdown ds-assistant-message-main-content';
-    mainMd.innerHTML = mainHtml;
-    msg.appendChild(mainMd);
-
-    return msg;
+/** Non-blank lines of the exported thinking section (each starts with "> "), without the section title. */
+function thinkingLines(markdown) {
+    const lines = markdown.split('\n');
+    const start = lines.indexOf('> **Thinking Process:**');
+    const out = [];
+    for (let i = start + 1; i < lines.length && lines[i].startsWith('>'); i++) {
+        if (lines[i].slice(1).trim() !== '') out.push(lines[i]);
+    }
+    return out;
 }
 
 function installHarvestMock(overrides) {
@@ -163,7 +157,7 @@ describe('convertMessageNodeToMarkdown', () => {
         expect(result).toContain('---');
     });
 
-    describe('user message (.fbb737a4)', () => {
+    describe('user message', () => {
         it('outputs ## User header', () => {
             const msg = makeUserMessage('test');
             const result = convertMessageNodeToMarkdown(msg, true, true);
@@ -173,17 +167,11 @@ describe('convertMessageNodeToMarkdown', () => {
         it('includes the user text content', () => {
             const msg = makeUserMessage('Explain recursion');
             const result = convertMessageNodeToMarkdown(msg, true, true);
-            expect(result).toContain('Explain recursion');
+            expect(result).toBe('## User\n\nExplain recursion\n\n---\n\n');
         });
 
         it('returns only separator when user text is empty', () => {
-            const msg = document.createElement('div');
-            msg.className = 'ds-message';
-            const inner = document.createElement('div');
-            inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            inner.textContent = '   ';
-            Object.defineProperty(inner, 'innerText', { value: '   ', configurable: true });
-            msg.appendChild(inner);
+            const msg = makeUserMessage('   ');
             const result = convertMessageNodeToMarkdown(msg, true, true);
             expect(result).not.toContain('## User');
             expect(result).toContain('---');
@@ -231,10 +219,37 @@ describe('convertMessageNodeToMarkdown', () => {
             expect(result).toContain('Main answer text');
         });
 
-        it('includes thought label (._5255ff8) in thinking section', () => {
+        it('exports the header status label as the thought label, never the search-result count beside it', () => {
             const msg = makeAiMessageWithThinking({ thoughtLabel: 'Thought for 5 seconds' });
-            const result = convertMessageNodeToMarkdown(msg, true, true);
-            expect(result).toContain('Thought for 5 seconds');
+            const lines = thinkingLines(convertMessageNodeToMarkdown(msg, true, true));
+            expect(lines[0]).toBe('> Thought for 5 seconds');
+            expect(lines.filter((line) => line.includes('Thought for 5 seconds'))).toHaveLength(1);
+            expect(lines.join('\n'), 'the search-result count row was exported as a thought label').not.toContain('搜索到 15 个网页');
+        });
+
+        it('exports status, think steps and the browse row with its links in page order', () => {
+            const msg = makeAiMessageWithThinking();
+            const browseRow = Array.from(thinkParts(msg).block.children).find((child) => child.textContent.startsWith('浏览 4 个页面'));
+            const links = Array.from(browseRow.querySelectorAll('a')).map((a) => ' [' + a.textContent + '](' + a.href + ')').join('');
+            expect(links, 'fixture: the browse row holds four reference links').toContain('[Reference page 4]');
+
+            const lines = thinkingLines(convertMessageNodeToMarkdown(msg, true, true));
+
+            expect(lines).toEqual([
+                '> 已思考（用时 3 秒）',
+                '> Placeholder think step 1.',
+                '> Placeholder think step 2.',
+                '> 浏览 4 个页面' + links,
+                '> Placeholder think step 3.',
+            ]);
+        });
+
+        it('exports the same thinking section after DeepSeek rotates every hashed class', () => {
+            const expected = thinkingLines(convertMessageNodeToMarkdown(makeAiMessageWithThinking(), true, true));
+            const rotated = stripHashedClasses(makeAiMessageWithThinking());
+            expect(thinkParts(rotated).block.className, 'fixture: the block kept no hashed class').toBe('');
+
+            expect(thinkingLines(convertMessageNodeToMarkdown(rotated, true, true))).toEqual(expected);
         });
     });
 

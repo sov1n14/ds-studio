@@ -3,7 +3,7 @@
  * 所有選擇器以 .dss-temp-chat- 前綴，避免污染宿主頁面樣式。
  */
 
-/* ── 容器列：水平置中，插入於 div.aaff8b8f 下方 38px ── */
+/* ── 容器列：水平置中，插入於浮動按鈕列（FLOATING_BUTTON_BAR_DIV_SELECTOR）下方 38px ── */
 .dss-temp-chat-row {
     display: flex;
     align-items: center;

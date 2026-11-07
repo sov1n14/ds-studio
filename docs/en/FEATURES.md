@@ -89,7 +89,7 @@ A prompt group dropdown is displayed directly in the center of the title bar at 
 
 ## Temporary Conversation
 
-On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control appears 38px below `div.aaff8b8f` (toggle on the left, label on the right):
+On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control appears 38px below the floating button bar (the div four levels above the main input, `FLOATING_BUTTON_BAR_SELECTOR`) (toggle on the left, label on the right):
 
 - **Purpose**: When turned on, any **new conversation created from the homepage** is marked as temporary. When you leave that temporary conversation, the extension automatically calls the DeepSeek deletion API to remove it — ideal for one-off questions you do not want to keep.
 - **Only newly created conversations are deleted**: Whether a conversation is temporary is determined by whether the `POST /api/v0/chat_session/create` API was called. **Existing conversations opened from the history list are never marked and never deleted** — even with the toggle on, entering and leaving a history conversation does not delete it.
@@ -197,7 +197,7 @@ The popup menu's **Features** card provides two independent toggles, both off by
 
 - **Round Cadence**: While at least one toggle is on, the extension works in rounds — each round waits a random delay between 0 and 3 seconds in 0.1-second steps, then clicks each enabled button that is currently on the page once, and then schedules the next round with a fresh random delay.
 - **Click Count**: Unlimited. As long as a button remains on screen, every round clicks it again until it disappears.
-- **Button Location**: Buttons are located by CSS selectors only, never by button text, so the interface language does not matter. The retry button uses the semantic classes `.ds-button--warning.ds-button--circle.ds-button--xs` with the hashed classes `.a3b9bd76._76a2310` as a fallback; the continue button uses `._8e85838 > .ds-button[role="button"]` with `._6eef0b0` as a fallback.
+- **Button Location**: Buttons are located by CSS selectors only, never by button text, so the interface language does not matter. The retry button uses the semantic classes `.ds-button--warning.ds-button--circle.ds-button--xs`; the continue button uses `._8e85838 > .ds-button[role="button"]` with `._6eef0b0` as a fallback.
 - **Master Switch Linkage**: Both toggles are controlled by the master switch. When the master switch is off, or both toggles are off, the round timer is stopped entirely and consumes no resources.
 - **Sync and Backup**: Like the other feature toggles, both states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
 
@@ -250,7 +250,7 @@ After selecting text within an AI reply area, a **Quote Reply** floating button 
 
 When you click DeepSeek's edit message button (v3.2.1), the extension automatically cleans up wrapper tags in the edit box that were injected by prompt injection, so you see only your original input text:
 
-- **Trigger**: Clicking the edit button next to a message (CSS class `d4910adc`); the extension detects the click via event delegation and waits for DeepSeek to asynchronously render the edit textarea.
+- **Trigger**: Clicking the edit button, an icon button in a user message's toolbar (`EDIT_MESSAGE_BUTTON_SELECTOR`); the extension detects the click via event delegation and waits for DeepSeek to asynchronously render the edit textarea.
 - **Cleanup Content**: If the textarea content matches the `<user-input>...</user-input>` wrapper format, the wrapper is stripped, keeping only the original input. Outer `<system-reminder>` and other injected content is also removed.
 - **Height Adjustment**: After the edit box appears, the container's max-height restriction is automatically removed, and the max-height of related elements is dynamically calculated based on the viewport height, ensuring the edit area has sufficient visible space. The edit box is automatically scrolled into view.
 - **Fully Automatic**: This feature is active as soon as the extension is injected; it has no independent toggle and is not gated by the master switch.

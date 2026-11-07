@@ -69,7 +69,7 @@
 ### 觸發與範圍
 
 - **委派監聽器**：單一 document 層級的 `click` 處理器（`handleEditButtonClick`），經由 `window` 防護旗標冪等註冊。
-- **編輯按鈕解析**：`e.target.closest('.d4910adc')`——混淆後的編輯按鈕 class（`EDIT_BUTTON_CLASS`）。不符合的點擊提早返回（guard clause）。
+- **編輯按鈕解析**：`e.target.closest(EDIT_BUTTON_SELECTOR)`——使用者訊息項目（含 `.ds-collapsible-text` 的項目）內 `.ds-flex` 中帶 `[aria-disabled]` 的圖示按鈕（`EDIT_BUTTON_SELECTOR` = `EDIT_MESSAGE_BUTTON_SELECTOR`）。不符合的點擊提早返回（guard clause）。
 
 ### 非同步 Textarea 偵測 (`waitForNewTextarea`)
 
@@ -83,15 +83,15 @@
 在偵測當下（`onFound`）套用一次，此時編輯 UI 已掛載且目標元素存在：
 
 - **`.cc852ac5`**（`REMOVE_MAX_HEIGHT_SELECTOR`）：對每個符合的元素設定 inline `style.maxHeight = 'none'`——一律執行。
-- **`._646a522`**（`DYNAMIC_MAX_HEIGHT_SELECTOR`）：inline `style.maxHeight` 設為當下經純函式 `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` 計算出的動態值 = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX`（offset = 32px）。高度即時讀取：`window.innerHeight`，以及第一個 `._2be88ba`（`HEIGHT_SOURCE_SELECTOR_A`）與第一個 `._871cbca`（`HEIGHT_SOURCE_SELECTOR_B`）的 `getBoundingClientRect().height`。**來源缺失規則**：任一來源元素不在 DOM 中時，完全略過 `._646a522` 的調整（保持原樣）——`.cc852ac5` 的移除仍照常執行。只計算一次；不註冊 resize 監聽器。編輯結束時覆寫值不會還原。
+- **`._646a522`**（`DYNAMIC_MAX_HEIGHT_SELECTOR`）：inline `style.maxHeight` 設為當下經純函式 `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` 計算出的動態值 = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX`（offset = 32px）。高度即時讀取：`window.innerHeight`，以及第一個 `CHAT_HEADER_SELECTOR`（`div:has(> .the-header)`，`HEIGHT_SOURCE_SELECTOR_A`）與第一個 `CONTENT_COLUMN_SELECTOR`（`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`，`HEIGHT_SOURCE_SELECTOR_B`）的 `getBoundingClientRect().height`。**來源缺失規則**：任一來源元素不在 DOM 中時，完全略過 `._646a522` 的調整（保持原樣）——`.cc852ac5` 的移除仍照常執行。只計算一次；不註冊 resize 監聽器。編輯結束時覆寫值不會還原。
 
 ### 捲動定位 (`applyEditScrollPosition` + `computeScrollDelta` + `findScrollableAncestor`)
 
-max-height 調整與包裝清理完成後，捲動編輯框使其視覺上位於固定標頭 `._2be88ba` 下方 `EDIT_SCROLL_GAP_PX`（16px）處。由於 `.cc852ac5` 位於可捲動容器內，而 `._2be88ba` 是固定定位（不同的 z 層），對齊完全靠調整容器的 `scrollTop` 達成——而非重新定位元素。在 `requestAnimationFrame` 內執行一次（於 `applyMaxHeightAdjustments` + `applyTextareaCleanup` 之後），以量測清理後的版面。
+max-height 調整與包裝清理完成後，捲動編輯框使其視覺上位於固定標頭 `CHAT_HEADER_SELECTOR` 下方 `EDIT_SCROLL_GAP_PX`（16px）處。由於 `.cc852ac5` 位於可捲動容器內，而 `CHAT_HEADER_SELECTOR` 是固定定位（不同的 z 層），對齊完全靠調整容器的 `scrollTop` 達成——而非重新定位元素。在 `requestAnimationFrame` 內執行一次（於 `applyMaxHeightAdjustments` + `applyTextareaCleanup` 之後），以量測清理後的版面。
 
 - **`computeScrollDelta(editBoxTop, headerBottom, gap)`**（純函式）：回傳 `editBoxTop − (headerBottom + gap)`——要**加到**捲動容器 `scrollTop` 的帶正負號像素量（正值向下捲，負值向上捲）。
 - **`findScrollableAncestor(el)`**：從 `el`（含自身）往上走，回傳最近一個 `scrollHeight > clientHeight` 的節點，否則回傳 `null`。
-- **`applyEditScrollPosition(root)`**（root 預設為 `document`，為 null 時也退回 `document`）：找到 `.cc852ac5`（編輯框）與 `._2be88ba`（標頭），從 `.ds-virtual-list-items._6f2c522` 開始經 `findScrollableAncestor` 解析真正的捲動容器（後備為 `._6f2c522` 本身），即時讀取 `getBoundingClientRect()` 幾何資訊，再執行 `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`。**防護規則**：編輯框、標頭或捲動容器缺失時不執行任何動作（不拋出例外）。一次性調整；不註冊 resize／scroll 監聽器。
+- **`applyEditScrollPosition(root)`**（root 預設為 `document`，為 null 時也退回 `document`）：找到 `.cc852ac5`（編輯框）與 `CHAT_HEADER_SELECTOR`（標頭），從 `VIRTUAL_LIST_CONTAINER_SELECTOR`（`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`）開始經 `findScrollableAncestor` 解析真正的捲動容器（找不到可捲動祖先時退回該列表容器本身），即時讀取 `getBoundingClientRect()` 幾何資訊，再執行 `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`。**防護規則**：編輯框、標頭或捲動容器缺失時不執行任何動作（不拋出例外）。一次性調整；不註冊 resize／scroll 監聽器。
 
 ### 包裝萃取 (`extractUserInput` + `applyTextareaCleanup`)
 
@@ -100,7 +100,7 @@ max-height 調整與包裝清理完成後，捲動編輯框使其視覺上位於
 
 ### 測試介面
 
-經由 `module.exports` 匯出（Node 環境防護）：`extractUserInput`、`computeDynamicMaxHeight`、`applyMaxHeightAdjustments`、`computeScrollDelta`、`findScrollableAncestor`、`applyEditScrollPosition`、`applyTextareaCleanup`、`waitForNewTextarea`、`handleEditButtonClick`，以及常數 `EDIT_BUTTON_CLASS`、`REMOVE_MAX_HEIGHT_SELECTOR`、`DYNAMIC_MAX_HEIGHT_SELECTOR`、`HEIGHT_SOURCE_SELECTOR_A`、`HEIGHT_SOURCE_SELECTOR_B`、`MAX_HEIGHT_OFFSET_PX`、`EDIT_SCROLL_GAP_PX`、`USER_INPUT_REGEX`、`DETECTION_TIMEOUT_MS`、`VALUE_WAIT_TIMEOUT_MS`。
+經由 `module.exports` 匯出（Node 環境防護）：`extractUserInput`、`computeDynamicMaxHeight`、`applyMaxHeightAdjustments`、`computeScrollDelta`、`findScrollableAncestor`、`applyEditScrollPosition`、`applyTextareaCleanup`、`waitForNewTextarea`、`handleEditButtonClick`，以及常數 `EDIT_BUTTON_SELECTOR`、`REMOVE_MAX_HEIGHT_SELECTOR`、`DYNAMIC_MAX_HEIGHT_SELECTOR`、`HEIGHT_SOURCE_SELECTOR_A`、`HEIGHT_SOURCE_SELECTOR_B`、`MAX_HEIGHT_OFFSET_PX`、`EDIT_SCROLL_GAP_PX`、`USER_INPUT_REGEX`、`DETECTION_TIMEOUT_MS`、`VALUE_WAIT_TIMEOUT_MS`。
 
 ## 防止自動回滾模組 (PreventAutoScroll)
 
@@ -193,11 +193,11 @@ Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊�
 
 ### 按鈕定位
 
-僅以 `content/ds-selectors.js` 的選擇器定位，不比對按鈕文字；主要選擇器命中時不嘗試備援。
+僅以 `content/ds-selectors.js` 的選擇器定位，不比對按鈕文字；繼續生成按鈕在主要選擇器命中時不嘗試備援，重試按鈕只用主要選擇器。
 
 | 按鈕 | 主要 | 備援 |
 |-|-|-|
-| 重試 | `RETRY_BUTTON_SELECTOR`（`.ds-button--warning.ds-button--circle.ds-button--xs`） | `RETRY_BUTTON_FALLBACK_SELECTOR`（`.a3b9bd76._76a2310`） |
+| 重試 | `RETRY_BUTTON_SELECTOR`（`.ds-button--warning.ds-button--circle.ds-button--xs`） | — |
 | 繼續生成 | `CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`） | `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`） |
 
 ### React 點擊橋接 (React Click Bridge)
@@ -233,7 +233,7 @@ Features 卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 `autoOpenSi
 
 ### 偵測與點擊
 
-- **收合期**：收合狀態以側欄 wrapper（`SIDEBAR_WRAPPER_SELECTOR`，`div.dc04ec1d`）是否帶 `content/ds-selectors.js` 側欄區塊的原生收合 class `SIDEBAR_NATIVE_COLLAPSED_CLASS`（`a02af2e6`）判定。收合期自 wrapper 取得該 class 起、失去該 class 止；`_scanExisting()` 在非收合狀態時重設 `_hasClickedThisEpisode`，收合期內只點擊一次。
+- **收合期**：收合狀態以側欄 wrapper（`SIDEBAR_WRAPPER_SELECTOR`，`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）是否符合 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_WRAPPER_COLLAPSED_SELECTOR`（wrapper 加上 `:has(> div:nth-child(2))`，即收合軌道作為第二個直接子層存在）判定，由 `wrapper.matches(...)` 檢查。收合期自 wrapper 符合該選擇器起、不再符合止；`_scanExisting()` 在非收合狀態時重設 `_hasClickedThisEpisode`，收合期內只點擊一次。
 - **觀察器**：生效期間在 `document.body` 上掛載 `MutationObserver`（`childList`、`subtree`、`attributes`，`attributeFilter: ['class']`），每批變更皆整頁重掃；按鈕的圖示 path 可能晚於按鈕節點插入，而 DeepSeek 依寬度斷點再收合時只改寫 wrapper 的 `class`，因此不只檢查新增節點。掃描拋出的錯誤以 `console.error('[DSS] auto-open-sidebar:', err)` 記錄。
 - **點擊**：收合期內尚未點擊時，對命中 `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR` 的按鈕派送冒泡的 `dss:react-click` 自訂事件，由 [React 點擊橋接](#react-點擊橋接-react-click-bridge)呼叫按鈕的 React `onClick`（無 React `onClick` 時退回 `element.click()`）。
 - **窄版型不點擊**（v4.36.3）：每次掃描先以 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_HAMBURGER_BUTTON_SELECTOR`（`div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])`）查找 DeepSeek header 的漢堡按鈕。漢堡按鈕在桌面與窄版型皆掛載，但只有窄版型（約 768px 以下）的 `checkVisibility()` 為真；收合軌道的展開按鈕則在兩種版型皆渲染且可見（34×34），無法以自身可見性區分版型。漢堡按鈕存在且 `typeof checkVisibility === 'function' && checkVisibility()` 為真時略過點擊且不消耗收合期（`_hasClickedThisEpisode` 與 `_lastClickAt` 皆不變），同一收合期內漢堡按鈕一旦變為不可見即點擊；缺少 `checkVisibility` 方法的漢堡按鈕不阻擋點擊。窄版型下 DeepSeek 會在任何展開後約 0.5–1.2 秒自行收回側欄，因此自動開啟不在該版型點擊。
@@ -248,7 +248,7 @@ Features 卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 `autoOpenSi
 div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])
 ```
 
-- **為何以圖示 path 區分**：此按鈕位於 DeepSeek 的收合軌道（`div.ca6d4be1`），與搜尋、新對話按鈕相鄰，三者的 class 字串完全相同（含雜湊 class），只有圖示 path 能區分展開側欄按鈕。
+- **為何以圖示 path 區分**：此按鈕位於 DeepSeek 的收合軌道（`SIDEBAR_NATIVE_COLLAPSED_SELECTOR`，wrapper `> div:not(:has(.ds-scroll-area))`），與搜尋、新對話按鈕相鄰，三者的 class 字串完全相同，只有圖示 path 能區分展開側欄按鈕。
 - **排除的變體**：展開狀態下的側欄切換按鈕使用 `ds-button--iconLabelTertiary`，行動版漢堡選單按鈕使用 `ds-button--xl` 且圖示 path 不同，兩者皆不符合此選擇器。
 
 ### 載入順序

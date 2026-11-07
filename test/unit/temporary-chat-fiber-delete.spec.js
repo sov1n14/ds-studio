@@ -1,117 +1,101 @@
+/**
+ * content/temporary-chat-fiber-delete.js (MAIN world) — finds the sidebar row of a session and calls the onDeleteSession prop on the nearest React fiber that carries it, then posts DSS_FIBER_DELETE_RESULT back.
+ *
+ * Fixture: test/fixtures/ds-snapshots/sidebar-expanded.html, the expanded sidebar wrapper captured from the live page (conv2-finished), chat titles and session ids replaced by placeholders. The only addition is a fake React fiber expando on one chat row anchor, the way React attaches __reactFiber$<random> to host nodes; no selector string is mocked, so the module locates the sidebar with its own selector against real markup.
+ * The wrapper is mounted as the first element of body: happy-dom 16.8.1 evaluates `:has(> A > B)` as `:has(> A)`, so its first match for the sidebar selector is the first div with a div child, which is the wrapper only when no such div precedes it.
+ */
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+const SIDEBAR_HTML = fs.readFileSync(path.resolve(__dirname, '../fixtures/ds-snapshots/sidebar-expanded.html'), 'utf8');
+const RESULT_TYPE = 'DSS_FIBER_DELETE_RESULT';
+const REQUEST_TYPE = 'DSS_FIBER_DELETE_SESSION';
+
+let onMessage;
+let postMessageSpy;
+
+function mountSidebar() {
+    document.body.innerHTML = SIDEBAR_HTML;
+    return document.body.firstElementChild;
+}
+
+/** Session id of the n-th chat row (0-based) in the fixture, read from its href. */
+function sessionIdOfRow(wrapper, n) {
+    const href = wrapper.querySelectorAll('a[href]')[n].getAttribute('href');
+    return href.split('/').filter(Boolean).pop();
+}
+
+/** Attach a fiber chain to the n-th row: the anchor's own fiber has no handler, its parent fiber carries onDeleteSession. */
+function attachFiber(wrapper, n) {
+    const onDeleteSession = vi.fn();
+    const anchor = wrapper.querySelectorAll('a[href]')[n];
+    anchor['__reactFiber$t3st'] = { memoizedProps: {}, return: { memoizedProps: { onDeleteSession } } };
+    return onDeleteSession;
+}
+
+function send(data, source = window) {
+    onMessage({ source, data });
+}
+
+beforeEach(() => {
+    const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, fn) => {
+        if (type === 'message') onMessage = fn;
+    });
+    postMessageSpy = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+
+    const scriptPath = require.resolve('../../content/temporary-chat-fiber-delete.js');
+    delete require.cache[scriptPath];
+    require('../../content/temporary-chat-fiber-delete.js');
+    addSpy.mockRestore();
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+    onMessage = undefined;
+});
+
 describe('temporary-chat-fiber-delete', () => {
-    let postMessageSpy;
-    let anchor;
-    let originalDocument;
-    let originalWindow;
+    it('calls onDeleteSession on the row of the requested session and posts success', () => {
+        const wrapper = mountSidebar();
+        const sessionId = sessionIdOfRow(wrapper, 1);
+        const otherHandler = attachFiber(wrapper, 0);
+        const onDeleteSession = attachFiber(wrapper, 1);
 
-    beforeEach(() => {
-        originalDocument = global.document;
-        originalWindow = global.window;
+        send({ type: REQUEST_TYPE, sessionId });
 
-        anchor = {
-            href: '/a/chat/s/test-session-id',
-            '__reactFiber$123': {
-                memoizedProps: {},
-                return: {
-                    memoizedProps: {
-                        onDeleteSession: vi.fn()
-                    }
-                }
-            }
-        };
-
-        const sidebar = {
-            querySelectorAll: vi.fn().mockReturnValue([anchor])
-        };
-
-        global.document = {
-            querySelector: vi.fn((selector) => {
-                if (selector === 'div.dc04ec1d') return sidebar;
-                return null;
-            })
-        };
-
-        global.window = {
-            addEventListener: vi.fn(),
-            postMessage: vi.fn()
-        };
-
-        postMessageSpy = vi.spyOn(global.window, 'postMessage');
-
-        // Load script
-        const scriptPath = require.resolve('../../content/temporary-chat-fiber-delete.js');
-        delete require.cache[scriptPath];
-        require('../../content/temporary-chat-fiber-delete.js');
+        expect(onDeleteSession, 'handler of the requested row').toHaveBeenCalledWith(sessionId);
+        expect(otherHandler, 'handler of another row').not.toHaveBeenCalled();
+        expect(postMessageSpy).toHaveBeenCalledWith({ type: RESULT_TYPE, sessionId, success: true }, '*');
     });
 
-    afterEach(() => {
-        global.document = originalDocument;
-        global.window = originalWindow;
-        vi.restoreAllMocks();
-        vi.resetModules();
+    it('posts failure when no sidebar row links to the session', () => {
+        const wrapper = mountSidebar();
+        const onDeleteSession = attachFiber(wrapper, 0);
+
+        send({ type: REQUEST_TYPE, sessionId: 'non-existent-id' });
+
+        expect(onDeleteSession).not.toHaveBeenCalled();
+        expect(postMessageSpy).toHaveBeenCalledWith({ type: RESULT_TYPE, sessionId: 'non-existent-id', success: false }, '*');
     });
 
-    it('should call onDeleteSession and post success result when session is found', () => {
-        // Find the registered message listener
-        const listenerCall = global.window.addEventListener.mock.calls.find(call => call[0] === 'message');
-        const listener = listenerCall[1];
+    it('ignores messages from other sources', () => {
+        const wrapper = mountSidebar();
+        const sessionId = sessionIdOfRow(wrapper, 0);
+        const onDeleteSession = attachFiber(wrapper, 0);
 
-        listener({
-            source: global.window,
-            data: { type: 'DSS_FIBER_DELETE_SESSION', sessionId: 'test-session-id' }
-        });
+        send({ type: REQUEST_TYPE, sessionId }, null);
 
-        expect(anchor['__reactFiber$123'].return.memoizedProps.onDeleteSession).toHaveBeenCalledWith('test-session-id');
-        expect(postMessageSpy).toHaveBeenCalledWith({
-            type: 'DSS_FIBER_DELETE_RESULT',
-            sessionId: 'test-session-id',
-            success: true
-        }, '*');
-    });
-
-    it('should post failure result when session is not found in DOM', () => {
-        const listenerCall = global.window.addEventListener.mock.calls.find(call => call[0] === 'message');
-        const listener = listenerCall[1];
-
-        listener({
-            source: global.window,
-            data: { type: 'DSS_FIBER_DELETE_SESSION', sessionId: 'non-existent-id' }
-        });
-
-        expect(postMessageSpy).toHaveBeenCalledWith({
-            type: 'DSS_FIBER_DELETE_RESULT',
-            sessionId: 'non-existent-id',
-            success: false
-        }, '*');
-    });
-
-    it('should ignore messages from other sources', () => {
-        const listenerCall = global.window.addEventListener.mock.calls.find(call => call[0] === 'message');
-        const listener = listenerCall[1];
-
-        listener({
-            source: null,
-            data: { type: 'DSS_FIBER_DELETE_SESSION', sessionId: 'test-session-id' }
-        });
-
+        expect(onDeleteSession).not.toHaveBeenCalled();
         expect(postMessageSpy).not.toHaveBeenCalled();
     });
 
-    it('should post failure result when sessionId is missing', () => {
-        const listenerCall = global.window.addEventListener.mock.calls.find(call => call[0] === 'message');
-        const listener = listenerCall[1];
+    it('posts failure when sessionId is missing', () => {
+        mountSidebar();
 
-        listener({
-            source: global.window,
-            data: { type: 'DSS_FIBER_DELETE_SESSION' }
-        });
+        send({ type: REQUEST_TYPE });
 
-        expect(postMessageSpy).toHaveBeenCalledWith({
-            type: 'DSS_FIBER_DELETE_RESULT',
-            sessionId: undefined,
-            success: false
-        }, '*');
+        expect(postMessageSpy).toHaveBeenCalledWith({ type: RESULT_TYPE, sessionId: undefined, success: false }, '*');
     });
 });

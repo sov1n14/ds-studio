@@ -1,7 +1,6 @@
 /**
  * DS studio — Mobile Homepage Cleanup
- * 在行動裝置上，當路徑為首頁（'/'）時，永久移除所有帶有 CSS class `_9579690`
- * 的 DOM 元素。使用 MutationObserver 應對 DeepSeek SPA 動態插入的元素。
+ * 在行動裝置上，當路徑為首頁（'/'）時，永久移除「下载应用」元素（選擇器見 content/ds-selectors.js 的 HOMEPAGE_MOBILE_CLEANUP_SELECTOR）。使用 MutationObserver 應對 DeepSeek SPA 動態插入的元素。
  *
  * 架構決策：
  *   - 僅在行動裝置（觸控或行動 UA）上啟動，桌面端零開銷；
@@ -43,7 +42,7 @@ const MobileHomepageCleanup = {
     },
 
     /**
-     * 移除頁面中所有帶有 `_9579690` class 的 DOM 元素。
+     * 移除頁面中所有符合 HOMEPAGE_MOBILE_CLEANUP_SELECTOR 的「下载应用」元素。
      */
     _removeTargetElements() {
         document.querySelectorAll(__DS_MobileHomepageSelectors.HOMEPAGE_MOBILE_CLEANUP_SELECTOR).forEach(el => el.remove());

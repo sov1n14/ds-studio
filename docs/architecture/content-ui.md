@@ -8,7 +8,7 @@
 
 `content/sidebar-auto-hide.js` 中的 `SidebarAutoHide` 模組負責側邊欄的收合／展開行為：
 
-- **收合**：啟用時，側邊欄（`div.dc04ec1d`）收合為 60px 寬。內層內容（`div.b8812f16.a2f3d50e`）以負值 `margin-left` 位移，藏到收合後的外層容器後方，只留下一條細長的可見區。
+- **收合**：啟用時，側邊欄（`SIDEBAR_WRAPPER_SELECTOR`，`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）收合為 60px 寬。內層內容（`SIDEBAR_INNER_SELECTOR`，`div:has(> .ds-scroll-area > .ds-scroll-area)`）以負值 `margin-left` 位移，藏到收合後的外層容器後方，只留下一條細長的可見區。
 - **展開**：`mouseenter` 觸發後延遲 150ms，側邊欄展開回原本儲存的寬度，並清除內層的 margin。
 - **懸停區擴展**：側邊欄有待執行的收合計時器（`leaveTimer`）時，`document` 上一個 capture 階段的 `mouseover` 監聽器會追蹤游標位置。若滑鼠進入浮動／下拉元素（以 `.ds-floating-position-wrapper` 偵測），收合計時器即被取消，側邊欄維持展開，直到滑鼠離開該浮動元素。如此可正確處理經 React portal 渲染（位於側邊欄 DOM 樹之外）的下拉選單。
 - **收合觸發**：`mouseleave` 觸發後延遲 400ms，側邊欄收合回 60px（滑鼠進入下拉選單時除外）。視窗尺寸變動也會經由 debounce（200ms）的 resize 處理器重新收合。
@@ -25,8 +25,8 @@
 `content/chat-width.js` 中的 `ChatWidth` 模組控制對話區域寬度：
 
 - **CSS 注入**：注入一個 `<style>` 元素，設定：
-  - 在 `.ds-virtual-list-items._6f2c522`（訊息清單容器）上設定 `max-width: Xvw !important`
-  - 在 `._871cbca`（輸入框／容器區，用於置中）上設定 `margin-left: auto !important; margin-right: auto !important; padding-left: 0 !important; padding-right: 0 !important`
+  - 在 `VIRTUAL_LIST_SELECTOR`（`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`，訊息清單容器）上設定 `max-width: Xvw !important`
+  - 在 `CONTENT_COLUMN_SELECTOR`（內容欄，用於置中）上設定 `margin-left: auto !important; margin-right: auto !important; padding-left: 0 !important; padding-right: 0 !important`
   - 在訊息清單上使用 CSS 自訂屬性 `--message-list-max-width: ${vw}vw !important`。
 - **範圍**：視窗寬度的 30% 至 100%，以 `Math.min(Math.max(...))` 限制。
 - **SPA 韌性**：`._765a5cd`（後備為 `document.body`）上的 `MutationObserver` 在 DOM 變動後重新注入樣式，debounce 200ms。
@@ -38,7 +38,7 @@
 
 `content/input-width.js` 中的 `InputWidth` 模組結構與 `ChatWidth` 相似，但只作用於編輯輸入區：
 
-- **CSS 注入**：在 `._871cbca`、`._871cbca .aaff8b8f`、`.aaff8b8f`（新對話頁面的獨立情況）與 `._871cbca ._77cefa5._3d616d3`（輸入區容器與 textarea）上設定 `max-width: Xvw !important` 與 `width: min(100%, Xvw) !important`，與對話寬度設定彼此獨立。
+- **CSS 注入**：在 `CONTENT_COLUMN_SELECTOR`、`CONTENT_COLUMN_SELECTOR FLOATING_BUTTON_BAR_SELECTOR`、`FLOATING_BUTTON_BAR_SELECTOR`（新對話頁面的獨立情況）與 `INPUT_COMPOSER_WRAPPER_SELECTOR`（輸入區容器；已含訊息清單根節點路徑，故獨立使用）上設定 `max-width: Xvw !important` 與 `width: min(100%, Xvw) !important`，與對話寬度設定彼此獨立。
 - **範圍**：視窗寬度的 30% 至 100%。
 - **對話寬度上限**：啟用對話寬度調整時，實際輸入框寬度以對話寬度為上限（`getEffectivePercent()`）。若對話寬度為 70%、輸入框寬度設為 100%，實際套用的寬度為 70%。此上限同時在 `enable()` 與 SPA 重新套用時經由 `getEffectivePercent()` 強制執行。模組也監聽 `dsChatWidth` 與 `dsChatWidthEnabled` 的變更以即時重新計算上限。
 - **SPA 韌性**：相同的 `MutationObserver` 模式，debounce 200ms，監看 `._765a5cd` 的屬性變更（`class`）。
@@ -52,8 +52,8 @@
 
 ### DOM 目標
 
-- **容器選擇器**：`._74c0879`——每個思考區塊的外層元素。
-- **標頭選擇器**：`THINK_HEADER_TOGGLE_CLASS`（目前為 `._245c867`，取自 `THINK_HEADER_CLASS` 的第一個 token）——容器內可點擊的切換標頭。`hide-thinking.js` 從共用的 `ds-selectors.js` 命名空間讀取此值。（註：`hide-thinking.js` 只使用此選擇器；`._5ab5d64` 僅用於無關的 `censor-reply-restore.thinkblock.js`。）
+- **容器選擇器**：`THINK_BLOCK_SELECTOR`——`.ds-message` 的直接子層 div，其標頭列依序為 `.ds-icon`、`span`、`.ds-icon`；每個思考區塊的外層元素。
+- **標頭選擇器**：`THINK_HEADER_TOGGLE_SELECTOR`（容器的 `> div:first-child`）——容器內可點擊的切換標頭，由 `HideThinking._findHeader` 在容器的子節點中比對。`hide-thinking.js` 從共用的 `ds-selectors.js` 命名空間讀取此值。
 - **展開指標**：容器內存在 `.ds-think-content` 子元素。不含 `.ds-think-content` 的區塊已是收合狀態，會被略過。
 - **收合標記**：點擊收合後，在容器元素寫入 `data-ht-collapsed="1"`，防止重複處理當前工作階段中已收合的區塊。
 
@@ -69,8 +69,8 @@
 
 `MutationObserver` 回呼會對每個新增的 `Element` 呼叫 `scanRoot(node)`：
 
-1. **直接比對**：若新增節點本身帶有容器 class（`._74c0879`），直接對其呼叫 `tryCollapseButton()`。
-2. **子孫搜尋**：對新增節點執行 `querySelectorAll('._74c0879')`，捕捉嵌在較大插入子樹中的容器。
+1. **容器比對**：對新增節點執行 `root.closest(CONTAINER_SELECTOR)`，涵蓋節點本身與其祖先（`:has()` 使標頭晚到時，既有祖先容器才開始符合）；僅當 `root.contains(header)` 時才對該容器呼叫 `tryCollapseButton()`，因此使用者展開區塊時重新掛載的內容節點不會再次收合。
+2. **子孫搜尋**：對新增節點執行 `querySelectorAll(CONTAINER_SELECTOR)`，捕捉嵌在較大插入子樹中的容器。
 
 如此同時涵蓋兩種情況：DeepSeek 直接插入思考區塊，以及將其插入訊息外層容器內。
 
@@ -103,10 +103,10 @@ DeepSeek 使用虛擬清單渲染；使用者捲離再捲回時，先前卸載�
 
 ### 注入策略
 
-依錨點可用性選擇兩種注入模式（stacked／solo）。注入受閘控：`_tryConnectDom()` 只在輸入區外層容器 `.aaff8b8f`（`INJECT_PARENT_SELECTOR`）或原生按鈕（`_getNativeButton()`）存在時才注入，每 500ms 重試一次，最多 120 次（約 60 秒）。若在上限內兩個錨點都未出現，模組即放棄且**完全不注入**——按鈕只相對於這兩個錨點掛載，因為正確錨點仍在渲染時，頁面層級的 `position: fixed` 掛載會附著到第一個 `.ds-theme` 元素——一個通知浮層——位置錯誤。原生 go-bottom 按鈕是新版 ds-button 設計系統元素——`<div role="button" class="ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ds-button--m ds-button--icon-relative-m ds-button--floating _0706cde">`，帶有 inline CSS 變數（`--dsl-button-height: 34px`、`--dsl-button-icon-size: 14px`、浮動填色／hover 顏色）與三個子層（`.ds-button__background`、`.ds-button__border`、`.ds-button__icon`）。`_createButtonElement()` 以複製優先的方式建構 GoToTop 按鈕：原生按鈕存在時以 `cloneNode(true)` 複製（移除網站的定位雜湊 class `_0706cde`，讓網站自身的 `querySelector('._0706cde')` 呼叫永遠不會抓到我們的節點）；原生按鈕不存在時，以寫死的範本（`NATIVE_BTN_TAG`／`NATIVE_BTN_CLASSES`／`NATIVE_BTN_INLINE_STYLE` 常數，對應 `to-fix/gotop-fix/samples/go-bottom.html`）重現相同標記。兩條路徑都會加上 `dsw-gotop` 標記 class 與無障礙屬性，並以 `_iconSvg()` 替換圖示（原生 14×14 向下箭頭經 `transform: scaleY(-1)` 翻轉，`fill="currentColor"`）。外觀（34×34 圓形、背景、邊框、陰影、hover）完全由網站樣式表經複製的 class 與 inline 變數渲染。擴充功能的基底 `.dsw-gotop` CSS 規則刻意**不宣告任何外觀屬性**（border／background／color／display 皆不設），確保永遠不遮蔽網站的元件樣式；定位完全由擴充功能自身的修飾 class（`--stacked`／`--solo`）提供：
+依錨點可用性選擇兩種注入模式（stacked／solo）。注入受閘控：`_tryConnectDom()` 只在浮動按鈕列（`FLOATING_BUTTON_BAR_SELECTOR`，即 `INJECT_PARENT_SELECTOR`，主 textarea 往上四層的 div）或原生按鈕（`_getNativeButton()`）存在時才注入，每 500ms 重試一次，最多 120 次（約 60 秒）。若在上限內兩個錨點都未出現，模組即放棄且**完全不注入**——按鈕只相對於這兩個錨點掛載，因為正確錨點仍在渲染時，頁面層級的 `position: fixed` 掛載會附著到第一個 `.ds-theme` 元素——一個通知浮層——位置錯誤。原生 go-bottom 按鈕是新版 ds-button 設計系統元素——`<div role="button" class="ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ds-button--m ds-button--icon-relative-m ds-button--floating _0706cde">`，帶有 inline CSS 變數（`--dsl-button-height: 34px`、`--dsl-button-icon-size: 14px`、浮動填色／hover 顏色）與三個子層（`.ds-button__background`、`.ds-button__border`、`.ds-button__icon`）。`_createButtonElement()` 以複製優先的方式建構 GoToTop 按鈕：原生按鈕存在時以 `cloneNode(true)` 複製其內層的 `[role="button"]`（原生節點可能是定位包裝層），並自複本移除網站的定位雜湊 class `_0706cde`，讓網站自身的 `querySelector('._0706cde')` 呼叫永遠不會抓到我們的節點）；原生按鈕不存在時，以寫死的範本（`NATIVE_BTN_TAG`／`NATIVE_BTN_CLASSES`／`NATIVE_BTN_INLINE_STYLE` 常數，對應 `to-fix/gotop-fix/samples/go-bottom.html`）重現相同標記（hover 顏色變數為 `--dsl-button-color-hover`）。兩條路徑都會加上 `dsw-gotop` 標記 class 與無障礙屬性，並以 `_iconSvg()` 替換圖示（原生 14×14 向下箭頭經 `transform: scaleY(-1)` 翻轉，`fill="currentColor"`）。外觀（34×34 圓形、背景、邊框、陰影、hover）完全由網站樣式表經複製的 class 與 inline 變數渲染。擴充功能的基底 `.dsw-gotop` CSS 規則刻意**不宣告任何外觀屬性**（border／background／color／display 皆不設），確保永遠不遮蔽網站的元件樣式；定位完全由擴充功能自身的修飾 class（`--stacked`／`--solo`）提供：
 
-- **Stacked 模式（`_injectionMode = 'injected'`）**：原生 go-bottom 按鈕存在時，go-top 按鈕以 `insertBefore` 注入為其在 `aaff8b8f` 內的兄弟節點，並加上 `dsw-gotop--stacked` class（`position: absolute; bottom: 100%; right: 12px`）。`_applyStackedOffset()` 在執行期以原生 `margin-bottom`（實測值照實採用，含 0px；僅在無法解析（如空字串或 `auto`）時以 20px 代替）+ 原生 `offsetHeight` + 8px 間距計算 inline `margin-bottom`（CSS 後備值：62px = 20 + 34 + 8），讓按鈕永遠位於原生按鈕上方 8px 且不重疊。原生按鈕偵測使用 `._0706cde:not(.dsw-gotop)`，並有限定於 `.aaff8b8f` 外層容器的結構化後備（`.ds-button--floating.ds-button--circle:not(.dsw-gotop)`、`[role="button"].ds-button--floating.ds-button--circle:not(.dsw-gotop)`、`[role="button"].ds-button--floating[class*="ds-button--circle"]:not(.dsw-gotop)`）。`_getNativeButton()` 中的事後驗證閘門會拒絕帶有 `ds-button--primary`、`ds-button--filled`、`ds-button--disabled` 或缺少 `ds-button--floating` 的非 `_0706cde` 比對結果——防止誤判同一外層容器內無關的圓形按鈕（例如送出／工具列按鈕）。
-- **Solo 模式（`_injectionMode = 'wrapper-solo'`）**：原生按鈕不存在但外層容器 `aaff8b8f` 存在時（由 `_locateWrapperDirect()` 定位，結構化後備為 `._871cbca > div:nth-child(2)`），按鈕注入為外層容器的第一個子節點並加上 `dsw-gotop--solo` class，重現原生按鈕的定位（`position: absolute; bottom: 100%; right: 12px; margin-bottom: 20px`），使其恰好出現在原生按鈕應在的位置。
+- **Stacked 模式（`_injectionMode = 'injected'`）**：原生 go-bottom 按鈕存在時，go-top 按鈕以 `insertBefore` 注入為其在浮動按鈕列內的兄弟節點，並加上 `dsw-gotop--stacked` class（`position: absolute; bottom: 100%; right: 12px`）。`_applyStackedOffset()` 在執行期以原生 `margin-bottom`（實測值照實採用，含 0px；僅在無法解析（如空字串或 `auto`）時以 20px 代替）+ 原生 `offsetHeight` + 8px 間距計算 inline `margin-bottom`（CSS 後備值：62px = 20 + 34 + 8），讓按鈕永遠位於原生按鈕上方 8px 且不重疊。原生按鈕偵測的主選擇器為 `._0706cde:not(.dsw-gotop)`，後備為單一選擇器 `.ds-button--floating.ds-button--circle[role="button"]`，以 `closest` 排除位於 `.dsw-gotop` 內的比對，且不限定於浮動按鈕列。`_getNativeButton()` 中的事後驗證閘門會拒絕帶有 `ds-button--primary`、`ds-button--filled`、`ds-button--disabled` 或缺少 `ds-button--floating` 的非 `_0706cde` 比對結果——防止誤判頁面上無關的圓形按鈕（例如送出／工具列按鈕）。
+- **Solo 模式（`_injectionMode = 'wrapper-solo'`）**：原生按鈕不存在但浮動按鈕列存在時（由 `_locateWrapperDirect()` 定位），按鈕注入為浮動按鈕列的第一個子節點並加上 `dsw-gotop--solo` class，重現原生按鈕的定位（`position: absolute; bottom: 100%; right: 12px; margin-bottom: 20px`），使其恰好出現在原生按鈕應在的位置。
 
 原生按鈕與外層容器都無法定位時，`_injectButton()` 不執行任何動作並回傳 `false`——不建立按鈕。
 
@@ -114,9 +114,9 @@ DeepSeek 使用虛擬清單渲染；使用者捲離再捲回時，先前卸載�
 
 ### SPA 韌性
 
-一個 `MutationObserver`（於 `_startWrapperObserver()` 設定）以 `childList + subtree` 監看外層容器（`_871cbca`）的變動。偵測到 go-top 按鈕被自 DOM 移除（React 重新渲染）時，重新注入按鈕。它也經由 `_transitionToStacked()`／`_transitionToSolo()` 執行雙向模式切換：solo 模式下原生按鈕出現時，按鈕升級為 stacked 模式（移除 solo class、加上 stacked class、重新計算 inline 偏移）；stacked 模式下原生按鈕消失時，按鈕降級回 solo 模式。切換**重用**同一個按鈕元素（以 `insertBefore` 移動、互換 class、保留 `display` 狀態）——元素從不移除再重建，否則程式化捲動期間會出現可見的閃爍。按鈕已處於正確模式時，no-op 防護會略過切換。以 80ms debounce 避免批次變動期間重複注入。
+一個 `MutationObserver`（於 `_startWrapperObserver()` 設定）以 `childList + subtree` 監看外層容器（`OUTER_WRAPPER_SELECTOR`，即 `CONTENT_COLUMN_SELECTOR`）的變動。偵測到 go-top 按鈕被自 DOM 移除（React 重新渲染）時，重新注入按鈕。它也經由 `_transitionToStacked()`／`_transitionToSolo()` 執行雙向模式切換：solo 模式下原生按鈕出現時，按鈕升級為 stacked 模式（移除 solo class、加上 stacked class、重新計算 inline 偏移）；stacked 模式下原生按鈕消失時，按鈕降級回 solo 模式。切換**重用**同一個按鈕元素（以 `insertBefore` 移動、互換 class、保留 `display` 狀態）——元素從不移除再重建，否則程式化捲動期間會出現可見的閃爍。按鈕已處於正確模式時，no-op 防護會略過切換。以 80ms debounce 避免批次變動期間重複注入。
 
-路由 observer 經由 body `MutationObserver` + `popstate` 事件監看 `window.location.pathname`。路由變更時，模組重置所有狀態（取消進行中的捲動、清除重試計時器、移除舊按鈕、停止所有 observer），並在 100ms 的 DOM 穩定延遲後驅動受閘控的重試迴圈 `_tryConnectDom()`。如此即使輸入區外層容器 `.aaff8b8f` 或原生按鈕尚未掛載，按鈕也能可靠出現——`_tryConnectDom()` 每 500ms 重試一次、最多 120 次直到就緒，之後才執行注入、捲動容器重新附著、監聽器重啟與可見性評估。100ms 穩定計時器的 handle 儲存在 `_routeChangeTimer`（每次重新設定前與 `disable()` 時清除），且 `_tryConnectDom()` 開頭有 `if (!this.enabled) return;` 防護。兩者皆為必要：若缺少它們，在 `disable()` 前 100ms 內發生的路由變更，仍會在拆除完成後觸發 `_tryConnectDom()`，重新注入按鈕並重啟外層容器 observer，而之後再也沒有任何機制能拆除它們——`_stopWrapperObserver()` 已執行過，且 `_startWrapperObserver()` 的 `if (this._wrapperObserver) return;` 重複防護看到的是 null 欄位。防護置於函式入口而非各呼叫點，因此涵蓋全部三個呼叫者（路由計時器、`_enableRetryTimer` 自我重試，以及 `enable()` 的同步呼叫）；這也是重試回呼本身不帶 `enabled` 檢查的原因。
+路由 observer 經由 body `MutationObserver` + `popstate` 事件監看 `window.location.pathname`。路由變更時，模組重置所有狀態（取消進行中的捲動、清除重試計時器、移除舊按鈕、停止所有 observer），並在 100ms 的 DOM 穩定延遲後驅動受閘控的重試迴圈 `_tryConnectDom()`。如此即使浮動按鈕列（`FLOATING_BUTTON_BAR_SELECTOR`）或原生按鈕尚未掛載，按鈕也能可靠出現——`_tryConnectDom()` 每 500ms 重試一次、最多 120 次直到就緒，之後才執行注入、捲動容器重新附著、監聽器重啟與可見性評估。100ms 穩定計時器的 handle 儲存在 `_routeChangeTimer`（每次重新設定前與 `disable()` 時清除），且 `_tryConnectDom()` 開頭有 `if (!this.enabled) return;` 防護。兩者皆為必要：若缺少它們，在 `disable()` 前 100ms 內發生的路由變更，仍會在拆除完成後觸發 `_tryConnectDom()`，重新注入按鈕並重啟外層容器 observer，而之後再也沒有任何機制能拆除它們——`_stopWrapperObserver()` 已執行過，且 `_startWrapperObserver()` 的 `if (this._wrapperObserver) return;` 重複防護看到的是 null 欄位。防護置於函式入口而非各呼叫點，因此涵蓋全部三個呼叫者（路由計時器、`_enableRetryTimer` 自我重試，以及 `enable()` 的同步呼叫）；這也是重試回呼本身不帶 `enabled` 檢查的原因。
 
 ### 可見性邏輯
 

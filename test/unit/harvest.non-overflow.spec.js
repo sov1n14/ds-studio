@@ -17,7 +17,6 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import harvestModule from '../../content/harvest.js';
-import DSSelectors from '../../content/ds-selectors.js';
 
 const { harvestAllMessages } = harvestModule;
 
@@ -35,12 +34,13 @@ const { harvestAllMessages } = harvestModule;
  */
 function buildVirtualListDOM({ scrollHeight = 1000, clientHeight = 400 } = {}) {
     const scrollArea = document.createElement('div');
-    scrollArea.className = 'ds-scroll-area';
+    // The live message-list root carries both ds-virtual-list and ds-scroll-area
+    scrollArea.className = 'ds-virtual-list ds-scroll-area';
     Object.defineProperty(scrollArea, 'scrollHeight', { value: scrollHeight, configurable: true });
     Object.defineProperty(scrollArea, 'clientHeight', { value: clientHeight, configurable: true });
 
     const virtualListItems = document.createElement('div');
-    virtualListItems.className = 'ds-virtual-list-items _6f2c522';
+    virtualListItems.className = 'ds-virtual-list-items';
 
     const visibleItems = document.createElement('div');
     visibleItems.className = 'ds-virtual-list-visible-items';
@@ -76,10 +76,22 @@ function appendMessage(visibleItems, key, textContent = 'msg', isAI = false) {
         md.appendChild(p);
         msg.appendChild(md);
     } else {
-        const inner = document.createElement('div');
-        inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-        inner.textContent = textContent;
-        msg.appendChild(inner);
+        // Live user-message markup: .ds-message > div > .ds-collapsible-text (text) + its toggle button
+        const content = document.createElement('div');
+        content.className = 'fbb737a4';
+        const collapsible = document.createElement('div');
+        collapsible.className = 'ds-collapsible-text';
+        const line = document.createElement('div');
+        const span = document.createElement('span');
+        span.textContent = textContent;
+        line.appendChild(span);
+        collapsible.appendChild(line);
+        const toggle = document.createElement('div');
+        toggle.className = 'ds-collapsible-text-toggle-button';
+        toggle.innerHTML = '<div></div><div><div class="ds-icon"></div></div>';
+        content.appendChild(collapsible);
+        content.appendChild(toggle);
+        msg.appendChild(content);
     }
 
     wrapper.appendChild(msg);

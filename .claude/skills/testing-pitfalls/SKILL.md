@@ -17,7 +17,7 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 
 | Pitfall | Relevant when your test … | Reference |
 |-|-|-|
-| DOM Fixture Completeness | builds a DOM fixture for code using `querySelector` or any first-match API, where sibling elements could match the same selector, or tests a tolerant or fallback matcher that another element could satisfy in a different UI state | [dom-fixture-completeness.md](references/dom-fixture-completeness.md) |
+| DOM Fixture Completeness | builds a DOM fixture for code that clones or wraps a host element, or for code using `querySelector` or any first-match API, where sibling elements could match the same selector; tests a tolerant or fallback matcher that another element could satisfy in a different UI state, layout, or DOM nesting; or asserts selector or DOM-structure behavior under happy-dom | [dom-fixture-completeness.md](references/dom-fixture-completeness.md) |
 | Boundary Test Doubles Must Copy | fakes `chrome.storage`, messaging, IndexedDB, or any in-memory store, or asserts a read-modify-write / lost-update outcome, or simulates a boundary error such as `chrome.runtime.lastError` or a `sendMessage` failure (including a resolved `undefined`) | [boundary-doubles-must-copy.md](references/boundary-doubles-must-copy.md) |
 | Red For the Right Reason | fails because its target is not implemented yet, or loads its target through a runtime `import()`, `require`, or other dynamic loader | [red-for-the-right-reason.md](references/red-for-the-right-reason.md) |
 | Layout Measurement Needs a Layout Model | exercises code that reads `scrollWidth`, `offsetWidth`, `clientWidth`, or `getBoundingClientRect`, or writes a measured size back into the element it measures | [layout-measurement-needs-layout-model.md](references/layout-measurement-needs-layout-model.md) |
@@ -27,6 +27,7 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 | Environment Detection: Test With Real Device Profiles | stubs `navigator` (`userAgent`, `platform`, `maxTouchPoints`) or any environment signal to exercise device, platform, or browser detection, or builds a fixture labeled mobile, desktop, or another device class | [realistic-device-profiles.md](references/realistic-device-profiles.md) |
 | Host Re-Renders Overwrite Extension State | writes a class, attribute, or flag onto a host-page element and later reads it back, or simulates a host state change (native toggle, React re-render) on elements the extension tracks | [host-rerenders-overwrite-extension-state.md](references/host-rerenders-overwrite-extension-state.md) |
 | Visibility Guards Need a Live Capture | stubs `checkVisibility`, `getBoundingClientRect`, or computed `display` to exercise a guard that decides by whether a host element is visible, or models a responsive layout such as narrow versus desktop | [visibility-guards-need-live-capture.md](references/visibility-guards-need-live-capture.md) |
+| Host Contract Names: Assert Against the Live Page | asserts a CSS custom property, class, or attribute name the extension writes for host-page CSS to read (such as `--dsl-button-color-hover`), or takes that name's expected value from the extension's own code | [host-contract-names-from-live-page.md](references/host-contract-names-from-live-page.md) |
 
 ## Adding a New Lesson
 

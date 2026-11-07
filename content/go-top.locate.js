@@ -8,7 +8,6 @@
     // 合併共用選擇器常數
     const __DSSelectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
-    const FLOATING_BAR = __DSSelectors.FLOATING_BUTTON_BAR_SELECTOR;
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
     const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
     const DS_BUTTON_FLOATING = __DSSelectors.DS_BUTTON_FLOATING_CLASS;
@@ -68,8 +67,7 @@
          * @returns {{ injectParent: Element, outerWrapper: Element }|null}
          */
         _locateWrapperDirect() {
-            const injectParent = document.querySelector(this.INJECT_PARENT_SELECTOR)
-                || document.querySelector(this.INJECT_PARENT_FALLBACK);
+            const injectParent = document.querySelector(this.INJECT_PARENT_SELECTOR);
             if (!injectParent) {
                 return null;
             }
@@ -163,15 +161,11 @@
          * @returns {Element|null} The native go-bottom button if it exists.
          */
         _getNativeButton() {
-            const result = this._querySelectorWithFallback([
-                this.NATIVE_BTN_SELECTOR,
-                FLOATING_BAR + ' .' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + ':not(.dsw-gotop)',
-                FLOATING_BAR + ' [role="button"].' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + ':not(.dsw-gotop)',
-                FLOATING_BAR + ' [role="button"].' + DS_BUTTON_FLOATING + '[class*="' + DS_BUTTON_CIRCLE + '"]:not(.dsw-gotop)',
-            ]);
+            const result = this._querySelectorWithFallback([this.NATIVE_BTN_SELECTOR])
+                || this._queryFloatingButtonOutsideGoTop();
             if (!result) return null;
 
-            // 後驗證：若匹配來自降級選擇器（非 _0706cde），確認確實為 floating 按鈕
+            // 後驗證：若匹配來自降級選擇器（不帶原生按鈕定位 class），確認確實為 floating 按鈕
             if (!result.classList.contains(GO_TOP_NATIVE_BUTTON_CLASS)) {
                 if (!result.classList.contains(DS_BUTTON_FLOATING) ||
                     result.classList.contains(DS_BUTTON_PRIMARY) ||
@@ -182,6 +176,14 @@
             }
 
             return result;
+        },
+
+        // 降級：浮動圓形按鈕（實測頁面中僅原生 go-bottom 按鈕符合），不依賴浮動按鈕列結構；以 closest 排除 GoTop 本身及其內部的原生按鈕副本（不用 :not(.dsw-gotop *)，happy-dom 對其求值錯誤）
+        _queryFloatingButtonOutsideGoTop() {
+            const candidates = document.querySelectorAll('.' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + '[role="button"]');
+            const match = [...candidates].find(el => !el.closest('.dsw-gotop')) || null;
+            if (match) this._hasSeenDom = true;
+            return match;
         },
 
         // ─────────────────────────────

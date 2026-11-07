@@ -61,15 +61,15 @@
 - **訊息容器**：`.ds-virtual-list-visible-items .ds-message`，用於列舉對話輪次。
 - **Markdown 內容**：`.ds-markdown`，用於 AI 回應內容。
 - **思考過程**：`.ds-think-content`，用於 AI 推理內容。
-- **側邊欄容器**：`div.dc04ec1d` — 自動隱藏模組目標的側邊欄容器。
-- **側邊欄內部內容**：`div.b8812f16.a2f3d50e` — 收合時透過負值 `margin-left` 位移的內部內容。
-- **訊息清單區域**：`.ds-virtual-list-items._6f2c522` — 對話區域寬度 CSS 注入的目標。
-- **輸入/容器區域**：`._871cbca` — 同時為對話區域寬度（置中）與輸入框寬度（max-width）CSS 注入的目標。
+- **側邊欄容器**：`SIDEBAR_WRAPPER_SELECTOR`（`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）— 自動隱藏模組目標的側邊欄容器。
+- **側邊欄內部內容**：`SIDEBAR_INNER_SELECTOR`（`div:has(> .ds-scroll-area > .ds-scroll-area)`）— 收合時透過負值 `margin-left` 位移的內部內容。
+- **訊息清單區域**：`VIRTUAL_LIST_SELECTOR`（`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`）— 對話區域寬度 CSS 注入的目標。
+- **輸入/容器區域**：`CONTENT_COLUMN_SELECTOR`（`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`）— 同時為對話區域寬度（置中）與輸入框寬度（max-width）CSS 注入的目標。
 - **主要應用區域**：`._765a5cd` — MutationObserver 監控的目標，用於 UI 調整的 SPA 重新套用。
-- **對話標題列**：`._2be88ba` — Overlay 提示詞組選單的定位錨點。
+- **對話標題列**：`CHAT_HEADER_SELECTOR`（`div:has(> .the-header)`）— Overlay 提示詞組選單的定位錨點。
 - **Go Down 原生按鈕**：`._0706cde`（含 `ds-button--floating ds-button--circle` 等 class）— GoToTop 的偵測目標與定位基準。
-- **浮動按鈕包裝容器**：`.aaff8b8f`（`position: relative`）— GoToTop 按鈕的注入目標容器；外層 sticky 容器 `._871cbca`。
-- **對話起始錨點**：`._9663006._2c189bc` / `[data-virtual-list-item-key="1"]` — GoToTop 隱藏條件與「已達頂部」判定錨點。
+- **浮動按鈕包裝容器**：`FLOATING_BUTTON_BAR_SELECTOR`（`div:has(> div > div > div > textarea[name="search"])`，主輸入框上四層的 `div`，`position: relative`）— GoToTop 按鈕的注入目標容器；外層 sticky 容器為 `CONTENT_COLUMN_SELECTOR`。
+- **對話起始錨點**：`GO_TOP_ANCHOR_SELECTOR`（`._9663006._2c189bc`）/ `[data-virtual-list-item-key="1"]` — GoToTop 隱藏條件與「已達頂部」判定錨點；`GO_TOP_ANCHOR_SELECTOR` 的後備為使用者訊息項目或編輯模式中的項目（`:has(.ds-collapsible-text)` / `:has(.ds-textarea)`）。
 
 ### 儲存結構
 

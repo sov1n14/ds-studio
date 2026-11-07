@@ -1,55 +1,73 @@
 /**
- * Unit tests — DOM resolver fix validation for preset-overlay.controller.js
+ * Unit tests — preset overlay DOM resolvers (preset-overlay.resolvers.js) and the placement that
+ * reposition() derives from the elements they return.
  *
- * Validates that reposition() correctly resolves:
- *   - Title  → first non-role="button" child of ._1aa2651; fallback via querySelector('._9986c0c')
- *   - Button → div[role="button"] with inline style*="min-width: 44px" inside ._1aa2651;
- *              structural fallback = first role-button AFTER title; never ._57370c5
+ * Fixtures are DeepSeek chat header containers captured verbatim from the live page, with chat titles
+ * replaced by a placeholder (test/fixtures/ds-snapshots/):
+ *   - conversation-header.html: desktop conversation page. Container children in DOM order:
+ *       [0] centred title header (holds a second copy of the chat title)
+ *       [1] title row: sidebar toggle button, chat title div, two spacer divs, new-chat button (last child)
+ *       [2] share button (role="button", a direct child of the container, outside the title row)
+ *   - home-header.html: desktop new-chat (home) page; same title row with an empty title div, no share button.
+ *   - mobile-ua-home-header.html: mobile-UA home page; the title row also holds the download-app pill in a wrapper div.
+ * Tests locate the expected elements by this captured position, never through the selectors under test.
  *
- * Resolvers are exported from preset-overlay.resolvers.js (loaded via require or the global
- * __DS_PresetOverlayResolvers). Tests drive them via the public reposition() / onSelectChange()
- * surface with a realistic header DOM and stubbed getBoundingClientRect.
+ * Required behaviour:
+ *   - title: the chat title div of the title row (the div right after the sidebar toggle).
+ *   - new-chat button: the last button of the title row; never the share button or the sidebar toggle.
+ *   - no title row: both resolvers return { el: null, path: 'none' }.
+ *
+ * Placement assertions run in the < 768 px gap branch, where the result depends on which title and
+ * button rects the controller reads; the >= 768 px center branch ignores both rects, so it cannot show
+ * a wrong pick. Every decoy element gets its own rect, chosen so that reading it instead of the real
+ * element produces a different left / visibility.
  *
  * Environment notes:
- *   1. happy-dom implements requestAnimationFrame, so scheduleFrame() is ASYNC.
- *      Each test stubs rAF to synchronous before calling reposition(), then
- *      restores it in afterEach.
- *   2. computePlacement is captured in the controller IIFE closure, so spying
- *      on the module export does NOT intercept the internal call. All assertions
- *      are made via wrapperEl.style.left / style.width / style.visibility.
- *   3. window.innerWidth: happy-dom defaults to 1024. Tests that need a specific
- *      branch (center vs gap) set window.innerWidth explicitly before reposition()
- *      and restore it in afterEach.
- *   4. naturalWidth in happy-dom: getNaturalWidth() returns ~20 raw, but the width
- *      pipeline floors it at minWidth=80 (content/preset-dropdown.position.js), so the
- *      effective width used for placement is 80, not 20.
- *      Center mode left = (containerWidth - 80) / 2.
- *      Tests that need a predictable width stub getNaturalWidth on the dropdown.
+ *   1. happy-dom implements requestAnimationFrame, so scheduleFrame() is ASYNC. Each test stubs rAF to a
+ *      synchronous trampoline before mounting and restores it in afterEach.
+ *   2. computePlacement is captured in the controller IIFE closure, so assertions read
+ *      wrapperEl.style.left / width / visibility instead of spying on it.
+ *   3. Gap-branch tests stub dropdown.getNaturalWidth() to 80 so the expected left is exact.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import '../../utils/storage-manager.js';
-import DSSelectors from '../../content/ds-selectors.js';
+import '../../content/ds-selectors.js';
 // Ensure resolvers global is populated before the controller resolves it.
 import '../../content/preset-overlay.resolvers.js';
 
+const { resolveTitleEl, resolveNewChatButtonEl } = require('../../content/preset-overlay.resolvers.js');
 const { createPresetOverlay } = require('../../content/preset-overlay.controller.js');
+
+const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/ds-snapshots');
+const TITLE_PLACEHOLDER = 'Chat title placeholder';
+
+// ── fixture loader ───────────────────────────────────────────────────────────
+
+/** Mounts a captured header container as the only body child and returns its parts by captured position. */
+function loadHeader(fileName) {
+    document.body.innerHTML = fs.readFileSync(path.join(FIXTURE_DIR, fileName), 'utf8');
+    const container = document.body.firstElementChild;
+    const centredHeader = container.children[0];
+    const titleRow = container.children[1];
+    return {
+        container,
+        titleRow,
+        centredTitle: centredHeader.firstElementChild,
+        sidebarToggle: titleRow.children[0],
+        titleEl: titleRow.children[1],
+        newChatBtn: titleRow.lastElementChild,
+        shareBtn: container.children[2] || null,
+    };
+}
 
 // ── rAF synchroniser ─────────────────────────────────────────────────────────
 
 /**
- * Stub requestAnimationFrame with a bounded trampoline.
- *
- * Problem: the production settle loop reschedules itself every frame via
- * opts.schedule(runFrame) → scheduleFrame() → rAF(runFrame). A naive
- * synchronous stub (`(fn) => { fn(); }`) turns this into unbounded
- * synchronous recursion → RangeError: Maximum call stack size exceeded.
- *
- * Solution: queue callbacks instead of calling inline, then drain the
- * queue ITERATIVELY (no stack growth) up to RAF_FLUSH_CAP iterations.
- * Re-entrant enqueues (next settle frame) are simply appended to the
- * queue and consumed by the same outermost drain loop.
- *
+ * Stub requestAnimationFrame with a bounded trampoline: the settle loop reschedules itself every frame,
+ * so callbacks are queued and drained iteratively (no stack growth) up to RAF_FLUSH_CAP iterations.
  * Returns a restore function.
  */
 const RAF_FLUSH_CAP = 200;
@@ -79,76 +97,20 @@ function makeRafSync() {
     };
 }
 
-// ── rect helper ───────────────────────────────────────────────────────────────
+// ── rect / window helpers ────────────────────────────────────────────────────
 
 function rect(left, width, top = 0) {
     return { left, right: left + width, width, top, bottom: top + 30, height: 30 };
 }
 
-// ── DOM builder ───────────────────────────────────────────────────────────────
-
-/**
- * Build a realistic 767px DeepSeek header DOM:
- *
- *   ._2be88ba  (container)
- *     ├─ ._1aa2651  (header wrapper)
- *     │    ├─ div[role="button"]            (btn1 — sidebar toggle, NO min-width)
- *     │    ├─ div._9986c0c                  (title — first non-button child)
- *     │    ├─ div                           (spacer)
- *     │    └─ div[role="button"][style="min-width: 44px;"]  (newChatBtn)
- *     └─ div._57370c5                       (stray — old wrong selector, outside wrapper)
- */
-function buildRealisticHeader() {
-    const container = document.createElement('div');
-    container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-
-    const wrapper = document.createElement('div');
-    wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
-
-    const btn1 = document.createElement('div');
-    btn1.setAttribute('role', 'button');
-
-    const titleEl = document.createElement('div');
-    titleEl.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
-    titleEl.textContent = 'My Chat';
-
-    const spacer = document.createElement('div');
-
-    const newChatBtn = document.createElement('div');
-    newChatBtn.setAttribute('role', 'button');
-    newChatBtn.setAttribute('style', 'min-width: 44px;');
-    newChatBtn.className = 'ds-button--capsule ds-button--xl';
-
-    wrapper.appendChild(btn1);
-    wrapper.appendChild(titleEl);
-    wrapper.appendChild(spacer);
-    wrapper.appendChild(newChatBtn);
-    container.appendChild(wrapper);
-
-    const stray57 = document.createElement('div');
-    stray57.className = DSSelectors.STRAY_BUTTON_CLASS;
-    container.appendChild(stray57);
-
-    document.body.appendChild(container);
-    return { container, wrapper, btn1, titleEl, spacer, newChatBtn, stray57 };
-}
-
-// ── stub helpers ──────────────────────────────────────────────────────────────
-
 function stubRect(el, rectValue) {
     return vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(rectValue);
 }
 
-// ── window.innerWidth helpers ─────────────────────────────────────────────────
-
 let _origInnerWidth;
 
-/**
- * Set window.innerWidth to a specific value for tests that need a deterministic branch.
- * Call restoreInnerWidth() in afterEach.
- */
 function setInnerWidth(value) {
-    _origInnerWidth = window.innerWidth;
+    if (_origInnerWidth === undefined) _origInnerWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { value, writable: true, configurable: true });
 }
 
@@ -159,7 +121,7 @@ function restoreInnerWidth() {
     }
 }
 
-// ── StorageManager spy helpers ────────────────────────────────────────────────
+// ── StorageManager spies / ctx ───────────────────────────────────────────────
 
 let smSpies = [];
 
@@ -178,8 +140,6 @@ function restoreStorageManager() {
     smSpies = [];
 }
 
-// ── ctx factory ───────────────────────────────────────────────────────────────
-
 function makeCtx(overrides = {}) {
     return {
         getIsEnabled:                  vi.fn(() => true),
@@ -194,669 +154,329 @@ function makeCtx(overrides = {}) {
     };
 }
 
-// ── shared rect constants ─────────────────────────────────────────────────────
+// ── gap-branch geometry (375 px viewport, natural width stubbed to 80) ────────
 //
-// Container: 767px wide at viewport x=0.
-// Title:     viewport 0..180   (width 180)
-// newChat:   viewport 683..727 (width 44)
-// btn1:      viewport 0..44    (width 44) — same position as title leading edge
-//
-// With windowWidth=1024 (center mode): raw naturalWidth≈20 (happy-dom returns 0 → ~20),
-// but the width pipeline floors it at minWidth=80, so the effective width is 80.
-//   width = max(naturalWidth, minWidth) = 80
-//   center left = Math.round((767 - 80) / 2) = 344  (Math.round added in v4.2.1)
-//
-// To produce a stable expected value, tests rely on the minWidth=80 floor
-// and assert with toBe against the exact rounded integer.
+// Real elements:  title 48..148, new-chat button 323..367
+//   availableGap = 323 - 148 - 2*8 = 159 → width = 80
+//   left = round(148 + 8 + 159/2 - 0 - 80/2) = round(195.5) = 196
+// Decoys, each producing a different left if read instead of the real element:
+//   share button 281..315 as button      → gap 117 → left 175
+//   centred title 100..275 as title      → gap 32  → left 283
+//   sidebar toggle 4..48 as title        → gap 259 → left 146
 
-const CONTAINER_RECT = rect(0,   767);
-const TITLE_RECT     = rect(0,   180);
-const NEWCHAT_RECT   = rect(683, 44);
-const BTN1_RECT      = rect(0,   44);
+const GAP_VIEWPORT = 375;
+const NATURAL_WIDTH = 80;
+const GAP_EXPECTED_LEFT = '196px';
+const GAP_EXPECTED_WIDTH = '80px';
 
-// Expected center-mode left when container=767 and effective width=80
-// (raw getNaturalWidth()≈20, floored to minWidth=80 by the width pipeline):
-// Math.round((767 - 80) / 2) = Math.round(343.5) = 344
-const EXPECTED_CENTER_LEFT = Math.round((767 - 80) / 2); // 344
+function applyGapGeometry(dom) {
+    stubRect(dom.container,     rect(0, GAP_VIEWPORT));
+    stubRect(dom.sidebarToggle, rect(4, 44));
+    stubRect(dom.titleEl,       rect(48, 100));
+    stubRect(dom.centredTitle,  rect(100, 175));
+    stubRect(dom.newChatBtn,    rect(323, 44));
+    if (dom.shareBtn) stubRect(dom.shareBtn, rect(281, 34));
+}
 
-// ── Group 1: correct element resolution via reposition() ─────────────────────
+/** Asserts the resolver returned this exact node (toBe: toEqual would accept any structurally equal node). */
+function expectResolved(result, expectedEl) {
+    expect(result.el).toBe(expectedEl);
+    expect(result.path).toBe('semantic');
+}
 
-describe('DOM resolvers — correct element resolution via reposition()', () => {
-    let overlay, ctx, dom, restoreRaf;
+// ── Group 1: fixture sanity ──────────────────────────────────────────────────
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024); // deterministic center branch
-        spyStorageManager();
-        ctx = makeCtx();
-        dom = buildRealisticHeader();
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(dom.container);
-    });
+describe('DOM resolvers — captured conversation header fixture', () => {
+    afterEach(() => { document.body.innerHTML = ''; });
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
-        restoreStorageManager();
-        vi.restoreAllMocks();
-    });
-
-    it('resolves to title ._9986c0c and new-chat button (min-width:44px), producing non-zero placement', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-        stubRect(dom.btn1,       BTN1_RECT);
-
-        overlay.reposition('test');
-
-        // center mode (windowWidth=1024): left=(767-naturalWidth)/2
-        const leftPx  = parseFloat(overlay.wrapperEl.style.left);
-        const widthPx = parseFloat(overlay.wrapperEl.style.width);
-
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
-        expect(widthPx).toBeGreaterThan(0);
-        expect(overlay.wrapperEl.style.transform).toBe('translateY(-50%)');
-    });
-
-    it('uses newChatBtn rect (683..727), NOT btn1 rect (0..44) — confirmed by non-degenerate placement', () => {
-        // With center mode (windowWidth=1024), mode is determined by windowWidth not geometry.
-        // Confirm placement is valid (not degenerate) and left is the expected center value.
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-        stubRect(dom.btn1,       BTN1_RECT);
-
-        overlay.reposition('btn-identity-test');
-
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
-        expect(isFinite(leftPx)).toBe(true);
-        expect(leftPx).toBeGreaterThan(0);
-    });
-
-    it('wrapperEl.style.left is consistent across two separate reposition() calls', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-
-        overlay.reposition('call-1');
-        const left1 = overlay.wrapperEl.style.left;
-
-        overlay.reposition('call-2');
-        const left2 = overlay.wrapperEl.style.left;
-
-        expect(left2).toBe(left1);
+    it('holds the title row parts and the share button outside the title row in captured order', () => {
+        const dom = loadHeader('conversation-header.html');
+        expect(dom.sidebarToggle.getAttribute('role')).toBe('button');
+        expect(dom.titleEl.textContent.trim()).toBe(TITLE_PLACEHOLDER);
+        expect(dom.centredTitle.textContent.trim()).toBe(TITLE_PLACEHOLDER);
+        expect(dom.newChatBtn.getAttribute('role')).toBe('button');
+        expect(dom.shareBtn.getAttribute('role')).toBe('button');
+        expect(dom.titleRow.contains(dom.shareBtn)).toBe(false);
+        expect(dom.container.lastElementChild).toBe(dom.shareBtn);
     });
 });
 
-// ── Group 2: hash-fallback title path ────────────────────────────────────────
+// ── Group 2: resolveTitleEl ──────────────────────────────────────────────────
 
-describe('DOM resolvers — hash-fallback title path', () => {
-    let overlay, ctx, restoreRaf;
+describe('resolveTitleEl — real header markup', () => {
+    afterEach(() => { document.body.innerHTML = ''; });
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024);
-        spyStorageManager();
-        ctx = makeCtx();
+    it('conversation page: returns the title-row chat title, not the centred title copy', () => {
+        const dom = loadHeader('conversation-header.html');
+        const result = resolveTitleEl(dom.container);
+        expect(result.el, 'resolver picked the centred title header copy').not.toBe(dom.centredTitle);
+        expectResolved(result, dom.titleEl);
     });
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        restoreStorageManager();
-        vi.restoreAllMocks();
-        document.body.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR).forEach(el => el.remove());
+    it('desktop new-chat page: returns the empty title div of the title row', () => {
+        const dom = loadHeader('home-header.html');
+        expectResolved(resolveTitleEl(dom.container), dom.titleEl);
     });
 
-    it('resolves title via container.querySelector("._9986c0c") when wrapper has only role-button children', () => {
-        // Wrapper with only role-button children → semantic path skips all;
-        // fallback finds ._9986c0c placed on the container.
-        const container = document.createElement('div');
-        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-
-        const wrapper = document.createElement('div');
-        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
-
-        const onlyBtn = document.createElement('div');
-        onlyBtn.setAttribute('role', 'button');
-        onlyBtn.setAttribute('style', 'min-width: 44px;');
-        wrapper.appendChild(onlyBtn);
-
-        // ._9986c0c as sibling to wrapper (hash fallback target)
-        const fallbackTitle = document.createElement('div');
-        fallbackTitle.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
-        fallbackTitle.textContent = 'Hash title';
-
-        container.appendChild(wrapper);
-        container.appendChild(fallbackTitle);
-        document.body.appendChild(container);
-
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(container);
-
-        stubRect(container,     rect(0, 767));
-        stubRect(fallbackTitle, TITLE_RECT);
-        stubRect(onlyBtn,       NEWCHAT_RECT);
-
-        overlay.reposition('fallback-test');
-
-        // center mode (windowWidth=1024): left = (767 - naturalWidth) / 2
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
+    it('mobile-UA home page: returns the empty title div of the title row', () => {
+        const dom = loadHeader('mobile-ua-home-header.html');
+        expectResolved(resolveTitleEl(dom.container), dom.titleEl);
     });
 
-    it('falls back gracefully (no throw) when both wrapper and ._9986c0c are absent', () => {
-        // No title found → titleRect=null → computePlacement falls back to center
-        const container = document.createElement('div');
-        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-
-        const wrapper = document.createElement('div');
-        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
-        const btn = document.createElement('div');
-        btn.setAttribute('role', 'button');
-        btn.setAttribute('style', 'min-width: 44px;');
-        wrapper.appendChild(btn);
-        container.appendChild(wrapper);
-        document.body.appendChild(container);
-
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(container);
-
-        stubRect(container, rect(0, 767));
-        stubRect(btn,       NEWCHAT_RECT);
-
-        // Must not throw; must produce a valid left style
-        expect(() => overlay.reposition('null-title-test')).not.toThrow();
-
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        // center fallback: (767 - naturalWidth) / 2
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
+    it('returns { el: null, path: "none" } when the title row is absent', () => {
+        const dom = loadHeader('conversation-header.html');
+        dom.titleRow.remove();
+        expect(resolveTitleEl(dom.container)).toEqual({ el: null, path: 'none' });
     });
 });
 
-// ── Group 3: ._57370c5 is never chosen as the new-chat button ─────────────────
+// ── Group 3: resolveNewChatButtonEl ──────────────────────────────────────────
+// The mobile-UA download-app pill case lives in preset-overlay.resolvers.real-markup.spec.js.
 
-describe('DOM resolvers — ._57370c5 is never chosen as the new-chat button', () => {
-    let overlay, ctx, dom, restoreRaf;
+describe('resolveNewChatButtonEl — real header markup', () => {
+    afterEach(() => { document.body.innerHTML = ''; });
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024);
-        spyStorageManager();
-        ctx = makeCtx();
-        dom = buildRealisticHeader();
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(dom.container);
+    it('conversation page: returns the last title-row button, not the share button or the sidebar toggle', () => {
+        const dom = loadHeader('conversation-header.html');
+        const result = resolveNewChatButtonEl(dom.container);
+        expect(result.el, 'resolver picked the share button outside the title row').not.toBe(dom.shareBtn);
+        expect(result.el, 'resolver picked the sidebar toggle').not.toBe(dom.sidebarToggle);
+        expectResolved(result, dom.newChatBtn);
     });
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
-        restoreStorageManager();
-        vi.restoreAllMocks();
+    it('conversation page: still returns the new-chat button after it loses its inline style', () => {
+        const dom = loadHeader('conversation-header.html');
+        dom.newChatBtn.removeAttribute('style');
+        expectResolved(resolveNewChatButtonEl(dom.container), dom.newChatBtn);
     });
 
-    it('._57370c5 node has no role=button and is outside ._1aa2651', () => {
-        expect(dom.stray57.getAttribute('role')).toBeNull();
-        expect(dom.stray57.closest('._1aa2651')).toBeNull();
+    it('desktop new-chat page: returns the new-chat button', () => {
+        const dom = loadHeader('home-header.html');
+        expectResolved(resolveNewChatButtonEl(dom.container), dom.newChatBtn);
     });
 
-    it('placement is identical with or without ._57370c5 present', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
+    it('returns { el: null, path: "none" } when the title row is absent, even though the share button remains', () => {
+        const dom = loadHeader('conversation-header.html');
+        dom.titleRow.remove();
+        expect(resolveNewChatButtonEl(dom.container)).toEqual({ el: null, path: 'none' });
+    });
 
-        overlay.reposition('with-stray');
-        const leftWith = overlay.wrapperEl.style.left;
-
-        // Remove stray and reposition again
-        dom.stray57.remove();
-        overlay.reposition('without-stray');
-        const leftWithout = overlay.wrapperEl.style.left;
-
-        expect(leftWithout).toBe(leftWith);
+    it('returns { el: null, path: "none" } when the title row holds no button', () => {
+        const dom = loadHeader('conversation-header.html');
+        dom.sidebarToggle.remove();
+        dom.newChatBtn.remove();
+        expect(resolveNewChatButtonEl(dom.container)).toEqual({ el: null, path: 'none' });
     });
 });
 
-// ── Group 4: consistency regression — render vs onSelectChange ───────────────
+// ── shared overlay harness ───────────────────────────────────────────────────
 
-describe('DOM resolvers — consistency regression: reposition() vs onSelectChange()', () => {
-    let overlay, ctx, dom, restoreRaf;
-
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024);
-        spyStorageManager();
-        ctx = makeCtx();
-        dom = buildRealisticHeader();
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(dom.container);
-    });
-
-    afterEach(() => {
+/** Mounts an overlay on a captured header; returns handles plus a teardown. */
+function setupOverlay(fileName, { viewport = GAP_VIEWPORT, stubNaturalWidth = true } = {}) {
+    const restoreRaf = makeRafSync();
+    setInnerWidth(viewport);
+    spyStorageManager();
+    const dom = loadHeader(fileName);
+    const overlay = createPresetOverlay(makeCtx());
+    overlay.mountTo(dom.container);
+    if (stubNaturalWidth) vi.spyOn(overlay.dropdown, 'getNaturalWidth').mockReturnValue(NATURAL_WIDTH);
+    const teardown = () => {
         restoreRaf();
         restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
+        overlay.unmount();
         restoreStorageManager();
         vi.restoreAllMocks();
+        document.body.innerHTML = '';
+    };
+    return { dom, overlay, teardown };
+}
+
+// ── Group 4: gap-branch placement uses the resolved elements ──────────────────
+
+describe('DOM resolvers — gap-branch placement via reposition()', () => {
+    let h;
+    afterEach(() => h.teardown());
+
+    it('places the overlay in the gap between the title-row title and the new-chat button', () => {
+        h = setupOverlay('conversation-header.html');
+        applyGapGeometry(h.dom);
+
+        h.overlay.reposition();
+
+        expect(h.overlay.wrapperEl.style.visibility).toBe('');
+        expect(h.overlay.wrapperEl.style.left).toBe(GAP_EXPECTED_LEFT);
+        expect(h.overlay.wrapperEl.style.width).toBe(GAP_EXPECTED_WIDTH);
+        expect(h.overlay.wrapperEl.style.transform).toBe('translateY(-50%)');
     });
 
-    it('left and width are IDENTICAL between initial reposition() and onSelectChange()', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-        stubRect(dom.btn1,       BTN1_RECT);
+    it('sets visibility=hidden when the title-row title and the new-chat button leave no gap', () => {
+        h = setupOverlay('conversation-header.html');
+        applyGapGeometry(h.dom);
+        // title 0..200, button 210..375 → availableGap = 210 - 200 - 16 = -6 → hidden.
+        // Each decoy keeps a positive gap, so a wrong pick stays visible: share button as button 281 - 200 - 16 = 65,
+        // centred title (100..150) as title 210 - 150 - 16 = 44, sidebar toggle (4..48) as title 210 - 48 - 16 = 146.
+        stubRect(h.dom.titleEl,      rect(0, 200));
+        stubRect(h.dom.newChatBtn,   rect(210, 165));
+        stubRect(h.dom.centredTitle, rect(100, 50));
 
-        overlay.reposition('initial');
-        const left1  = overlay.wrapperEl.style.left;
-        const width1 = overlay.wrapperEl.style.width;
+        h.overlay.reposition();
 
-        overlay.onSelectChange('preset-A');
-        const left2  = overlay.wrapperEl.style.left;
-        const width2 = overlay.wrapperEl.style.width;
-
-        expect(left2).toBe(left1);
-        expect(width2).toBe(width1);
+        expect(h.overlay.wrapperEl.style.visibility).toBe('hidden');
     });
 
-    it('placement is non-zero (not 0px) after reposition() with stubbed rects', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
+    it('clears a previous visibility=hidden once the gap is positive again', () => {
+        h = setupOverlay('conversation-header.html');
+        h.overlay.wrapperEl.style.visibility = 'hidden';
+        applyGapGeometry(h.dom);
 
-        overlay.reposition('non-zero-check');
+        h.overlay.reposition();
 
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBeGreaterThan(0);
-        expect(overlay.wrapperEl.style.width).toBeTruthy();
+        expect(h.overlay.wrapperEl.style.visibility).toBe('');
+        expect(h.overlay.wrapperEl.style.left).toBe(GAP_EXPECTED_LEFT);
     });
 
-    it('repeated onSelectChange calls produce stable placement — no drift', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
+    it('falls back to container centring (no throw) when the title row is absent', () => {
+        h = setupOverlay('conversation-header.html');
+        applyGapGeometry(h.dom);
+        h.dom.titleRow.remove();
 
-        overlay.reposition('seed');
-        const leftSeed = overlay.wrapperEl.style.left;
+        expect(() => h.overlay.reposition()).not.toThrow();
 
-        overlay.onSelectChange('preset-X');
-        overlay.onSelectChange('preset-Y');
-        overlay.onSelectChange('');
-
-        expect(overlay.wrapperEl.style.left).toBe(leftSeed);
-    });
-
-    it('onSelectChange with empty-string (unbind path) still calls reposition and keeps placement stable', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-
-        overlay.reposition('seed');
-        const leftSeed = overlay.wrapperEl.style.left;
-
-        overlay.onSelectChange('');
-        expect(overlay.wrapperEl.style.left).toBe(leftSeed);
+        // center fallback: round((375 - 80) / 2) = round(147.5) = 148
+        expect(h.overlay.wrapperEl.style.left).toBe('148px');
+        expect(h.overlay.wrapperEl.style.width).toBe(GAP_EXPECTED_WIDTH);
     });
 });
 
-// ── Group 5: structural-fallback button path ──────────────────────────────────
+// ── Group 5: consistency — reposition() vs onSelectChange() ──────────────────
 
-describe('DOM resolvers — structural-fallback button path', () => {
-    let overlay, ctx, restoreRaf;
-
+describe('DOM resolvers — consistency: reposition() vs onSelectChange()', () => {
+    let h;
     beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024);
-        spyStorageManager();
-        ctx = makeCtx();
+        h = setupOverlay('conversation-header.html');
+        applyGapGeometry(h.dom);
+    });
+    afterEach(() => h.teardown());
+
+    it('onSelectChange() places the overlay exactly where reposition() does', () => {
+        h.overlay.reposition();
+        expect(h.overlay.wrapperEl.style.left).toBe(GAP_EXPECTED_LEFT);
+
+        h.overlay.wrapperEl.style.left = '';
+        h.overlay.wrapperEl.style.width = '';
+        h.overlay.onSelectChange('preset-A');
+
+        expect(h.overlay.wrapperEl.style.left).toBe(GAP_EXPECTED_LEFT);
+        expect(h.overlay.wrapperEl.style.width).toBe(GAP_EXPECTED_WIDTH);
     });
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        restoreStorageManager();
-        vi.restoreAllMocks();
-        document.body.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR).forEach(el => el.remove());
-    });
+    it('repeated onSelectChange() calls, including the empty (unbind) choice, keep the same placement', () => {
+        h.overlay.reposition();
 
-    it('picks first role-button AFTER title (structural fallback) when no min-width button present', () => {
-        // btn1 (before title) | titleEl | btn2 (after title, no min-width)
-        const container = document.createElement('div');
-        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-
-        const wrapper = document.createElement('div');
-        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
-
-        const btn1 = document.createElement('div');
-        btn1.setAttribute('role', 'button');
-
-        const titleEl = document.createElement('div');
-        titleEl.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
-        titleEl.textContent = 'Title';
-
-        const btn2 = document.createElement('div');
-        btn2.setAttribute('role', 'button');
-
-        wrapper.appendChild(btn1);
-        wrapper.appendChild(titleEl);
-        wrapper.appendChild(btn2);
-        container.appendChild(wrapper);
-        document.body.appendChild(container);
-
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(container);
-
-        stubRect(container, rect(0, 767));
-        stubRect(titleEl,   TITLE_RECT);
-        stubRect(btn1,      BTN1_RECT);
-        stubRect(btn2,      NEWCHAT_RECT);
-
-        overlay.reposition('structural-fallback-test');
-
-        // center mode (windowWidth=1024): left = (767 - naturalWidth) / 2
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
-    });
-
-    it('falls back to LAST role-button in wrapper when title cannot be resolved', () => {
-        const container = document.createElement('div');
-        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-
-        const wrapper = document.createElement('div');
-        wrapper.className = DSSelectors.CHAT_HEADER_TITLE_ROW_SELECTOR.slice(1);
-
-        const btnA = document.createElement('div');
-        btnA.setAttribute('role', 'button');
-
-        const btnB = document.createElement('div');
-        btnB.setAttribute('role', 'button'); // last → chosen as last-resort
-
-        wrapper.appendChild(btnA);
-        wrapper.appendChild(btnB);
-        container.appendChild(wrapper);
-        document.body.appendChild(container);
-
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(container);
-
-        stubRect(container, rect(0, 767));
-        stubRect(btnA,      BTN1_RECT);
-        stubRect(btnB,      NEWCHAT_RECT);
-
-        overlay.reposition('last-resort-test');
-
-        // titleRect=null, windowWidth=1024 → center fallback
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
+        for (const id of ['preset-X', 'preset-Y', '']) {
+            h.overlay.wrapperEl.style.left = '';
+            h.overlay.onSelectChange(id);
+            expect(h.overlay.wrapperEl.style.left, 'after onSelectChange(' + JSON.stringify(id) + ')').toBe(GAP_EXPECTED_LEFT);
+        }
     });
 });
 
-// ── Group 6: null paths and guard clauses ────────────────────────────────────
+// ── Group 6: guard clauses ───────────────────────────────────────────────────
 
-describe('DOM resolvers — null paths and guard clauses', () => {
-    let overlay, ctx, restoreRaf;
+describe('DOM resolvers — guard clauses', () => {
+    let h;
+    afterEach(() => { if (h) h.teardown(); h = null; });
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024);
+    it('reposition() is a no-op (no throw) when the overlay is not mounted', () => {
         spyStorageManager();
-        ctx = makeCtx();
-    });
-
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
+        const overlay = createPresetOverlay(makeCtx());
+        expect(() => overlay.reposition()).not.toThrow();
+        expect(overlay.wrapperEl).toBeNull();
         restoreStorageManager();
-        vi.restoreAllMocks();
-        document.body.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR).forEach(el => el.remove());
     });
 
-    it('buttonRect=null when no ._1aa2651 wrapper present — no throw, falls back to center', () => {
-        const container = document.createElement('div');
-        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        const titleEl = document.createElement('div');
-        titleEl.className = DSSelectors.CHAT_TITLE_FALLBACK_SELECTOR.slice(1);
-        container.appendChild(titleEl);
-        document.body.appendChild(container);
+    it('reposition() leaves the placement untouched while the wrapper is display:none', () => {
+        h = setupOverlay('conversation-header.html');
+        applyGapGeometry(h.dom);
+        h.overlay.wrapperEl.style.display = 'none';
+        h.overlay.wrapperEl.style.left = '';
 
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(container);
+        h.overlay.reposition();
 
-        stubRect(container, rect(0, 767));
-        stubRect(titleEl,   TITLE_RECT);
-
-        expect(() => overlay.reposition('no-wrapper-test')).not.toThrow();
-        // buttonRect=null → fallback center
-        const leftPx = parseFloat(overlay.wrapperEl.style.left);
-        expect(leftPx).toBe(EXPECTED_CENTER_LEFT);
-    });
-
-    it('reposition() is a no-op (no throw) when wrapperEl is null (not mounted)', () => {
-        overlay = createPresetOverlay(ctx);
-        // Not mounted — wrapperEl is null
-        expect(() => overlay.reposition('no-mount')).not.toThrow();
-    });
-
-    it('reposition() skips computation when display:none', () => {
-        const container = document.createElement('div');
-        container.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        document.body.appendChild(container);
-
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(container);
-        overlay.wrapperEl.style.display = 'none';
-        overlay.wrapperEl.style.left = '';
-
-        overlay.reposition('display-none-test');
-
-        // style.left must remain untouched (computation skipped)
-        expect(overlay.wrapperEl.style.left).toBe('');
+        expect(h.overlay.wrapperEl.style.left).toBe('');
     });
 });
 
-// ── Group 7: hidden placement (visibility toggle) ─────────────────────────────
+// ── Group 7: center branch (>= 768 px) ───────────────────────────────────────
 
-describe('DOM resolvers — hidden placement via visibility style', () => {
-    let overlay, ctx, dom, restoreRaf;
+describe('DOM resolvers — center branch ignores the title and button rects', () => {
+    let h;
+    afterEach(() => h.teardown());
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        spyStorageManager();
-        ctx = makeCtx();
-        dom = buildRealisticHeader();
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(dom.container);
-    });
+    it('centres in the container and stays visible even when title and button overlap', () => {
+        h = setupOverlay('conversation-header.html', { viewport: 1024 });
+        stubRect(h.dom.container,  rect(0, 767));
+        stubRect(h.dom.titleEl,    rect(0, 400));
+        stubRect(h.dom.newChatBtn, rect(400, 367));
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
-        restoreStorageManager();
-        vi.restoreAllMocks();
-    });
+        h.overlay.reposition();
 
-    it('sets visibility=hidden when availableGap<=0 in <768 mode', () => {
-        setInnerWidth(375); // gap branch
-        // title 0..200, button 210..375 → availableGap=210-200-16=-6 → hidden
-        stubRect(dom.container,  rect(0, 375));
-        stubRect(dom.titleEl,    rect(0, 200));
-        stubRect(dom.newChatBtn, rect(210, 165));
-
-        overlay.reposition('hidden-test');
-
-        expect(overlay.wrapperEl.style.visibility).toBe('hidden');
-    });
-
-    it('clears visibility when gap is positive (<768 mode)', () => {
-        setInnerWidth(375); // gap branch
-        // First hide it
-        overlay.wrapperEl.style.visibility = 'hidden';
-
-        // Now provide a valid gap: title 0..50, button 200..375 → availableGap=200-50-16=134
-        stubRect(dom.container,  rect(0, 375));
-        stubRect(dom.titleEl,    rect(0, 50));
-        stubRect(dom.newChatBtn, rect(200, 175));
-
-        overlay.reposition('restore-test');
-
-        expect(overlay.wrapperEl.style.visibility).toBe('');
-    });
-
-    it('visibility is not hidden in center mode (>=768) even with overlapping rects', () => {
-        setInnerWidth(1024); // center branch
-        // Large title/button that would cause hidden in <768
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    rect(0, 400));
-        stubRect(dom.newChatBtn, rect(400, 367));
-
-        overlay.reposition('center-no-hide');
-
-        expect(overlay.wrapperEl.style.visibility).not.toBe('hidden');
+        // round((767 - 80) / 2) = round(343.5) = 344
+        expect(h.overlay.wrapperEl.style.visibility).not.toBe('hidden');
+        expect(h.overlay.wrapperEl.style.left).toBe('344px');
     });
 });
 
 // ── Group 8: window resize listener ──────────────────────────────────────────
 
 describe('DOM resolvers — window resize listener', () => {
-    let overlay, ctx, dom, restoreRaf;
+    let h;
+    beforeEach(() => { h = setupOverlay('conversation-header.html', { viewport: 1024 }); });
+    afterEach(() => { if (h) h.teardown(); });
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024);
-        spyStorageManager();
-        ctx = makeCtx();
-        dom = buildRealisticHeader();
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(dom.container);
+    it('registers a resize handler on mount and removes it on unmount', () => {
+        expect(typeof h.overlay._windowResizeHandler).toBe('function');
+        h.overlay.unmount();
+        expect(h.overlay._windowResizeHandler).toBeNull();
     });
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
-        restoreStorageManager();
-        vi.restoreAllMocks();
-    });
+    it('switches from center to gap placement when a resize crosses below 768 px', () => {
+        stubRect(h.dom.container, rect(0, 767));
+        h.overlay.reposition();
+        expect(h.overlay.wrapperEl.style.left).toBe('344px');
 
-    it('_windowResizeHandler is set after mountTo (resize listener registered)', () => {
-        expect(overlay._windowResizeHandler).not.toBeNull();
-        expect(typeof overlay._windowResizeHandler).toBe('function');
-    });
-
-    it('_windowResizeHandler is null after unmount (listener removed)', () => {
-        overlay.unmount();
-        expect(overlay._windowResizeHandler).toBeNull();
-        // prevent double-unmount in afterEach
-        overlay = null;
-    });
-
-    it('dispatching a resize event with new innerWidth calls reposition', () => {
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-
-        // Spy on reposition to count calls (after mount)
-        const repoSpy = vi.spyOn(overlay, 'reposition');
-
-        // Simulate crossing below 768
-        setInnerWidth(375);
+        setInnerWidth(GAP_VIEWPORT);
+        applyGapGeometry(h.dom);
         window.dispatchEvent(new Event('resize'));
 
-        // rAF is synchronous (makeRafSync), so handler runs synchronously
-        expect(repoSpy).toHaveBeenCalled();
-    });
-
-    it('mode switches from center to gap when innerWidth crosses below 768 on resize', () => {
-        // Start in center mode (1024)
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-
-        overlay.reposition('initial');
-        const leftCenter = parseFloat(overlay.wrapperEl.style.left);
-
-        // Now simulate resize to 375px with good gap
-        setInnerWidth(375);
-        stubRect(dom.container,  rect(0, 375));
-        stubRect(dom.titleEl,    rect(0, 50));
-        stubRect(dom.newChatBtn, rect(200, 175));
-
-        window.dispatchEvent(new Event('resize'));
-
-        const leftGap = parseFloat(overlay.wrapperEl.style.left);
-        // Gap mode left will differ from center mode left
-        expect(leftGap).not.toBeCloseTo(leftCenter, 0);
-        expect(isFinite(leftGap)).toBe(true);
+        expect(h.overlay.wrapperEl.style.left).toBe(GAP_EXPECTED_LEFT);
     });
 });
 
 // ── Group 9: idempotency regression (Bug #2 fix — v4.2.1) ────────────────────
 //
-// getNaturalWidth() now uses canvas-based measureTextWidth + stable constant 16
-// for arrow width (no longer reads arrow.getBoundingClientRect()). Calling
-// reposition() twice with the same label text must yield the exact same integer
-// left and width on both calls — no sub-pixel drift between invocations.
+// getNaturalWidth() uses canvas-based measureTextWidth plus a stable arrow-width constant (it no longer
+// reads arrow.getBoundingClientRect()), so two reposition() calls with the same label must yield the exact
+// same integer left and width. The real getNaturalWidth() runs here (no stub), since it is the subject.
 
 describe('DOM resolvers — reposition() idempotency (Bug #2 regression)', () => {
-    let overlay, ctx, dom, restoreRaf;
+    let h;
+    afterEach(() => h.teardown());
 
-    beforeEach(() => {
-        restoreRaf = makeRafSync();
-        setInnerWidth(1024); // center mode (>=768)
-        spyStorageManager();
-        ctx = makeCtx();
-        dom = buildRealisticHeader();
-        overlay = createPresetOverlay(ctx);
-        overlay.mountTo(dom.container);
-    });
+    it('two consecutive reposition() calls with the same label yield identical integer left and width', () => {
+        h = setupOverlay('conversation-header.html', { viewport: 1024, stubNaturalWidth: false });
+        stubRect(h.dom.container, rect(0, 767));
 
-    afterEach(() => {
-        restoreRaf();
-        restoreInnerWidth();
-        if (overlay) overlay.unmount();
-        if (dom.container.parentNode) dom.container.parentNode.removeChild(dom.container);
-        restoreStorageManager();
-        vi.restoreAllMocks();
-    });
+        h.overlay.reposition();
+        const left1  = h.overlay.wrapperEl.style.left;
+        const width1 = h.overlay.wrapperEl.style.width;
 
-    it('two consecutive reposition() calls with the same label yield identical integer left and width (no drift)', () => {
-        // Arrange: stable geometry so computation is deterministic
-        stubRect(dom.container,  CONTAINER_RECT);
-        stubRect(dom.titleEl,    TITLE_RECT);
-        stubRect(dom.newChatBtn, NEWCHAT_RECT);
-        stubRect(dom.btn1,       BTN1_RECT);
+        h.overlay.reposition();
 
-        // First reposition
-        overlay.reposition('idempotency-run-1');
-        const left1  = overlay.wrapperEl.style.left;
-        const width1 = overlay.wrapperEl.style.width;
-
-        // Second reposition — same label, same geometry, same windowWidth
-        overlay.reposition('idempotency-run-2');
-        const left2  = overlay.wrapperEl.style.left;
-        const width2 = overlay.wrapperEl.style.width;
-
-        // Both values must be non-empty (placement occurred)
         expect(left1).not.toBe('');
         expect(width1).not.toBe('');
-
-        // Must be identical across both calls — no sub-pixel drift
-        expect(left2).toBe(left1);
-        expect(width2).toBe(width1);
-
-        // Values must represent integers (Math.round applied in v4.2.1)
+        expect(h.overlay.wrapperEl.style.left).toBe(left1);
+        expect(h.overlay.wrapperEl.style.width).toBe(width1);
         expect(parseFloat(left1) % 1).toBe(0);
         expect(parseFloat(width1) % 1).toBe(0);
     });

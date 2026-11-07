@@ -6,7 +6,7 @@
  * 不可移至靜態 manifest CSS。
  *
  * 注入內容（僅定位相關）：
- *   1. ._2be88ba:not(._1551317) — 建立 containing block；跳過新對話頁。
+ *   1. 對話頁標題列容器（CHAT_HEADER_SELECTOR 排除 NEW_CHAT_HEADER_MODIFIER_SELECTOR）— 建立 containing block；跳過新對話頁。
  *   2. #dss-preset-overlay — absolute 基底 + 垂直置中；水平定位由 controller 以 inline style 覆寫。
  *
  * 此檔案以 classic script 載入，無 ES import/export。
@@ -38,9 +38,8 @@
         var style = document.createElement('style');
         style.id = STYLE_ID;
         style.textContent = [
-            /* 為 #dss-preset-overlay 建立 absolute 定位的 containing block；
-               ._1551317 為新對話頁，刻意跳過以避免不必要掛載。 */
-            selectors.CHAT_HEADER_SELECTOR + ':not(.' + selectors.NEW_CHAT_HEADER_MODIFIER_CLASS + '){position:relative!important}',
+            /* 為 #dss-preset-overlay 建立 absolute 定位的 containing block；新對話頁的標題列容器（其後沒有訊息列表）刻意跳過以避免不必要掛載。 */
+            selectors.CHAT_HEADER_SELECTOR + ':not(' + selectors.NEW_CHAT_HEADER_MODIFIER_SELECTOR + '){position:relative!important}',
 
             /* overlay 容器基底定位：脫離 flow（absolute）+ 垂直置中。
                水平定位（left / width）由 reposition() 依 computePlacement 結果寫入 inline style。 */

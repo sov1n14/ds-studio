@@ -1,26 +1,58 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import '../../content/sidebar-auto-hide.styles.js';
 import '../../content/sidebar-auto-hide.observers.js';
 import SidebarAutoHide from '../../content/sidebar-auto-hide.js';
-const DSSelectors = require('../../content/ds-selectors.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Captured live markup: the expanded sidebar wrapper (test/fixtures/ds-snapshots/sidebar-expanded.html, conv2-finished, personal text replaced) and DeepSeek's native collapsed rail (test/fixtures/sidebar-buttons/full-collapesed-component.html, identical to the rail in the conv-sidebar-collapsed capture). Natively collapsed, DeepSeek inserts the rail as the wrapper's first child; expanded, the rail is unmounted. The specs toggle the native state the same way, by inserting and removing the rail node.
+const EXPANDED_SIDEBAR_HTML = fs.readFileSync(path.resolve(__dirname, '../fixtures/ds-snapshots/sidebar-expanded.html'), 'utf8');
+const NATIVE_RAIL_HTML = fs.readFileSync(path.resolve(__dirname, '../fixtures/sidebar-buttons/full-collapesed-component.html'), 'utf8');
+
+function parse(html) {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return host.firstElementChild;
+}
+
+/**
+ * Sidebar skeleton: the chain of captured elements the sidebar selectors read (wrapper > inner > outer scroll area > inner scroll area), tags and attributes verbatim from the expanded capture. Every other element is dropped and the innermost scroll area is re-tagged from div to section, because happy-dom 16.8.1 evaluates `:has(> A > B ...)` as `:has(> A)`: under that bug any further div in the subtree reads as the native rail (SIDEBAR_NATIVE_COLLAPSED_SELECTOR), so the sidebar would always look natively collapsed. Chrome evaluates the wrapper, inner and native-rail selectors identically on this skeleton and on the full capture.
+ */
+function buildSidebarSkeleton() {
+    const wrapper = parse(EXPANDED_SIDEBAR_HTML);
+    const innerScroll = [...wrapper.querySelectorAll('.ds-scroll-area')].find((el) => el.parentElement.classList.contains('ds-scroll-area'));
+    const outerScroll = innerScroll.parentElement;
+    const inner = outerScroll.parentElement;
+    const section = document.createElement('section');
+    [...innerScroll.attributes].forEach(({ name, value }) => section.setAttribute(name, value));
+    outerScroll.replaceChildren(section);
+    inner.replaceChildren(outerScroll);
+    wrapper.replaceChildren(inner);
+    return wrapper;
+}
+
+/** Mount the expanded sidebar skeleton at the end of body and return its wrapper. */
 function createSidebar() {
-    const el = document.createElement('div');
-    el.className = DSSelectors.SIDEBAR_WRAPPER_SELECTOR.split('.').pop();
+    const el = buildSidebarSkeleton();
     document.body.appendChild(el);
     return el;
 }
 
-function createSidebarInner(parent) {
-    const el = document.createElement('div');
-    el.className = 'b8812f16 a2f3d50e';
-    parent.appendChild(el);
-    return el;
+/** The inner content element of a mounted wrapper: its child that holds the scroll areas. */
+function innerOf(sidebar) {
+    return [...sidebar.children].find((child) => child.querySelector('.ds-scroll-area'));
+}
+
+/** Native collapse as DeepSeek renders it: insert the captured rail as the wrapper's first child. Removing the returned node is the native expand. */
+function nativeCollapse(sidebar) {
+    const rail = parse(NATIVE_RAIL_HTML);
+    sidebar.prepend(rail);
+    return rail;
 }
 
 /** Dispatch a mouseover from `target` so capture listeners on document see the correct e.target. */
@@ -288,7 +320,6 @@ describe('Group B — setupHoverZone() child element hover behaviour', () => {
 describe('Group C — collapse() / expand() core state transitions', () => {
     beforeEach(() => {
         SidebarAutoHide.sidebarEl = createSidebar();
-        createSidebarInner(SidebarAutoHide.sidebarEl);
     });
 
     it('C1: collapse() adds COLLAPSED_CLASS and sets width to 60px', () => {
@@ -531,9 +562,7 @@ describe('Group F1 — applyOverflow() overflow state management', () => {
     });
 
     it('F3: clears overflow when natively collapsed regardless of our collapse state', () => {
-        const nativeBar = document.createElement('div');
-        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
-        SidebarAutoHide.sidebarEl.appendChild(nativeBar);
+        nativeCollapse(SidebarAutoHide.sidebarEl);
         SidebarAutoHide.sidebarEl.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.applyOverflow();
         expect(SidebarAutoHide.sidebarEl.style.overflow).toBe('');
@@ -546,7 +575,7 @@ describe('Group F1 — applyOverflow() overflow state management', () => {
 
 describe('Group F2 — MutationObserver guards on applyOverflow()', () => {
     beforeEach(() => {
-        createSidebarInner(createSidebar());
+        createSidebar();
         SidebarAutoHide.enable();
     });
 
@@ -555,9 +584,9 @@ describe('Group F2 — MutationObserver guards on applyOverflow()', () => {
 
         SidebarAutoHide.expand();
 
-        const dummy = document.createElement('div');
+        const dummy = document.createElement('span');
         dummy.className = 'dummy';
-        SidebarAutoHide.sidebarEl.appendChild(dummy);
+        innerOf(SidebarAutoHide.sidebarEl).appendChild(dummy);
 
         await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -568,9 +597,9 @@ describe('Group F2 — MutationObserver guards on applyOverflow()', () => {
     it('F5: MutationObserver DOES re-apply overflow: hidden after collapse() (normal behavior preserved)', async () => {
         const overflowSpy = vi.spyOn(SidebarAutoHide, 'applyOverflow');
 
-        const dummy = document.createElement('div');
+        const dummy = document.createElement('span');
         dummy.className = 'dummy';
-        SidebarAutoHide.sidebarEl.appendChild(dummy);
+        innerOf(SidebarAutoHide.sidebarEl).appendChild(dummy);
 
         await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -623,7 +652,6 @@ describe('Group G — storeOriginalWidth() guard against collapsed state', () =>
 describe('Group H — expand() fallback when originalWidth is invalid', () => {
     beforeEach(() => {
         SidebarAutoHide.sidebarEl = createSidebar();
-        createSidebarInner(SidebarAutoHide.sidebarEl);
     });
 
     it('H1: expand() clears inline width (style.width = "") when originalWidth is null', () => {
@@ -657,7 +685,7 @@ describe('Group H — expand() fallback when originalWidth is invalid', () => {
 describe('Group I — enable() / disable() lifecycle', () => {
     beforeEach(() => {
         vi.useFakeTimers();
-        createSidebarInner(createSidebar());
+        createSidebar();
     });
 
     it('I1: disable() tears down both MutationObservers', () => {
@@ -855,13 +883,11 @@ describe('Group K - setupMutationObserver() sidebar replacement detection', () =
 describe('Group L - observeSidebar() native-expand re-collapse', () => {
     it('L1: native expand while our collapse is active re-applies width, overflow, and marginLeft', async () => {
         const sidebar = createSidebar();
-        const innerEl = createSidebarInner(sidebar);
+        const innerEl = innerOf(sidebar);
         SidebarAutoHide.sidebarEl = sidebar;
         SidebarAutoHide.enabled = true;
 
-        const nativeBar = document.createElement('div');
-        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
-        sidebar.appendChild(nativeBar);
+        const nativeBar = nativeCollapse(sidebar);
 
         sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
 
@@ -880,19 +906,19 @@ describe('Group L - observeSidebar() native-expand re-collapse', () => {
         expect(innerEl.style.marginLeft).toBe(-(260 - SidebarAutoHide.COLLAPSED_WIDTH) + 'px');
     });
 
+    // Reachable when React empties the wrapper in one render: the rail and the inner element leave together, so the native expand is detected while no inner element exists.
     it('L2: native expand with no inner element does not throw', async () => {
         const sidebar = createSidebar();
         SidebarAutoHide.sidebarEl = sidebar;
         SidebarAutoHide.enabled = true;
 
-        const nativeBar = document.createElement('div');
-        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
-        sidebar.appendChild(nativeBar);
+        nativeCollapse(sidebar);
 
         sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.observeSidebar();
+        expect(SidebarAutoHide._wasNativelyCollapsed, 'precondition: natively collapsed').toBe(true);
 
-        nativeBar.remove();
+        sidebar.replaceChildren();
 
         await new Promise(resolve => setTimeout(resolve, 0));
         expect(sidebar.style.width).toBe(SidebarAutoHide.COLLAPSED_WIDTH + 'px');
@@ -900,13 +926,11 @@ describe('Group L - observeSidebar() native-expand re-collapse', () => {
 
     it('L3: inner element with getBoundingClientRect().width = 0 does NOT set marginLeft', async () => {
         const sidebar = createSidebar();
-        const innerEl = createSidebarInner(sidebar);
+        const innerEl = innerOf(sidebar);
         SidebarAutoHide.sidebarEl = sidebar;
         SidebarAutoHide.enabled = true;
 
-        const nativeBar = document.createElement('div');
-        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
-        sidebar.appendChild(nativeBar);
+        const nativeBar = nativeCollapse(sidebar);
 
         sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
         SidebarAutoHide.observeSidebar();
@@ -939,18 +963,18 @@ describe('Group L - observeSidebar() native-expand re-collapse', () => {
 });
 // ---------------------------------------------------------------------------
 //  Group U - collapse intent survives a React className rewrite
-//  Live (DevTools): the wrapper flips 'dc04ec1d a02af2e6' <-> 'dc04ec1d' on every native toggle, and React rewrites the whole className, wiping COLLAPSED_CLASS. Group L only models the native rail node being removed, never the className rewrite.
+//  Live (DevTools): on every native toggle React rewrites the wrapper's whole className attribute to the value it renders, wiping COLLAPSED_CLASS. reactClassName is the captured wrapper's own className, the value React writes back. Group L only models the native rail node being removed, never the className rewrite.
 // ---------------------------------------------------------------------------
 
 describe('Group U - collapse intent survives a React className rewrite', () => {
-    const REACT_EXPANDED_CLASSNAME = 'dc04ec1d';
+    let reactClassName;
     let sidebar;
 
     /** Real-timer wait: lets the sidebar MutationObserver deliver (happy-dom window timer) and the module's hover timers elapse. */
     const wait = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
     beforeEach(() => {
-        createSidebarInner(createSidebar());
+        reactClassName = createSidebar().className;
         SidebarAutoHide.enable();
         sidebar = SidebarAutoHide.sidebarEl;
     });
@@ -958,7 +982,7 @@ describe('Group U - collapse intent survives a React className rewrite', () => {
     it('U1: pointer outside - the class wipe is undone immediately (class, 60px, overflow hidden) with no mouse event', async () => {
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'precondition: enable() collapsed the sidebar').toBe(true);
 
-        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        sidebar.className = reactClassName;
         await wait();
 
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'COLLAPSED_CLASS re-applied after the React rewrite').toBe(true);
@@ -968,7 +992,7 @@ describe('Group U - collapse intent survives a React className rewrite', () => {
 
     it('U2: pointer inside - the class wipe is not undone while hovering; mouseleave collapses again', async () => {
         sidebar.dispatchEvent(new MouseEvent('mouseenter'));
-        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        sidebar.className = reactClassName;
         await wait();
 
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'no re-collapse while the pointer is inside').toBe(false);
@@ -984,7 +1008,7 @@ describe('Group U - collapse intent survives a React className rewrite', () => {
         SidebarAutoHide.originalWidth = 250;
 
         sidebar.dispatchEvent(new MouseEvent('mouseenter'));
-        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        sidebar.className = reactClassName;
         await wait(SidebarAutoHide.ENTER_DELAY_MS + 50);
 
         expect(sidebar.style.width, 'expand() restored the original width').toBe('250px');
@@ -1003,7 +1027,7 @@ describe('Group U - collapse intent survives a React className rewrite', () => {
         await wait(SidebarAutoHide.LEAVE_DELAY_MS + 50);
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'collapsed again after mouseleave').toBe(true);
 
-        sidebar.className = REACT_EXPANDED_CLASSNAME;
+        sidebar.className = reactClassName;
         await wait();
 
         expect(sidebar.classList.contains(SidebarAutoHide.COLLAPSED_CLASS), 'COLLAPSED_CLASS re-applied after the React rewrite (pointer already left)').toBe(true);
@@ -1270,7 +1294,7 @@ describe('Group Q - setupMutationObserver() callback side-effects', () => {
 describe('Group R - observeSidebar() callback conditions and observe options', () => {
     it('R1: unchanged native state does not trigger re-collapse branch', async () => {
         const sidebar = createSidebar();
-        const innerEl = createSidebarInner(sidebar);
+        const innerEl = innerOf(sidebar);
         SidebarAutoHide.sidebarEl = sidebar;
         SidebarAutoHide.enabled = true;
         sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
@@ -1287,7 +1311,7 @@ describe('Group R - observeSidebar() callback conditions and observe options', (
 
     it('R2: native collapse (not expand) does not trigger re-collapse branch', async () => {
         const sidebar = createSidebar();
-        const innerEl = createSidebarInner(sidebar);
+        const innerEl = innerOf(sidebar);
         SidebarAutoHide.sidebarEl = sidebar;
         SidebarAutoHide.enabled = true;
         sidebar.classList.add(SidebarAutoHide.COLLAPSED_CLASS);
@@ -1296,9 +1320,7 @@ describe('Group R - observeSidebar() callback conditions and observe options', (
         SidebarAutoHide.observeSidebar();
         expect(SidebarAutoHide._wasNativelyCollapsed).toBe(false);
 
-        const nativeBar = document.createElement('div');
-        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
-        sidebar.appendChild(nativeBar);
+        const nativeBar = nativeCollapse(sidebar);
         await new Promise(resolve => setTimeout(resolve, 0));
 
         expect(innerEl.style.marginLeft).toBe('');
@@ -1306,13 +1328,11 @@ describe('Group R - observeSidebar() callback conditions and observe options', (
 
     it('R3: native expand while not our-collapsed does not trigger re-collapse', async () => {
         const sidebar = createSidebar();
-        const innerEl = createSidebarInner(sidebar);
+        const innerEl = innerOf(sidebar);
         SidebarAutoHide.sidebarEl = sidebar;
         SidebarAutoHide.enabled = true;
 
-        const nativeBar = document.createElement('div');
-        nativeBar.className = DSSelectors.SIDEBAR_NATIVE_COLLAPSED_SELECTOR.split('.').pop();
-        sidebar.appendChild(nativeBar);
+        const nativeBar = nativeCollapse(sidebar);
 
         SidebarAutoHide.observeSidebar();
         expect(SidebarAutoHide._wasNativelyCollapsed).toBe(true);

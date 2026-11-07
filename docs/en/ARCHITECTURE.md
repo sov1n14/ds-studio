@@ -12,7 +12,7 @@ ds-studio/
 │   ├── content-script.export.js       ─  Markdown export pipeline (HTML→MD, download)
 │   ├── content-script.export.markdown.js ─  Export Markdown formatting bundle
 │   ├── content-script.export.time.js  ─  Export timestamp formatting bundle
-│   ├── ds-selectors.js      ─  Shared DOM selector constants for obfuscated DeepSeek class names
+│   ├── ds-selectors.js      ─  Shared DeepSeek DOM selector constants, mainly `ds-*` semantic classes and structural `:has()` selectors, with a few hashed classes retained
 │   ├── feature-toggle.js    ─  Shared master-switch + per-feature toggle pipeline (registerFeatureToggle)
 │   ├── retry-until.js       ─  Polling-until-ready utility (fixed-interval retry with cap)
 │   ├── mobile-device.js     ─  Mobile device detection shared utility
@@ -181,11 +181,13 @@ ds-studio/
 │   ├── i18n.locales.en.js      ─  en string dictionary, pure data
 │   ├── i18n.locales.js         ─  Locale aggregator: imports and registers the per-language dictionaries (v4.11.14 split)
 │   └── logger.js               ─  Diagnostic logger, .warn() only after v4.8.4 cleanup
-└── test/                    ─  Unit tests (Vitest only)
-    ├── vitest.config.js     ─  Vitest configuration
+└── test/                    ─  Unit tests (Vitest) and E2E tests (Playwright)
+    ├── vitest.config.js     ─  Vitest configuration, default environment happy-dom; selector and DOM-structure specs opt into jsdom per file with `// @vitest-environment jsdom`
+    ├── playwright.config.js ─  Playwright configuration (`*.e2e.js`, one worker)
     ├── setup/               ─  Test setup and preload
     ├── unit/                ─  Unit test specs
-    ├── fixtures/            ─  Test data fixtures
+    ├── e2e/                 ─  Playwright specs, run locally against `.browser-profile/`
+    ├── fixtures/            ─  Test data fixtures, including `ds-snapshots/` live-page snapshots
     └── helpers/             ─  Test helper utilities
 ```
 
@@ -309,7 +311,7 @@ A conversation sitting in the pending-delete queue is hidden from the DeepSeek s
 - **Group-collapse rule**: the sidebar nests conversation anchors inside date-group containers, each holding a date label plus one or more row anchors. Evaluation is per container — if *every* anchor inside is queued, the container itself is hidden so the date label disappears with it; if at least one anchor is not queued, only the individual queued anchors are hidden. A single-anchor group whose one anchor is queued counts as fully queued.
 - **Hiding mechanism**: the `ds-` prefixed class `ds-temp-chat-hidden` plus an injected `display: none !important` rule. Nodes stay in the page. Each application clears the class everywhere and re-derives it from the current set, so a group reappears — and an individual anchor unhides — as soon as its entry leaves the queue.
 - A `MutationObserver` on the sidebar wrapper coalesces bursts into a single application per animation frame.
-- **Selectors** live in `content/ds-selectors.js`: `SIDEBAR_DATE_GROUP_SELECTOR` (the obfuscated date-group container class) and `SIDEBAR_CHAT_LINK_SELECTOR` (anchors matched by their `/a/chat/s/` href). If a DeepSeek markup change breaks the group selector, the feature degrades to individual-anchor hiding, which locates anchors by href and is independent of obfuscated class names.
+- **Selectors** live in `content/ds-selectors.js`: `SIDEBAR_DATE_GROUP_SELECTOR` (the structural selector `div:has(> a[href*="/a/chat/s/"])`, a div directly wrapping chat links) and `SIDEBAR_CHAT_LINK_SELECTOR` (anchors matched by their `/a/chat/s/` href). If a DeepSeek markup change breaks the group selector, the feature degrades to individual-anchor hiding, which locates anchors by href and is independent of obfuscated class names.
 
 ### Content Settings Access (content → background)
 

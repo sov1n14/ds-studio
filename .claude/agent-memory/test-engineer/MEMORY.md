@@ -2,7 +2,7 @@
 
 - [Service Worker Test Harness](sw-test-harness.md) — real pending-store + captured onChanged + Map alarms bootstrap for SW sweep specs; revert-check recipe
 - [Stryker Dry Run Timeout](stryker-dry-run-timeout.md) — default 5min too short for 3000+ tests, use --dryRunTimeoutMinutes 15.
-- [Sidebar Hide Group Collapse](sidebar-hide-group-collapse.md) — group hides instead of anchor when all anchors queued; use multi-anchor groups in tests.
+- [Sidebar Hide Group Collapse](sidebar-hide-group-collapse.md) — group hides when all anchors queued; fallback needs no div parent of chat rows
 - [Stryker scoped run](reference_stryker_scoped_run.md) — CLI recipe, load-time mutants need fresh import, ignoreStatic hybrid coveredBy trap, happy-dom capture quirk
 - [Bash heredoc long files](pitfall_bash_heredoc_long_files.md) — heredocs over ~100 lines fail with matching-quote EOF; write specs in 50-100 line cat >> chunks
 - [Temp-chat event harness](reference_temp_chat_event_harness.md) — drive temporary-chat-delete via real navigate/beforeunload listeners, fetch-only mock
@@ -51,7 +51,7 @@
 - [GoToTop v2.9 gating toggle](project_gotop_v2_9_gating_toggle.md) — injection gating and scroll toggle test updates and what to watch
 - [GoToTop v2.9 tests aligned](project_gotop_v2_9_tests_aligned.md) — tests already matched rebuilt go-top.js; one index bug fix needed
 - [happy-dom environment limits](project_happydom_environment_limits.md) — AbortController teardown, HTMLDialogElement, MutationObserver under fake timers (resolved workaround)
-- [Hide-thinking DOM](project_hide_thinking_dom.md) — real DeepSeek container/header/content structure for hide-thinking tests
+- [Hide-thinking DOM](project_hide_thinking_dom.md) — real think-block shape, shared fixture helper, scanRoot closest() re-collapse regression (2026-11-08)
 - [jest-chrome removal](project_jest_chrome_removal.md) — replaced by hand-rolled vi.fn() chrome mock in vitest.setup.js; API surface actually used
 - [Messaging spec harness](project_messaging_spec_harness.md) — spec DSS_GET_SETTINGS / DSS_SETTINGS_CHANGED consumers; fresh-module load per test, auto-start double-registration trap
 - [Mutation proof method](project_mutation_proof_method.md) — prove a migrated assertion is non-vacuous when the original never ran under a failing case
@@ -61,7 +61,7 @@
 - [Popup refactor v3.0.0 tests](project_popup_refactor_v300_tests.md) — new and fixed files; migration-push defaults gotcha
 - [Popup toggle factory conventions](project_popup_toggle_factory_conventions.md) — popup factory modules share one ctx accessor convention and eval()-based test loading
 - [Preset delete-all tests](project_preset_delete_all_tests.md) — preset-item-renderer, custom-select delete-all wiring, requestDeleteAllPresets(), i18n keys
-- [Preset DOM resolvers tests](project_preset_dom_resolvers_tests.md) — 16 tests for preset-overlay.controller.js title/button selection via reposition()
+- [Preset DOM resolvers tests](project_preset_dom_resolvers_tests.md) — real header fixtures, toBe on result.el, gap-branch placement (center mode is vacuous)
 - [Preset dropdown tests](project_preset_dropdown_tests.md) — position and component specs, plus vitest.setup.js overlay wiring fix
 - [Preset position v2 tests](project_preset_position_v2_tests.md) — computePlacement rewrite: windowWidth branching, no minWidth floor, hidden flag
 - [Preset position v4.2.1 rounding](project_preset_position_v421_rounding.md) — Math.round in computePlacement; EXPECTED_CENTER_LEFT 374; idempotency test
@@ -98,5 +98,12 @@
 - [Pinned-default dry-run flake](pitfall_pinned_default_dry_run_flake.md) — root cause: un-awaited initSettings bootstrap race; fixed 2026-09-30 with waitForContentScriptBootstrap
 - [Navigation stale prefix not real](project_navigation_stale_prefix_not_real.md) — stale recompute vs handleChatChange race does not reproduce; every branch awaits storage first
 - [GoTop render-combined equivalents](project_gotop_render_combined_equivalents.md) — 5 equivalent survivors and the one-debounce fake-timer observer harness
-- [happy-dom :has() descendant bug](happy-dom-has-descendant.md) — :has(A B) evaluated as :has(A) in happy-dom 16.8.1
+- [happy-dom :has() first-compound bug](happy-dom-has-descendant.md) — :has() keeps only its first compound (descendant and child chains); sidebar selector consequences
 - [Auto-open-sidebar observer equivalents](project_auto_open_sidebar_observer_equivalents.md) — isEnabled gate in observer callback makes disconnect/leak mutants click-equivalent
+- [DeepSeek locator probe snapshots](reference_ds_locator_probe_snapshots.md) — 26 live-page snapshots in %TEMP%, fixture extraction, observable vs not fallbacks, :scope quirk
+- [User msg shares _63c77b1](pitfall_user_message_shares_assistant_class.md) — real user .ds-message has the assistant hash class; get assistant from buildChatPair, not a class query
+- [Selector override probe](reference_selector_override_probe.md) — kill-check DSSelectors constants via scratch config; re-eval preloaded pure bundle or override is ignored
+- [GoTop native wrapper defect](project_gotop_native_wrapper_defect.md) — live _0706cde is a wrapper; fix landed; use createNativeButton/insertNativeButton two-level fixture
+- [GoTop jsdom migration](pitfall_gotop_jsdom_migration.md) — leaked observer timer after teardown, jsdom margin 0px vs happy-dom empty, which specs use jsdom
+- [GoTop template hover var red](gotop-template-hover-var-red.md) — solo template hover var name bug; derive expected inline vars from snapshot native control
+- [jsdom per-file env](reference_jsdom_per_file_env.md) — docblock opt-in for :has() selector specs; innerText / location / scrollIntoView gaps and stubs

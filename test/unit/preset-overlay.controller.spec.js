@@ -12,11 +12,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Ensure the StorageManager global is populated before any test runs.
 import '../../utils/storage-manager.js';
-import DSSelectors from '../../content/ds-selectors.js';
+import fs from 'fs';
+import path from 'path';
+import '../../content/ds-selectors.js';
 
 const { createPresetOverlay } = require('../../content/preset-overlay.controller.js');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// Desktop new-chat (home) page header container captured verbatim from the live page.
+const HOME_HEADER_HTML = fs.readFileSync(path.resolve(__dirname, '../fixtures/ds-snapshots/home-header.html'), 'utf8');
+
+/** Appends a fresh copy of the captured new-chat header container to body and returns it. */
+function appendHomeHeader() {
+    const holder = document.createElement('div');
+    holder.innerHTML = HOME_HEADER_HTML;
+    const header = holder.firstElementChild;
+    document.body.appendChild(header);
+    return header;
+}
 
 function makeCtx(overrides = {}) {
     return {
@@ -270,9 +284,7 @@ describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)
 
         overlay = createPresetOverlay(ctx);
 
-        target = document.createElement('div');
-        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        document.body.appendChild(target);
+        target = appendHomeHeader();
     });
 
     afterEach(() => {
@@ -303,9 +315,7 @@ describe('findAndMount — pinned default vs explicit empty choice (no chatUuid)
 
         // Simulate React replacing the chat title bar: swap in a fresh target element.
         target.parentNode.removeChild(target);
-        target = document.createElement('div');
-        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        document.body.appendChild(target);
+        target = appendHomeHeader();
 
         overlay.findAndMount();
         await new Promise((resolve) => setTimeout(resolve, 0));

@@ -12,7 +12,7 @@ ds-studio/
 │   ├── content-script.export.js       ─  Markdown 匯出管線（HTML→MD、下載）
 │   ├── content-script.export.markdown.js ─  匯出 Markdown 格式化方法包
 │   ├── content-script.export.time.js  ─  匯出時間戳記格式化方法包
-│   ├── ds-selectors.js      ─  DeepSeek 混淆 class 名稱的共用 DOM 選擇器常數
+│   ├── ds-selectors.js      ─  DeepSeek 共用 DOM 選擇器常數，以 `ds-*` 語意 class 與結構 `:has()` 選擇器為主，僅保留少數雜湊 class
 │   ├── feature-toggle.js    ─  共用主開關＋個別功能開關管線（registerFeatureToggle）
 │   ├── retry-until.js       ─  輪詢至就緒工具（固定間隔重試，設有上限）
 │   ├── mobile-device.js     ─  行動裝置偵測共用工具
@@ -181,11 +181,13 @@ ds-studio/
 │   ├── i18n.locales.en.js      ─  en 字串字典，純資料
 │   ├── i18n.locales.js         ─  語系彙整器：匯入並註冊各語言字典（v4.11.14 拆分）
 │   └── logger.js               ─  診斷記錄器，v4.8.4 清理後僅保留 .warn()
-└── test/                    ─  單元測試（僅 Vitest）
-    ├── vitest.config.js     ─  Vitest 設定
+└── test/                    ─  單元測試（Vitest）與 E2E 測試（Playwright）
+    ├── vitest.config.js     ─  Vitest 設定，預設環境 happy-dom；選擇器與 DOM 結構規格以 `// @vitest-environment jsdom` 逐檔改用 jsdom
+    ├── playwright.config.js ─  Playwright 設定（`*.e2e.js`，單一 worker）
     ├── setup/               ─  測試設定與預載
     ├── unit/                ─  單元測試規格
-    ├── fixtures/            ─  測試資料 fixture
+    ├── e2e/                 ─  Playwright 規格，僅在本機對 `.browser-profile/` 執行
+    ├── fixtures/            ─  測試資料 fixture，含 `ds-snapshots/` 即時頁面快照
     └── helpers/             ─  測試輔助工具
 ```
 
@@ -309,7 +311,7 @@ per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) �
 - **群組收合規則**：側欄將對話連結巢狀放在日期群組容器內，每個容器含一個日期標籤與一或多個列連結。判定以容器為單位 — 若容器內*每個*連結都在佇列中，就隱藏容器本身，日期標籤隨之消失；若至少有一個連結不在佇列中，只隱藏個別佇列中的連結。只含一個連結且該連結在佇列中的群組，視為全部在佇列中。
 - **隱藏機制**：`ds-` 前綴的 class `ds-temp-chat-hidden` 加上注入的 `display: none !important` 規則。節點保留在頁面中。每次套用都會先清除所有位置的 class，再依目前集合重新推導，因此項目一離開佇列，群組就重新出現 — 個別連結也隨之取消隱藏。
 - 側欄外層容器上的 `MutationObserver` 將突發變動合併為每個動畫影格套用一次。
-- **選擇器**位於 `content/ds-selectors.js`：`SIDEBAR_DATE_GROUP_SELECTOR`（混淆過的日期群組容器 class）與 `SIDEBAR_CHAT_LINK_SELECTOR`（以 `/a/chat/s/` href 比對的連結）。若 DeepSeek 標記變更使群組選擇器失效，功能會降級為個別連結隱藏；此方式以 href 定位連結，與混淆 class 名稱無關。
+- **選擇器**位於 `content/ds-selectors.js`：`SIDEBAR_DATE_GROUP_SELECTOR`（結構選擇器 `div:has(> a[href*="/a/chat/s/"])`，即直接包住對話連結的 div）與 `SIDEBAR_CHAT_LINK_SELECTOR`（以 `/a/chat/s/` href 比對的連結）。若 DeepSeek 標記變更使群組選擇器失效，功能會降級為個別連結隱藏；此方式以 href 定位連結，與混淆 class 名稱無關。
 
 ### 內容腳本設定存取（content → background）
 

@@ -41,7 +41,7 @@
             this._stopScrollListener();
             this._scrollContainer = null;
 
-            // DOM 穩定後驅動 gated 重試迴圈：等待 .aaff8b8f／原生按鈕就緒後再注入並重連容器、監聽器與視覺狀態
+            // DOM 穩定後驅動 gated 重試迴圈：等待浮動按鈕列／原生按鈕就緒後再注入並重連容器、監聽器與視覺狀態
             clearTimeout(this._routeChangeTimer);
             this._routeChangeTimer = setTimeout(() => {
                 this._tryConnectDom();
@@ -68,7 +68,7 @@
 
         /**
          * 嘗試注入按鈕、找到滾動容器並附加 scroll 監聽器。
-         * 就緒條件：INJECT_PARENT_SELECTOR（.aaff8b8f）已掛載，或原生按鈕已出現。 未就緒時以 DSSRetryUntil 每 500ms 重試，最多 120 次（約 60 秒）； 超過上限直接放棄，不注入任何按鈕。 */
+         * 就緒條件：INJECT_PARENT_SELECTOR（浮動按鈕列）已掛載，或原生按鈕已出現。 未就緒時以 DSSRetryUntil 每 500ms 重試，最多 120 次（約 60 秒）； 超過上限直接放棄，不注入任何按鈕。 */
         _tryConnectDom() {
             if (!this.enabled) return;
 

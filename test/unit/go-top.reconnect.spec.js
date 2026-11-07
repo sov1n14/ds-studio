@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — DOM reconnection unit tests: readiness gating, wrapper
  * observer reconciliation, and route-change teardown/re-connect.
@@ -8,14 +9,15 @@ import '../../utils/storage-manager.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createWrapperWithoutNativeButton,
-    createNativeButton,
+    insertNativeButton,
     createFullWrapperWithNativeButton,
     resetGoToTopState,
 } from '../helpers/go-top-fixtures.js';
 
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     // ─────────────────────────────────────
     //  _tryConnectDom (Change A — gating)
@@ -31,7 +33,7 @@ describe('GoToTop', () => {
             vi.useRealTimers();
         });
 
-        it('does NOT inject when both .aaff8b8f and native button are absent — keeps polling instead', () => {
+        it('does NOT inject when both floating button bar and native button are absent — keeps polling instead', () => {
             document.body.innerHTML = '';
 
             GoToTop._tryConnectDom();
@@ -47,7 +49,7 @@ describe('GoToTop', () => {
             expect(document.body.contains(GoToTop._button)).toBe(true);
         });
 
-        it('injects immediately when .aaff8b8f wrapper is present (regardless of _getAnchor)', () => {
+        it('injects immediately when floating button bar is present (regardless of _getAnchor)', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
             vi.spyOn(GoToTop, '_getAnchor').mockReturnValue(null);
 
@@ -153,8 +155,7 @@ describe('GoToTop', () => {
             expect(GoToTop._injectionMode).toBe('wrapper-solo');
 
             // Simulate native button appearing
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
             vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(nativeBtn);
             vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
 
@@ -177,8 +178,7 @@ describe('GoToTop', () => {
             vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(null);
 
             outerWrapper.appendChild(document.createElement('span'));
-            // Real MutationObserver + real debounce timer: fake timers don't
-            // deliver pending MutationObserver records (see happy-dom limits memory).
+            // Real MutationObserver + real debounce timer: this describe block runs on real timers.
             await new Promise((resolve) => setTimeout(resolve, GoToTop.WRAPPER_OBSERVER_DEBOUNCE + 40));
 
             // Must be a genuinely NEW, connected button — not the stale pre-removal reference.
@@ -191,8 +191,7 @@ describe('GoToTop', () => {
 
         it('reconciliation no-op: injected mode with native button present does no work', async () => {
             const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._injectIntoWrapperDirect(); // starts wrapper observer, mode = wrapper-solo
             vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(nativeBtn);
@@ -312,11 +311,11 @@ describe('GoToTop', () => {
             }
         });
 
-        it('when .aaff8b8f is ABSENT at debounce time: does NOT inject, but schedules a retry', async () => {
+        it('when floating button bar is ABSENT at debounce time: does NOT inject, but schedules a retry', async () => {
             vi.useFakeTimers();
             try {
                 GoToTop.enabled = true;
-                document.body.innerHTML = ''; // no .aaff8b8f, no native button
+                document.body.innerHTML = ''; // no floating button bar, no native button
 
                 GoToTop._onRouteChange();
                 vi.advanceTimersByTime(100); // fire route-change debounce → _tryConnectDom
@@ -335,7 +334,7 @@ describe('GoToTop', () => {
             }
         });
 
-        it('retry fires after .aaff8b8f later appears: button IS injected on the gated retry', async () => {
+        it('retry fires after floating button bar later appears: button IS injected on the gated retry', async () => {
             vi.useFakeTimers();
             try {
                 GoToTop.enabled = true;
@@ -360,7 +359,7 @@ describe('GoToTop', () => {
             }
         });
 
-        it('when .aaff8b8f IS present at debounce time: injects on the first gated attempt (no retry)', async () => {
+        it('when floating button bar IS present at debounce time: injects on the first gated attempt (no retry)', async () => {
             vi.useFakeTimers();
             try {
                 GoToTop.enabled = true;

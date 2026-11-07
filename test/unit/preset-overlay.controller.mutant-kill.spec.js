@@ -5,11 +5,25 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/storage-manager.js";
-import DSSelectors from "../../content/ds-selectors.js";
+import fs from "fs";
+import path from "path";
+import "../../content/ds-selectors.js";
 
 const { createPresetOverlay } = require("../../content/preset-overlay.controller.js");
 
 // -- helpers ------------------------------------------------------------------
+
+// Desktop conversation page header container captured verbatim from the live page (chat title replaced by a placeholder).
+const CONVERSATION_HEADER_HTML = fs.readFileSync(path.resolve(__dirname, "../fixtures/ds-snapshots/conversation-header.html"), "utf8");
+
+/** Appends a fresh copy of the captured conversation header container to body and returns it. */
+function appendConversationHeader() {
+    const holder = document.createElement("div");
+    holder.innerHTML = CONVERSATION_HEADER_HTML;
+    const header = holder.firstElementChild;
+    document.body.appendChild(header);
+    return header;
+}
 
 function makeCtx(overrides = {}) {
     return {
@@ -370,19 +384,17 @@ describe("findAndMount -- DOM query", () => {
     it("does nothing if TARGET_SELECTOR element is absent", () => { overlay.findAndMount(); expect(overlay.targetEl).toBeNull(); });
 
     it("does not remount if targetEl is already the found element", () => {
-        target = document.createElement("div");
-        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        document.body.appendChild(target);
+        target = appendConversationHeader();
         overlay.findAndMount();
         const firstDropdown = overlay.dropdown;
+        expect(overlay.targetEl).toBe(target);
+        expect(firstDropdown).not.toBeNull();
         overlay.findAndMount();
         expect(overlay.dropdown).toBe(firstDropdown);
     });
 
     it("calls setVisible with ctx.getIsEnabled() result", () => {
-        target = document.createElement("div");
-        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        document.body.appendChild(target);
+        target = appendConversationHeader();
         ctx.getIsEnabled.mockReturnValue(false);
         overlay.findAndMount();
         expect(overlay.wrapperEl.style.display).toBe("none");
@@ -419,13 +431,11 @@ describe("start -- full initialization", () => {
         spyStorageManager();
         ctx = makeCtx();
         overlay = createPresetOverlay(ctx);
-        target = document.createElement("div");
-        target.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        document.body.appendChild(target);
+        target = appendConversationHeader();
     });
     afterEach(() => { teardown(overlay, null); if (target && target.parentNode) target.parentNode.removeChild(target); restoreStorageManager(); });
 
-    it("mounts to the target", () => { overlay.start([], "", true); expect(overlay.targetEl).toBeTruthy(); });
+    it("mounts to the target", () => { overlay.start([], "", true); expect(overlay.targetEl).toBe(target); expect(target.contains(overlay.wrapperEl)).toBe(true); });
     it("calls render", () => { const spy = vi.spyOn(overlay, "render"); overlay.start([{ id: "p1", name: "P1" }], "p1", true); expect(spy).toHaveBeenCalledWith([{ id: "p1", name: "P1" }], "p1"); });
     it("calls setVisible when enable is provided", () => { const spy = vi.spyOn(overlay, "setVisible"); overlay.start([], "", false); expect(spy).toHaveBeenCalledWith(false); });
     it("skips the explicit setVisible branch when enable is undefined", () => { overlay.start([], ""); /* findAndMount calls setVisible internally, but the explicit enable branch should not add an extra call */ });

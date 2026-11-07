@@ -61,15 +61,15 @@
 - **Message Container**: `.ds-virtual-list-visible-items .ds-message`, for enumerating conversation turns.
 - **Markdown Content**: `.ds-markdown`, for AI response content.
 - **Thinking Process**: `.ds-think-content`, for AI reasoning content.
-- **Sidebar Container**: `div.dc04ec1d` — the sidebar container targeted by the auto-hide module.
-- **Sidebar Inner Content**: `div.b8812f16.a2f3d50e` — inner content offset via negative `margin-left` when collapsed.
-- **Message List Area**: `.ds-virtual-list-items._6f2c522` — target for conversation area width CSS injection.
-- **Input/Container Area**: `._871cbca` — target for both conversation area width (centering) and input box width (max-width) CSS injection.
+- **Sidebar Container**: `SIDEBAR_WRAPPER_SELECTOR` (`div:has(> div > .ds-scroll-area > .ds-scroll-area)`) — the sidebar container targeted by the auto-hide module.
+- **Sidebar Inner Content**: `SIDEBAR_INNER_SELECTOR` (`div:has(> .ds-scroll-area > .ds-scroll-area)`) — inner content offset via negative `margin-left` when collapsed.
+- **Message List Area**: `VIRTUAL_LIST_SELECTOR` (`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`) — target for conversation area width CSS injection.
+- **Input/Container Area**: `CONTENT_COLUMN_SELECTOR` (`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`) — target for both conversation area width (centering) and input box width (max-width) CSS injection.
 - **Main Application Area**: `._765a5cd` — MutationObserver monitoring target for SPA reapplication of UI adjustments.
-- **Conversation Title Bar**: `._2be88ba` — positioning anchor for the overlay prompt group menu.
+- **Conversation Title Bar**: `CHAT_HEADER_SELECTOR` (`div:has(> .the-header)`) — positioning anchor for the overlay prompt group menu.
 - **Go Down Native Button**: `._0706cde` (with `ds-button--floating ds-button--circle` and other classes) — GoToTop's detection target and positioning reference.
-- **Floating Button Wrapper Container**: `.aaff8b8f` (`position: relative`) — GoToTop button's injection target container; outer sticky container `._871cbca`.
-- **Conversation Start Anchor**: `._9663006._2c189bc` / `[data-virtual-list-item-key="1"]` — GoToTop hide condition and "reached top" determination anchor.
+- **Floating Button Wrapper Container**: `FLOATING_BUTTON_BAR_SELECTOR` (`div:has(> div > div > div > textarea[name="search"])`, the `div` four levels above the main textarea, `position: relative`) — GoToTop button's injection target container; outer sticky container is `CONTENT_COLUMN_SELECTOR`.
+- **Conversation Start Anchor**: `GO_TOP_ANCHOR_SELECTOR` (`._9663006._2c189bc`) / `[data-virtual-list-item-key="1"]` — GoToTop hide condition and "reached top" determination anchor; the fallback of `GO_TOP_ANCHOR_SELECTOR` is a user-message item or an item in edit mode (`:has(.ds-collapsible-text)` / `:has(.ds-textarea)`).
 
 ### Storage Structure
 

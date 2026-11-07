@@ -28,7 +28,7 @@
 - **AI 回覆**（含 `.ds-markdown`）：
   - 啟用 `includeThinking` 時，從 `.ds-think-content` 區塊擷取思考過程，包含搜尋狀態列（例如「搜尋到 X 個網頁」）、瀏覽過的網頁與連結，以及所有推理段落。
   - 從思考容器以外的 `.ds-markdown` 區塊擷取主要回覆。
-- **使用者訊息**：從使用者內容容器（`.fbb737a4`）擷取純文字。
+- **使用者訊息**：從使用者內容容器（`USER_CONTENT_SELECTOR`，`.ds-message > div:has(> .ds-collapsible-text)`）擷取純文字；找不到容器時改用整則訊息的 `innerText`。
 
 HTML 轉 Markdown（`parseHtmlToMarkdown`）處理項目：
 - **標題**：`<h1>`–`<h6>` → `#`–`######`

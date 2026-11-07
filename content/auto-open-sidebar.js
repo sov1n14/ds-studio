@@ -3,7 +3,7 @@
 
     /**
      * DS studio — Auto Open Sidebar
-     * 每個「收合期」點擊一次 DeepSeek 收合軌道上的「展開側邊欄」按鈕，讓側邊欄保持開啟；收合期自側欄 wrapper 取得原生收合 class 起、失去該 class 止，同一收合期內不重複點擊，下一個收合期即使 DeepSeek 重用同一軌道節點、只改寫 wrapper className 也照樣點擊。
+     * 每個「收合期」點擊一次 DeepSeek 收合軌道上的「展開側邊欄」按鈕，讓側邊欄保持開啟；收合期自側欄 wrapper 符合原生收合結構（直屬子層多出收合軌道）起、不再符合止，同一收合期內不重複點擊，下一個收合期即使 DeepSeek 重用同一軌道節點也照樣點擊。
      *
      * 迴圈保險：點擊後若 wrapper 在 1500ms 內離開又回到收合狀態且其間沒有視窗 resize（窄螢幕下 DeepSeek 會立即再收合），停止點擊直到下一次 resize。
      *
@@ -41,7 +41,7 @@
         /** 側欄 wrapper 是否處於 DeepSeek 原生收合狀態 */
         _isNativelyCollapsed() {
             const [wrapper] = document.querySelectorAll(__DS_AutoOpenSidebarSelectors.SIDEBAR_WRAPPER_SELECTOR);
-            return !!wrapper && wrapper.classList.contains(__DS_AutoOpenSidebarSelectors.SIDEBAR_NATIVE_COLLAPSED_CLASS);
+            return !!wrapper && wrapper.matches(__DS_AutoOpenSidebarSelectors.SIDEBAR_WRAPPER_COLLAPSED_SELECTOR);
         },
 
         /** 依收合期狀態決定是否點擊展開按鈕 */
@@ -71,7 +71,7 @@
             button.dispatchEvent(new CustomEvent('dss:react-click', { bubbles: true }));
         },
 
-        /** 啟動 MutationObserver；圖示 path 可能晚於按鈕節點插入、收合僅改寫 wrapper class，故每批變更皆整頁重掃 */
+        /** 啟動 MutationObserver；圖示 path 可能晚於按鈕節點插入、收合狀態隨 wrapper 子層增減（childList）或 className 改寫而切換，故每批變更皆整頁重掃 */
         _startObserver() {
             if (this._observer) return;
             this._observer = new MutationObserver(() => {

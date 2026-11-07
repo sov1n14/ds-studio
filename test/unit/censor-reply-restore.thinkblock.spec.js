@@ -1,11 +1,21 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore } from '../helpers/censor-reply-restore-fixtures.js';
 import selectors from '../../content/ds-selectors.js';
+import { loadThinkMessage, loadMessagesWithoutThinkBlock, thinkParts } from '../helpers/think-block-fixtures.js';
 
 describe('_buildThinkBlock DOM structure mutant killers', () => {
     beforeEach(resetCensorReplyRestore);
+
+    // Mounts the replica where _injectThinkContent puts it: as the first child of a real reply .ds-message, ahead of the answer markdown.
+    function mountInReply(block) {
+        const { assistantMessage } = loadMessagesWithoutThinkBlock();
+        assistantMessage.prepend(block);
+        document.body.appendChild(assistantMessage);
+        return assistantMessage;
+    }
 
     function build(content, secs) {
         if (content === undefined) content = 'test thinking';
@@ -48,17 +58,26 @@ describe('_buildThinkBlock DOM structure mutant killers', () => {
         it('THINK_HEADER_ICON_ROW_CLASS wrapper', () => {
             expect(build().querySelector(`.${selectors.THINK_HEADER_ICON_ROW_CLASS}`)).not.toBeNull();
         });
-        it('_5255ff8 _4d41763 span', () => {
-            const span = build().querySelector(selectors.THINK_STATUS_SELECTOR);
-            expect(span).not.toBeNull();
-            expect(span.classList.contains(selectors.THINK_TIME_CLASS)).toBe(true);
+        it('mounted in a reply, it is found as the think block and its status label as the think status', () => {
+            const block = build();
+            const msg = mountInReply(block);
+            expect(msg.querySelector(selectors.THINK_BLOCK_SELECTOR)).toBe(block);
+            const status = msg.querySelector(selectors.THINK_STATUS_SELECTOR);
+            expect(status).not.toBeNull();
+            expect(block.firstElementChild.contains(status)).toBe(true);
+        });
+        it('status label carries the same classes as the native status label, so DeepSeek styles it alike', () => {
+            const nativeStatus = thinkParts(loadThinkMessage('closed')).statusSpan;
+            const status = mountInReply(build()).querySelector(selectors.THINK_STATUS_SELECTOR);
+            expect(status.className).toBe(nativeStatus.className);
         });
         it('rounded seconds in header', () => {
-            const span = build('thinking', 3.7).querySelector(selectors.THINK_STATUS_SELECTOR);
-            expect(span.textContent).toContain('4');
+            const span = mountInReply(build('thinking', 3.7)).querySelector(selectors.THINK_STATUS_SELECTOR);
+            expect(span.textContent).toBe(dsI18n.t('thinkBlockHeader', { seconds: 4 }));
         });
         it('empty seconds when 0', () => {
-            const span = build('thinking', 0).querySelector(selectors.THINK_STATUS_SELECTOR);
+            const span = mountInReply(build('thinking', 0)).querySelector(selectors.THINK_STATUS_SELECTOR);
+            expect(span.textContent).toBe(dsI18n.t('thinkBlockHeader', { seconds: '' }));
             expect(span.textContent).not.toContain('0');
         });
         it('c99b79f8 divider', () => {

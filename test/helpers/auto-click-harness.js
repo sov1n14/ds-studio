@@ -26,18 +26,14 @@ export const R_2700 = 0.9;  // floor(27.9) = 27 -> 2700 ms
 export const selectors = () => window.DSstudio.Selectors;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  DOM fixtures — real DeepSeek markup (retry: existing spec; continue: to-do/samples/continue-generate.html). data-fixture attributes only identify elements for the test; no selector reads them.
+//  DOM fixtures — real DeepSeek markup (retry: live snapshot error-after-abort, its hashed class left out because no selector reads it; continue: to-do/samples/continue-generate.html). data-fixture attributes only identify elements for the test; no selector reads them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RETRY_MARKUP =
-    '<div data-fixture="retry" role="button" class="ds-button ds-button--warning ds-button--filled ds-button--circle ds-button--xs ds-button--icon-relative-m a3b9bd76 _76a2310" tabindex="0"></div>';
+    '<div data-fixture="retry" role="button" class="ds-button ds-button--warning ds-button--filled ds-button--circle ds-button--xs ds-button--icon-relative-m" tabindex="0" style="--dsl-button-height: 24px;"></div>';
 
 export const CONTINUE_MARKUP =
     '<div class="_8e85838"><div data-fixture="continue" role="button" class="ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--capsule ds-button--s ds-button--icon-relative-m ds-button--min-width _6eef0b0" tabindex="0"><div class="ds-button__background"></div><div class="ds-button__border"></div><span class="ds-button__content">继续生成</span></div></div>';
-
-/** Matches only RETRY_BUTTON_FALLBACK_SELECTOR (hashed classes), not the semantic primary. */
-export const RETRY_FALLBACK_ONLY_MARKUP =
-    '<div data-fixture="retry-fallback" role="button" class="a3b9bd76 _76a2310" tabindex="0"></div>';
 
 /** Matches only CONTINUE_BUTTON_FALLBACK_SELECTOR: hashed class, not a child of ._8e85838. */
 export const CONTINUE_FALLBACK_ONLY_MARKUP =

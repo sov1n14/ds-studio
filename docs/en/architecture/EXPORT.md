@@ -28,7 +28,7 @@ The cloned nodes are processed through `convertMessageNodeToMarkdown()`:
 - **AI responses** (containing `.ds-markdown`):
   - Extracts the thinking process from `.ds-think-content` blocks if `includeThinking` is enabled. Captures search status lines (e.g. "Searched X web pages"), browsed pages with links, and all reasoning paragraphs.
   - Extracts the main response from `.ds-markdown` blocks outside the thinking container.
-- **User messages**: Extracted as plain text from the user content wrapper (`.fbb737a4`).
+- **User messages**: Extracted as plain text from the user content wrapper (`USER_CONTENT_SELECTOR`, `.ds-message > div:has(> .ds-collapsible-text)`); when no wrapper is found, the whole message `innerText` is used.
 
 HTML-to-Markdown conversion (`parseHtmlToMarkdown`) handles:
 - **Headings**: `<h1>`–`<h6>` → `#`–`######`

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — wrapper MutationObserver behavior (re-injection, visibility preservation, solo/stacked transitions, debounce).
  * Requirements: docs/en/architecture/content-ui.md GoTop section ("A MutationObserver ... watches the outer wrapper"), docs/spec/03-ui-adjustments.md section 18.
@@ -8,12 +9,13 @@ import '../../utils/storage-manager.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createNativeButton,
+    insertNativeButton,
     createWrapperWithoutNativeButton,
     createFullWrapperWithNativeButton,
     resetGoToTopState,
 } from '../helpers/go-top-fixtures.js';
 
-// happy-dom delivers MutationObserver records through its own captured real setTimeout, while the debounce timer inside the callback uses the (faked) global. Yield one real macrotask so the record is delivered and the debounce timer is armed, then advance the fake clock past exactly one debounce window, so any follow-up mutation made by the callback itself is NOT processed before the assertions.
+// MutationObserver records are delivered outside the fake clock, while the debounce timer inside the callback uses the (faked) global. Yield one real macrotask so the record is delivered and the debounce timer is armed, then advance the fake clock past exactly one debounce window, so any follow-up mutation made by the callback itself is NOT processed before the assertions.
 const realSetTimeout = globalThis.setTimeout;
 const yieldToMacrotask = () => new Promise((resolve) => realSetTimeout(resolve, 0));
 async function flushOneDebounce() {
@@ -26,7 +28,8 @@ describe('GoToTop wrapper observer', () => {
         resetGoToTopState();
         vi.useFakeTimers();
     });
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     describe('re-injection after React re-render removes the button', () => {
         it('with native button: a hidden button is re-injected hidden, stacked, directly before the native button', async () => {
@@ -105,8 +108,7 @@ describe('GoToTop wrapper observer', () => {
             expect(GoToTop._injectionMode).toBe('wrapper-solo');
             const evalSpy = vi.spyOn(GoToTop, '_evaluateVisibility');
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
             await flushOneDebounce();
 
             expect(GoToTop._button).toBe(soloBtn);

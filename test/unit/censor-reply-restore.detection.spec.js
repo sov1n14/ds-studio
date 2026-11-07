@@ -1,15 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
-import { resetCensorReplyRestore } from '../helpers/censor-reply-restore-fixtures.js';
-import DSSelectors from '../../content/ds-selectors.js';
+import {
+    resetCensorReplyRestore,
+    buildChatPair,
+    createUserItem,
+    createAssistantItem,
+    toolbarButtonsOf,
+    mountVisibleItems
+} from '../helpers/censor-reply-restore-fixtures.js';
 
 /**
  * DOM inspection: censored-toolbar detection, toolbar lookup, and reading
  * the preceding user prompt out of the virtual list.
  *
- * Split out of the original censor-reply-restore.spec.js monolith; every case
- * below is the unchanged original assertion set.
+ * Split out of the original censor-reply-restore.spec.js monolith. Toolbar-lookup and prompt-lookup cases run on live DeepSeek markup from the shared fixtures helper.
  */
 describe('CensorReplyRestore — censored-reply DOM detection', () => {
     beforeEach(resetCensorReplyRestore);
@@ -71,199 +76,68 @@ describe('CensorReplyRestore — censored-reply DOM detection', () => {
     });
 
     describe('_getToolbarGroup()', () => {
-        /**
-         * Builds a virtual-list item containing an assistant message element
-         * and optionally a separate toolbar sibling inside the same container.
-         */
-        function buildVirtualItem({ toolbarClassName, buttonCount }) {
-            const container = document.createElement('div');
-            container.setAttribute('data-virtual-list-item-key', 'asst-1');
+        // Fixtures are live DeepSeek markup (test/helpers/censor-reply-restore-fixtures.js). The expected toolbar group is identified structurally, as the shared parent of the assistant item's toolbar buttons.
 
-            const msgEl = document.createElement('div');
-            msgEl.className = 'ds-message _63c77b1';
-            container.appendChild(msgEl);
-
-            const toolbar = document.createElement('div');
-            toolbar.className = toolbarClassName;
-            for (let i = 0; i < buttonCount; i++) {
-                const btn = document.createElement('div');
-                btn.setAttribute('role', 'button');
-                btn.className = 'ds-button ds-button--icon';
-                toolbar.appendChild(btn);
-            }
-            container.appendChild(toolbar);
-
-            document.body.appendChild(container);
-            return { msgEl, toolbar };
+        function mountAssistantItem(key) {
+            const item = createAssistantItem(key, { censored: false });
+            mountVisibleItems().appendChild(item);
+            const buttons = toolbarButtonsOf(item);
+            return { item, msgEl: item.querySelector('.ds-message'), buttons, group: buttons[0].parentElement };
         }
 
-        beforeEach(() => {
-            document.body.innerHTML = '';
+        it('finds the toolbar group of a finished assistant reply, not its outer .ds-flex wrapper', () => {
+            const { msgEl, group } = mountAssistantItem('asst-1');
+            const result = CensorReplyRestore._getToolbarGroup(msgEl);
+            expect(result).toBe(group);
+            expect(result).not.toBe(group.parentElement);
         });
 
-        it('(primary) finds .ds-flex._965abe9 container containing new-style ds-button children', () => {
-            const { msgEl, toolbar } = buildVirtualItem({
-                toolbarClassName: 'ds-flex _965abe9 _54866f7',
-                buttonCount: 5
-            });
-            const result = CensorReplyRestore._getToolbarGroup(msgEl);
-            expect(result).toBe(toolbar);
+        it('returns null for a user message, whose edit/copy row holds only 2 buttons', () => {
+            const userItem = createUserItem('user-1', 'Hello');
+            mountVisibleItems().appendChild(userItem);
+            expect(CensorReplyRestore._getToolbarGroup(userItem.querySelector('.ds-message'))).toBeNull();
         });
 
-        it('(fallback) finds .ds-flex with 5 new-style buttons when no .ds-flex._965abe9 exists', () => {
-            const { msgEl, toolbar } = buildVirtualItem({
-                toolbarClassName: 'ds-flex some-other-class',
-                buttonCount: 5
-            });
-            const result = CensorReplyRestore._getToolbarGroup(msgEl);
-            expect(result).toBe(toolbar);
-        });
-
-        it('(fallback) returns null when the only .ds-flex has fewer than 5 buttons', () => {
-            const { msgEl } = buildVirtualItem({
-                toolbarClassName: 'ds-flex some-other-class',
-                buttonCount: 3
-            });
-            const result = CensorReplyRestore._getToolbarGroup(msgEl);
-            expect(result).toBeNull();
-        });
-
-        it('returns null when there is no .ds-flex toolbar at all', () => {
-            const container = document.createElement('div');
-            container.setAttribute('data-virtual-list-item-key', 'asst-2');
-            const msgEl = document.createElement('div');
-            msgEl.className = 'ds-message _63c77b1';
-            container.appendChild(msgEl);
-            document.body.appendChild(container);
-
-            const result = CensorReplyRestore._getToolbarGroup(msgEl);
-            expect(result).toBeNull();
+        it('returns null while the reply is streaming (live page renders no toolbar wrapper yet)', () => {
+            const { msgEl, group } = mountAssistantItem('asst-2');
+            group.parentElement.remove();
+            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBeNull();
         });
     });
 
     describe('_getPrecedingUserPromptKey()', () => {
-        function createChatPair(assistantKey, userPromptText) {
-            const container = document.createElement('div');
-            container.className = 'ds-virtual-list-visible-items';
-
-            const userItem = document.createElement('div');
-            userItem.setAttribute('data-virtual-list-item-key', 'user-1');
-            const userMsg = document.createElement('div');
-            userMsg.className = 'ds-message';
-            const userContent = document.createElement('div');
-            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            userContent.textContent = userPromptText;
-            userMsg.appendChild(userContent);
-            userItem.appendChild(userMsg);
-            container.appendChild(userItem);
-
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', assistantKey);
-            const asstMsg = document.createElement('div');
-            asstMsg.className = 'ds-message _63c77b1';
-            asstItem.appendChild(asstMsg);
-            container.appendChild(asstItem);
-
-            document.body.appendChild(container);
-            return asstMsg;
-        }
-
-        beforeEach(() => {
-            document.body.innerHTML = '';
-        });
-
         it('returns normalized prompt text when preceding user message exists', () => {
-            const asstMsg = createChatPair('asst-1', 'Hello world');
+            const asstMsg = buildChatPair('asst-1', 'Hello world');
             expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBe('Hello world');
         });
 
         it('returns null when there is no preceding sibling (first message in chat)', () => {
-            const container = document.createElement('div');
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', 'asst-1');
-            const asstMsg = document.createElement('div');
-            asstMsg.className = 'ds-message _63c77b1';
-            asstItem.appendChild(asstMsg);
-            container.appendChild(asstItem);
-            document.body.appendChild(container);
-            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBeNull();
+            const asstItem = createAssistantItem('asst-1');
+            mountVisibleItems().appendChild(asstItem);
+            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstItem.querySelector('.ds-message'))).toBeNull();
         });
 
         it('returns null when preceding message is also an assistant message (not user)', () => {
-            const container = document.createElement('div');
-
-            const prevItem = document.createElement('div');
-            prevItem.setAttribute('data-virtual-list-item-key', 'asst-prev');
-            const prevMsg = document.createElement('div');
-            prevMsg.className = 'ds-message _63c77b1';
-            prevItem.appendChild(prevMsg);
-            container.appendChild(prevItem);
-
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', 'asst-1');
-            const asstMsg = document.createElement('div');
-            asstMsg.className = 'ds-message _63c77b1';
-            asstItem.appendChild(asstMsg);
+            const container = mountVisibleItems();
+            container.appendChild(createAssistantItem('asst-prev'));
+            const asstItem = createAssistantItem('asst-1');
             container.appendChild(asstItem);
-            document.body.appendChild(container);
-            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBeNull();
+            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstItem.querySelector('.ds-message'))).toBeNull();
         });
 
         it('handles whitespace-heavy prompt text (normalizes it)', () => {
-            const asstMsg = createChatPair('asst-1', '  Hello    world  ');
+            const asstMsg = buildChatPair('asst-1', '  Hello    world  ');
             expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBe('Hello world');
         });
 
-        it('returns first user message when there are multiple preceding siblings', () => {
-            const container = document.createElement('div');
-            container.className = 'ds-virtual-list-visible-items';
-
-            // First pair: user + assistant
-            const user1 = document.createElement('div');
-            user1.setAttribute('data-virtual-list-item-key', 'user-1');
-            const userMsg1 = document.createElement('div');
-            userMsg1.className = 'ds-message';
-            const userContent1 = document.createElement('div');
-            userContent1.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            userContent1.textContent = 'First user';
-            userMsg1.appendChild(userContent1);
-            user1.appendChild(userMsg1);
-            container.appendChild(user1);
-
-            const asst1 = document.createElement('div');
-            asst1.setAttribute('data-virtual-list-item-key', 'asst-1');
-            const asstMsg1 = document.createElement('div');
-            asstMsg1.className = 'ds-message _63c77b1';
-            asst1.appendChild(asstMsg1);
-            container.appendChild(asst1);
-
-            // Second pair: user + assistant
-            const user2 = document.createElement('div');
-            user2.setAttribute('data-virtual-list-item-key', 'user-2');
-            const userMsg2 = document.createElement('div');
-            userMsg2.className = 'ds-message';
-            const userContent2 = document.createElement('div');
-            userContent2.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            userContent2.textContent = 'Second user';
-            userMsg2.appendChild(userContent2);
-            user2.appendChild(userMsg2);
-            container.appendChild(user2);
-
-            const asst2 = document.createElement('div');
-            asst2.setAttribute('data-virtual-list-item-key', 'asst-2');
-            const asstMsg2 = document.createElement('div');
-            asstMsg2.className = 'ds-message _63c77b1';
-            asst2.appendChild(asstMsg2);
-            container.appendChild(asst2);
-
-            document.body.appendChild(container);
-
+        it('returns the nearest preceding user message when there are multiple preceding turns', () => {
+            buildChatPair('asst-1', 'First user');
+            const asstMsg2 = buildChatPair('asst-2', 'Second user');
             expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg2)).toBe('Second user');
         });
 
         it('returns null when assistant msg has no data-virtual-list-item-key ancestor', () => {
-            const orphanMsg = document.createElement('div');
-            orphanMsg.className = 'ds-message _63c77b1';
+            const orphanMsg = createAssistantItem('asst-1').querySelector('.ds-message');
             document.body.appendChild(orphanMsg);
             expect(CensorReplyRestore._getPrecedingUserPromptKey(orphanMsg)).toBeNull();
         });
@@ -300,71 +174,34 @@ describe('CensorReplyRestore — mutant-killing boundary tests', () => {
     });
 
     describe('_getToolbarGroup() — parentElement fallback path', () => {
-        it('finds toolbar via parentElement when no [data-virtual-list-item-key] ancestor exists', () => {
-            // messageEl has no virtual-list-item-key ancestor, so closest() returns null
-            // Falls back to messageEl.parentElement
-            const parent = document.createElement('div');
+        it('finds the toolbar group via parentElement when no [data-virtual-list-item-key] ancestor exists', () => {
+            // Live assistant item with only its virtual-list key removed: closest() finds nothing, so lookup scopes to messageEl.parentElement (the item itself).
+            const item = createAssistantItem('asst-1');
+            item.removeAttribute('data-virtual-list-item-key');
+            document.body.appendChild(item);
+            const group = toolbarButtonsOf(item)[0].parentElement;
 
-            const msgEl = document.createElement('div');
-            msgEl.className = 'ds-message _63c77b1';
-            parent.appendChild(msgEl);
-
-            const toolbar = document.createElement('div');
-            toolbar.className = 'ds-flex _965abe9 _54866f7';
-            for (let i = 0; i < 5; i++) {
-                const btn = document.createElement('div');
-                btn.setAttribute('role', 'button');
-                btn.className = 'ds-button ds-button--icon';
-                toolbar.appendChild(btn);
-            }
-            parent.appendChild(toolbar);
-            document.body.appendChild(parent);
-
-            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBe(toolbar);
+            expect(CensorReplyRestore._getToolbarGroup(item.querySelector('.ds-message'))).toBe(group);
         });
     });
 
     describe('_getToolbarGroup() — exactly 4 icon buttons boundary (kills >= 5 → >= 4 mutant)', () => {
-        it('returns null when fallback .ds-flex has exactly 4 icon buttons', () => {
-            const container = document.createElement('div');
-            container.setAttribute('data-virtual-list-item-key', 'asst-boundary');
+        it('returns null when the toolbar group holds exactly 4 icon buttons', () => {
+            // Live assistant item with the last 2 of its 6 toolbar buttons removed.
+            const item = createAssistantItem('asst-boundary');
+            mountVisibleItems().appendChild(item);
+            const buttons = toolbarButtonsOf(item);
+            buttons[5].remove();
+            buttons[4].remove();
 
-            const msgEl = document.createElement('div');
-            msgEl.className = 'ds-message _63c77b1';
-            container.appendChild(msgEl);
-
-            // No _965abe9 toolbar, only a generic ds-flex with 4 buttons (below threshold)
-            const flex = document.createElement('div');
-            flex.className = 'ds-flex some-other-class';
-            for (let i = 0; i < 4; i++) {
-                const btn = document.createElement('div');
-                btn.setAttribute('role', 'button');
-                btn.className = 'ds-button ds-button--icon';
-                flex.appendChild(btn);
-            }
-            container.appendChild(flex);
-            document.body.appendChild(container);
-
-            expect(CensorReplyRestore._getToolbarGroup(msgEl)).toBeNull();
+            expect(CensorReplyRestore._getToolbarGroup(item.querySelector('.ds-message'))).toBeNull();
         });
     });
 
     describe('_getPrecedingUserPromptKey() — skips non-message siblings', () => {
         it('skips a non-message div between user and assistant items and still finds the user message', () => {
-            const container = document.createElement('div');
-            container.className = 'ds-virtual-list-visible-items';
-
-            // User item
-            const userItem = document.createElement('div');
-            userItem.setAttribute('data-virtual-list-item-key', 'user-1');
-            const userMsg = document.createElement('div');
-            userMsg.className = 'ds-message';
-            const userContent = document.createElement('div');
-            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            userContent.textContent = 'User prompt here';
-            userMsg.appendChild(userContent);
-            userItem.appendChild(userMsg);
-            container.appendChild(userItem);
+            const container = mountVisibleItems();
+            container.appendChild(createUserItem('user-1', 'User prompt here'));
 
             // Non-message sibling (e.g. a divider or ad injection)
             const divider = document.createElement('div');
@@ -376,56 +213,31 @@ describe('CensorReplyRestore — mutant-killing boundary tests', () => {
             divider.appendChild(innerDiv);
             container.appendChild(divider);
 
-            // Assistant item
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', 'asst-1');
-            const asstMsg = document.createElement('div');
-            asstMsg.className = 'ds-message _63c77b1';
-            asstItem.appendChild(asstMsg);
+            const asstItem = createAssistantItem('asst-1');
             container.appendChild(asstItem);
 
-            document.body.appendChild(container);
-
-            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstMsg)).toBe('User prompt here');
+            expect(CensorReplyRestore._getPrecedingUserPromptKey(asstItem.querySelector('.ds-message'))).toBe('User prompt here');
         });
     });
 });
 
 // ---------------------------------------------------------------------------
-// Mutant-killing: _getToolbarGroup toolbar condition (kills toolbar → false on line 27)
+// Mutant-killing: _getToolbarGroup primary lookup (kills the "if (toolbar) return toolbar" guard mutated to false)
 // ---------------------------------------------------------------------------
 
-describe('CensorReplyRestore — _getToolbarGroup toolbar condition mutant killer', () => {
+describe('CensorReplyRestore — _getToolbarGroup primary lookup mutant killer', () => {
     beforeEach(() => {
         document.body.innerHTML = '';
     });
 
-    it('returns the primary toolbar when it matches MESSAGE_TOOLBAR_SELECTOR but has fewer than 5 icon buttons', () => {
-        // The primary path (line 27) finds the toolbar via MESSAGE_TOOLBAR_SELECTOR (.ds-flex._965abe9).
-        // The fallback path (lines 31-34) requires >= 5 icon buttons in any .ds-flex.
-        // By giving the toolbar only 3 buttons, the fallback would NOT find it.
-        // With real code: primary selector finds it, if (toolbar) → return toolbar ✓
-        // With mutant (if (false)): primary skipped, fallback scans, 3 buttons < 5 → returns null ✗
-        const container = document.createElement('div');
-        container.setAttribute('data-virtual-list-item-key', 'asst-toolbar-mutant');
+    it('still finds the toolbar group by structure when DeepSeek renames the icon-button modifier class', () => {
+        // Live assistant item with only the ds-button--icon modifier stripped from its toolbar buttons (a class rotation). The toolbar group keeps its real nesting and six role=button children, so a structural lookup must still return it.
+        const item = createAssistantItem('asst-toolbar-mutant');
+        mountVisibleItems().appendChild(item);
+        const buttons = toolbarButtonsOf(item);
+        for (const btn of buttons) btn.classList.remove('ds-button--icon');
+        const group = buttons[0].parentElement;
 
-        const msgEl = document.createElement('div');
-        msgEl.className = 'ds-message _63c77b1';
-        container.appendChild(msgEl);
-
-        // Toolbar matches primary selector but has only 3 icon buttons
-        const toolbar = document.createElement('div');
-        toolbar.className = 'ds-flex _965abe9';
-        for (let i = 0; i < 3; i++) {
-            const btn = document.createElement('div');
-            btn.setAttribute('role', 'button');
-            btn.className = 'ds-button ds-button--icon';
-            toolbar.appendChild(btn);
-        }
-        container.appendChild(toolbar);
-        document.body.appendChild(container);
-
-        const result = CensorReplyRestore._getToolbarGroup(msgEl);
-        expect(result).toBe(toolbar);
+        expect(CensorReplyRestore._getToolbarGroup(item.querySelector('.ds-message'))).toBe(group);
     });
 });

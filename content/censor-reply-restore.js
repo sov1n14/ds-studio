@@ -126,7 +126,7 @@ const CensorReplyRestore = {
         });
 
         // MutationObserver 可能已在 postMessage 之前觸發，手動掃描一遍
-        var msgs = document.querySelectorAll(__DS_CensorSelectors.ASSISTANT_MESSAGE_SELECTOR);
+        var msgs = document.querySelectorAll(__DS_CensorSelectors.MESSAGE_SELECTOR);
         for (var mi = 0; mi < msgs.length; mi++) {
             this._tryRestoreMessage(msgs[mi]);
         }

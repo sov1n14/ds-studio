@@ -6,8 +6,8 @@
 (function () {
     'use strict';
 
-    // Cross-ref: ds-selectors.js SIDEBAR_WRAPPER_SELECTOR — update both on DeepSeek rebuild
-    const SIDEBAR_SELECTOR = 'div.dc04ec1d';
+    // Cross-ref: ds-selectors.js SIDEBAR_WRAPPER_SELECTOR — update both on DeepSeek rebuild（本檔於 MAIN world 執行，無法載入 ds-selectors.js，故保留同值副本）
+    const SIDEBAR_SELECTOR = 'div:has(> div > .ds-scroll-area > .ds-scroll-area)';
 
     /**
      * 處理來自 ISOLATED world 的刪除請求

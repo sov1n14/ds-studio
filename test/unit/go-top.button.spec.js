@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — button element construction unit tests.
  * Shared fixtures: test/helpers/go-top-fixtures.js
@@ -11,9 +12,27 @@ import {
     resetGoToTopState,
 } from '../helpers/go-top-fixtures.js';
 
+/** Splits an inline style attribute into [property, value] pairs, trimmed, in declaration order. */
+function parseInlineDeclarations(styleAttr) {
+    return (styleAttr || '').split(';')
+        .map((decl) => decl.trim())
+        .filter(Boolean)
+        .map((decl) => {
+            const colon = decl.indexOf(':');
+            return [decl.slice(0, colon).trim(), decl.slice(colon + 1).trim()];
+        });
+}
+
+/** Hover-related declarations on the live native floating control (inner role="button") of the conv2-finished snapshot. */
+function nativeFloatingHoverDeclarations() {
+    const control = createNativeButton().querySelector('[role="button"].ds-button--floating');
+    return parseInlineDeclarations(control.getAttribute('style')).filter(([name]) => name.includes('hover'));
+}
+
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     // ─────────────────────────────────────
     //  Constructor / state
@@ -51,7 +70,6 @@ describe('GoToTop', () => {
             expect(GoToTop.NATIVE_BTN_CLASSES).not.toContain(DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS);
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-height: 34px');
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-color');
-            expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-hover-color');
             expect(GoToTop.NATIVE_BTN_INLINE_STYLE).toContain('--dsl-button-icon-size: 14px');
             expect(GoToTop.STACK_GAP_PX).toBe(8);
             // Deleted constants must NOT exist
@@ -93,8 +111,29 @@ describe('GoToTop', () => {
             const style = btn.getAttribute('style');
             expect(style).toContain('--dsl-button-height: 34px');
             expect(style).toContain('--dsl-button-color');
-            expect(style).toContain('--dsl-button-hover-color');
             expect(style).toContain('--dsl-button-icon-size: 14px');
+        });
+
+        it('template path: declares the hover custom property the live native floating button sets, with the floating-hover value', () => {
+            // DeepSeek's stylesheet colours the hovered background from the property the native floating control declares inline; any other name is never read and the hover falls back to a grey tint.
+            const nativeHover = nativeFloatingHoverDeclarations();
+            // Fixture guard: the snapshot must actually carry a hover declaration, otherwise the loop below asserts nothing.
+            expect(nativeHover.length, 'snapshot native control declares no hover custom property').toBeGreaterThan(0);
+            expect(nativeHover.map(([, value]) => value)).toContain('var(--dsw-alias-button-floating-hover)');
+            const template = new Map(parseInlineDeclarations(GoToTop._createButtonElement(null).getAttribute('style')));
+            for (const [name, value] of nativeHover) {
+                expect(template.get(name), 'template button inline style must declare ' + name + ' as the native floating button does').toBe(value);
+            }
+        });
+
+        it('template path: declares no hover custom property that the live native floating button does not set', () => {
+            // A hover property name the native control does not use is one DeepSeek's stylesheet never reads.
+            const nativeNames = nativeFloatingHoverDeclarations().map(([name]) => name);
+            expect(nativeNames.length, 'snapshot native control declares no hover custom property').toBeGreaterThan(0);
+            const templateHoverNames = parseInlineDeclarations(GoToTop._createButtonElement(null).getAttribute('style'))
+                .map(([name]) => name)
+                .filter((name) => name.includes('hover'));
+            expect(templateHoverNames.filter((name) => !nativeNames.includes(name)), 'hover properties on the template button that DeepSeek never reads').toEqual([]);
         });
 
         it('template path: builds three child divs — ds-button__background, ds-button__border, ds-button__icon', () => {
@@ -105,7 +144,7 @@ describe('GoToTop', () => {
         });
 
         it('template path: has exactly the three native child layers in native order, the last being the icon layer', () => {
-            // Mirrors the native go-bottom structure (createNativeButton fixture / docs: three child layers).
+            // Mirrors the live native go-bottom control: the role="button" inside createNativeButton()'s positioning wrapper has these three child layers.
             const btn = GoToTop._createButtonElement(null);
             expect(Array.from(btn.children, (el) => el.className)).toEqual([
                 'ds-button__background',
@@ -133,8 +172,10 @@ describe('GoToTop', () => {
         it('clone path: copies the live native styling (variant classes and inline variables), not the hardcoded template', () => {
             // DeepSeek may ship a different size variant; the clone-first strategy must follow the live native button.
             const nativeBtn = createNativeButton();
-            nativeBtn.classList.replace('ds-button--m', 'ds-button--l');
-            nativeBtn.style.setProperty('--dsl-button-height', '40px');
+            // The variant classes and inline variables live on the inner role="button" control, not on its positioning wrapper.
+            const control = nativeBtn.querySelector('[role="button"]');
+            control.classList.replace('ds-button--m', 'ds-button--l');
+            control.style.setProperty('--dsl-button-height', '40px');
             const btn = GoToTop._createButtonElement(nativeBtn);
             expect(btn.classList.contains('ds-button--l')).toBe(true);
             expect(btn.classList.contains('ds-button--m')).toBe(false);

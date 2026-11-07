@@ -40,7 +40,7 @@
 }
 
 /*
- * Solo 路徑：原生按鈕尚未渲染時，複製網站 ._0706cde 的絕對定位規則
+ * Solo 路徑：原生按鈕尚未渲染時，複製網站原生按鈕包裝（GO_TOP_NATIVE_BUTTON_CLASS）的絕對定位規則
  *（margin-bottom:20px; position:absolute; bottom:100%; right:12px）。
  * 外觀（圓形、尺寸）由按鈕攜帶的 ds-* class 及 NATIVE_BTN_INLINE_STYLE 負責，
  * 此處僅提供定位，不重複設定外觀屬性（避免與 ds-* class 衝突）。

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import "../../utils/storage-manager.js";
-import DSSelectors from "../../content/ds-selectors.js";
+import fs from "fs";
+import path from "path";
+import "../../content/ds-selectors.js";
 const { createPresetOverlay } = require("../../content/preset-overlay.controller.js");
 
 function makeCtx(overrides = {}) {
@@ -28,6 +30,17 @@ function spySM() {
         vi.spyOn(StorageManager, "saveActivePresetId").mockReturnValue(r),
         vi.spyOn(StorageManager, "getSettings").mockResolvedValue({ promptPresets: [], pinnedPresetId: "" }),
     ];
+}
+// Desktop conversation page header container captured verbatim from the live page (chat title replaced by a placeholder).
+const CONVERSATION_HEADER_HTML = fs.readFileSync(path.resolve(__dirname, "../fixtures/ds-snapshots/conversation-header.html"), "utf8");
+
+/** Appends a fresh copy of the captured conversation header container to body and returns it. */
+function appendConversationHeader() {
+    const holder = document.createElement("div");
+    holder.innerHTML = CONVERSATION_HEADER_HTML;
+    const header = holder.firstElementChild;
+    document.body.appendChild(header);
+    return header;
 }
 function restoreSM() { smSpies.forEach(s => s.mockRestore()); smSpies = []; }
 function mount(o) { const t = document.createElement("div"); document.body.appendChild(t); o.mountTo(t); return t; }
@@ -89,11 +102,11 @@ describe("startSettle -- settle object", () => {
 
 describe("start -- enable branching", () => {
     let o, ctx, t;
-    beforeEach(() => { spySM(); ctx = makeCtx(); o = createPresetOverlay(ctx); t = document.createElement("div"); t.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1); document.body.appendChild(t); });
+    beforeEach(() => { spySM(); ctx = makeCtx(); o = createPresetOverlay(ctx); t = appendConversationHeader(); });
     afterEach(() => { td(o, null); if (t && t.parentNode) t.parentNode.removeChild(t); restoreSM(); });
 
-    it("false hides", () => { o.start([], "", false); expect(o.wrapperEl.style.display).toBe("none"); });
-    it("true shows", () => { o.start([], "", true); expect(o.wrapperEl.style.display).not.toBe("none"); });
+    it("false hides", () => { o.start([], "", false); expect(o.targetEl).toBe(t); expect(o.wrapperEl.style.display).toBe("none"); });
+    it("true shows", () => { o.start([], "", true); expect(o.targetEl).toBe(t); expect(o.wrapperEl.style.display).not.toBe("none"); });
 });
 
 describe("scheduleFrame -- rAF invocation", () => {

@@ -19,13 +19,12 @@ const __DS_AutoRetrySelectors = (globalThis).DSstudio?.Selectors ||
 const __DS_AutoRetryKeys = globalThis.__DS_StorageManager_keys.KEYS;
 const AutoRetry = {
     // === 常數 ===
-    // 每顆按鈕：閘門鍵與依序嘗試的選擇器（主要 → 備援）
+    // 每顆按鈕：閘門鍵與依序嘗試的選擇器（主要 → 備援；重試僅有主要選擇器）
     BUTTONS: {
         retry: {
             ownKey: __DS_AutoRetryKeys.AUTO_RETRY,
             selectors: [
                 __DS_AutoRetrySelectors.RETRY_BUTTON_SELECTOR,
-                __DS_AutoRetrySelectors.RETRY_BUTTON_FALLBACK_SELECTOR,
             ],
         },
         continue: {

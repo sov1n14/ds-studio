@@ -48,11 +48,13 @@ const InputWidth = INPUT_WIDTH_FACTORY.create({
         const vw = this.clampPercent(percent);
         const column = __DS_InputWidthSelectors.CONTENT_COLUMN_SELECTOR;
         const bar = __DS_InputWidthSelectors.FLOATING_BUTTON_BAR_SELECTOR;
+        // 編輯器包裝選擇器已自帶訊息列表根節點路徑，須獨立使用；接在內容欄之後會變成無法匹配的巢狀路徑
+        const composer = __DS_InputWidthSelectors.INPUT_COMPOSER_WRAPPER_SELECTOR;
         return `
 ${column},
 ${column} ${bar},
 ${bar},
-${column} ${__DS_InputWidthSelectors.INPUT_COMPOSER_WRAPPER_SELECTOR} {
+${composer} {
   max-width: ${vw}vw !important;
   width: min(100%, ${vw}vw) !important;
   margin-left: auto !important;

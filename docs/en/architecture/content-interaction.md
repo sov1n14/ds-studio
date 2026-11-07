@@ -69,7 +69,7 @@ Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQ
 ### Trigger and Scope
 
 - **Delegated listener**: A single document-level `click` handler (`handleEditButtonClick`) registered idempotently via a `window` guard flag.
-- **Edit-button resolution**: `e.target.closest('.d4910adc')` — the obfuscated edit-button class (`EDIT_BUTTON_CLASS`). Non-matching clicks return early (guard clause).
+- **Edit-button resolution**: `e.target.closest(EDIT_BUTTON_SELECTOR)` — the icon button with `[aria-disabled]` inside `.ds-flex` in a user-message item (an item containing `.ds-collapsible-text`) (`EDIT_BUTTON_SELECTOR` = `EDIT_MESSAGE_BUTTON_SELECTOR`). Non-matching clicks return early (guard clause).
 
 ### Asynchronous Textarea Detection (`waitForNewTextarea`)
 
@@ -83,15 +83,15 @@ The edit textarea renders AFTER the click, so it must be detected asynchronously
 Applied once at the detection moment (`onFound`), when the edit UI is mounted and the target elements exist:
 
 - **`.cc852ac5`** (`REMOVE_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight = 'none'` on every matched element — always runs.
-- **`._646a522`** (`DYNAMIC_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight` set to a dynamic value computed at that moment via the pure `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX` (offset = 32px). Heights are read in real time: `window.innerHeight`, and `getBoundingClientRect().height` of the first `._2be88ba` (`HEIGHT_SOURCE_SELECTOR_A`) and first `._871cbca` (`HEIGHT_SOURCE_SELECTOR_B`). **Missing-source rule**: if either source element is absent from the DOM, the `._646a522` adjustment is skipped entirely (left untouched) — the `.cc852ac5` removal still runs. Computed once; no resize listener. Overrides are not restored when editing ends.
+- **`._646a522`** (`DYNAMIC_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight` set to a dynamic value computed at that moment via the pure `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX` (offset = 32px). Heights are read in real time: `window.innerHeight`, and `getBoundingClientRect().height` of the first `CHAT_HEADER_SELECTOR` (`div:has(> .the-header)`, `HEIGHT_SOURCE_SELECTOR_A`) and first `CONTENT_COLUMN_SELECTOR` (`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`, `HEIGHT_SOURCE_SELECTOR_B`). **Missing-source rule**: if either source element is absent from the DOM, the `._646a522` adjustment is skipped entirely (left untouched) — the `.cc852ac5` removal still runs. Computed once; no resize listener. Overrides are not restored when editing ends.
 
 ### Scroll-into-position (`applyEditScrollPosition` + `computeScrollDelta` + `findScrollableAncestor`)
 
-After the max-height adjustment and wrapper cleanup, the edit box is scrolled so it visually sits `EDIT_SCROLL_GAP_PX` (16px) below the fixed header `._2be88ba`. Because `.cc852ac5` lives inside a scrollable container while `._2be88ba` is fixed (different z-layers), the alignment is achieved purely by adjusting the container's `scrollTop` — not by repositioning the element. Run once inside a `requestAnimationFrame` (after `applyMaxHeightAdjustments` + `applyTextareaCleanup`) so the post-cleanup layout is measured.
+After the max-height adjustment and wrapper cleanup, the edit box is scrolled so it visually sits `EDIT_SCROLL_GAP_PX` (16px) below the fixed header `CHAT_HEADER_SELECTOR`. Because `.cc852ac5` lives inside a scrollable container while `CHAT_HEADER_SELECTOR` is fixed (different z-layers), the alignment is achieved purely by adjusting the container's `scrollTop` — not by repositioning the element. Run once inside a `requestAnimationFrame` (after `applyMaxHeightAdjustments` + `applyTextareaCleanup`) so the post-cleanup layout is measured.
 
 - **`computeScrollDelta(editBoxTop, headerBottom, gap)`** (pure): returns `editBoxTop − (headerBottom + gap)` — the signed pixel amount to ADD to the scroller's `scrollTop` (positive scrolls down, negative scrolls up).
 - **`findScrollableAncestor(el)`**: walks up from `el` (inclusive) and returns the nearest node whose `scrollHeight > clientHeight`, else `null`.
-- **`applyEditScrollPosition(root)`** (root defaults to `document`, falls back to `document` when null): finds `.cc852ac5` (edit box) and `._2be88ba` (header), starts from `.ds-virtual-list-items._6f2c522` and resolves the real scroller via `findScrollableAncestor` (fallback to `._6f2c522` itself), reads `getBoundingClientRect()` geometry in real time, then `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`. **Guard rule**: if the edit box, header, or scroll container is missing, it is a no-op (no throw). One-time adjustment; no resize/scroll listener.
+- **`applyEditScrollPosition(root)`** (root defaults to `document`, falls back to `document` when null): finds `.cc852ac5` (edit box) and `CHAT_HEADER_SELECTOR` (header), starts from `VIRTUAL_LIST_CONTAINER_SELECTOR` (`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`) and resolves the real scroller via `findScrollableAncestor` (falling back to the list container itself when no scrollable ancestor exists), reads `getBoundingClientRect()` geometry in real time, then `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`. **Guard rule**: if the edit box, header, or scroll container is missing, it is a no-op (no throw). One-time adjustment; no resize/scroll listener.
 
 ### Wrapper Extraction (`extractUserInput` + `applyTextareaCleanup`)
 
@@ -100,7 +100,7 @@ After the max-height adjustment and wrapper cleanup, the edit box is scrolled so
 
 ### Test Interface
 
-Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynamicMaxHeight`, `applyMaxHeightAdjustments`, `computeScrollDelta`, `findScrollableAncestor`, `applyEditScrollPosition`, `applyTextareaCleanup`, `waitForNewTextarea`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_CLASS`, `REMOVE_MAX_HEIGHT_SELECTOR`, `DYNAMIC_MAX_HEIGHT_SELECTOR`, `HEIGHT_SOURCE_SELECTOR_A`, `HEIGHT_SOURCE_SELECTOR_B`, `MAX_HEIGHT_OFFSET_PX`, `EDIT_SCROLL_GAP_PX`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`, `VALUE_WAIT_TIMEOUT_MS`.
+Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynamicMaxHeight`, `applyMaxHeightAdjustments`, `computeScrollDelta`, `findScrollableAncestor`, `applyEditScrollPosition`, `applyTextareaCleanup`, `waitForNewTextarea`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_SELECTOR`, `REMOVE_MAX_HEIGHT_SELECTOR`, `DYNAMIC_MAX_HEIGHT_SELECTOR`, `HEIGHT_SOURCE_SELECTOR_A`, `HEIGHT_SOURCE_SELECTOR_B`, `MAX_HEIGHT_OFFSET_PX`, `EDIT_SCROLL_GAP_PX`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`, `VALUE_WAIT_TIMEOUT_MS`.
 
 ## PreventAutoScroll Module
 
@@ -193,11 +193,11 @@ The `#autoRetryToggle` and `#autoContinueToggle` checkboxes in the Features card
 
 ### Button Location
 
-Buttons are located only through the selectors in `content/ds-selectors.js`, never by button text; the fallback is tried only when the primary selector finds nothing.
+Buttons are located only through the selectors in `content/ds-selectors.js`, never by button text; the continue button tries its fallback only when the primary selector finds nothing, and the retry button uses only its primary selector.
 
 | Button | Primary | Fallback |
 |-|-|-|
-| Retry | `RETRY_BUTTON_SELECTOR` (`.ds-button--warning.ds-button--circle.ds-button--xs`) | `RETRY_BUTTON_FALLBACK_SELECTOR` (`.a3b9bd76._76a2310`) |
+| Retry | `RETRY_BUTTON_SELECTOR` (`.ds-button--warning.ds-button--circle.ds-button--xs`) | — |
 | Continue generating | `CONTINUE_BUTTON_SELECTOR` (`._8e85838 > .ds-button[role="button"]`) | `CONTINUE_BUTTON_FALLBACK_SELECTOR` (`._6eef0b0`) |
 
 ### React Click Bridge
@@ -233,7 +233,7 @@ The `#autoOpenSidebarToggle` checkbox in the Features card (label `autoOpenSideb
 
 ### Detection and Clicking
 
-- **Collapsed episode**: The collapsed state is read from whether the sidebar wrapper (`SIDEBAR_WRAPPER_SELECTOR`, `div.dc04ec1d`) carries the native-collapsed class `SIDEBAR_NATIVE_COLLAPSED_CLASS` (`a02af2e6`) from the Sidebar block of `content/ds-selectors.js`. An episode starts when the wrapper gains that class and ends when it loses it; `_scanExisting()` resets `_hasClickedThisEpisode` while not collapsed, and clicks at most once per episode.
+- **Collapsed episode**: The collapsed state is read from whether the sidebar wrapper (`SIDEBAR_WRAPPER_SELECTOR`, `div:has(> div > .ds-scroll-area > .ds-scroll-area)`) matches `SIDEBAR_WRAPPER_COLLAPSED_SELECTOR` from the Sidebar block of `content/ds-selectors.js` (the wrapper plus `:has(> div:nth-child(2))`, i.e. the collapse rail is present as a second direct child), checked with `wrapper.matches(...)`. An episode starts when the wrapper matches that selector and ends when it stops matching; `_scanExisting()` resets `_hasClickedThisEpisode` while not collapsed, and clicks at most once per episode.
 - **Observer**: While active, a `MutationObserver` (`childList`, `subtree`, `attributes` with `attributeFilter: ['class']`) on `document.body` rescans the whole page on every mutation batch; the button's icon path can be inserted after the button node, and DeepSeek's width breakpoints re-collapse the sidebar by rewriting only the wrapper's `class`, so checking only added nodes is not enough. Errors thrown by a scan are logged with `console.error('[DSS] auto-open-sidebar:', err)`.
 - **Clicking**: When the current episode has not been clicked yet, it dispatches the bubbling `dss:react-click` custom event on the button matched by `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR`; the [React Click Bridge](#react-click-bridge) calls the button's React `onClick` (falling back to `element.click()` when there is no React `onClick`).
 - **No click in the narrow layout** (v4.36.3): Each scan first looks up DeepSeek's header hamburger button with `SIDEBAR_HAMBURGER_BUTTON_SELECTOR` (`div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])`) from the Sidebar block of `content/ds-selectors.js`. The hamburger is mounted in both the desktop and narrow layouts, but its `checkVisibility()` is true only in the narrow layout (about 768px and below); the collapsed rail's open button is rendered and visible (34×34) in both layouts, so its own visibility cannot tell the layouts apart. When the hamburger exists and `typeof checkVisibility === 'function' && checkVisibility()` is true, the click is skipped without consuming the episode (neither `_hasClickedThisEpisode` nor `_lastClickAt` changes), so the button is clicked once the hamburger becomes hidden within the same episode; a hamburger lacking the `checkVisibility` method does not block the click. In the narrow layout DeepSeek re-closes the sidebar by itself about 0.5–1.2 s after any open, which is why auto-open does not click there.
@@ -248,7 +248,7 @@ The `#autoOpenSidebarToggle` checkbox in the Features card (label `autoOpenSideb
 div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])
 ```
 
-- **Why the icon path**: The button sits in DeepSeek's collapsed rail (`div.ca6d4be1`) next to the search and new-chat buttons, and all three share the identical class string including the hash class, so only the icon path distinguishes the open-sidebar button.
+- **Why the icon path**: The button sits in DeepSeek's collapsed rail (`SIDEBAR_NATIVE_COLLAPSED_SELECTOR`, wrapper `> div:not(:has(.ds-scroll-area))`) next to the search and new-chat buttons, and all three share the identical class string, so only the icon path distinguishes the open-sidebar button.
 - **Excluded variants**: The expanded-state sidebar toggle uses `ds-button--iconLabelTertiary`, and the mobile hamburger button uses `ds-button--xl` with a different icon path, so neither matches this selector.
 
 ### Load Order

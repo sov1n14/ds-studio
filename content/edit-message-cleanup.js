@@ -9,8 +9,8 @@
  *   讓使用者只看到、編輯自己原本輸入的文字。
  *
  *   同時調整相關元素的 max-height：
- *   - .cc852ac5：設為 none（移除限制）
- *   - ._646a522：依視窗高度與來源元素高度動態計算
+ *   - 編輯框容器（EDIT_BOX_SELECTOR）：設為 none（移除限制）
+ *   - 編輯框高度容器（EDIT_BOX_HEIGHT_CONTAINER_SELECTOR）：依視窗高度與來源元素高度動態計算
  */
 
 'use strict';
@@ -25,7 +25,7 @@ const {
     applyTextareaCleanup,
     findScrollableAncestor,
     applyEditScrollPosition,
-    EDIT_BUTTON_CLASS,
+    EDIT_BUTTON_SELECTOR,
     REMOVE_MAX_HEIGHT_SELECTOR,
     DYNAMIC_MAX_HEIGHT_SELECTOR,
     HEIGHT_SOURCE_SELECTOR_A,
@@ -157,7 +157,7 @@ function waitForNewTextarea(preExisting, onFound) {
  */
 function handleEditButtonClick(e) {
     // Guard：確認點擊目標為編輯按鈕
-    const editButton = e.target.closest(`.${EDIT_BUTTON_CLASS}`);
+    const editButton = e.target.closest(EDIT_BUTTON_SELECTOR);
 
     if (!editButton) return;
 
@@ -208,7 +208,7 @@ if (typeof module !== 'undefined' && module.exports) {
         applyEditScrollPosition,
         waitForNewTextarea,
         handleEditButtonClick,
-        EDIT_BUTTON_CLASS,
+        EDIT_BUTTON_SELECTOR,
         REMOVE_MAX_HEIGHT_SELECTOR,
         DYNAMIC_MAX_HEIGHT_SELECTOR,
         HEIGHT_SOURCE_SELECTOR_A,

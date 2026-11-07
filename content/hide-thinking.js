@@ -12,9 +12,10 @@ const __DS_HideThinkingSelectors = (globalThis).DSstudio?.Selectors ||
 
 const HideThinking = {
     STORAGE_KEY: StorageManager.KEYS.HIDE_THINKING,
-    CONTAINER_CLASS: __DS_HideThinkingSelectors.THINK_BLOCK_CLASS,
-    HEADER_CLASS: __DS_HideThinkingSelectors.THINK_HEADER_TOGGLE_CLASS,
-    THINK_CONTENT_CLASS: __DS_HideThinkingSelectors.THINK_CONTENT_CLASS,
+    // 結構式選擇器（可能含 :has()），以 querySelector / closest 比對，不可當 class 名使用
+    CONTAINER_SELECTOR: __DS_HideThinkingSelectors.THINK_BLOCK_SELECTOR,
+    HEADER_SELECTOR: __DS_HideThinkingSelectors.THINK_HEADER_TOGGLE_SELECTOR,
+    THINK_CONTENT_SELECTOR: __DS_HideThinkingSelectors.THINK_CONTENT_SELECTOR,
     DATA_ATTR: 'data-ht-collapsed',
 
     enabled: false,
@@ -22,14 +23,22 @@ const HideThinking = {
 
     isExpanded(containerEl) {
         if (!containerEl || !containerEl.classList) return false;
-        return !!containerEl.querySelector('.' + this.THINK_CONTENT_CLASS);
+        return !!containerEl.querySelector(this.THINK_CONTENT_SELECTOR);
+    },
+
+    /**
+     * 取得思考區塊的可點擊標頭（區塊的直接子節點）。
+     * 以 children + matches 比對而非 el.querySelector：標頭選擇器以位於 el 之外的 .ds-message 祖先為錨點，部分 DOM 實作（happy-dom）的 querySelector 不比對範圍外的祖先。
+     */
+    _findHeader(blockEl) {
+        return Array.from(blockEl.children).find((child) => child.matches(this.HEADER_SELECTOR)) || null;
     },
 
     tryCollapseButton(el) {
         if (!el || !el.isConnected) return;
         if (el.dataset.htCollapsed === '1') return;
         if (!this.isExpanded(el)) return;
-        const header = el.querySelector('.' + this.HEADER_CLASS);
+        const header = this._findHeader(el);
         if (!header) return;
         el.dataset.htCollapsed = '1';
         header.click();
@@ -37,16 +46,19 @@ const HideThinking = {
 
     scanRoot(root) {
         if (!(root instanceof Element)) return;
-        if (root.classList && root.classList.contains(this.CONTAINER_CLASS)) {
-            this.tryCollapseButton(root);
+        // closest 涵蓋 root 本身與其祖先：結構式選擇器含 :has()，標頭晚於容器插入時既有的祖先容器才開始符合，須由新增節點往上找回該容器
+        // 僅在 root 為區塊本身或其標頭時處理：標頭到位才是區塊「首次出現」；使用者展開時重新掛載的內容節點不含標頭，不得觸發收合
+        const enclosingBlock = root.closest(this.CONTAINER_SELECTOR);
+        if (enclosingBlock && root.contains(this._findHeader(enclosingBlock))) {
+            this.tryCollapseButton(enclosingBlock);
         }
-        root.querySelectorAll('.' + this.CONTAINER_CLASS).forEach((el) => {
+        root.querySelectorAll(this.CONTAINER_SELECTOR).forEach((el) => {
             this.tryCollapseButton(el);
         });
     },
 
     applyToExisting() {
-        const blocks = document.querySelectorAll('.' + this.CONTAINER_CLASS);
+        const blocks = document.querySelectorAll(this.CONTAINER_SELECTOR);
         blocks.forEach((el) => this.tryCollapseButton(el));
     },
 
@@ -55,7 +67,7 @@ const HideThinking = {
             // 先移除標記，使該區塊不再被追蹤
             el.removeAttribute(this.DATA_ATTR);
             if (!el.isConnected) return;
-            const header = el.querySelector('.' + this.HEADER_CLASS);
+            const header = this._findHeader(el);
             if (header) header.click();
         });
     },

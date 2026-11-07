@@ -28,11 +28,12 @@ DeepSeek 的對話介面是單頁應用程式（SPA）。使用者切換對話�
 
 ## Overlay 提示詞組選擇器 (Overlay Preset Selector)
 
-`PresetOverlay` 模組（由 `content/content-script.js` 經工廠協調，UI 邏輯分散於 `preset-overlay.controller.js`、`preset-overlay.resolvers.js`、`preset-overlay.styles.js`、`preset-viewport-sync.js`、`preset-id.resolver.js`、`preset-dropdown.component.js`、`preset-dropdown.position.js`、`preset-dropdown.menu-position.js`、`preset-dropdown.width.js`、`preset-dropdown.options.js`、`preset-dropdown.keyboard.js` 與 `preset-settle.scheduler.js`）在 DeepSeek 頁面的對話標題列（`div._2be88ba`）上渲染一個置中的浮動下拉選單，無需開啟 popup 即可切換提示詞組。
+`PresetOverlay` 模組（由 `content/content-script.js` 經工廠協調，UI 邏輯分散於 `preset-overlay.controller.js`、`preset-overlay.resolvers.js`、`preset-overlay.styles.js`、`preset-viewport-sync.js`、`preset-id.resolver.js`、`preset-dropdown.component.js`、`preset-dropdown.position.js`、`preset-dropdown.menu-position.js`、`preset-dropdown.width.js`、`preset-dropdown.options.js`、`preset-dropdown.keyboard.js` 與 `preset-settle.scheduler.js`）在 DeepSeek 頁面的對話標題列（`CHAT_HEADER_SELECTOR`）上渲染一個置中的浮動下拉選單，無需開啟 popup 即可切換提示詞組。
 
 **DOM 結構**：
 - `<div id="dss-preset-overlay" role="combobox">` 外層容器作為自訂 combobox 容器。其定位由 `content/preset-dropdown.position.js` 的 `computePlacement()` 逐幀動態計算（而非靜態 CSS）——定位模式見下文。
-- 內部的 `<button class="dss-preset-trigger">` 顯示目前選取的提示詞組名稱，`<ul id="dss-preset-menu" role="listbox">` 下拉選單列出可用的提示詞組。標題列經由選擇器 `._2be88ba:not(._1551317)` 取得 `position: relative !important`，作為定位錨點——`:not(._1551317)` 排除條件保留 DeepSeek 在新對話頁面原生的 `position: absolute`，避免破壞歡迎畫面（`_9a2f8e4`）的版面。
+- 內部的 `<button class="dss-preset-trigger">` 顯示目前選取的提示詞組名稱，`<ul id="dss-preset-menu" role="listbox">` 下拉選單列出可用的提示詞組。標題列經由選擇器 `CHAT_HEADER_SELECTOR:not(NEW_CHAT_HEADER_MODIFIER_SELECTOR)` 取得 `position: relative !important`，作為定位錨點——`NEW_CHAT_HEADER_MODIFIER_SELECTOR`（`div:has(> .the-header):not(:has(~ .ds-virtual-list))`，後方沒有訊息列表同層元素的標題列）排除條件保留 DeepSeek 在新對話頁面原生的 `position: absolute`，避免破壞歡迎畫面（`_9a2f8e4`）的版面。
+- 對話標題以 `CHAT_TITLE_FALLBACK_SELECTOR`（`.the-header > [role="button"] + div`）取得；新對話按鈕取 `CHAT_HEADER_TITLE_ROW_SELECTOR`（`.the-header:has(> [role="button"])`）最後一個直接子層 `div[role="button"]`。
 - CSS 經由 `injectOverlayStyles()` 注入，並以防護（`#dss-overlay-style`）避免重複注入；也可經由 `removeOverlayStyles()` 完整移除。
 
 #### 響應式定位 (v4.2.0–v4.2.2)
@@ -55,7 +56,7 @@ Overlay 佔用的寬度貼合**最寬**的候選標籤，而非目前顯示的�
 
 **生命週期**：
 1. `start(presets, activeId, enable)`——於 `initSettings()` 中、`setupNavigationDetection()` 之後呼叫。注入 overlay 樣式、設定 DOM observer、尋找並掛載到標題列、渲染提示詞組清單，並依 `enable` 參數（連動總開關 `isEnabled`）設定初始可見性。
-2. `findAndMount()`——查詢 `._2be88ba`。若找到且與目前目標不同，呼叫 `mountTo()` 建構 DOM 並附加到標題列，接著依 `isEnabled` 同步可見性，並讀取 storage 以渲染目前狀態。
+2. `findAndMount()`——查詢 `CHAT_HEADER_SELECTOR`。若找到且與目前目標不同，呼叫 `mountTo()` 建構 DOM 並附加到標題列，接著依 `isEnabled` 同步可見性，並讀取 storage 以渲染目前狀態。
 3. `mountTo()` 經由 `_applyPlacementSync()`，**在與 `appendChild` 相同的 task 中同步**套用定位，並在穩定迴圈啟動之前完成（v4.18.1）。若先附加再等待 animation frame，瀏覽器會以元素未設定尺寸的預設幾何繪製一幀，從該幀跳到第一次量測後的定位，在頁面載入時看起來就像「展開」動畫。overlay 本身完全沒有 CSS transition——`preset-dropdown.css` 中唯一的 transition 是 `.dss-preset-arrow` 的開合旋轉——因此這項修正純粹是調整順序，而非遮掩。穩定迴圈之後仍會執行，因為 DeepSeek 宿主頁面本身的版面在載入期間確實持續變動。
 4. `scheduleFindAndMount()`——150 ms debounce 的重新掛載（`FIND_AND_MOUNT_DEBOUNCE_MS`），在 SPA 導航替換標題列時重新觸發 `findAndMount()`。controller 本身不持有任何 `MutationObserver`：`content/content-script.js` 為整個內容層持有唯一的 `document.body` `childList + subtree` observer，並將其回呼分派給導航檢查與此方法，各自保有自己的 debounce 語意。新的 body 層級偵測需求必須接到這個分派上——不允許第二個 body observer。
 5. `setVisible(enabled)`——切換外層容器的 `display: none`。於總開關變更與 SPA 重新掛載時呼叫，以遵循目前的 `isEnabled` 狀態。

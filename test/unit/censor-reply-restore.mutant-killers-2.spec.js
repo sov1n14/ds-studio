@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Round-2 mutant-killer tests for the censor-reply-restore module family.
  * Every assertion targets observable behavior: DOM end-state, return values, stored records, or the reply sent over the chrome.runtime trust boundary.
@@ -7,13 +8,15 @@ import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
 import DSSelectors from '../../content/ds-selectors.js';
+import { loadThinkMessage, loadMessagesWithoutThinkBlock, thinkParts } from '../helpers/think-block-fixtures.js';
 const KeyToMessageIdMap = require('../../content/censor-reply-restore.keymap.js');
 
 const CRR = CensorReplyRestore;
 const SESSION = 'abc123';
 
+// jsdom's location.pathname is not configurable, so the session URL is set through history (same-origin, no navigation).
 function setSession(id) {
-    vi.spyOn(window.location, 'pathname', 'get').mockReturnValue(id ? '/a/chat/s/' + id : '/');
+    window.history.replaceState({}, '', id ? '/a/chat/s/' + id : '/');
 }
 
 // Seeds one stored record the way _saveFragment would persist it.
@@ -61,6 +64,7 @@ beforeEach(() => {
 afterEach(() => {
     resetCensorReplyRestore();
     vi.restoreAllMocks();
+    setSession(null);
 });
 
 describe('entry: _findKeyForMessageId()', () => {
@@ -282,17 +286,12 @@ describe('dom.inject: content injection', () => {
         expect(() => CRR._injectThinkContent(msg, 'x', { thinking_elapsed_secs: 0 }, detached)).not.toThrow();
     });
     it('clears the old separator body of an existing think container', () => {
-        const msg = buildChatPair('k1', 'hi');
-        const block = document.createElement('div');
-        block.className = DSSelectors.THINK_BLOCK_CLASS;
-        const content = document.createElement('div');
-        content.className = DSSelectors.THINK_CONTENT_CLASS;
-        const sep = document.createElement('div');
-        sep.className = DSSelectors.THINK_SEPARATOR_CLASS;
+        // Real finished reply with an expanded think block; the first think step is loading dots, separator, markdown.
+        const msg = loadThinkMessage('open');
+        document.body.appendChild(msg);
+        const content = thinkParts(msg).block.querySelector('.ds-think-content');
+        const sep = content.children[1];
         sep.textContent = 'censored old thinking';
-        content.appendChild(sep);
-        block.appendChild(content);
-        msg.prepend(block);
         const restoredEl = document.createElement('div');
         msg.appendChild(restoredEl);
         CRR._injectThinkContent(msg, 'new thinking', { thinking_elapsed_secs: 0 }, restoredEl);
@@ -427,9 +426,12 @@ describe('keymap: KeyToMessageIdMap', () => {
 });
 
 describe('thinkblock: _buildThinkBlock()', () => {
+    // Mounts the replica where _injectThinkContent puts it: first child of a real reply .ds-message.
     function build(elapsed = 0) {
         const block = CRR._buildThinkBlock({ content: 'reasoning' }, elapsed);
-        document.body.appendChild(block);
+        const { assistantMessage } = loadMessagesWithoutThinkBlock();
+        assistantMessage.prepend(block);
+        document.body.appendChild(assistantMessage);
         const header = block.firstElementChild;
         const iconRow = header.querySelector('.' + DSSelectors.THINK_HEADER_ICON_ROW_CLASS);
         const arrow = iconRow.querySelector('.ds-icon:not(.' + DSSelectors.THINK_ICON_CLASS + ')');
@@ -599,26 +601,5 @@ describe('round-2 follow-ups', () => {
     it('start() leaves the feature enabled', async () => {
         await CRR.start();
         expect(CRR.enabled).toBe(true);
-    });
-    it('inserts the restored think markdown directly after the separator, not at the end', () => {
-        const msg = buildChatPair('k1', 'hi');
-        const block = document.createElement('div');
-        block.className = DSSelectors.THINK_BLOCK_CLASS;
-        const content = document.createElement('div');
-        content.className = DSSelectors.THINK_CONTENT_CLASS;
-        const sep = document.createElement('div');
-        sep.className = DSSelectors.THINK_SEPARATOR_CLASS;
-        const trailing = document.createElement('div');
-        trailing.className = 'trailing-sibling';
-        content.appendChild(sep);
-        content.appendChild(trailing);
-        block.appendChild(content);
-        msg.prepend(block);
-        const restoredEl = document.createElement('div');
-        msg.appendChild(restoredEl);
-        CRR._injectThinkContent(msg, 'new thinking', { thinking_elapsed_secs: 0 }, restoredEl);
-        const md = content.querySelector(DSSelectors.MARKDOWN_SELECTOR);
-        expect(md.previousElementSibling).toBe(sep);
-        expect(md.nextElementSibling).toBe(trailing);
     });
 });

@@ -1,53 +1,37 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-// Load order matters: constants and shared selectors must resolve their globals
-// before the module under test evaluates. Static imports are hoisted in source
-// order, so these three lines fix the sequence.
+// Load order matters: constants and shared selectors must resolve their globals before the module under test evaluates. Static imports are hoisted in source order, so these lines fix the sequence.
 import '../../utils/temporary-chat-constants.js';
 import '../../content/ds-selectors.js';
-const DSSelectors = require('../../content/ds-selectors.js');
 import '../../content/temporary-chat-sidebar-hide.js';
 
-// --- Sidebar DOM fixtures (inlined; sole consumer) ---
-// Markup shape transcribed from the captured snapshot to-do/samples/side-chat.html,
-// NOT derived from content/ds-selectors.js: a fixture built from the selector it
-// exercises would prove nothing.
+// --- Sidebar DOM fixtures (inlined; also inlined in temporary-chat-sidebar-hide.mutant-kill.spec.js) ---
+// Markup comes from test/fixtures/ds-snapshots/sidebar-expanded.html, the expanded sidebar wrapper captured from the live page (conv2-finished) with chat titles and session ids replaced by placeholders. Test rows and date groups are clones of the captured row anchor and date-group container with only href, title text and label text changed, so no element is shaped from a selector constant. The captured groups stay mounted (their placeholder ids are never queued) so every case runs among the real sibling groups.
+const SIDEBAR_HTML = fs.readFileSync(path.resolve(__dirname, '../fixtures/ds-snapshots/sidebar-expanded.html'), 'utf8');
 const CHAT_PATH_PREFIX = '/a/chat/s/';
 const ABSOLUTE_ORIGIN = 'https://chat.deepseek.com';
 
+function parseSidebar() {
+    const host = document.createElement('div');
+    host.innerHTML = SIDEBAR_HTML;
+    return host.firstElementChild;
+}
+
+const TEMPLATE_ANCHOR = parseSidebar().querySelector('a[href]');
+const TEMPLATE_GROUP = TEMPLATE_ANCHOR.parentElement;
+
 function makeChatAnchor(uuid, { absolute = false } = {}) {
-    const a = document.createElement('a');
-    a.className = '_546d736 b64fb9ae';
-    a.setAttribute('tabindex', '0');
+    const a = TEMPLATE_ANCHOR.cloneNode(true);
     const base = absolute ? ABSOLUTE_ORIGIN : '';
     a.setAttribute('href', `${base}${CHAT_PATH_PREFIX}${uuid}`);
-
-    const ring = document.createElement('div');
-    ring.className = 'ds-focus-ring';
-
-    const title = document.createElement('div');
-    title.className = DSSelectors.SIDEBAR_TITLE_CLASS;
-    title.textContent = 'chat title';
-
-    const actions = document.createElement('div');
-    actions.className = DSSelectors.SIDEBAR_ACTIONS_CLASS;
-    const actionBtn = document.createElement('div');
-    actionBtn.setAttribute('role', 'button');
-    actionBtn.className = 'ds-button _2090548';
-    actionBtn.setAttribute('tabindex', '0');
-    actions.appendChild(actionBtn);
-
-    a.appendChild(ring);
-    a.appendChild(title);
-    a.appendChild(actions);
+    a.querySelector('.ds-focus-ring').nextElementSibling.textContent = 'chat title';
     return a;
 }
 
-function makeDateGroup({ uuids = [], label = '今天', groupClass = DSSelectors.SIDEBAR_DATE_GROUP_SELECTOR.split('.').pop(), absolute = false } = {}) {
-    const group = document.createElement('div');
-    group.className = groupClass;
-
-    const dateLabel = document.createElement('div');
-    dateLabel.className = DSSelectors.SIDEBAR_DATE_LABEL_CLASS;
+function makeDateGroup({ uuids = [], label = '今天', absolute = false } = {}) {
+    const group = TEMPLATE_GROUP.cloneNode(false);
+    const dateLabel = TEMPLATE_GROUP.firstElementChild.cloneNode(true);
     dateLabel.textContent = label;
     group.appendChild(dateLabel);
 
@@ -62,15 +46,27 @@ function makeDateGroup({ uuids = [], label = '今天', groupClass = DSSelectors.
     return { group, dateLabel, anchors, byUuid };
 }
 
+/** Mount the captured sidebar as the first element of body and append `groups` to its chat list (the container of the captured date groups). */
 function mountSidebar(...groups) {
-    const wrapper = document.createElement('div');
-    wrapper.className = DSSelectors.SIDEBAR_WRAPPER_SELECTOR.split('.').pop();
-    const inner = document.createElement('div');
-    inner.className = 'b8812f16 a2f3d50e';
-    wrapper.appendChild(inner);
-    groups.forEach((g) => inner.appendChild(g));
-    document.body.appendChild(wrapper);
-    return { wrapper, inner };
+    document.body.innerHTML = SIDEBAR_HTML;
+    const wrapper = document.body.firstElementChild;
+    const list = wrapper.querySelector('a[href]').parentElement.parentElement;
+    groups.forEach((g) => list.appendChild(g));
+    return { wrapper, list };
+}
+
+/** Minimal mutation that reaches the fallback: every date-group container in the sidebar (captured and test-built) becomes a <section> with the same attributes and children, modelling a rebuild where no div directly holds the chat rows. Returns the replacement of `group`. */
+function retagDateGroups(wrapper, group) {
+    let replacement = null;
+    const containers = new Set([...wrapper.querySelectorAll('a[href]')].map((a) => a.parentElement));
+    containers.forEach((div) => {
+        const section = document.createElement('section');
+        [...div.attributes].forEach(({ name, value }) => section.setAttribute(name, value));
+        section.append(...div.childNodes);
+        div.replaceWith(section);
+        if (div === group) replacement = section;
+    });
+    return replacement;
 }
 
 // Derived from the CONTRACT, not from reading the module source.
@@ -100,8 +96,7 @@ function allHidden() {
 }
 
 beforeEach(() => {
-    // rAF coalescing: run the scheduled application synchronously so a single
-    // flush() after a mutation is enough to observe the result deterministically.
+    // rAF coalescing: run the scheduled application synchronously so a single flush() after a mutation is enough to observe the result deterministically.
     vi.stubGlobal('requestAnimationFrame', (cb) => { cb(); return 1; });
     vi.stubGlobal('cancelAnimationFrame', () => {});
     chrome.runtime.sendMessage.mockReset();
@@ -192,31 +187,34 @@ describe('TemporaryChatSidebarHide - idempotent re-apply on queue change', () =>
     });
 });
 
-describe('TemporaryChatSidebarHide - fallback when the group container class changes', () => {
-    it('7: queued anchors are still hidden individually when no date-group container matches', async () => {
-        const { group, byUuid } = makeDateGroup({ uuids: ['u1', 'u2'], groupClass: 'renamed-group-xyz' });
-        mountSidebar(group);
+describe('TemporaryChatSidebarHide - fallback when no date-group container matches', () => {
+    it('7: queued anchors are still hidden individually when no div directly holds the chat rows', async () => {
+        const { group, byUuid } = makeDateGroup({ uuids: ['u1', 'u2'] });
+        const { wrapper } = mountSidebar(group);
+        const container = retagDateGroups(wrapper, group);
+        expect([...wrapper.querySelectorAll('a[href]')].map((x) => x.parentElement.tagName), 'precondition: no chat row has a div parent').not.toContain('DIV');
 
         stubPendingUuids(['u1']);
         await Hide.init();
 
         expect(isHidden(byUuid.get('u1'))).toBe(true);
         expect(isHidden(byUuid.get('u2'))).toBe(false);
-        expect(isHidden(group)).toBe(false);
+        expect(isHidden(container)).toBe(false);
+        expect(allHidden()).toEqual([byUuid.get('u1')]);
     });
 });
 
 describe('TemporaryChatSidebarHide - MutationObserver re-apply', () => {
     it('8: a fully-queued group appended after init() is hidden once the observer fires', async () => {
         const { group: existing } = makeDateGroup({ uuids: ['keep'] });
-        const { inner } = mountSidebar(existing);
+        const { list } = mountSidebar(existing);
 
         stubPendingUuids(['new1', 'new2']);
         await Hide.init();
         expect(isHidden(existing)).toBe(false);
 
         const { group: added } = makeDateGroup({ uuids: ['new1', 'new2'], label: '昨天' });
-        inner.appendChild(added);
+        list.appendChild(added);
         await flush();
 
         expect(isHidden(added)).toBe(true);
@@ -226,7 +224,7 @@ describe('TemporaryChatSidebarHide - MutationObserver re-apply', () => {
 describe('TemporaryChatSidebarHide - stop()', () => {
     it('9: after stop(), neither a push nor a DOM insertion changes the hiding state', async () => {
         const { group } = makeDateGroup({ uuids: ['u1'] });
-        const { inner } = mountSidebar(group);
+        const { list } = mountSidebar(group);
 
         stubPendingUuids([]);
         await Hide.init();
@@ -238,7 +236,7 @@ describe('TemporaryChatSidebarHide - stop()', () => {
         expect(isHidden(group)).toBe(false);
 
         const { group: added } = makeDateGroup({ uuids: ['u1'] });
-        inner.appendChild(added);
+        list.appendChild(added);
         await flush();
         expect(isHidden(added)).toBe(false);
         expect(allHidden()).toEqual([]);
@@ -251,7 +249,7 @@ describe('TemporaryChatSidebarHide - storage boundary', () => {
         const syncSpies = ['get', 'set', 'remove', 'clear'].map((m) => vi.spyOn(chrome.storage.sync, m));
 
         const { group } = makeDateGroup({ uuids: ['u1', 'u2'] });
-        const { inner } = mountSidebar(group);
+        const { list } = mountSidebar(group);
 
         stubPendingUuids(['u1', 'u2']);
         await Hide.init();
@@ -259,7 +257,7 @@ describe('TemporaryChatSidebarHide - storage boundary', () => {
         pushPendingUuids(['u1']);
 
         const { group: added } = makeDateGroup({ uuids: ['u3'] });
-        inner.appendChild(added);
+        list.appendChild(added);
         await flush();
 
         Hide.stop();
@@ -270,16 +268,16 @@ describe('TemporaryChatSidebarHide - storage boundary', () => {
 
 describe('TemporaryChatSidebarHide - href-based uuid extraction', () => {
     it('11: an anchor with an ABSOLUTE href for a queued uuid is still hidden', async () => {
-        const anchor = makeChatAnchor('abs-uuid', { absolute: true });
-        const container = document.createElement('div');
-        container.className = 'renamed-group-abs';
-        container.appendChild(anchor);
-        const { inner } = mountSidebar();
-        inner.appendChild(container);
+        const { group, byUuid } = makeDateGroup({ uuids: ['rel-uuid'] });
+        const absolute = makeChatAnchor('abs-uuid', { absolute: true });
+        group.appendChild(absolute);
+        mountSidebar(group);
 
         stubPendingUuids(['abs-uuid']);
         await Hide.init();
 
-        expect(isHidden(anchor)).toBe(true);
+        expect(isHidden(absolute), 'absolute-href row').toBe(true);
+        expect(isHidden(byUuid.get('rel-uuid')), 'unqueued sibling row').toBe(false);
+        expect(isHidden(group), 'group with an unqueued row').toBe(false);
     });
 });

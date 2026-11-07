@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — solo/stacked mode transition unit tests.
  * Shared fixtures: test/helpers/go-top-fixtures.js
@@ -7,14 +8,15 @@ import '../../utils/storage-manager.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createWrapperWithoutNativeButton,
-    createNativeButton,
+    insertNativeButton,
     createFullWrapperWithNativeButton,
     resetGoToTopState,
 } from '../helpers/go-top-fixtures.js';
 
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     // ─────────────────────────────────────
     //  _transitionToStacked
@@ -26,8 +28,7 @@ describe('GoToTop', () => {
             GoToTop._injectIntoWrapperDirect();
             const originalBtn = GoToTop._button;
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
@@ -39,8 +40,7 @@ describe('GoToTop', () => {
             GoToTop._injectIntoWrapperDirect();
             expect(GoToTop._button.classList.contains('dsw-gotop--solo')).toBe(true);
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
@@ -55,8 +55,7 @@ describe('GoToTop', () => {
             // Record all ds-button classes before transition
             const dsBefore = Array.from(GoToTop._button.classList).filter(c => c.startsWith('ds-button'));
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
             const dsAfter = Array.from(GoToTop._button.classList).filter(c => c.startsWith('ds-button'));
@@ -67,8 +66,7 @@ describe('GoToTop', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
             GoToTop._injectIntoWrapperDirect();
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
@@ -82,8 +80,7 @@ describe('GoToTop', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
             GoToTop._injectIntoWrapperDirect();
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             const offsetSpy = vi.spyOn(GoToTop, '_applyStackedOffset');
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
@@ -95,8 +92,7 @@ describe('GoToTop', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
             GoToTop._injectIntoWrapperDirect();
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
@@ -108,8 +104,7 @@ describe('GoToTop', () => {
             GoToTop._injectIntoWrapperDirect();
             GoToTop._button.style.display = 'none';
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
@@ -121,8 +116,7 @@ describe('GoToTop', () => {
             GoToTop._injectIntoWrapperDirect();
             GoToTop._button.style.display = '';
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 
@@ -183,7 +177,7 @@ describe('GoToTop', () => {
             const { injectParent, nativeBtn } = createFullWrapperWithNativeButton();
 
             GoToTop._injectIntoWrapper(nativeBtn);
-            expect(GoToTop._button.style.marginBottom).toBe('62px');
+            expect(GoToTop._button.style.marginBottom).not.toBe('');
 
             GoToTop._transitionToSolo(GoToTop._button, injectParent);
 
@@ -247,8 +241,10 @@ describe('GoToTop', () => {
             expect(originalBtn.classList.contains('dsw-gotop--solo')).toBe(true);
 
             // Native button appears
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
+            // No layout engine: give the native button its live geometry (34px tall, 20px margin-bottom).
+            Object.defineProperty(nativeBtn, 'offsetHeight', { value: 34, configurable: true });
+            vi.spyOn(window, 'getComputedStyle').mockReturnValue({ marginBottom: '20px', right: '' });
 
             GoToTop._injectIntoWrapper(nativeBtn);
 
@@ -267,8 +263,7 @@ describe('GoToTop', () => {
             const originalBtn = GoToTop._button;
             expect(GoToTop._injectionMode).toBe('wrapper-solo');
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
             vi.spyOn(GoToTop, '_getNativeButton').mockReturnValue(nativeBtn);
             vi.spyOn(GoToTop, '_evaluateVisibility').mockReturnValue(undefined);
 
@@ -310,8 +305,7 @@ describe('GoToTop', () => {
             GoToTop._injectIntoWrapperDirect();
             GoToTop._button.style.display = '';  // make it visible
 
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
 

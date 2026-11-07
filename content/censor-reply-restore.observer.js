@@ -59,7 +59,7 @@
         },
 
         applyToExisting() {
-            const messages = document.querySelectorAll(__DS_ObserverSelectors.ASSISTANT_MESSAGE_SELECTOR);
+            const messages = document.querySelectorAll(__DS_ObserverSelectors.MESSAGE_SELECTOR);
             messages.forEach((el) => this._tryRestoreMessage(el));
             this._tryRestoreFromStoredRecords();
         },
