@@ -18,6 +18,10 @@ Since v2.6.0, the export engine uses a scroll-and-harvest loop to capture the fu
 4. A non-blocking floating progress toast is shown to the user (styled via `go-top.css`, `pointer-events: none` so it does not block interaction). Since v4.19.0 the toast also carries a cancel button, which individually opts back into `pointer-events: auto` because the container deliberately lets clicks pass through to the page.
 5. The harvest loop incrementally scrolls from top to bottom, waiting for DOM stability after each step via `MutationObserver` (see the Harvest Module section below for details).
 6. Each message node is cloned as it enters the viewport, deduplicated by the numeric `data-virtual-list-item-key` DOM attribute, and collected.
+   - **Collapsed thinking blocks**: DeepSeek's native collapse unmounts the thinking body node (`.ds-think-content`), and export reads only mounted nodes, so a block collapsed by hand or by the "Collapse Thinking Process" feature would lose its thinking.
+   - **Expand, capture, restore**: `exportConversationToMarkdown(includeThinking, ...)` calls `Harvest.harvestAllMessages({ expandThinking: includeThinking })`. When `captureVisible` (async) clones each not-yet-captured visible message, it goes through `_cloneMessageWithThinkingExpanded(msg)` in `content/harvest.think.js`: for each collapsed thinking block (header present, no mounted thinking body) it clicks the native header to expand; if the body is already mounted it clones at once, otherwise it polls up to about 2 seconds via `DSSRetryUntil` and clones anyway on timeout; after cloning, a `finally` clicks the header again on every block whose body is mounted, so the page is restored even on error or cancel.
+   - **Gate and load order**: with `includeThinking` off nothing is clicked; already-expanded blocks are untouched; `convertMessageNodeToMarkdown` stays synchronous and pure. `manifest.json` loads `harvest.think.js` after `harvest.dom.js` (and after `ds-selectors.js` and `retry-until.js`, which it depends on); when `expandThinking` is on and the module is missing, harvest fails fast with a load-order error.
+   - **Known limit**: a body that mounts after the roughly 2-second wait is not captured, and that block stays expanded on screen.
 7. Bottom detection uses 3 consecutive confirmations that `scrollTop + clientHeight >= scrollHeight` to ensure the list is fully loaded.
 8. A safety net detects external scroll jumps (e.g., React re-renders) and aborts with partial export.
 9. On completion, the original scroll position is restored. On an early stop, partial content is still exported — with a warning footer naming the real cause and an on-page warning toast (v4.19.0).
@@ -26,7 +30,7 @@ Since v2.6.0, the export engine uses a scroll-and-harvest loop to capture the fu
 
 The cloned nodes are processed through `convertMessageNodeToMarkdown()`:
 - **AI responses** (containing `.ds-markdown`):
-  - Extracts the thinking process from `.ds-think-content` blocks if `includeThinking` is enabled. Captures search status lines (e.g. "Searched X web pages"), browsed pages with links, and all reasoning paragraphs.
+  - Extracts the thinking process from `.ds-think-content` blocks (collapsed blocks are expanded temporarily during capture, see step 6 of the flow) if `includeThinking` is enabled. Captures search status lines (e.g. "Searched X web pages"), browsed pages with links, and all reasoning paragraphs.
   - Extracts the main response from `.ds-markdown` blocks outside the thinking container.
 - **User messages**: Extracted as plain text from the user content wrapper (`USER_CONTENT_SELECTOR`, `.ds-message > div:has(> .ds-collapsible-text)`); when no wrapper is found, the whole message `innerText` is used.
 

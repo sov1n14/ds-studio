@@ -161,8 +161,8 @@
             return;
         }
 
-        // 執行完整擷取（遮罩由 Harvest 內部管理）
-        var harvestResult = await Harvest.harvestAllMessages();
+        // 執行完整擷取（遮罩由 Harvest 內部管理）；含思考時請 Harvest 暫時展開已收合的思考區塊，收合僅屬顯示層，不得影響匯出內容
+        var harvestResult = await Harvest.harvestAllMessages({ expandThinking: includeThinking });
 
         // Guard: 完全沒有訊息
         if (!harvestResult.items || harvestResult.items.length === 0) {

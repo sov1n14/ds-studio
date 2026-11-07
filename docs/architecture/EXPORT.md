@@ -18,6 +18,10 @@
 4. 畫面上顯示非阻塞的浮動進度提示（樣式來自 `go-top.css`，`pointer-events: none`，不妨礙操作）。自 v4.19.0 起進度提示附帶取消按鈕；由於容器刻意讓點擊穿透至頁面，該按鈕單獨設為 `pointer-events: auto`。
 5. 擷取迴圈由上而下逐步捲動，每一步之後以 `MutationObserver` 等待 DOM 穩定（細節見下方「捲動擷取模組 (Harvest Module)」一節）。
 6. 每個訊息節點進入視口時即被複製，依數值型 DOM 屬性 `data-virtual-list-item-key` 去重後收集。
+   - **收合的思考區塊**：DeepSeek 原生收合會卸載思考內容節點（`.ds-think-content`），而匯出只讀已掛載的節點，所以手動收合或啟用「隱藏思考過程」的區塊會漏掉思考過程。
+   - **展開、擷取、恢復**：`exportConversationToMarkdown(includeThinking, ...)` 呼叫 `Harvest.harvestAllMessages({ expandThinking: includeThinking })`。`captureVisible`（非同步）複製每則尚未擷取的可見訊息時，改由 `content/harvest.think.js` 的 `_cloneMessageWithThinkingExpanded(msg)` 處理：對每個已收合的思考區塊（有標頭、無掛載的思考內容）點擊原生標頭展開；內容立即掛載就直接複製，否則以 `DSSRetryUntil` 輪詢最多約 2 秒，逾時也照常複製；複製後在 `finally` 對內容已掛載的區塊再點一次標頭，因此出錯或取消時畫面仍會恢復。
+   - **閘門與載入**：`includeThinking` 關閉時完全不點擊；已展開的區塊不動；`convertMessageNodeToMarkdown` 維持同步且純粹。`harvest.think.js` 於 `manifest.json` 在 `harvest.dom.js` 之後載入（依賴先載入的 `ds-selectors.js` 與 `retry-until.js`）；`expandThinking` 開啟而模組缺席時，harvest 以載入順序錯誤快速失敗。
+   - **已知限制**：思考內容在約 2 秒等待之後才掛載時不會被擷取，該區塊也會停留在展開狀態。
 7. 到底偵測需連續 3 次確認 `scrollTop + clientHeight >= scrollHeight`，確保列表已完整載入。
 8. 安全網會偵測外部造成的捲動跳躍（例如 React 重新渲染），並中止擷取、匯出部分內容。
 9. 完成後還原原本的捲動位置。提前停止時仍會匯出部分內容，並附上標明實際原因的警告頁尾，同時在頁面上顯示警告提示（v4.19.0）。
@@ -26,7 +30,7 @@
 
 複製下來的節點交由 `convertMessageNodeToMarkdown()` 處理：
 - **AI 回覆**（含 `.ds-markdown`）：
-  - 啟用 `includeThinking` 時，從 `.ds-think-content` 區塊擷取思考過程，包含搜尋狀態列（例如「搜尋到 X 個網頁」）、瀏覽過的網頁與連結，以及所有推理段落。
+  - 啟用 `includeThinking` 時，從 `.ds-think-content` 區塊（收合的區塊已於擷取時暫時展開，見流程第 6 步）擷取思考過程，包含搜尋狀態列（例如「搜尋到 X 個網頁」）、瀏覽過的網頁與連結，以及所有推理段落。
   - 從思考容器以外的 `.ds-markdown` 區塊擷取主要回覆。
 - **使用者訊息**：從使用者內容容器（`USER_CONTENT_SELECTOR`，`.ds-message > div:has(> .ds-collapsible-text)`）擷取純文字；找不到容器時改用整則訊息的 `innerText`。
 

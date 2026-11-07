@@ -76,6 +76,7 @@ ds-studio/
 │   ├── harvest.toast.js     ─  Export progress / cancel / incomplete-warning toast UI (v4.11.9 split)
 │   ├── harvest.policy.js    ─  Pure loop-termination & scroll-step decisions, DOM-free (v4.19.0 split)
 │   ├── harvest.dom.js       ─  DOM probing: container lookup, message harvest, stability observer, mount measurement (v4.19.1 split)
+│   ├── harvest.think.js     ─  temporarily expands collapsed think blocks during export capture, then restores them
 │   ├── go-top.js            ─  Entry: "Go to Top" button lifecycle (v4.0.0 split)
 │   ├── go-top.locate.js     ─  DOM query / locator / visibility orchestration bundle
 │   ├── go-top.render.button.js  ─  Button element creation bundle (stub, merged into go-top.render.combined.js)

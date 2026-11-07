@@ -1,4 +1,4 @@
-// 300 lines: incremental scroll-harvest orchestrator — the capture loop, scroll control, abort handling, and policy delegation form one linear async pipeline; splitting the loop body from its setup would obscure the sequential flow and shared capturedMap state
+// 306 lines: incremental scroll-harvest orchestrator — the capture loop, scroll control, abort handling, and policy delegation form one linear async pipeline; splitting the loop body from its setup would obscure the sequential flow and shared capturedMap state
 /**
  * DS studio — Harvest Module
  * 負責從虛擬化列表中增量捲動擷取完整對話訊息。
@@ -14,8 +14,9 @@
  * 載入順序（manifest.json content_scripts）：
  *   1. content/harvest.toast.js  → 掛載 globalThis.__DS_Harvest_toast
  *   2. content/harvest.dom.js    → 掛載 globalThis.__DS_Harvest_dom
- *   3. content/harvest.policy.js → 掛載 window.DSstudio.HarvestPolicy
- *   4. content/harvest.js        （本檔，合入以上 bundle）
+ *   3. content/harvest.think.js  → 掛載 globalThis.__DS_Harvest_think（匯出含思考時暫時展開已收合的思考區塊）
+ *   4. content/harvest.policy.js → 掛載 window.DSstudio.HarvestPolicy
+ *   5. content/harvest.js        （本檔，合入以上 bundle）
  */
 
 // 合併 Toast Bundle（瀏覽器：由 harvest.toast.js 在前載入設定 globalThis；Node.js 測試：直接 require）
@@ -31,10 +32,15 @@ const __DSHarvestDom = (globalThis).__DS_Harvest_dom ||
 const VISIBLE_ITEMS_SELECTOR = __DSHarvestDom.VISIBLE_ITEMS_SELECTOR;
 const MESSAGE_SELECTOR = __DSHarvestDom.MESSAGE_SELECTOR;
 const _findHarvestScrollContainer = __DSHarvestDom._findHarvestScrollContainer;
+const _findVisibleMessageEntries = __DSHarvestDom._findVisibleMessageEntries;
 const _harvestVisibleMessages = __DSHarvestDom._harvestVisibleMessages;
 const _waitForDomStability = __DSHarvestDom._waitForDomStability;
 const _isAtBottom = __DSHarvestDom._isAtBottom;
 const _measureMountedBottomOffset = __DSHarvestDom._measureMountedBottomOffset;
+
+// 合併思考區塊展開 Bundle（瀏覽器：由 harvest.think.js 在前載入設定 globalThis；Node.js 測試：直接 require）
+const __DSHarvestThink = (globalThis).__DS_Harvest_think ||
+    (typeof require !== 'undefined' ? require('./harvest.think.js') : {});
 
 // 合併決策模組（瀏覽器：由 content/harvest.policy.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
 const __DSHarvestPolicy = (globalThis).DSstudio?.HarvestPolicy ||
@@ -86,13 +92,17 @@ async function _scrollToTopAndSettle(container) {
  * 完全委派給 window.DSstudio.HarvestPolicy 純函式決定；本函式只提供觀測值
  * （含 Date.now()）並依裁決執行 DOM 操作。刻意移除整體逾時上限：只要仍有
  * 進度就不應被時間切斷，使用者可透過 Toast 取消鈕主動中止。
+ * @param {{expandThinking?: boolean}} [options] - expandThinking 為 true 時，複製每則新訊息前暫時展開其中已收合的思考區塊（匯出含思考時使用）
  * @returns {Promise<{items: Element[], isComplete: boolean, reason?: string}>}
  *   reason: 'cancelled' | 'stalled' | 'scroll_interrupted' | 'no_container' | 'no_messages' | undefined
  */
-async function harvestAllMessages() {
+async function harvestAllMessages({ expandThinking = false } = {}) {
     // ── Guard clauses ──────────────────────────────────────────────
     if (!__DSHarvestPolicy) {
         throw new Error('window.DSstudio.HarvestPolicy is required but was not found — check that content/harvest.policy.js loads before content/harvest.js in manifest.json');
+    }
+    if (expandThinking && typeof __DSHarvestThink._cloneMessageWithThinkingExpanded !== 'function') {
+        throw new Error('content/harvest.think.js is required to export collapsed thinking but was not found — check that it loads before content/harvest.js in manifest.json');
     }
 
     const container = _findHarvestScrollContainer();
@@ -128,20 +138,16 @@ async function harvestAllMessages() {
     const abortController = new AbortController();
     const onCancel = () => abortController.abort();
 
-    /**
-     * 將目前可見訊息寫入 capturedMap（略過已有的 key）。
-     * @returns {number} 本次新增的項目數
-     */
-    function captureVisible() {
-        const visible = _harvestVisibleMessages();
-        let newCount = 0;
-        visible.forEach(({ key, clonedNode }) => {
-            if (!capturedMap.has(key)) {
-                capturedMap.set(key, clonedNode);
-                newCount++;
-            }
-        });
-        return newCount;
+    const cloneMessage = expandThinking
+        ? __DSHarvestThink._cloneMessageWithThinkingExpanded
+        : (msg) => msg.cloneNode(true);
+
+    /** 將目前可見訊息複製寫入 capturedMap（略過已有的 key，已擷取的訊息不再展開思考區塊）。 */
+    async function captureVisible() {
+        for (const { key, node } of _findVisibleMessageEntries()) {
+            if (capturedMap.has(key)) continue;
+            capturedMap.set(key, await cloneMessage(node));
+        }
     }
 
     try {
@@ -160,7 +166,7 @@ async function harvestAllMessages() {
             reason = scrollResult.reason;
             return { items: [], isComplete: false, reason };
         }
-        captureVisible();
+        await captureVisible();
         // 抵達頂部後切換至擷取階段，顯示數量與警示
         showHarvestToastCapturing(capturedMap.size, onCancel);
 
@@ -214,7 +220,7 @@ async function harvestAllMessages() {
                 isComplete = reason === 'complete';
                 if (isComplete) {
                     // 再擷取一次確保底部訊息被收入
-                    captureVisible();
+                    await captureVisible();
                 }
                 break;
             }
@@ -222,7 +228,7 @@ async function harvestAllMessages() {
             if (isAtBottomNow) {
                 // 尚未達到確認次數，繼續等待並重新擷取
                 await _waitForDomStability(container, HARVEST_STEP_TIMEOUT);
-                captureVisible();
+                await captureVisible();
                 showHarvestToastCapturing(capturedMap.size, onCancel);
                 // 在底部確認階段，更新預期位置為當前值（允許位置穩定）
                 _expectedScrollTop = container.scrollTop;
@@ -244,7 +250,7 @@ async function harvestAllMessages() {
             // 等待 DOM 穩定（lazy-load 注入新節點）
             await _waitForDomStability(container, HARVEST_STEP_TIMEOUT);
 
-            captureVisible();
+            await captureVisible();
             showHarvestToastCapturing(capturedMap.size, onCancel);
         }
     } finally {

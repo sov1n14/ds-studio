@@ -48,7 +48,7 @@ The `InputWidth` module in `content/input-width.js` is structurally similar to `
 
 ## Hide Thinking Module
 
-The `HideThinking` module in `content/hide-thinking.js` auto-collapses DeepSeek's "thinking process" blocks on first DOM appearance, keeping the chat view uncluttered.
+The `HideThinking` module in `content/hide-thinking.js` auto-collapses DeepSeek's "thinking process" blocks on first DOM appearance, keeping the chat view uncluttered. Export temporarily expands collapsed thinking blocks and restores them after capture, and this module does not interfere (see step 6 of the flow in [Export Architecture](EXPORT.md)).
 
 ### DOM Targeting
 

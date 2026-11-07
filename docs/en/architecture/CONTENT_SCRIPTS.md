@@ -43,6 +43,8 @@
 >
 > Note that the two layers' handling of "`HarvestPolicy` absence" is **intentionally inconsistent**: `harvest.js` throws directly (the module cannot function without decision logic, and since it's a hard dependency loaded by the same manifest, absence means the manifest is broken — it should fail loudly); `content-script.export.js` falls back to a generic description and downloads anyway (it can still deliver the user's data). **Do not unify these two for consistency's sake.**
 
+> **Harvest think module**: `harvest.think.js` carries the single concern of "temporarily expands collapsed think blocks during export capture, then restores them", merged in by `harvest.js`. In `manifest.json` it is ordered after `harvest.dom.js` and before `harvest.policy.js`.
+
 > **Prompt injection module** (v4.11.15): `content-script.js` carries settings initialization and wiring (`initSettings()`, settings-change handling), while prompt injection lives in `prompt-injector.controller.js`, keeping the entry file under `coding-guidelines` §8's 450-line threshold.
 >
 > `initSettings()` stays in `content-script.js`: `test/unit/storage-manager.sync-now.spec.js` uses regex matching against the **source text literal** of `content-script.js` to capture the `async function initSettings()` block and asserts that it calls `StorageManager.syncNow()`; moving that function would break the assertion.

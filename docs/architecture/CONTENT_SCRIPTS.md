@@ -43,6 +43,8 @@
 >
 > 注意兩層對「`HarvestPolicy` 缺席」的處理**刻意不一致**：`harvest.js` 直接 `throw`（沒有決策邏輯就無法運作，且它是同一份 manifest 載入的硬依賴，缺席即代表 manifest 壞了，應該大聲失敗）；`content-script.export.js` 則退回通用說明並照樣下載（它仍能把使用者的資料交出去）。**不要為了一致性把這兩者統一。**
 
+> **Harvest think 模組**：`harvest.think.js` 承載「匯出時暫時展開收合的思考區塊再擷取，結束後還原」這個單一關注點，由 `harvest.js` 合入使用。`manifest.json` 中排在 `harvest.dom.js` 之後、`harvest.policy.js` 之前。
+
 > **提示詞注入模組**（v4.11.15）：`content-script.js` 承載設定初始化與接線（`initSettings()`、設定變更處理），提示詞注入位於 `prompt-injector.controller.js`，使入口檔維持在 `coding-guidelines` §8 的 450 行門檻之下。
 >
 > `initSettings()` 固定留在 `content-script.js`：`test/unit/storage-manager.sync-now.spec.js` 以正則比對 `content-script.js` 的**原始碼字面**，抓取 `async function initSettings()` 區塊並斷言其呼叫 `StorageManager.syncNow()`，搬動該函式會打斷這個斷言。

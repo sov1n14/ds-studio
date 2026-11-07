@@ -76,6 +76,7 @@ ds-studio/
 │   ├── harvest.toast.js     ─  匯出進度／取消／不完整警告 toast UI（v4.11.9 拆分）
 │   ├── harvest.policy.js    ─  迴圈終止與捲動步幅的純決策，不含 DOM（v4.19.0 拆分）
 │   ├── harvest.dom.js       ─  DOM 探測：容器查找、訊息擷取、穩定度 observer、掛載量測（v4.19.1 拆分）
+│   ├── harvest.think.js     ─  匯出時暫時展開收合的思考區塊再擷取，結束後還原
 │   ├── go-top.js            ─  入口：「回到頂部」按鈕生命週期（v4.0.0 拆分）
 │   ├── go-top.locate.js     ─  DOM 查詢／定位／可見性協調方法包
 │   ├── go-top.render.button.js  ─  按鈕元素建立方法包（stub，已合併至 go-top.render.combined.js）

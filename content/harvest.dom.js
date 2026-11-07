@@ -88,11 +88,11 @@
     }
 
     /**
-     * 取得目前可見的訊息，回傳 { key, clonedNode } 陣列。
-     * 每個訊息節點被克隆以防止後續 React 虛擬化銷毀。
-     * @returns {Array<{key: number, clonedNode: Element}>}
+     * 取得目前可見的訊息，回傳 { key, node } 陣列（node 為頁面上的原節點，未複製）。
+     * 略過缺少 data-virtual-list-item-key 或 key 非數字的訊息。
+     * @returns {Array<{key: number, node: Element}>}
      */
-    function _harvestVisibleMessages() {
+    function _findVisibleMessageEntries() {
         const visibleContainers = document.querySelectorAll(VISIBLE_ITEMS_SELECTOR);
 
         const results = [];
@@ -107,11 +107,20 @@
                 const key = parseInt(rawKey, 10);
                 if (isNaN(key)) return;
 
-                results.push({ key, clonedNode: msg.cloneNode(true) });
+                results.push({ key, node: msg });
             });
         });
 
         return results;
+    }
+
+    /**
+     * 取得目前可見的訊息，回傳 { key, clonedNode } 陣列。
+     * 每個訊息節點被克隆以防止後續 React 虛擬化銷毀。
+     * @returns {Array<{key: number, clonedNode: Element}>}
+     */
+    function _harvestVisibleMessages() {
+        return _findVisibleMessageEntries().map(({ key, node }) => ({ key, clonedNode: node.cloneNode(true) }));
     }
 
     /**
@@ -216,6 +225,7 @@
         VIRTUAL_LIST_SELECTOR,
         VIRTUAL_LIST_FALLBACK,
         _findHarvestScrollContainer,
+        _findVisibleMessageEntries,
         _harvestVisibleMessages,
         _waitForDomStability,
         _isAtBottom,

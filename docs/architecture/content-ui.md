@@ -48,7 +48,7 @@
 
 ## 隱藏思考過程模組 (Hide Thinking)
 
-`content/hide-thinking.js` 中的 `HideThinking` 模組在 DeepSeek 的「思考過程」區塊首次出現在 DOM 時自動收合，讓對話畫面保持簡潔。
+`content/hide-thinking.js` 中的 `HideThinking` 模組在 DeepSeek 的「思考過程」區塊首次出現在 DOM 時自動收合，讓對話畫面保持簡潔。匯出對話時會暫時展開已收合的思考區塊並在擷取後恢復，此行為不受本模組影響（見[匯出架構](EXPORT.md)流程第 6 步）。
 
 ### DOM 目標
 

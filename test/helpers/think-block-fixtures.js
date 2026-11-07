@@ -89,3 +89,35 @@ export function stripHashedClasses(root) {
     });
     return root;
 }
+
+/**
+ * Models DeepSeek's native header toggle as a React state flip whose think body mounts asynchronously: each click flips the open state; opening schedules the body insert (before the footer) `mountDelayMs` later on the global timer, so fake timers control it; closing detaches the shown body at once and cancels a pending insert.
+ * `bodyNodes` supplies the nodes an initially collapsed block shows when expanded (default: the block's own body nodes).
+ * Returns a spy called once per header click.
+ */
+export function installDelayedNativeThinkToggle(block, mountDelayMs, bodyNodes = thinkBodyNodes(block)) {
+    const header = block.firstElementChild;
+    const footer = block.lastElementChild;
+    let hidden = thinkBodyNodes(block).length === 0 ? bodyNodes.slice() : [];
+    let isOpen = hidden.length === 0;
+    let mountTimer = null;
+    const clicks = vi.fn();
+    header.addEventListener('click', () => {
+        clicks();
+        isOpen = !isOpen;
+        clearTimeout(mountTimer);
+        mountTimer = null;
+        if (isOpen) {
+            mountTimer = setTimeout(() => {
+                mountTimer = null;
+                hidden.forEach((node) => block.insertBefore(node, footer));
+                hidden = [];
+            }, mountDelayMs);
+            return;
+        }
+        const shown = thinkBodyNodes(block);
+        shown.forEach((node) => node.remove());
+        if (shown.length > 0) hidden = shown;
+    });
+    return clicks;
+}
