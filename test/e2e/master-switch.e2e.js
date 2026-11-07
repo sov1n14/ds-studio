@@ -1,11 +1,9 @@
 import { test, expect } from './fixtures.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
+import { GO_TOP_SELECTOR as GO_TOP, PRESET_OVERLAY_SELECTOR as PRESET_OVERLAY } from './helpers/extension-ui.js';
 
 // The master switch (`isEnabled`) gates every feature live, without a reload.
-// Go-to-top (`.dsw-gotop`) and the preset overlay (`#dss-preset-overlay`) follow the master switch only.
-
-const GO_TOP = '.dsw-gotop';
-const PRESET_OVERLAY = '#dss-preset-overlay';
+// Go-to-top and the preset overlay follow the master switch only.
 
 test.describe('master switch', () => {
     test('turning isEnabled off removes go-top and hides the preset overlay; turning it on brings both back', async ({ page, settings, openConversation }) => {

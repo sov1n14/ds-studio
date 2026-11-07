@@ -9,6 +9,14 @@ async function setLocal(context, values) {
     await evaluateInWorker(context, (payload) => chrome.storage.local.set(payload), values);
 }
 
+/** Writes `values` into chrome.storage.sync, then local, so a sync-first reader and the local broadcast agree. */
+async function setBothAreas(context, values) {
+    await evaluateInWorker(context, async (payload) => {
+        await chrome.storage.sync.set(payload);
+        await chrome.storage.local.set(payload);
+    }, values);
+}
+
 /** Reads `keys` from both storage areas; absent keys are absent from each returned object. */
 async function readBothAreas(context, keys) {
     return evaluateInWorker(context, async (list) => ({
@@ -18,27 +26,33 @@ async function readBothAreas(context, keys) {
 }
 
 /**
- * Restores `keys` of `area` to `snapshot`: present keys are set, absent keys removed.
- * Sync is rewritten only where it drifted, so restoration never adds sync traffic of its own.
+ * Restores `keys` in both areas to their snapshots (present keys set, absent keys removed), sync first and local right after, inside one worker call.
+ * One call keeps the window in which the areas disagree to a few milliseconds: while they disagree the extension's sync-first reader writes the sync value back into local, which would undo a local-first restore of synced data such as presets.
+ * Only drifted keys are written, so restoration adds no sync traffic of its own.
  */
-async function restoreArea(context, area, keys, snapshot) {
-    await evaluateInWorker(context, async ({ areaName, list, saved }) => {
-        const storage = chrome.storage[areaName];
-        const current = await storage.get(list);
-        const drifted = list.filter((key) => JSON.stringify(current[key]) !== JSON.stringify(saved[key]));
-        const toSet = {};
-        const toRemove = [];
-        drifted.forEach((key) => {
-            if (key in saved) toSet[key] = saved[key];
-            else toRemove.push(key);
-        });
-        if (Object.keys(toSet).length > 0) await storage.set(toSet);
-        if (toRemove.length > 0) await storage.remove(toRemove);
-    }, { areaName: area, list: keys, saved: snapshot });
+async function restoreBothAreas(context, keys, snapshots) {
+    await evaluateInWorker(context, async ({ list, saved }) => {
+        const plan = {};
+        for (const areaName of ['sync', 'local']) {
+            const current = await chrome.storage[areaName].get(list);
+            const drifted = list.filter((key) => JSON.stringify(current[key]) !== JSON.stringify(saved[areaName][key]));
+            plan[areaName] = {
+                toSet: Object.fromEntries(drifted.filter((key) => key in saved[areaName]).map((key) => [key, saved[areaName][key]])),
+                toRemove: drifted.filter((key) => !(key in saved[areaName])),
+            };
+        }
+        for (const areaName of ['sync', 'local']) {
+            const { toSet, toRemove } = plan[areaName];
+            if (Object.keys(toSet).length > 0) await chrome.storage[areaName].set(toSet);
+            if (toRemove.length > 0) await chrome.storage[areaName].remove(toRemove);
+        }
+    }, { list: keys, saved: snapshots });
 }
 
 /**
  * Creates a settings session: `set()` snapshots every key on its first touch, then writes local;
+ * `setInBothAreas()` snapshots the same way but writes sync and local, for synced data (presets) that readers take from sync first;
+ * `track()` snapshots keys the extension itself writes during a test, without writing them;
  * `restore()` puts every touched key back in both areas. `isEnabled` is always snapshotted.
  */
 export function createSettingsSession(context) {
@@ -61,11 +75,17 @@ export function createSettingsSession(context) {
             await captureUntouched(['isEnabled', ...Object.keys(values)]);
             await setLocal(context, values);
         },
+        async setInBothAreas(values) {
+            await captureUntouched(['isEnabled', ...Object.keys(values)]);
+            await setBothAreas(context, values);
+        },
+        async track(keys) {
+            await captureUntouched(keys);
+        },
         async restore() {
             if (touched.size === 0) return;
             const keys = [...touched];
-            await restoreArea(context, 'local', keys, snapshots.local);
-            await restoreArea(context, 'sync', keys, snapshots.sync);
+            await restoreBothAreas(context, keys, snapshots);
         },
     };
 }
