@@ -1,4 +1,4 @@
-// 406 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
+// 402 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *
@@ -136,8 +136,6 @@
 
     /** think block 標題列的雜湊 class */
     const THINK_HEADER_CLASS = '_245c867 _34a54ec';
-    /** 可點擊的 toggle class（由 THINK_HEADER_CLASS 衍生，雜湊輪換時僅需改一處） */
-    const THINK_HEADER_TOGGLE_CLASS = THINK_HEADER_CLASS.split(' ')[0];
     /** 可點擊的思考區塊標題列：思考區塊外層容器的第一個子層 */
     const THINK_HEADER_TOGGLE_SELECTOR = THINK_BLOCK_SELECTOR + ' > div:first-child';
 
@@ -215,8 +213,6 @@
 
     // ── 編輯區域 ──
 
-    /** 編輯訊息按鈕 */
-    const EDIT_MESSAGE_BUTTON_CLASS = 'd4910adc';
     /** 編輯訊息按鈕：使用者訊息項目工具列中帶 aria-disabled 的圖示按鈕 */
     const EDIT_MESSAGE_BUTTON_SELECTOR = USER_MESSAGE_ITEM_SELECTOR + ' .ds-flex > .ds-button--icon[aria-disabled]';
 
@@ -359,7 +355,7 @@
         FLOATING_POSITION_WRAPPER_SELECTOR, CODE_BLOCK_CLASS,
         THINK_BLOCK_CLASS, THINK_BLOCK_SELECTOR,
         THINK_SEPARATOR_CLASS, THINK_SEPARATOR_SELECTOR,
-        THINK_HEADER_CLASS, THINK_HEADER_TOGGLE_CLASS, THINK_HEADER_TOGGLE_SELECTOR, THINK_SPACER_CLASS,
+        THINK_HEADER_CLASS, THINK_HEADER_TOGGLE_SELECTOR, THINK_SPACER_CLASS,
         THINK_CONTENT_OUTER_CLASS, THINK_CONTENT_MODIFIER_CLASS,
         THINK_LOADING_DOTS_CLASS, THINK_FOOTER_CLASS,
         THINK_ICON_CLASS, THINK_HEADER_ICON_ROW_CLASS, THINK_TIME_CLASS, THINK_DIVIDER_CLASS,
@@ -369,7 +365,7 @@
         CONTENT_COLUMN_SELECTOR, INPUT_COMPOSER_WRAPPER_SELECTOR, FLOATING_BUTTON_BAR_SELECTOR, FLOATING_BUTTON_BAR_DIV_SELECTOR,
         MESSAGE_TOOLBAR_SELECTOR, THINK_STATUS_CLASS, THINK_STATUS_SELECTOR,
         THINK_REFERENCE_LABEL_SELECTOR, THINK_REFERENCE_LINK_SELECTOR,
-        EDIT_MESSAGE_BUTTON_CLASS, EDIT_MESSAGE_BUTTON_SELECTOR,
+        EDIT_MESSAGE_BUTTON_SELECTOR,
         EDIT_BOX_SELECTOR, EDIT_BOX_HEIGHT_CONTAINER_SELECTOR, HOMEPAGE_MOBILE_CLEANUP_SELECTOR,
         VIRTUAL_LIST_CONTAINER_SELECTOR,
         SIDEBAR_WRAPPER_SELECTOR, SIDEBAR_INNER_SELECTOR, SIDEBAR_NATIVE_COLLAPSED_SELECTOR,

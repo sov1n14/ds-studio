@@ -18,6 +18,8 @@ const REMOVED_EXPORTS = [
     'SIDEBAR_NATIVE_COLLAPSED_CLASS',
     'EXPAND_BUTTON_CONTAINER_CLASS',
     'EXPAND_BUTTON_ICON_CLASS',
+    'THINK_HEADER_TOGGLE_CLASS',
+    'EDIT_MESSAGE_BUTTON_CLASS',
 ];
 
 const selectorEntries = Object.entries(S).filter(([key]) => /_(SELECTOR|FALLBACK)$/.test(key));
@@ -40,15 +42,9 @@ function hasBalancedBrackets(selector) {
     return stack.length === 0 && quote === null;
 }
 
-describe('DSSelectors — composite values', () => {
-    it('THINK_HEADER_TOGGLE_CLASS is the first word of THINK_HEADER_CLASS', () => {
-        expect(S.THINK_HEADER_TOGGLE_CLASS).toBe(S.THINK_HEADER_CLASS.split(' ')[0]);
-    });
-});
-
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 97 keys (guards accidental export removal)', () => {
-        expect(Object.keys(S)).toHaveLength(97);
+    it('exports exactly 95 keys (guards accidental export removal)', () => {
+        expect(Object.keys(S)).toHaveLength(95);
     });
     it('does not export the rejected websearch hash classes (ARCHITECTURE.md rejected signals)', () => {
         expect(S).not.toHaveProperty('WEBSEARCH_TOGGLE_CLASS');
