@@ -1,13 +1,14 @@
 /**
  * POC: Can Playwright log into chat.deepseek.com unattended?
  * Reads credentials from tools/test_auth.txt (line1=email, line2=password).
- * Uses a persistent browser context at tools/.pw-profile.
+ * Uses the persistent browser context at .browser-profile (via tools/profile.mjs).
  * Saves screenshot to tools/poc-login-result.png.
  */
 import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { launchProfile } from './profile.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TIMEOUT_MS = 150_000; // 2.5 min total budget
@@ -26,9 +27,7 @@ console.log(`Email: ${email}`);
 console.log('Password: [REDACTED]');
 
 // Launch with persistent context (keeps cookies/session for future runs)
-const profileDir = resolve(__dirname, '.pw-profile');
-const context = await chromium.launchPersistentContext(profileDir, {
-  headless: false,
+const context = await launchProfile(chromium, {
   viewport: { width: 1280, height: 800 },
   locale: 'en-US',
 });

@@ -63,15 +63,11 @@ export const scenarios = [
     group: 'A',
     run: async (page) => {
       // Click the think block header to collapse it
-      const thinkHeader = page.locator(`[class*="${DSSelectors.THINK_HEADER_TOGGLE_CLASS}"]`).first();
-      if (await thinkHeader.count() > 0) {
-        await thinkHeader.click({ timeout: 10_000 });
-      } else {
-        // Fallback: try any think-block header-like element
-        const fallback = page.locator(DSSelectors.THINK_BLOCK_SELECTOR + ' > div').first();
-        if (await fallback.count() > 0) await fallback.click({ timeout: 5_000 });
-        else throw new Error('No think-block header found — DeepThink may not have been enabled');
+      const thinkHeader = page.locator(DSSelectors.THINK_HEADER_TOGGLE_SELECTOR).first();
+      if (await thinkHeader.count() === 0) {
+        throw new Error('No think-block header found — DeepThink may not have been enabled');
       }
+      await thinkHeader.click({ timeout: 10_000 });
       await page.waitForTimeout(1000);
     },
   },
@@ -80,7 +76,7 @@ export const scenarios = [
     description: 'Edit window open on the submitted message',
     group: 'A',
     run: async (page) => {
-      const editBtn = page.locator(`[class*="${DSSelectors.EDIT_MESSAGE_BUTTON_CLASS}"]`).first();
+      const editBtn = page.locator(DSSelectors.EDIT_MESSAGE_BUTTON_SELECTOR).first();
       await editBtn.click({ timeout: 10_000 });
       await page.waitForTimeout(1000);
     },

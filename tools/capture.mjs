@@ -15,10 +15,10 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { scenarios } from './scenarios.mjs';
+import { launchProfile } from './profile.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CAPTURES_DIR = join(__dirname, 'captures');
-const PROFILE_DIR = join(__dirname, '.pw-profile');
 const LAUNCH_ARGS = ['--disable-blink-features=AutomationControlled'];
 const DESKTOP_CONTEXT = { viewport: { width: 1440, height: 900 } };
 // Mobile UA + hasTouch make content/mobile-device.js isMobileDevice() true; defaultBrowserType is dropped because we always launch chromium.
@@ -138,8 +138,7 @@ console.log(`Running ${toRun.length} scenario(s) in ${groups.size} group(s)...`)
 // A persistent profile can only be open once, so desktop and mobile groups run as two sequential passes on the same profile.
 async function runPass(passGroups, contextOptions, isMobile) {
   if (passGroups.length === 0) return;
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: false,
+  const context = await launchProfile(chromium, {
     ...contextOptions,
     args: LAUNCH_ARGS,
   });

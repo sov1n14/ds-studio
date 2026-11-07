@@ -5,15 +5,12 @@
  * Success signal: chat composer textarea visible.
  */
 import { chromium } from 'playwright';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { launchProfile } from './profile.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const WAIT_MS = 300_000;
-const profileDir = resolve(__dirname, '.pw-profile');
 
 console.log('=== Phase 1: Manual Login ===');
-console.log('Launching headed Chromium with persistent profile...');
+console.log('Launching headed Chrome with .browser-profile...');
 console.log('');
 console.log('>>> HUMAN ACTION REQUIRED <<<');
 console.log('A browser window will open to the DeepSeek sign-in page.');
@@ -21,8 +18,7 @@ console.log('Please log in manually and solve any CAPTCHA that appears.');
 console.log(`You have ${WAIT_MS / 1000} seconds. The script will detect success automatically.`);
 console.log('');
 
-const context = await chromium.launchPersistentContext(profileDir, {
-  headless: false,
+const context = await launchProfile(chromium, {
   viewport: { width: 1280, height: 800 },
   locale: 'en-US',
 });
