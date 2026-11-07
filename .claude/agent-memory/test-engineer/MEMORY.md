@@ -110,3 +110,4 @@
 - [Export collapsed-thinking scenario](export_collapsed_thinking_scenario.md) — real-Harvest export harness in jsdom; combined form + harvest-wrapper probe for display-state tests
 - [E2E live calibration](e2e-live-calibration.md) — native widths at 1280 viewport, export speed, sabotage-copy proof, batch-2 send guard and sync-first restore order
 - [Scoped Stryker runs](stryker-runs.md) — ~7-8 min, full table printed, ENOENT crash when Playwright writes test/test-results concurrently
+- [E2E batch 3 live facts](e2e-batch3-live-facts.md) — edit box key pinning, real-send capture, auto-click synthetic buttons, heredoc backslash trap

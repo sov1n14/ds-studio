@@ -8,3 +8,6 @@ export const PRESET_OVERLAY_SELECTOR = '#dss-preset-overlay';
 
 /** The floating "quote reply" button shown over a reply selection. */
 export const QUOTE_BUTTON_SELECTOR = '.dss-quote-btn';
+
+/** The temporary-chat row (switch plus label) injected below the home-page floating button bar. */
+export const TEMP_CHAT_ROW_SELECTOR = '#dss-temp-chat-toggle-row';
