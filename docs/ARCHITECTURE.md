@@ -198,6 +198,26 @@ ds-studio/
 >
 > `‡` = 由 `manifest.json` 的 `content_scripts` 項目以 `"world": "MAIN"` 靜態載入頁面 MAIN world（有別於經 `main-world-injector.js` 注入的 web_accessible_resources 腳本）。
 
+### E2E 規格
+
+`test/e2e/` 的共用夾具在 `fixtures.js`，輔助函式在 `test/e2e/helpers/`；設定經由擴充功能 service worker 寫入，並在每個測試後還原；送出請求一律中止，不會有訊息送達 DeepSeek；同一時間只有一個瀏覽器能占用 `.browser-profile/`。
+
+- `auto-click.e2e.js`：自動點擊的各開關關閉時不點擊按鈕，開啟後才點擊；主開關關閉時自動重試不點擊。
+- `edit-message.e2e.js`：編輯框開啟時，引用回覆與預設前綴進入主輸入框，編輯框僅保留原文（v4.36.8 迴歸）。
+- `export.e2e.js`：Markdown 匯出的檔名時間戳、思考區段、引用連結與思考收合狀態。
+- `go-top.e2e.js`：點擊或在按鈕上按 Enter 皆捲到訊息列表頂端。
+- `hide-thinking.e2e.js`：「隱藏思考過程」開啟時收合所有思考區塊，關閉時展開。
+- `master-switch.e2e.js`：主開關關閉時移除回頂部按鈕並隱藏預設提示詞浮層，開啟後恢復。
+- `preset-overlay.e2e.js`：選取預設提示詞後，送出時輸入框帶有其內容；選空白選項則不帶。
+- `prevent-auto-scroll.e2e.js`：開啟時頁面腳本無法向下捲動列表，滾輪與向上捲動仍有效；關閉後恢復。
+- `prompt-injection.e2e.js`：送出的提示詞在未選預設時只含輸入文字，選取後預設內容位於輸入文字之前。
+- `quote-reply.e2e.js`：選取回覆文字後引用到輸入框成為引用區塊；主開關關閉時不顯示引用按鈕。
+- `sidebar.e2e.js`：側邊欄自動隱藏縮為 60px 並於懸停時展開；自動開啟會重新展開已收合的側邊欄。
+- `smoke.e2e.js`：頁面停留在聊天應用並顯示輸入框，擴充功能 service worker 正在執行。
+- `temp-chat-toggle.e2e.js`：臨時對話列在主開關開啟時顯示於首頁，關閉時移除。
+- `websearch-toggle.e2e.js`：搜尋啟動狀態關閉時放開 DeepSeek 的搜尋開關，開啟時按下；僅套用一次，手動切換不會被還原。
+- `width.e2e.js`：對話寬度與輸入框寬度生效並可還原；輸入框寬度受已啟用的對話寬度限制。
+
 ### 模組化載入順序（v4.0.0）
 
 數個大型檔案以**雙重載入模式**拆分為較小的模組，同時適用於正式環境的 classic script 載入與 Vitest 測試執行器：

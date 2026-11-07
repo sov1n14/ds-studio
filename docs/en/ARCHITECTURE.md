@@ -198,6 +198,26 @@ ds-studio/
 >
 > `‡` = Statically loaded into the page MAIN world by a `manifest.json` `content_scripts` entry with `"world": "MAIN"` (unlike the web_accessible_resources scripts injected via `main-world-injector.js`).
 
+### E2E Specs
+
+The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `test/e2e/helpers/`; settings are written through the extension service worker and restored after each test; send requests are always aborted so no message reaches DeepSeek; only one browser may hold `.browser-profile/` at a time.
+
+- `auto-click.e2e.js`: with each auto-click switch off its button is never clicked and switching it on gets it clicked; with the master switch off auto retry never clicks.
+- `edit-message.e2e.js`: with the edit box open, the quote reply and preset prefix land in the main composer and the edit box keeps only the original text (v4.36.8 regression).
+- `export.e2e.js`: Markdown export file name timestamp, thinking sections, cite links and collapsed-thinking parity.
+- `go-top.e2e.js`: clicking, or pressing Enter on, the button scrolls the message list to the very top.
+- `hide-thinking.e2e.js`: "Hide Thinking Process" on collapses every thinking block and off expands them.
+- `master-switch.e2e.js`: master switch off removes go-top and hides the preset overlay; on brings both back.
+- `preset-overlay.e2e.js`: a picked preset makes the composer carry its content at send time; the empty option drops it.
+- `prevent-auto-scroll.e2e.js`: on, page scripts cannot scroll the list down while the wheel and upward scrolls still work; off restores it.
+- `prompt-injection.e2e.js`: the sent prompt carries only the typed text with no preset, and the preset content before the typed text once picked.
+- `quote-reply.e2e.js`: a reply selection quoted into the composer becomes a blockquote; with the master switch off no quote button shows.
+- `sidebar.e2e.js`: auto-hide shrinks the sidebar to 60px and widens it on hover; auto-open shows a collapsed sidebar again.
+- `smoke.e2e.js`: the page stays on the chat app with the chat input shown and the extension service worker is running.
+- `temp-chat-toggle.e2e.js`: the temporary-chat row shows on the home page while the master switch is on and is removed when it turns off.
+- `websearch-toggle.e2e.js`: web-search start state off releases DeepSeek's Search toggle and on presses it; it applies once, so a manual flip is not undone.
+- `width.e2e.js`: chat width and input width apply and restore; input width is clamped to an enabled chat width.
+
 ### Modular Load Order (v4.0.0)
 
 Several large files were split into smaller modules using a **dual-load pattern** that works for both classic-script production loading and the Vitest test runner:
