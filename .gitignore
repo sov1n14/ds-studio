@@ -21,3 +21,4 @@ tools/node_modules/
 tools/.pw-profile/
 tools/captures/
 tools/screenshots/
+.browser-profile/

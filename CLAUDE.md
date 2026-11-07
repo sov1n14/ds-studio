@@ -12,8 +12,9 @@ DOM-adapter behavior is defined by the live page (selectors, React timing, class
 |-|-|-|
 | Logic | State, settings, toggles, retry/timing, parsing, storage schema, pure helpers | **MUST** red-green: failing test first, then implement |
 | DOM-adapter | Selectors, `MutationObserver`, injection timing, event binding | Implement first, then add tests |
+| E2E | Playwright specs under `test/e2e/` driving the live page | Implement first, then add tests |
 
-**MUST**: every bug fix, in either layer, starts with a test observed failing on pre-fix code — a reproduced bug is observed behavior, so the red test encodes a fact instead of a guess.
+**MUST**: every bug fix, in any layer, starts with a test observed failing on pre-fix code — a reproduced bug is observed behavior, so the red test encodes a fact instead of a guess.
 
 **MUST**: when the bug is confirmed real and existing tests missed it, the same change records a lesson (cause, solution, prevention) in the `testing-pitfalls` skill, following its entry format — so no future test repeats the same blind spot.
 
@@ -23,7 +24,8 @@ DOM-adapter behavior is defined by the live page (selectors, React timing, class
 
 ## Testing Policy
 
-- **MUST** write unit tests only — no integration or e2e (Playwright) tests.
+- E2E tests use `@playwright/test`, live under `test/e2e/`, and run only locally against the gitignored persistent Chrome profile `.browser-profile/` (logged-in DeepSeek account and the unpacked extension).
+- E2E tests add to unit tests and never replace the unit tests a change requires; run them only when explicitly requested; Stryker mutation testing covers the unit suite.
 - Every code change **MUST** land with new or updated unit tests, and delete cases the change made obsolete.
 - **ALL** test files (tests, fixtures, helpers, mocks) live under `test/`.
 - Run scoped tests by default; run the full suite only when explicitly requested.

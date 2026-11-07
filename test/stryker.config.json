@@ -9,7 +9,7 @@
     "!content/prevent-auto-scroll.js",
     "!content/temporary-chat-history-hook.js"
   ],
-  "ignorePatterns": [".venv", "node_modules", ".git", ".playwright-cli"],
+  "ignorePatterns": [".venv", "node_modules", ".git", ".playwright-cli", ".browser-profile", "test/e2e"],
   "incremental": true,
   "incrementalFile": "test/stryker-incremental.json",
   "ignoreStatic": true,

@@ -34,7 +34,7 @@ Your report must contain:
 
 ## Scope Rules
 
-- **Unit tests only.** This project has retired integration and end-to-end tests (e.g., Playwright). If your directive asks you to run one, stop and report that it violates project policy.
+- **E2E only on request.** Run E2E tests (`npm run test:e2e` from `test/`) only when the directive names them; the E2E rule lives in `CLAUDE.md` `## Testing Policy`.
 - **Scoped by default.** Run only the test files covering the scope you were given. Do not run the full suite unless the directive explicitly says so.
 - Before running anything, read the `code-testing-policy` skill and follow its execution-logging and artifact-cleanup requirements.
 

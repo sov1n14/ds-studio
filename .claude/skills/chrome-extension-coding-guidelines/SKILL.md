@@ -15,7 +15,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 
 **Enforcement mechanism:** conformance to the rules *in this file* — layer boundaries, naming, file size — is checked by human or agent review, with one mechanical exception: `test/unit/storage-manager.loader-contract.spec.js` enforces the load-order contract described in §1.
 
-**This says nothing about testing the code's behavior**, which is a separate obligation and is not optional. `CLAUDE.md` §2 governs it: logic-layer changes follow the red-green protocol — `test-engineer` writes the failing test and reports the observed failure before any implementation exists, `code-implementer` implements without touching the test files, `test-executor` certifies the pass. DOM-adapter changes explore the live page first, then implement, then add tests. Unit tests only, all of them under `test/`. Satisfying the review rules here does not discharge that; passing tests does not discharge these.
+**This says nothing about testing the code's behavior**, which is a separate obligation and is not optional. `CLAUDE.md` `## Layered TDD` governs it: logic-layer changes follow the red-green protocol — `test-engineer` writes the failing test and reports the observed failure before any implementation exists, `code-implementer` implements without touching the test files, `test-executor` certifies the pass. DOM-adapter changes explore the live page first, then implement, then add tests. All tests live under `test/`; `CLAUDE.md` `## Testing Policy` names the kinds that exist. Satisfying the review rules here does not discharge that; passing tests does not discharge these.
 
 ---
 
