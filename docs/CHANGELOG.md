@@ -10,6 +10,7 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.36.8](changelog/v4.md#4368---2026-11-08) | 修正開啟訊息編輯視窗時，提示詞前綴（主輸入框送出按鈕）與引用回覆被送進編輯框而非主輸入框：主輸入框選擇器 `INPUT_TEXTAREA_SELECTOR` 改為只匹配 `textarea[name="search"]`，新增 `ANY_TEXTAREA_SELECTOR` 供編輯視窗路徑使用（`DSSelectors` 匯出 96 → 97）；更正 `SCROLL_ROOT_SELECTOR` 的 JSDoc 與過時的「遮罩」註解（匯出進度 UI 為不阻擋操作的 toast） |
 | [4.36.7](changelog/v4.md#4367---2026-11-08) | 修正「匯出包含思考過程」搭配「隱藏思考過程」時匯出缺少思考區塊：匯出含思考時，擷取每則訊息前暫時展開已收合的思考區塊（無論由「隱藏思考過程」或使用者手動收合），複製後還原原本的收合狀態，匯出內容不再受顯示層影響；新增 `content/harvest.think.js` |
 | [4.36.6](changelog/v4.md#4366---2026-11-08) | 選擇器強化：多數雜湊 class 選擇器改為 `ds-*` 語意 class 與結構式 `:has()` 選擇器（`DSSelectors` 匯出 95 → 96）；修正回到頂端按鈕克隆原生外層、副本被誤認為原生按鈕而使 stacked → solo 從未觸發（改為克隆內層 `[role=button]`，後備排除 `.dsw-gotop`），並修正樣板 hover 變數拼字 `--dsl-button-hover-color` → `--dsl-button-color-hover`；移除新對話結構步驟與 censor 無效分支，censor 工具列後備改計算直接圖示子節點 |
 | [4.36.5](changelog/v4.md#4365---2026-10-17) | 頁面浮動選單的綁定寫入失敗時，回滾只套用於仍停留的對話：拒絕在使用者已切換至其他對話或新對話後才抵達時，只更新記憶體中的 chatPresetMap，不再把原對話的綁定寫成新頁面的 `activePresetId` 或重繪其浮動選單 |

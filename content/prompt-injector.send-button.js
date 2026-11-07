@@ -94,7 +94,7 @@
 
         // Stryker disable next-line ConditionalExpression: equivalent — global fallback covers same subtree, loop terminates at null
         while (el && el !== document.body) {
-            const ta = el.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
+            const ta = el.querySelector(selectors.ANY_TEXTAREA_SELECTOR);
             if (ta) {
                 if (ta.value.trim() !== '') return ta;
                 if (!firstEmptyTextarea) firstEmptyTextarea = ta;
@@ -102,7 +102,7 @@
             el = el.parentElement;
         }
 
-        const globalFallbackTextarea = document.querySelector(selectors.INPUT_TEXTAREA_SELECTOR);
+        const globalFallbackTextarea = document.querySelector(selectors.ANY_TEXTAREA_SELECTOR);
         const isGlobalFallbackNonEmpty = !!globalFallbackTextarea && globalFallbackTextarea.value.trim() !== '';
         if (isGlobalFallbackNonEmpty) return globalFallbackTextarea;
         return firstEmptyTextarea || globalFallbackTextarea;

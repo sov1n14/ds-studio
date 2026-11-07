@@ -1,4 +1,4 @@
-// 403 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
+// 406 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *
@@ -97,8 +97,11 @@
     /** 程式碼區塊容器 class（以 includes 比對） */
     const CODE_BLOCK_CLASS = 'md-code-block';
 
-    /** 主輸入框 textarea（頁面通用標籤選擇器） */
-    const INPUT_TEXTAREA_SELECTOR = 'textarea';
+    /** 主輸入框 textarea（僅匹配主輸入框；訊息編輯框開啟時頁面另有 textarea，故不可用通用標籤選擇器） */
+    const INPUT_TEXTAREA_SELECTOR = MAIN_TEXTAREA_SELECTOR;
+
+    /** 頁面上所有 textarea（含訊息編輯框，供編輯視窗路徑在多個 textarea 中定位編輯框） */
+    const ANY_TEXTAREA_SELECTOR = 'textarea';
 
     /** 以 role="button" 標記的 div 按鈕（新版設計的可點擊容器） */
     const ROLE_BUTTON_DIV_SELECTOR = 'div[role="button"]';
@@ -114,7 +117,7 @@
 
     // ── 滾動區域 ──
 
-    /** 訊息列表的可滾動根容器（與 SCROLL_AREA_CLASS 同一元素） */
+    /** 包住訊息列表（.ds-virtual-list.ds-scroll-area）的主窗格外層容器（本身不可滾動），作為 MutationObserver 觀察根節點 */
     const SCROLL_ROOT_SELECTOR = '._765a5cd';
 
     // ── Think block ──
@@ -350,7 +353,7 @@
         ASSISTANT_MAIN_CONTENT_SELECTOR, MARKDOWN_CITE_SELECTOR,
         ICON_BUTTON_ROLE_SELECTOR,
         FLEX_ROW_SELECTOR,
-        INPUT_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
+        INPUT_TEXTAREA_SELECTOR, ANY_TEXTAREA_SELECTOR, ROLE_BUTTON_DIV_SELECTOR,
         TOGGLE_BUTTON_SELECTOR, TOGGLE_BUTTON_FALLBACK_SELECTOR,
         RETRY_BUTTON_SELECTOR, CONTINUE_BUTTON_SELECTOR, CONTINUE_BUTTON_FALLBACK_SELECTOR,
         FLOATING_POSITION_WRAPPER_SELECTOR, CODE_BLOCK_CLASS,

@@ -47,8 +47,8 @@ describe('DSSelectors — composite values', () => {
 });
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 96 keys (guards accidental export removal)', () => {
-        expect(Object.keys(S)).toHaveLength(96);
+    it('exports exactly 97 keys (guards accidental export removal)', () => {
+        expect(Object.keys(S)).toHaveLength(97);
     });
     it('does not export the rejected websearch hash classes (ARCHITECTURE.md rejected signals)', () => {
         expect(S).not.toHaveProperty('WEBSEARCH_TOGGLE_CLASS');
@@ -90,6 +90,34 @@ describe('DSSelectors — selector syntax', () => {
         for (const token of value.split(/\s+/)) {
             expect(() => document.querySelector('.' + token), token).not.toThrow();
         }
+    });
+});
+
+/**
+ * While a message edit window is open the page holds two textareas: the edit box textarea[name="user query"] first in document order, then the main input textarea[name="search"].
+ * Composer paths (send interception, quote-reply) read INPUT_TEXTAREA_SELECTOR and must reach the main input only; edit-window paths read ANY_TEXTAREA_SELECTOR and must still reach the edit box.
+ * Expected elements are located by tag and name attribute, never through the selectors under test.
+ */
+describe('DSSelectors — composer vs edit-window textareas on real markup', () => {
+    const SNAPSHOTS = path.resolve(__dirname, '../fixtures/ds-snapshots');
+    const EDIT_PANE = path.join(SNAPSHOTS, 'edit-window-chat-pane.html');
+    const IDLE_PANE = path.join(SNAPSHOTS, 'conv2-finished-chat-pane.html');
+
+    it('ANY_TEXTAREA_SELECTOR is exported and matches every textarea on the edit-window pane, edit box included', () => {
+        expect(S).toHaveProperty('ANY_TEXTAREA_SELECTOR');
+        document.body.innerHTML = fs.readFileSync(EDIT_PANE, 'utf8');
+        const all = Array.from(document.getElementsByTagName('textarea'));
+        expect(all.map((t) => t.getAttribute('name')), 'fixture holds the edit box first, then the main input').toEqual(['user query', 'search']);
+        expect(Array.from(document.querySelectorAll(S.ANY_TEXTAREA_SELECTOR))).toEqual(all);
+    });
+
+    it.each([
+        ['edit-window pane (edit box precedes the main input)', EDIT_PANE],
+        ['idle conversation pane', IDLE_PANE],
+    ])('INPUT_TEXTAREA_SELECTOR matches exactly the main input on the %s', (_label, file) => {
+        document.body.innerHTML = fs.readFileSync(file, 'utf8');
+        const matches = Array.from(document.querySelectorAll(S.INPUT_TEXTAREA_SELECTOR));
+        expect(matches.map((t) => t.getAttribute('name')), 'composer selector must match only the main input').toEqual(['search']);
     });
 });
 

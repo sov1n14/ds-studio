@@ -48,13 +48,13 @@
   - 輸出僅包含時間戳行（系統時間開關開啟時）與提示詞組／全域提示詞前綴，**刻意省略整個 `<user-input>` 包裹**——沒有使用者文字可包。
   - 觸發時機與一般送出相同：按下 `Enter` 或點擊送出按鈕皆會套用，判定方式與有文字時共用同一組送出按鈕定位邏輯。
   - 若文字輸入區為空且送出按鈕本身也處於停用狀態（此時使用者原本就無法送出），仍維持跳過注入。
-  - **點擊路徑的 textarea 判定為三層優先序**：(1) 由被點擊的送出按鈕向上遍歷 DOM，找到的**非空** textarea 優先勝出；(2) 找不到時採用全域 `document.querySelector('textarea')` 備援，若其為**非空**亦優先採用（此為本功能新增前即存在的原始行為，予以保留）；(3) 僅當全站都找不到非空 textarea 時，才選取空 textarea——向上遍歷找到的最近者優先，否則採用全域備援的結果，此為純附件／圖片送出情境實際命中的層級。
+  - **點擊路徑的 textarea 判定為三層優先序**：(1) 由被點擊的送出按鈕向上遍歷 DOM，找到的**非空** textarea 優先勝出；(2) 找不到時採用全域 `document.querySelector(ANY_TEXTAREA_SELECTOR)`（`'textarea'`，匹配含編輯框的所有 textarea）備援，若其為**非空**亦優先採用；向上遍歷與全域備援皆使用 `ANY_TEXTAREA_SELECTOR`；編輯視窗送出按鈕先取 `document.activeElement`（為 textarea 時），否則走上述向上遍歷與全域備援；主輸入框送出按鈕（composer 路徑）則一律解析為 `textarea[name="search"]`（`INPUT_TEXTAREA_SELECTOR`）；(3) 僅當全站都找不到非空 textarea 時，才選取空 textarea——向上遍歷找到的最近者優先，否則採用全域備援的結果，此為純附件／圖片送出情境實際命中的層級。
 
 ## 3. 編輯訊息清理（解除包裹）
 
 - **目的**：使用者送出的訊息會被注入邏輯（§2）包裹為 `<system-reminder>...</system-reminder>` 與 `<user-input>\n...\n</user-input>` 結構。當使用者點擊 DeepSeek 的編輯按鈕重新編輯該訊息時，編輯框會載入**完整的包裹內容**。此功能負責解除包裹，使使用者僅編輯自己的原始文字。（實作於 `content/edit-message-cleanup.js`，v3.2.1）
 - **觸發**：文件層級委派的 `click` 監聽器，透過 `e.target.closest(EDIT_BUTTON_SELECTOR)` 辨識編輯按鈕（使用者訊息項目內帶 `[aria-disabled]` 的圖示按鈕）。非編輯按鈕的點擊直接忽略。
-- **非同步偵測（快照式）**：編輯框 textarea 於點擊後才渲染。點擊當下唯一的 textarea 是頁面底部主輸入框，故不可用「往上找含 textarea 的祖先」策略（會誤抓主輸入框）。改為：點擊當下先以 `new Set(document.querySelectorAll('textarea'))` 建立快照，再以 `MutationObserver` 觀察 `document.body`，挑出**不在快照內的新 textarea**即為編輯框。硬性逾時 2000ms；若新 textarea 的 value 尚未填入，另以最多 800ms 的次級觀察等待其填值。
+- **非同步偵測（快照式）**：編輯框 textarea 於點擊後才渲染。點擊當下唯一的 textarea 是頁面底部主輸入框，故不可用「往上找含 textarea 的祖先」策略（會誤抓主輸入框）。改為：點擊當下先以 `new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))` 建立快照，再以 `MutationObserver` 觀察 `document.body`，挑出**不在快照內的新 textarea**即為編輯框。硬性逾時 2000ms；若新 textarea 的 value 尚未填入，另以最多 800ms 的次級觀察等待其填值。
 - **展開編輯區（max-height 調整）**：偵測到編輯框當下計算並套用一次（不隨視窗縮放重算、離開編輯後不還原）：
   - `.cc852ac5`：移除 `max-height`（inline style 設為 `none`），所有匹配元素皆套用。
   - `._646a522`：將 `max-height` 設為 `(window.innerHeight − CHAT_HEADER_SELECTOR 高度 − CONTENT_COLUMN_SELECTOR 高度 − 32)px`。三項高度於當下即時取得（`window.innerHeight` 與兩來源元素的 `getBoundingClientRect().height`）。**缺元素規則**：若 `CHAT_HEADER_SELECTOR` 或 `CONTENT_COLUMN_SELECTOR` 任一元素不存在，則跳過 `._646a522` 的設定（保持原狀）；`.cc852ac5` 的移除不受影響。

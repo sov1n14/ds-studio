@@ -1,6 +1,6 @@
 /**
  * DS studio — Harvest :: Toast Bundle
- * 擷取進度遮罩 UI（顯示/更新/隱藏）。由 harvest.js 合入使用。
+ * 擷取進度 toast UI（不阻擋頁面操作；顯示/更新/隱藏）。由 harvest.js 合入使用。
  * 純函式集合，不持有模組層級可變狀態；跨呼叫需保留的狀態（取消回呼、
  * 是否已點擊取消）改為存放於 DOM 元素本身（自訂屬性 / disabled 屬性），
  * 與 _ensureHarvestToast() 既有「以 DOM 為狀態來源」的作法一致。

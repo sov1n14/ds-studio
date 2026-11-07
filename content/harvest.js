@@ -7,7 +7,7 @@
  *   - 此模組純屬 content 層，僅做 DOM 操作，不呼叫 chrome.storage。
  *   - 所有公開函式透過 window.DSstudio.Harvest 暴露，供同層其他模組呼叫。
  *   - 五大單責模組：(a) 迴圈編排/捲動控制（本檔）、(b) DOM 探測與量測（harvest.dom.js）、
- *     (c) 進度遮罩 UI（harvest.toast.js）、
+ *     (c) 進度 toast UI（harvest.toast.js）、
  *     (d) 是否繼續/停止與捲動步進的純決策邏輯（harvest.policy.js）、
  *     (e) (由外部呼叫者) Markdown 組裝。
  *

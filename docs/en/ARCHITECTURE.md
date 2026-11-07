@@ -222,7 +222,7 @@ DeepSeek's chat interface relies on a frontend framework (likely React) which tr
   - **Click path**: injects whenever the clicked send button is not disabled, even when the resolved textarea is empty, keeping the existing `preventDefault` / `stopPropagation` / `requestAnimationFrame` synthetic re-click flow. The `isInjecting` re-entrancy guard is set synchronously immediately after injection (before `redispatchClick`), so that subsequent event phases (`mousedown` / `click`) from the same physical click are suppressed without waiting for the `requestAnimationFrame` callback.
   - **Textarea-resolution priority (click path, revised in the v4.21.1 follow-up fix)**: resolution is now a strict three-tier order, not a plain empty-textarea fallback:
     1. A **non-empty** textarea found while walking up the DOM from the clicked send button wins.
-    2. Otherwise, the global `document.querySelector('textarea')` fallback is used when it is **non-empty** — this is the original, pre-feature behavior and is preserved unchanged.
+    2. Otherwise, the global `document.querySelector(ANY_TEXTAREA_SELECTOR)` fallback is used when it is **non-empty**.
     3. Only when no non-empty textarea exists anywhere is an **empty** textarea selected: the nearest one found during the walk-up takes priority, falling back to the global query's result otherwise. This tier is what serves the attachment-only send case.
   - **Enter-keydown path**: locates the send button for the active textarea via `findSendButtonForTextarea` and passes the resulting flag into `injectPrefix()`; no button found → flag is false, identical to pre-v4.21.1 behavior.
   - `markChatCreationAttempt()` also fires for an attachment-only send that actually got injected.

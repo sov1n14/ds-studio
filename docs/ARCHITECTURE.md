@@ -222,7 +222,7 @@ DeepSeek 的對話介面依賴前端框架（推測為 React），框架在內�
   - **點擊路徑**：只要被點擊的送出按鈕未停用就注入，即使解析到的 textarea 為空，並沿用既有的 `preventDefault` / `stopPropagation` / `requestAnimationFrame` 合成重點擊流程。`isInjecting` 重入守衛在注入後立即同步設定（在 `redispatchClick` 之前），使同一次實體點擊的後續事件階段（`mousedown` / `click`）不必等待 `requestAnimationFrame` 回呼即被攔下。
   - **textarea 解析優先序（點擊路徑，v4.21.1 後續修正時修訂）**：解析採嚴格三層順序，而非單純的空 textarea 降級：
     1. 從被點擊的送出按鈕沿 DOM 向上走訪時找到的**非空** textarea 優先。
-    2. 否則，若全域 `document.querySelector('textarea')` 降級結果為**非空**則採用 — 這是此功能加入前的原始行為，維持原樣。
+    2. 否則，若全域 `document.querySelector(ANY_TEXTAREA_SELECTOR)` 降級結果為**非空**則採用。
     3. 只有在任何地方都沒有非空 textarea 時才選用**空的** textarea：向上走訪時找到的最近者優先，否則採用全域查詢結果。此層負責純附件送出的情境。
   - **Enter 按鍵路徑**：透過 `findSendButtonForTextarea` 找出目前 textarea 對應的送出按鈕，並將所得旗標傳入 `injectPrefix()`；找不到按鈕 → 旗標為 false，與 v4.21.1 之前的行為相同。
   - 實際完成注入的純附件送出同樣會觸發 `markChatCreationAttempt()`。

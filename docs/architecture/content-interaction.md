@@ -75,7 +75,7 @@
 
 編輯 textarea 在點擊**之後**才渲染，因此必須非同步偵測。天真的「往上找最近一個含 textarea 的祖先」做法是錯的：點擊當下頁面上唯一的 textarea 是底部主輸入框，而範圍廣的虛擬清單祖先正好包含它——該策略會同步解析到**錯誤**（空白）的 textarea，永遠不會等待真正的編輯框。因此偵測採用快照式且不依賴 class 的做法：
 
-- `handleEditButtonClick` 對點擊當下已存在的 textarea 建立快照：`new Set(document.querySelectorAll('textarea'))`。
+- `handleEditButtonClick` 對點擊當下已存在的 textarea 建立快照：`new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))`（`'textarea'`，匹配含主輸入框的所有 textarea）。
 - **`waitForNewTextarea(preExisting, onFound)`**：經由 `MutationObserver`（`childList: true, subtree: true`）監看 `document.body`，取第一個**不在**快照中的 textarea——那必定是編輯 textarea。`onFound` 至多觸發一次，之後即中斷連線。硬性逾時 `DETECTION_TIMEOUT_MS`（2000ms）。若找到的 textarea 在發現時 `value` 仍為空（React 尚未填入），則對該 textarea 進行第二層監看，最多等待 `VALUE_WAIT_TIMEOUT_MS`（800ms）讓值填入。每次點擊的狀態（已解析旗標、逾時 id、observer）都是閉包區域變數——模組層級無可變狀態。
 
 ### max-height 調整 (`applyMaxHeightAdjustments` + `computeDynamicMaxHeight`)

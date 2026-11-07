@@ -55,6 +55,7 @@ function makeSendButton(opts) {
 function makeInputArea(textareaValue, buttonInfo) {
     var container = document.createElement('div');
     var textarea = document.createElement('textarea');
+    textarea.setAttribute('name', 'search'); // models the live main input; composer paths target textarea[name="search"]
     textarea.value = textareaValue;
     container.appendChild(textarea);
 
@@ -295,6 +296,7 @@ describe('Send interception: attachment button must not trigger injection', func
 
         var container = document.createElement('div');
         var textarea = document.createElement('textarea');
+        textarea.setAttribute('name', 'search');
         textarea.value = 'user message';
         container.appendChild(textarea);
         container.appendChild(row);
@@ -351,6 +353,7 @@ describe('Send interception: attachment button must not trigger injection', func
 
         var container = document.createElement('div');
         var textarea = document.createElement('textarea');
+        textarea.setAttribute('name', 'search');
         textarea.value = 'user message';
         container.appendChild(textarea);
         container.appendChild(row);
@@ -389,6 +392,7 @@ describe('Regression: Enter path — attachment button preceding send button in 
         // precedes the send button in DOM order — matching the real DeepSeek layout.
         var container = document.createElement('div');
         var textarea = document.createElement('textarea');
+        textarea.setAttribute('name', 'search');
         textarea.value = '';
         container.appendChild(textarea);
 

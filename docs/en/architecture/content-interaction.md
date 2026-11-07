@@ -75,7 +75,7 @@ Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQ
 
 The edit textarea renders AFTER the click, so it must be detected asynchronously. A naive "walk up to the nearest ancestor that contains a textarea" approach is wrong: at click time the only textarea on the page is the main bottom composer, and the broad virtual-list ancestor contains it — so that strategy resolves synchronously to the WRONG (empty) textarea and never waits for the real edit box. Detection is therefore snapshot-based and class-independent:
 
-- `handleEditButtonClick` snapshots the textareas already present at click time: `new Set(document.querySelectorAll('textarea'))`.
+- `handleEditButtonClick` snapshots the textareas already present at click time: `new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))` (`'textarea'`, matching every textarea including the main input).
 - **`waitForNewTextarea(preExisting, onFound)`**: watches `document.body` via `MutationObserver` (`childList: true, subtree: true`) and picks the first textarea NOT in the snapshot — that is definitively the edit textarea. Fires `onFound` at most once, then disconnects. Hard timeout `DETECTION_TIMEOUT_MS` (2000ms). If the found textarea's `value` is still empty at discovery (React not yet populated), a secondary watch on that specific textarea waits up to `VALUE_WAIT_TIMEOUT_MS` (800ms) for the value to populate. All per-click state (resolved flag, timeout id, observer) is closure-local — no module-level mutable state.
 
 ### max-height Adjustments (`applyMaxHeightAdjustments` + `computeDynamicMaxHeight`)
