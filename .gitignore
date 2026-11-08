@@ -1,6 +1,7 @@
 *.log
 *.py
 *.zip
+.claude/agent-memory/
 .claude/screenshots/
 .ignore/
 .playwright-cli/
