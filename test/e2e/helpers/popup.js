@@ -1,10 +1,11 @@
 // The extension popup opened as a tab, its prompt-group dropdown, and the editor windows it opens.
 
 import { expect } from '@playwright/test';
-import { evaluateInWorker, findTabId } from './extension.js';
+import { evaluateInWorker, findTabId, listWindows } from './extension.js';
 
 const EXTENSION_SCHEME = 'chrome-extension://';
 const POPUP_PATH = 'popup/popup.html';
+const EDITOR_PATH = '/popup/editor/editor.html';
 
 /**
  * Opens the popup page in a new tab and waits until its prompt-group dropdown has rendered (every popup control is bound by then).
@@ -172,4 +173,11 @@ export async function waitForPopupFullyBound(popup) {
         if (!isBound) label.textContent = shownText;
         return isBound;
     }, null, { timeout: 15_000 });
+}
+
+/** 目前開著的編輯器視窗（分頁網址含編輯器頁面路徑的視窗），每筆含 `id`、`focused` 與該視窗的編輯器網址 `url`。 */
+export async function listEditorWindows(context) {
+    return (await listWindows(context))
+        .filter((win) => win.tabUrls.some((url) => url.includes(EDITOR_PATH)))
+        .map((win) => ({ id: win.id, focused: win.focused, url: win.tabUrls.find((url) => url.includes(EDITOR_PATH)) }));
 }

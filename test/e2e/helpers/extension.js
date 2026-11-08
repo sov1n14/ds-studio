@@ -94,3 +94,13 @@ export async function evaluateInExtensionOrigin(context, extensionId, fn, arg) {
         await page.close();
     }
 }
+
+/** 經由 service worker 以 `chrome.windows.getAll` 列出所有瀏覽器視窗（不另開分頁，因此不會改變視窗焦點）；每筆含 `id`、`type`、`focused` 與各分頁網址 `tabUrls`（無權讀取的分頁為空字串）。 */
+export async function listWindows(context) {
+    return evaluateInWorker(context, async () => (await chrome.windows.getAll({ populate: true })).map((win) => ({
+        id: win.id,
+        type: win.type,
+        focused: win.focused,
+        tabUrls: (win.tabs || []).map((tab) => tab.url || tab.pendingUrl || ''),
+    })));
+}

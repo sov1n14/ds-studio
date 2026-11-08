@@ -58,3 +58,19 @@ export async function expectNoPageWithin(context, urlPart, durationMs, message) 
         throw new Error(`${message}: ${matching.length} page(s) opened within ${durationMs} ms: ${JSON.stringify(matching)}`);
     }
 }
+
+/**
+ * `page` 在 `durationMs` 內被關閉即失敗；觀察窗結束時仍開著即通過。與 `expectNeverWithin` 相同，觀察窗本身就是斷言。
+ * 呼叫前已關閉的頁面會直接失敗，因為對已關閉的頁面等待 `close` 事件只會逾時，而逾時會被誤判為通過。
+ * @param {import('@playwright/test').Page} page
+ */
+export async function expectPageStaysOpenWithin(page, durationMs, message) {
+    if (page.isClosed()) throw new Error(`${message}: the page was already closed before the window began`);
+    try {
+        await page.waitForEvent('close', { timeout: durationMs });
+    } catch (error) {
+        if (error?.name === 'TimeoutError' && !page.isClosed()) return;
+        throw error;
+    }
+    throw new Error(`${message}: the page closed within ${durationMs} ms`);
+}
