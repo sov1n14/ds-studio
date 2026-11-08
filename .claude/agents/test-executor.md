@@ -45,10 +45,11 @@ When dispatched for mutation testing, run Stryker and report results using the s
 Commands (from project root; the `version-bump` skill, Pre-Bump Quality Gate, owns when each applies and the pass gate):
 - Scoped run: `node test/scripts/stryker-scoped.mjs`
 - Full-file branch run: `node test/scripts/stryker-scoped.mjs --full --base origin/main`
+- Listed files whole: `node test/scripts/stryker-scoped.mjs --files <a.js,b.js>`
 - Plan only: `node test/scripts/stryker-scoped.mjs --plan`
 - Full run: `npx --prefix test stryker run test/stryker.config.json`
 
-Run the command exactly as the dispatch gives it, including the script's own flags (`--base`, `--full`, `--plan`).
+Run the command exactly as the dispatch gives it, including the script's own flags (`--base`, `--full`, `--files`, `--plan`).
 
 Your report must contain:
 - The script's exit code and its gate output verbatim: the in-scope mutant count, the table of not-Killed mutants, the `Gate PASS` or `Gate FAIL` line
