@@ -144,7 +144,6 @@ function makeCtx(overrides = {}) {
     return {
         getIsEnabled:                  vi.fn(() => true),
         getCurrentChatUuid:            vi.fn(() => 'uuid-dom-test'),
-        setCurrentChatUuid:            vi.fn(),
         getChatPresetMap:              vi.fn(() => ({})),
         setChatPresetMap:              vi.fn(),
         setPendingPresetId:            vi.fn(),

@@ -34,7 +34,6 @@ function makeCtx(overrides = {}) {
     return {
         getIsEnabled:               vi.fn(() => true),
         getCurrentChatUuid:         vi.fn(() => CHAT_UUID),
-        setCurrentChatUuid:         vi.fn(),
         getChatPresetMap:           vi.fn(() => ({})),
         setChatPresetMap:           vi.fn(),
         getPendingPresetId:         vi.fn(() => undefined),

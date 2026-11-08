@@ -1,4 +1,4 @@
-// 269 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 268 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -54,7 +54,6 @@ const PresetOverlay = __overlayFactory.createPresetOverlay({
     i18n:                      dsI18n,
     getIsEnabled:              () => bindingState.isEnabled,
     getCurrentChatUuid:        () => bindingState.currentChatUuid,
-    setCurrentChatUuid:        (v) => { bindingState.currentChatUuid = v; },
     getChatPresetMap:          () => bindingState.chatPresetMap,
     setChatPresetMap:          (v) => { bindingState.chatPresetMap = v; },
     setPendingPresetId:        (v) => { bindingState.pendingPresetId = v; },
