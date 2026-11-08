@@ -2,7 +2,7 @@
 /**
  * content/auto-copy.js — auto-copy reply content and auto-copy code block content (red phase: the module does not exist yet).
  *
- * Requirement (user request): two Features toggles. (a) Auto-copy code block content: click the code block's copy button automatically. (b) Auto-copy reply content: when a new message toolbar (「快捷功能條」) appears, click its copy button automatically; a toolbar that is not new (an old one scrolled back into view) MUST NOT be clicked. Decisions: D-07 a stopped / aborted reply gets no auto-copy; U6-04 code blocks are copied only when the reply completes (its new toolbar appears), never when a banner mounts while streaming; U6-05 both toggles default off; U6-07 (revised) with both on, every code block copy runs first, in document order, and the reply copy runs last, so the clipboard ends holding the full reply (the content the user ultimately pastes); both toggles stay on, the copy logic never turns either off.
+ * Requirement (user request): two Features toggles. (a) Auto-copy code block content: click the code block's copy button automatically. (b) Auto-copy reply content: when a new message toolbar (「快捷功能條」) appears, click its copy button automatically; a toolbar that is not new (an old one scrolled back into view) MUST NOT be clicked. Decisions: a stopped / aborted reply gets no auto-copy; code blocks are copied only when the reply completes (its new toolbar appears), never when a banner mounts while streaming; both toggles default off; with both on, every code block copy runs first, in document order, and the reply copy runs last, so the clipboard ends holding the full reply (the content the user ultimately pastes); both toggles stay on, the copy logic never turns either off.
  *
  * Contract under test:
  *   - Gates (content/feature-toggle.js): reply copy = master "isEnabled" ON && "isAutoCopyReplyEnabled" true; code copy = master ON && "isAutoCopyCodeEnabled" true. Initial values via DSS_GET_SETTINGS, changes via DSS_SETTINGS_CHANGED.
@@ -85,7 +85,7 @@ describe('a new reply completes (new toolbar in an already-mounted item)', () =>
         expect(activations()).toEqual(['new:code#0', 'new:code#1']);
     });
 
-    it('both on: each code block copy first in document order, then the reply copy last (U6-07 revised); both toggles stay on, so the next new reply is copied the same way', async () => {
+    it('both on: each code block copy first in document order, then the reply copy last; both toggles stay on, so the next new reply is copied the same way', async () => {
         const { list } = mountPage({ oldCodeBlock: true });
         await loadAutoCopy(BOTH);
         const fresh = awaitingItem(4, 'new');
@@ -160,7 +160,7 @@ describe('toolbars that are not a newly completed reply are never copied', () =>
         expect(activations(), 'positive control: a later new reply').toEqual(['control:reply']);
     });
 
-    it('stopped reply (D-07): neither the reply nor its code blocks are copied, and the continue button is not pressed', async () => {
+    it('stopped reply: neither the reply nor its code blocks are copied, and the continue button is not pressed', async () => {
         const { list } = mountPage();
         await loadAutoCopy(BOTH);
         const stopped = awaitingItem(4, 'stopped');
@@ -193,7 +193,7 @@ describe('toolbars that are not a newly completed reply are never copied', () =>
         expect(activations(), 'positive control: a later new reply').toEqual(['control:reply']);
     });
 
-    it('code block banners mounting while the reply streams (no toolbar yet) are not copied; they are copied once when the toolbar arrives (U6-04)', async () => {
+    it('code block banners mounting while the reply streams (no toolbar yet) are not copied; they are copied once when the toolbar arrives', async () => {
         const { list } = mountPage();
         await loadAutoCopy(CODE_ONLY);
         const fresh = awaitingItem(4, 'new');

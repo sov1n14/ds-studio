@@ -4,7 +4,7 @@
  * DeepSeek 的重試／繼續生成按鈕只透過 React onClick 生效，且處理器要求 e.nativeEvent.isTrusted === true 並為 Event 實例；isolated world 的 element.click() 屬不受信任事件而被忽略，也看不到 __reactProps$ expando。
  * 本檔由 manifest 以 "world": "MAIN" 載入：收到冒泡至 document 的 dss:react-click 事件時，以通過該檢查的 nativeEvent 直接呼叫目標元素的 React onClick；元素無 React onClick 時退回 element.click()。
  *
- * 失焦自動複製（決策 U6-14）：事件 detail 為 'auto-copy' 時（僅 content/auto-copy.js 如此派送），先登記一筆約 1500 ms 後失效的待擷取項目再呼叫 onClick。本檔包裝 navigator.clipboard.writeText：有存活的待擷取項目時消耗一筆並記下文字，原 Promise 原封不動回傳給網站；僅在該 Promise 拒絕（如文件未取得焦點）時，於 document 派送 dss:auto-copy-captured（detail 為文字），由 isolated world 的 content/auto-copy.relay.js 轉交 service worker。使用者點擊、無待擷取項目或寫入成功時不做任何額外動作。
+ * 失焦自動複製：事件 detail 為 'auto-copy' 時（僅 content/auto-copy.js 如此派送），先登記一筆約 1500 ms 後失效的待擷取項目再呼叫 onClick。本檔包裝 navigator.clipboard.writeText：有存活的待擷取項目時消耗一筆並記下文字，原 Promise 原封不動回傳給網站；僅在該 Promise 拒絕（如文件未取得焦點）時，於 document 派送 dss:auto-copy-captured（detail 為文字），由 isolated world 的 content/auto-copy.relay.js 轉交 service worker。使用者點擊、無待擷取項目或寫入成功時不做任何額外動作。
  *
  * 載入期即安裝監聽器與包裝：MAIN world 腳本無法由 isolated world 呼叫其 init，故為刻意的啟動點；window 旗標為防禦性防護：若同一視窗內本腳本被執行兩次，仍只保留一個監聽器與一層包裝，一次 dss:react-click 只呼叫一次 onClick。
  * 注意：此檔案不得包含 chrome.* API 呼叫。

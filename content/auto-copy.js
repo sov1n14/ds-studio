@@ -8,7 +8,7 @@
  *   - 判斷：每批次交由 DSstudio.ReplyCompletion.newToolbarsFromRecords 找出新出現的工具列（捲動重新掛載的舊工具列不計）；isStoppedReply 為真的工具列（被停止的回覆）整個略過。
  *   - 觸發：DeepSeek 的 React onClick 只接受受信任事件，故不呼叫 button.click()，改在按鈕上派送冒泡的 dss:react-click 事件，由 MAIN world 的 content/react-click-bridge.main.js 呼叫 React onClick。
  *   - 順序：每個工具列先依文件順序複製該工具列所屬項目內每個程式碼區塊的複製按鈕（banner 的第一個按鈕，非下載），最後複製回覆（工具列第一個按鈕），使兩個開關皆開啟時剪貼簿最終保留完整回覆；任一按鈕派送失敗只記錄錯誤，不影響其後目標。
- *   - 失焦補寫（決策 U6-14）：派送的事件帶字串 detail 'auto-copy'，讓 MAIN world 橋接器只擷取本模組觸發的寫入；每次派送前呼叫 DSSAutoCopyRelay.notePending() 登記待轉交項目（content/auto-copy.relay.js 未載入時略過，聚焦時的複製不受影響）。
+ *   - 失焦補寫：派送的事件帶字串 detail 'auto-copy'，讓 MAIN world 橋接器只擷取本模組觸發的寫入；每次派送前呼叫 DSSAutoCopyRelay.notePending() 登記待轉交項目（content/auto-copy.relay.js 未載入時略過，聚焦時的複製不受影響）。
  */
 (function () {
     'use strict';

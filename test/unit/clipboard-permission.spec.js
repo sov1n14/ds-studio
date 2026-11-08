@@ -1,5 +1,5 @@
 /**
- * RED-phase spec for utils/clipboard-permission.js (DECISIONS U6-14).
+ * RED-phase spec for utils/clipboard-permission.js.
  *
  * Contract under test — a popup-facing wrapper over chrome.permissions for the optional `clipboardWrite` + `offscreen` permission pair, which auto-copy requests together when either auto-copy checkbox turns on. It is a classic script that publishes globalThis.DSSClipboardPermission and never throws at its callers:
  *

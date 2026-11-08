@@ -1,4 +1,4 @@
-// 278 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal (D-26), so splitting would open an async gap between that check and the removal
+// 278 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
 /**
  * DS studio — Popup Feature Toggles 模組
  * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、自動複製回覆與程式碼區塊、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
@@ -27,12 +27,12 @@ function createToggleManager(ctx) {
     } = ctx;
     const notificationPermission = ctx.DSSNotificationPermission ?? globalThis.DSSNotificationPermission;
     const clipboardPermission = ctx.DSSClipboardPermission ?? globalThis.DSSClipboardPermission;
-    // 本次 popup 開啟後由使用者記下的意圖；開啟時的清理一律跳過，避免刪掉使用者剛建立的意圖（決策 D-26）
+    // 本次 popup 開啟後由使用者記下的意圖；開啟時的清理一律跳過，避免刪掉使用者剛建立的意圖
     const intentNamesRecordedSinceOpen = new Set();
 
     /**
-     * 確認權限包裝模組回報已取得權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false（決策 D-08）。
-     * 請求前先記下待完成意圖：Chrome 顯示提示時會關閉 popup，同意後改由 background/permission-intent-routes.js 開啟設定；遭拒或失敗時清除意圖（決策 D-26）。
+     * 確認權限包裝模組回報已取得權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false。
+     * 請求前先記下待完成意圖：Chrome 顯示提示時會關閉 popup，同意後改由 background/permission-intent-routes.js 開啟設定；遭拒或失敗時清除意圖。
      */
     async function ensurePermission(permissionModule, hasMethodName, requestMethodName, intentName) {
         if (!permissionModule) return false;
@@ -46,11 +46,11 @@ function createToggleManager(ctx) {
     const ensureNotificationPermission = (intentName) => ensurePermission(notificationPermission, 'hasNotificationPermission', 'requestNotificationPermission', intentName);
     const ensureClipboardPermission = (intentName) => ensurePermission(clipboardPermission, 'hasClipboardPermission', 'requestClipboardPermission', intentName);
 
-    /** 查詢權限包裝模組是否回報已取得權限；包裝模組缺失視為未取得（決策 D-08）。 */
+    /** 查詢權限包裝模組是否回報已取得權限；包裝模組缺失視為未取得。 */
     const hasModulePermission = async (permissionModule, hasMethodName) => !!permissionModule && (await permissionModule[hasMethodName]()) === true;
 
     /**
-     * 清除遭拒的待完成意圖（決策 D-26）：Chrome 顯示提示時已關閉 popup，按下拒絕不會執行 popup 程式碼，故於下次開啟時清除權限仍未取得的意圖；權限已取得者留給 background/permission-intent-routes.js 完成。
+     * 清除遭拒的待完成意圖：Chrome 顯示提示時已關閉 popup，按下拒絕不會執行 popup 程式碼，故於下次開啟時清除權限仍未取得的意圖；權限已取得者留給 background/permission-intent-routes.js 完成。
      * 移除前同步檢查本次開啟後記下的意圖並跳過；storage 操作依發出順序套用，故不會刪掉使用者在清理期間建立的意圖。
      */
     async function clearRefusedPermissionIntents() {
@@ -225,7 +225,7 @@ function createToggleManager(ctx) {
             });
         }
 
-        // --- 自動複製開關：勾選前須取得剪貼簿權限，遭拒或失敗時退回未勾選且不寫入（決策 U6-14）；寫入前清除待完成意圖，取消勾選即撤回（決策 D-26） ---
+        // --- 自動複製開關：勾選前須取得剪貼簿權限，遭拒或失敗時退回未勾選且不寫入；寫入前清除待完成意圖，取消勾選即撤回 ---
         const bindAutoCopyToggle = (toggle, intentName, saveValue) => {
             if (!toggle) return;
             toggle.addEventListener('change', async () => {
@@ -252,7 +252,7 @@ function createToggleManager(ctx) {
             });
         });
 
-        // --- 回覆完成通知單選：開啟前須取得通知權限，遭拒或失敗時退回關閉且不寫入；寫入前清除待完成意圖，選關閉即撤回（決策 D-26） ---
+        // --- 回覆完成通知單選：開啟前須取得通知權限，遭拒或失敗時退回關閉且不寫入；寫入前清除待完成意圖，選關閉即撤回 ---
         replyNotificationRadios.forEach(r => {
             r.addEventListener('change', async () => {
                 if (!r.checked) return;

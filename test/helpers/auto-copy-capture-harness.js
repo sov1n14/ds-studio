@@ -1,5 +1,5 @@
 /**
- * Shared harness for the unfocused auto-copy capture specs (DECISIONS U6-14): when an auto-copy click runs while the DeepSeek document is unfocused, the MAIN-world bridge (content/react-click-bridge.main.js) captures the text the site passes to `navigator.clipboard.writeText` and forwards it to the isolated world, where content/auto-copy.relay.js sends it to the service worker as { type: 'DSS_COPY_TO_CLIPBOARD', text }.
+ * Shared harness for the unfocused auto-copy capture specs: when an auto-copy click runs while the DeepSeek document is unfocused, the MAIN-world bridge (content/react-click-bridge.main.js) captures the text the site passes to `navigator.clipboard.writeText` and forwards it to the isolated world, where content/auto-copy.relay.js sends it to the service worker as { type: 'DSS_COPY_TO_CLIPBOARD', text }.
  *
  * Real modules: the bridge, the relay and content/auto-copy.js with its dependencies (loaded through test/helpers/auto-copy-harness.js). Faked trust boundaries only: the browser Clipboard API (navigator.clipboard, installed before the bridge loads), chrome.runtime.sendMessage (routed by message type) and time (fake Date only, so real timers keep MutationObserver delivery and flush() working).
  *

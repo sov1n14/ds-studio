@@ -2,7 +2,7 @@
 /**
  * content/reply-notification.js — desktop notification when a reply completes while the tab is not in the foreground (red phase: the module does not exist yet).
  *
- * Requirement (user request, verbatim): "(a) When a new quick status bar appears, the browser sends a notification indicating that the reply is complete." Decisions: D-06 notify only when the tab is not in the foreground; D-07 a stopped or aborted reply gets no notification; U6-10 "not in the foreground" means document.visibilityState !== 'visible' || !document.hasFocus(), and the toggle key is isReplyNotificationEnabled.
+ * Requirement (user request, verbatim): "(a) When a new quick status bar appears, the browser sends a notification indicating that the reply is complete." Decisions: notify only when the tab is not in the foreground; a stopped or aborted reply gets no notification; "not in the foreground" means document.visibilityState !== 'visible' || !document.hasFocus(), and the toggle key is isReplyNotificationEnabled.
  *
  * Contract under test:
  *   - Gate (content/feature-toggle.js): master "isEnabled" ON && "isReplyNotificationEnabled" true; initial values via DSS_GET_SETTINGS, changes via DSS_SETTINGS_CHANGED.
@@ -74,7 +74,7 @@ describe('initial settings request', () => {
     });
 });
 
-describe('a new reply completes: notify only when the tab is not in the foreground (D-06, U6-10)', () => {
+describe('a new reply completes: notify only when the tab is not in the foreground', () => {
     it('tab hidden when the reply completes (foreground at load): exactly one DSS_SHOW_NOTIFICATION with the i18n title and body', async () => {
         const { list } = mountPage();
         await loadReplyNotification(settings());
@@ -150,7 +150,7 @@ describe('toolbars that are not a newly completed reply never notify', () => {
         expect(notifications(), 'positive control: a later new reply').toEqual([expectedNotification()]);
     });
 
-    it('stopped reply (D-07: toolbar arrives with the continue button in its own row): no notification', async () => {
+    it('stopped reply (toolbar arrives with the continue button in its own row): no notification', async () => {
         const { list } = mountPage();
         await loadReplyNotification(settings());
         setForeground(HIDDEN);

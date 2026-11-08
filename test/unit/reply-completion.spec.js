@@ -6,7 +6,7 @@
  *
  * Live behaviour (observed 2026-11-08): a new reply or a regenerate mounts its `[data-virtual-list-item-key]` item first, without a toolbar, and appends the toolbar into that already-mounted item in a later mutation batch. Scrolling re-mounts whole items that already hold their toolbar. A toolbar arriving inside an item that was added in the same batch therefore counts as a re-mount.
  *
- * isStoppedReply (user decision D-07: a stopped or aborted reply gets no auto-copy and no notification): a stopped reply's toolbar arrives in one mutation together with DeepSeek's 「继续生成」 button, inside the toolbar's own row wrapper (toolbar.parentElement), as [toolbar, div, div._8e85838 > div.ds-button[role="button"]._6eef0b0]; a normally completed reply's wrapper holds no continue button, and older replies never carry it even when the latest reply was stopped. It returns true exactly when the toolbar's own wrapper holds the continue button by CONTINUE_BUTTON_SELECTOR or CONTINUE_BUTTON_FALLBACK_SELECTOR; the scope is that wrapper, never the document, and the button is never located by its text.
+ * isStoppedReply (user decision: a stopped or aborted reply gets no auto-copy and no notification): a stopped reply's toolbar arrives in one mutation together with DeepSeek's 「继续生成」 button, inside the toolbar's own row wrapper (toolbar.parentElement), as [toolbar, div, div._8e85838 > div.ds-button[role="button"]._6eef0b0]; a normally completed reply's wrapper holds no continue button, and older replies never carry it even when the latest reply was stopped. It returns true exactly when the toolbar's own wrapper holds the continue button by CONTINUE_BUTTON_SELECTOR or CONTINUE_BUTTON_FALLBACK_SELECTOR; the scope is that wrapper, never the document, and the button is never located by its text.
  *
  * DOM: copies of live snapshots via test/helpers/reply-completion-fixtures.js; mutations are performed on the mounted fixture and the records come from observer.takeRecords(). Runs under jsdom because the toolbar selector uses `:has()`, which happy-dom mis-evaluates. Assertions check the returned elements by identity, never by structural equality (two toolbars from the same snapshot are structurally equal).
  */
@@ -214,7 +214,7 @@ describe('newToolbarsFromRecords — re-mounted or non-toolbar content is not re
         expectSameElements(await newToolbars(records), [], 'wrapper with item, then toolbar into that item, in one batch');
     });
 
-    it('a non-item wrapper appended into an already-mounted item, carrying a nested item that already holds its toolbar, is not new (nested virtual list re-mount, D-16)', async () => {
+    it('a non-item wrapper appended into an already-mounted item, carrying a nested item that already holds its toolbar, is not new (nested virtual list re-mount)', async () => {
         const fx = loadVisibleItems();
         const nested = loadAssistantItem(7);
         const wrapper = document.createElement('div');

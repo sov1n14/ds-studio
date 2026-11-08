@@ -1,7 +1,7 @@
 /**
  * Reply-complete notification toggle: a device-local boolean setting.
  *
- * Requirement (DECISIONS U6-10): the storage key is `isReplyNotificationEnabled`, default false; it lives in chrome.storage.local only, is read back through getSettings().replyNotification, written through saveReplyNotification(), and never reaches chrome.storage.sync — sync contents are ignored on read.
+ * Requirement: the storage key is `isReplyNotificationEnabled`, default false; it lives in chrome.storage.local only, is read back through getSettings().replyNotification, written through saveReplyNotification(), and never reaches chrome.storage.sync — sync contents are ignored on read.
  *
  * Arrange steps use the literal storage key so they stay honest while KEYS.REPLY_NOTIFICATION does not exist yet (red phase).
  *

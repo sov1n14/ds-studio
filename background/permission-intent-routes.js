@@ -1,7 +1,7 @@
 /**
  * DS studio — 待完成權限意圖路由（background/permission-intent-routes.js）
  *
- * 職責：Chrome 顯示選用權限提示時會關閉 popup，popup 在提示後的儲存因此不會執行（決策 D-26）。popup 於提示前記下待完成意圖；install() 於呼叫時（非載入時）註冊 chrome.permissions.onAdded 監聽器，權限授予後逐筆檢查待完成意圖，所需權限已全數取得者經由 StorageManager 開啟對應設定並清除該意圖；權限仍不足者保留待下次授予。
+ * 職責：Chrome 顯示選用權限提示時會關閉 popup，popup 在提示後的儲存因此不會執行。popup 於提示前記下待完成意圖；install() 於呼叫時（非載入時）註冊 chrome.permissions.onAdded 監聽器，權限授予後逐筆檢查待完成意圖，所需權限已全數取得者經由 StorageManager 開啟對應設定並清除該意圖；權限仍不足者保留待下次授予。
  *
  * 相依：utils/storage-manager*.js、utils/clipboard-permission.js、utils/notification-permission.js 需先載入。
  */

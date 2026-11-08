@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Clipboard capture of content/react-click-bridge.main.js (DECISIONS U6-14) observed on its own output: the dss:auto-copy-captured events it dispatches and what navigator.clipboard.writeText returns to the site. The relay is deliberately absent, so its own 1500 ms window cannot mask a bridge defect.
+ * Clipboard capture of content/react-click-bridge.main.js observed on its own output: the dss:auto-copy-captured events it dispatches and what navigator.clipboard.writeText returns to the site. The relay is deliberately absent, so its own 1500 ms window cannot mask a bridge defect.
  *
  * Contract: a dss:react-click with detail 'auto-copy' opens one capture entry for 1500 ms (the end instant excluded); each writeText call consumes the oldest live entry; only a string text whose writeText promise rejects while consuming a live entry is dispatched as one dss:auto-copy-captured with that text; the wrapper returns exactly what the original writeText returned, thenable or not, and never throws because of it; a failure while dispatching the captured event is logged with the '[DSS] react-click-bridge' prefix and never escapes as an unhandled rejection.
  *

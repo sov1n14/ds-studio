@@ -1,5 +1,5 @@
 /**
- * Unit: the editor auto-save controller and settleWithin (popup/editor/editor.autosave.js, DECISIONS D-38).
+ * Unit: the editor auto-save controller and settleWithin (popup/editor/editor.autosave.js).
  *
  * Requirements under test:
  * - a save that rejects leaves the work pending, and the next flush() retries it until it persists;

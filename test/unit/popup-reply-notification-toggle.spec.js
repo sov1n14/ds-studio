@@ -2,7 +2,7 @@
  * Reply-notification toggle - popup Features card on/off button, optional notifications permission, live sync, master-switch gating, i18n (red phase: popup side not implemented yet).
  *
  * Requirement (user, verbatim): "(b) Configuration: add a toggle in Features in the same form as 聯網搜索 (not a checkbox, but an on/off button). (c) Permission check: when clicking to turn it on, check whether notification permission exists; if not, request notification permission."
- * Decisions: D-08 the notifications permission is optional, requested when the toggle turns on, and the toggle reverts on refusal. D-12 unit tests mock chrome.permissions. U6-10.
+ * Decisions: the notifications permission is optional, requested when the toggle turns on, and the toggle reverts on refusal; unit tests mock chrome.permissions.
  *
  * Contract this spec fixes:
  *   1. popup.html Features card holds radios input[name="replyNotificationToggle"] valued on / off, inside .websearch-options > label.segmented-option like the websearch pair, with a label data-i18n="replyNotificationLabel" in the same input-group; popup.html loads utils/notification-permission.js before popup.js.
@@ -278,7 +278,7 @@ describe('turning on - permission absent', () => {
         await userSelects(on);
 
         expect(permissions.request, 'precondition: the permission was requested').toHaveBeenCalledWith(NOTIFICATIONS_PERMISSION_SET);
-        expect({ on: on.checked, off: off.checked }, 'the toggle reverts to off (D-08)').toEqual({ on: false, off: true });
+        expect({ on: on.checked, off: off.checked }, 'the toggle reverts to off').toEqual({ on: false, off: true });
         expect([undefined, false], 'the stored value stays false or absent on refusal').toContain(await readLocal(KEY));
         expect(localWrites, 'true is never written, not even transiently').not.toContain(true);
         expect(storedWhenSaveShown, 'no save status when nothing was saved').toEqual([]);

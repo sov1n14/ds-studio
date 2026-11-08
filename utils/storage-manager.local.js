@@ -76,7 +76,7 @@
         },
 
         /**
-         * 記下待完成權限意圖（決策 D-26）；僅存本機。
+         * 記下待完成權限意圖；僅存本機。
          * @param {string} intentName - PERMISSION_INTENTS 的值
          */
         savePermissionIntent(intentName) {

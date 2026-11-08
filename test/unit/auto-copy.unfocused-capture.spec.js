@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Unfocused auto-copy capture (DECISIONS U6-14): when an auto-copy click runs while the DeepSeek document is unfocused, the MAIN-world bridge captures the text the site passes to `navigator.clipboard.writeText` (only for clicks the auto-copy module dispatched; user clicks, other features' clicks and focused clicks are untouched) and forwards it to the isolated world; the content script sends it to the service worker as exactly { type: 'DSS_COPY_TO_CLIPBOARD', text }.
+ * Unfocused auto-copy capture: when an auto-copy click runs while the DeepSeek document is unfocused, the MAIN-world bridge captures the text the site passes to `navigator.clipboard.writeText` (only for clicks the auto-copy module dispatched; user clicks, other features' clicks and focused clicks are untouched) and forwards it to the isolated world; the content script sends it to the service worker as exactly { type: 'DSS_COPY_TO_CLIPBOARD', text }.
  *
  * Real modules together: content/react-click-bridge.main.js, content/auto-copy.relay.js, content/auto-copy.js and its dependencies. Faked trust boundaries only: the Clipboard API, chrome.runtime.sendMessage and Date (see test/helpers/auto-copy-capture-harness.js). Everything is driven through the page (a new reply completing, events on host buttons, the site's own writeText calls) and observed through the DSS_COPY_TO_CLIPBOARD messages and the promises the site received.
  *

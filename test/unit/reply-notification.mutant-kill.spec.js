@@ -3,7 +3,7 @@
  * content/reply-notification.js — targeted tests for behaviors test/unit/reply-notification.scenario.spec.js leaves unpinned (surviving Stryker mutants).
  *
  * Requirements asserted:
- *   A. "Not in the foreground" is visibilityState !== 'visible' || !hasFocus() (U6-10): a hidden tab notifies even when document.hasFocus() answers true.
+ *   A. "Not in the foreground" is visibilityState !== 'visible' || !hasFocus(): a hidden tab notifies even when document.hasFocus() answers true.
  *   B. Only a synchronous throw or a promise rejection of sendMessage is a failure: a sendMessage that returns undefined (callback-only form) or a truthy non-promise value is not an error, logs nothing, and later replies still notify.
  *   C. One reply, one notification, however the gate has moved: after on -> off -> on, and with a duplicate start() registration, each reply sends exactly one message, none while off, and nothing is logged as an error.
  *   D. A failure while processing a mutation batch (a host-page API that throws) is logged with a "[DSS] reply-notification" prefix and the error, escapes nowhere, and the next reply still notifies.

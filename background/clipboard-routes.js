@@ -1,7 +1,7 @@
 /**
  * DS studio — 剪貼簿寫入訊息路由（background/clipboard-routes.js）
  *
- * 職責：background 層的訊息路由（決策 U6-14）。install() 於呼叫時（非載入時）註冊單一 chrome.runtime.onMessage 監聽器；收到 DSS_COPY_TO_CLIPBOARD 時驗證 text 為字串，確保 reason CLIPBOARD 的 offscreen 文件存在，再以 DSS_OFFSCREEN_WRITE_CLIPBOARD 請該文件寫入剪貼簿，僅在 offscreen 回覆 { ok: true } 時回應成功。未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
+ * 職責：background 層的訊息路由。install() 於呼叫時（非載入時）註冊單一 chrome.runtime.onMessage 監聽器；收到 DSS_COPY_TO_CLIPBOARD 時驗證 text 為字串，確保 reason CLIPBOARD 的 offscreen 文件存在，再以 DSS_OFFSCREEN_WRITE_CLIPBOARD 請該文件寫入剪貼簿，僅在 offscreen 回覆 { ok: true } 時回應成功。未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
  * 不使用 chrome.runtime.getContexts／chrome.offscreen.hasDocument（Chrome 最低版本 111 不支援），改以「建立中 promise + 已建立旗標」追蹤文件，並把單一文件錯誤視為文件已存在。
  *

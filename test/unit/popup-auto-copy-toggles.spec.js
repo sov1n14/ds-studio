@@ -1,11 +1,11 @@
 /**
  * Auto-copy toggles - storage schema, popup Features card, optional clipboard permission gate, master-switch gating, live sync (red phase: the permission gate is not implemented yet).
  *
- * Requirement (user request + decisions): two Features toggles, "auto-copy reply content" and "auto-copy code block content". D-05 they are checkboxes; U6-05 both default off. Decided design:
+ * Requirement (user request + decisions): two Features toggles, "auto-copy reply content" and "auto-copy code block content". they are checkboxes; both default off. Decided design:
  *   1. Storage keys "isAutoCopyReplyEnabled" / "isAutoCopyCodeEnabled" are StorageManager.KEYS values, default false in DEFAULTS, synced settings (written to chrome.storage.sync as well as local), with setters following saveAutoOpenSidebar, exposed by getSettings() and restorable from a backup like the other synced toggles.
- *   2. popup.html Features card holds checkboxes #autoCopyReplyToggle / #autoCopyCodeToggle, labelled data-i18n="autoCopyReplyLabel" / "autoCopyCodeLabel", both keys defined in zh-TW and en; their position in the card (D-27) is asserted by popup-card-order.spec.js.
+ *   2. popup.html Features card holds checkboxes #autoCopyReplyToggle / #autoCopyCodeToggle, labelled data-i18n="autoCopyReplyLabel" / "autoCopyCodeLabel", both keys defined in zh-TW and en; their position in the card is asserted by popup-card-order.spec.js.
  *   3. Changing a checkbox saves its key; applyMasterSwitchUI(false) disables both; a storage change of a key updates its checkbox (live sync).
- *   4. U6-14: clipboardWrite and offscreen are both optional permissions, requested together when either checkbox turns on; refusal reverts the checkbox (same flow as the reply-notification toggle). Checking asks contains first and requests only when absent; granted -> the key is saved true; refused or failed -> the box is unchecked and true is never stored. Unchecking saves false without touching chrome.permissions.
+ *   4. clipboardWrite and offscreen are both optional permissions, requested together when either checkbox turns on; refusal reverts the checkbox (same flow as the reply-notification toggle). Checking asks contains first and requests only when absent; granted -> the key is saved true; refused or failed -> the box is unchecked and true is never stored. Unchecking saves false without touching chrome.permissions.
  *
  * Names this spec fixes because the design leaves them to the setter / getSettings conventions: setters saveAutoCopyReply / saveAutoCopyCode (after saveAutoOpenSidebar for "isAutoOpenSidebarEnabled"), getSettings() / backup fields autoCopyReply / autoCopyCode (after autoOpenSidebar).
  *
@@ -67,7 +67,7 @@ function requireCheckbox(dom, id) {
 
 // ── 1. Storage schema, setters, getSettings, restore ──
 
-describe('storage - schema and defaults (U6-05)', () => {
+describe('storage - schema and defaults', () => {
     it.each(KEYS_ONLY)('"%s" is a StorageManager.KEYS value and defaults to false', (key) => {
         expect(Object.values(StorageManager.KEYS), `no KEYS entry has the value ${key}`).toContain(key);
         expect(StorageManager.DEFAULTS).toHaveProperty(key, false);
@@ -140,7 +140,7 @@ describe('storage - restoreSettings from a backup', () => {
 
 // ── 2. popup.html markup and i18n ──
 
-describe('popup.html - Features card checkboxes (D-05)', () => {
+describe('popup.html - Features card checkboxes', () => {
     it.each(TOGGLES)('key %s (setter %s, field %s): the Features card holds checkbox #%s labelled data-i18n="%s"', (_key, _setter, _field, id, i18nKey) => {
         const card = findFeaturesCard(parsePopupHtml());
         const input = card.querySelector(`#${id}`);
@@ -250,7 +250,7 @@ async function userSets(box, checked) {
     await fireChangeAndSettle(box);
 }
 
-describe('popup.toggles.js - checking a box with the clipboard permission already granted (U6-14)', () => {
+describe('popup.toggles.js - checking a box with the clipboard permission already granted', () => {
     it.each(TOGGLES)('%s: the box stays checked, the key is saved true in local and sync, and no permission prompt is shown', async (key, _setter, _field, id) => {
         const permissions = grantAll();
         const dom = buildPopupDom();
@@ -268,7 +268,7 @@ describe('popup.toggles.js - checking a box with the clipboard permission alread
     });
 });
 
-describe('popup.toggles.js - checking a box with the clipboard permission absent and granted on request (U6-14)', () => {
+describe('popup.toggles.js - checking a box with the clipboard permission absent and granted on request', () => {
     it.each(TOGGLES)('%s: request receives exactly clipboardWrite and offscreen, the box stays checked, the key is saved true', async (key, _setter, _field, id) => {
         const permissions = installPermissions({ contains: async () => false, request: async () => true });
         const dom = buildPopupDom();
@@ -287,7 +287,7 @@ describe('popup.toggles.js - checking a box with the clipboard permission absent
     });
 });
 
-describe('popup.toggles.js - refusing or failing the clipboard permission reverts the box (U6-14)', () => {
+describe('popup.toggles.js - refusing or failing the clipboard permission reverts the box', () => {
     beforeEach(() => vi.spyOn(console, 'error').mockImplementation(() => {}));
     afterEach(() => vi.restoreAllMocks());
 
@@ -319,7 +319,7 @@ describe('popup.toggles.js - refusing or failing the clipboard permission revert
     });
 });
 
-describe('popup.toggles.js - unchecking a box (U6-14)', () => {
+describe('popup.toggles.js - unchecking a box', () => {
     it.each(TOGGLES)('%s (setter %s): unchecking saves false in local and sync without touching chrome.permissions', async (key, setter, _field, id) => {
         await requireSetter(setter)(true);
         const permissions = grantAll();

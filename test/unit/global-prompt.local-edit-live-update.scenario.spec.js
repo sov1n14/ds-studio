@@ -1,5 +1,5 @@
 /**
- * Scenario (global prompt, local edit reaches an open tab): user decision D-45, "It should take effect immediately."
+ * Scenario (global prompt, local edit reaches an open tab): user decision, "It should take effect immediately."
  *
  * Requirement: when the user edits the global default prompt on this device, a DeepSeek tab that is already open injects the new text on its next send, without a reload. This holds when chrome.storage.sync accepts the write and when sync rejects it and the save falls back to chrome.storage.local. Cross-device sync is out of scope.
  *
@@ -73,7 +73,7 @@ const nextSend = (text = 'user message') => {
 
 const saveGlobalFromEditor = (value) => globalThis.__DS_Editor_storage.saveContent({ type: 'global' }, value);
 
-describe('a local edit of the global prompt takes effect on an already-open tab (D-45)', () => {
+describe('a local edit of the global prompt takes effect on an already-open tab', () => {
     let restoreNotify;
     const originals = { runtimeSend: chrome.runtime.sendMessage, tabsQuery: chrome.tabs.query, tabsSend: chrome.tabs.sendMessage };
 

@@ -1,11 +1,11 @@
 /**
  * popup.html card layout - which toggles each settings card holds, and in what order.
  *
- * Requirement (user request, DECISIONS D-27): reorder the popup controls, positions only. Expected sequence, top to bottom:
+ * Requirement (user request): reorder the popup controls, positions only. Expected sequence, top to bottom:
  *   - Features card: showSystemTime, autoCopyReply, autoCopyCode, preventAutoScroll, autoRetry, autoContinue, 連網搜索 radios (name="websearchToggle"), 回覆完成通知 radios (name="replyNotificationToggle").
  *   - UI Adjustments card: sidebarAutoHide, hideThinking, autoExpandMessages, autoOpenSidebar, chatWidth, inputWidth.
  *
- * Each card is located by its .card-title heading; a control is identified by its checkbox id or, for a radio group, by the group name, collected in DOM order. Range sliders are excluded because D-27 names the width controls by their toggle.
+ * Each card is located by its .card-title heading; a control is identified by its checkbox id or, for a radio group, by the group name, collected in DOM order. Range sliders are excluded because the requirement names the width controls by their toggle.
  */
 import { describe, it, expect } from 'vitest';
 import { parsePopupHtml } from '../helpers/popup-master-switch-harness.js';
@@ -47,7 +47,7 @@ const EXPECTED = [
     ]],
 ];
 
-describe('popup.html - card control order (D-27)', () => {
+describe('popup.html - card control order', () => {
     it.each(EXPECTED)('the %s card holds exactly these controls in this order', (heading, expected) => {
         expect(controlSequence(findCard(parsePopupHtml(), heading)), `${heading} card controls, top to bottom`).toEqual(expected);
     });

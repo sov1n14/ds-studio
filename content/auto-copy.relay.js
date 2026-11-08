@@ -1,6 +1,6 @@
 /**
  * DS studio — Auto Copy Relay（失焦自動複製的文字轉交）
- * 單一職責：把 MAIN world 擷取到的自動複製文字轉交 service worker 寫入剪貼簿（決策 U6-14）。
+ * 單一職責：把 MAIN world 擷取到的自動複製文字轉交 service worker 寫入剪貼簿。
  *
  * 行為：
  *   - 登記：content/auto-copy.js 每次派送 dss:react-click 前呼叫 notePending()，登記一筆約 1500 ms 後失效的待轉交項目（與 content/react-click-bridge.main.js 的待擷取窗口相同）。

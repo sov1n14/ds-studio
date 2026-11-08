@@ -1,5 +1,5 @@
 /**
- * RED-phase spec for utils/notification-permission.js (DECISIONS U6-10 / D-12).
+ * RED-phase spec for utils/notification-permission.js.
  *
  * Contract under test — a popup-facing wrapper over chrome.permissions for the optional `notifications` permission that never throws at its callers. It is a classic script that publishes globalThis.DSSNotificationPermission:
  *

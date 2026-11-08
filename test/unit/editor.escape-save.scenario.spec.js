@@ -1,8 +1,8 @@
 /**
- * Scenario: Esc in the prompt-group editor window must not lose typed edits (bug I-06).
+ * Scenario: Esc in the prompt-group editor window must not lose typed edits (regression guard for a confirmed bug).
  *
  * Requirement (docs/FEATURES.md, Prompt Groups item 6): "Press `Esc` to close the editor window (unsaved content is auto-saved first)".
- * Expected behaviour (lead decisions, DECISIONS D-38):
+ * Expected behaviour (lead decisions):
  * - dirty edits: window.close() runs only after the edits are persisted, so storage already holds the typed name and content at that instant;
  * - the save rejects with DUPLICATE_NAME: the window stays open and the editor shows its duplicate-name error;
  * - the storage write rejects for another reason, or never settles: the window still closes after a bounded wait (ESC_SAVE_WAIT_MS, 1500 ms); these tests allow CLOSE_BOUND_MS (2000 ms);
@@ -22,7 +22,7 @@ const ORIGINAL = { id: PRESET_ID, name: 'poc original', content: 'ORIGINAL', cre
 const CLOSE_BOUND_MS = 2000;
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
-describe('editor window: Esc saves typed edits before closing (I-06)', () => {
+describe('editor window: Esc saves typed edits before closing', () => {
     let h;
 
     beforeEach(() => {

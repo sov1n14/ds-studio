@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Unfocused auto-copy capture (DECISIONS U6-14) with the MAIN-world bridge evaluated twice in the same window (re-injection): one unfocused auto-copy click must still reach the site once, write once and produce exactly one DSS_COPY_TO_CLIPBOARD message.
+ * Unfocused auto-copy capture with the MAIN-world bridge evaluated twice in the same window (re-injection): one unfocused auto-copy click must still reach the site once, write once and produce exactly one DSS_COPY_TO_CLIPBOARD message.
  *
  * Own spec file: the bridge's install state lives on `window` / `document` and navigator.clipboard, which survive vi.resetModules, so both evaluations must happen on a window no other test has touched (vitest isolates each spec file). Harness: test/helpers/auto-copy-capture-harness.js.
  */

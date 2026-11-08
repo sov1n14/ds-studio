@@ -218,7 +218,7 @@ describe('i18n - label keys', () => {
 });
 
 // ── 7. "Auto open sidebar" (#autoOpenSidebarToggle, KEYS.AUTO_OPEN_SIDEBAR) ──
-// Same contract as autoRetry / autoContinue: own storage key "isAutoOpenSidebarEnabled" (default false), saveAutoOpenSidebar(bool) writes it to both storage areas, getSettings().autoOpenSidebar mirrors it, and the checkbox sits in the UI Adjustments card (D-27) as a master-switch sub-control.
+// Same contract as autoRetry / autoContinue: own storage key "isAutoOpenSidebarEnabled" (default false), saveAutoOpenSidebar(bool) writes it to both storage areas, getSettings().autoOpenSidebar mirrors it, and the checkbox sits in the UI Adjustments card as a master-switch sub-control.
 
 const AUTO_OPEN_SIDEBAR_KEY = 'isAutoOpenSidebarEnabled';
 
@@ -256,7 +256,7 @@ describe('auto open sidebar - storage schema and setter', () => {
 });
 
 describe('auto open sidebar - popup', () => {
-    it('UI Adjustments card (not Features) holds checkbox #autoOpenSidebarToggle with label data-i18n="autoOpenSidebarLabel" (D-27)', () => {
+    it('UI Adjustments card (not Features) holds checkbox #autoOpenSidebarToggle with label data-i18n="autoOpenSidebarLabel"', () => {
         const doc = parsePopupHtml();
         const card = findCard(doc, 'UI Adjustments');
         const input = card.querySelector('#autoOpenSidebarToggle');

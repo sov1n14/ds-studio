@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * content/auto-copy.relay.js (DECISIONS U6-14) evaluated fresh inside every test, so load-time state (the pending list, the started flag, the auto-start, the module.exports guard) is attributed to the test that observes it.
+ * content/auto-copy.relay.js evaluated fresh inside every test, so load-time state (the pending list, the started flag, the auto-start, the module.exports guard) is attributed to the test that observes it.
  *
  * Contract: the relay forwards a string dss:auto-copy-captured detail as exactly one { type: DSS_COPY_TO_CLIPBOARD, text } only while consuming one live pending entry (notePending() opens one entry for 1500 ms, the end instant excluded); entries are consumed first in, first out, one per capture; start() registers its listener once however often it runs; a missing DSS_COPY_TO_CLIPBOARD constant makes loading throw an Error naming utils/message-constants.js; a sendMessage rejection or synchronous throw and an exception while handling a capture are logged with the '[DSS] auto-copy-relay' prefix and never escape; the relay is published on globalThis.DSSAutoCopyRelay and, where CommonJS `module` exists, on module.exports.
  *

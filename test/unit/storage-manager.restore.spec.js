@@ -352,7 +352,7 @@ describe('restoreSettings - autoOpenSidebar end-state', () => {
 });
 
 /**
- * Reply-notification toggle is device-local (DECISIONS U6-10): a backup carrying it never changes this device's value. The backup carries both the storage key and the getSettings() field name so neither spelling can slip through; chatWidth proves the restore itself ran.
+ * Reply-notification toggle is device-local: a backup carrying it never changes this device's value. The backup carries both the storage key and the getSettings() field name so neither spelling can slip through; chatWidth proves the restore itself ran.
  */
 describe('restoreSettings - reply notification is not restored (device-local)', () => {
     const KEY = 'isReplyNotificationEnabled';

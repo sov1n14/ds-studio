@@ -2,7 +2,7 @@
 /**
  * offscreen/clipboard-offscreen.js — offscreen document (reason CLIPBOARD) script that writes text to the clipboard with textarea + select + document.execCommand('copy') for the service worker (red phase: the module does not exist yet and was NOT read).
  *
- * Basis: DECISIONS U6-14 (the service worker writes unfocused auto-copy text through an offscreen document with textarea + select + execCommand('copy')).
+ * Basis: the service worker writes unfocused auto-copy text through an offscreen document with textarea + select + execCommand('copy').
  *
  * Contract under test: the classic script, loaded by offscreen/clipboard-offscreen.html, publishes globalThis.DSSClipboardOffscreen.writeViaExecCommand(doc, text) and registers one chrome.runtime.onMessage listener at load. writeViaExecCommand returns the boolean execCommand('copy') returned; when execCommand runs, the selected textarea text equals text exactly; afterwards no textarea it created remains in doc; a throwing execCommand yields false and still leaves no textarea. The listener answers { type: 'DSS_OFFSCREEN_WRITE_CLIPBOARD', text } with { ok: <execCommand result> }, answers a non-string text with { ok: false } without calling execCommand, and for any other message returns a falsy value and never answers.
  *

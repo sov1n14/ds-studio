@@ -11,8 +11,8 @@ const K = StorageManager.KEYS;
  * RESTORED_MESSAGES, IS_ENABLED, GLOBAL_PROMPT_ENABLED, and
  * isReplyNotificationEnabled are only written to local — they are local-only
  * keys (report.md §4.3 Step 3 made IS_ENABLED and GLOBAL_PROMPT_ENABLED
- * local-only, joining the pre-existing RESTORED_MESSAGES pattern; DECISIONS
- * U6-10 added the reply-notification toggle) and should never be in sync.
+ * local-only, joining the pre-existing RESTORED_MESSAGES pattern; the
+ * reply-notification toggle joined later) and should never be in sync.
  *
  * IMPORTANT: this list must stay in sync with StorageManager.DEFAULTS
  * (utils/storage-manager.js). Any key present in DEFAULTS but missing here
@@ -264,7 +264,7 @@ describe('StorageManager migration push regression', () => {
             expect(syncAfter).not.toHaveProperty(K.GLOBAL_PROMPT_ENABLED);
         });
 
-        it('regression guard (DECISIONS U6-10): never pushes isReplyNotificationEnabled to sync, even when missing from sync and present in local', async () => {
+        it('regression guard: never pushes isReplyNotificationEnabled to sync, even when missing from sync and present in local', async () => {
             await populateDefaults();
 
             await chrome.storage.local.set({ isReplyNotificationEnabled: true });
@@ -279,7 +279,7 @@ describe('StorageManager migration push regression', () => {
             expect((await StorageManager.getSettings()).replyNotification, 'getSettings().replyNotification after initialize()').toBe(true);
         });
 
-        it('regression guard (DECISIONS U6-10): never marks isReplyNotificationEnabled LOCAL_AUTHORITATIVE when the migration push hits a sync quota error', async () => {
+        it('regression guard: never marks isReplyNotificationEnabled LOCAL_AUTHORITATIVE when the migration push hits a sync quota error', async () => {
             await populateDefaults();
 
             // INCLUDE_THINKING missing from sync forces a migration push that fails on quota.

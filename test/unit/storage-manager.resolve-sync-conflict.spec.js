@@ -409,7 +409,7 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
     });
 
     // ----------------------------------------------------------------
-    // Device-local reply-notification toggle (DECISIONS U6-10): the
+    // Device-local reply-notification toggle: the
     // reconciliation never writes isReplyNotificationEnabled to sync and
     // never lets a sync value replace the local one.
     // ----------------------------------------------------------------
