@@ -268,7 +268,7 @@ describe('onSelectChange - rejected bind rolls the displayed selection back (R4)
     });
 });
 
-describe('onSelectChange on a new chat - global-prompt refresh failure containment (I-07)', () => {
+describe('onSelectChange on a new chat - global-prompt refresh failure containment', () => {
     // Requirement: a pick on a new chat (no currentChatUuid) re-resolves the global-prompt flag through ctx.refreshGlobalPromptEnabled(); when that refresh rejects, the error is surfaced on the '[DSS]' console.error boundary together with the error itself, and never escapes as an unhandled rejection.
     let overlay, ctx, errorSpy, unhandled, onUnhandled;
     const refreshError = new Error('global-prompt refresh failed');

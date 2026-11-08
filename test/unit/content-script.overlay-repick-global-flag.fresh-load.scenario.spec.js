@@ -1,5 +1,5 @@
 /**
- * Scenario (I-07, content-script wiring): on a new conversation, re-picking in the in-page overlay the group that is already the stored activePresetId must make the next send carry that group's global prompt, through the real wiring content/content-script.js builds between the overlay and the binding controller.
+ * Scenario (content-script wiring): on a new conversation, re-picking in the in-page overlay the group that is already the stored activePresetId must make the next send carry that group's global prompt, through the real wiring content/content-script.js builds between the overlay and the binding controller.
  *
  * Requirement (docs/FEATURES.md "Global Prompt"): each prompt group remembers its own global-prompt switch; messages sent under a group whose switch is on carry the global prompt, and with no group shown the device-level switch decides.
  *
@@ -39,7 +39,7 @@ async function waitForBootstrap() {
     throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
 }
 
-describe('I-07 through the content-script wiring: a re-pick of the stored group on a new chat injects its global prompt', () => {
+describe('through the content-script wiring: a re-pick of the stored group on a new chat injects its global prompt', () => {
     let contentScript;
     let overlay;
     let target;

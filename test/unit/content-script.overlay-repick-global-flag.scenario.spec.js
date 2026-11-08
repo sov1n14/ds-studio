@@ -1,5 +1,5 @@
 /**
- * Scenario (I-07): on a new conversation, re-picking in the in-page overlay the prompt group that is already the stored activePresetId must still inject that group's global-prompt choice.
+ * Scenario: on a new conversation, re-picking in the in-page overlay the prompt group that is already the stored activePresetId must still inject that group's global-prompt choice.
  *
  * Requirement (docs/FEATURES.md "Global Prompt"): each prompt group remembers its own global-prompt switch; "messages sent under A carry the global prompt" when A's switch is on, and only with the blank option or an unbound conversation does the device-level (legacy) switch decide.
  *
@@ -7,7 +7,7 @@
  *
  * Why the in-memory fake hid the bug: real Chrome fires no chrome.storage.onChanged event for a write that changes nothing (verified in Chrome 156, local and sync), so re-saving the same activePresetId produces no DSS_SETTINGS_CHANGED broadcast. The harness option `isUnchangedWriteSilent` reproduces that; without it the fake reports every write as a change.
  *
- * Harness (real modules, mocked trust boundaries only): test/helpers/overlay-consistency-harness.js. The one exception is the getSettings-rejection case: StorageManager reads chrome.storage in callback form and resolves `{}` on any storage error, so no storage-boundary failure can make getSettings reject; that case stubs StorageManager.getSettings directly, as the I-07 dispatch requires.
+ * Harness (real modules, mocked trust boundaries only): test/helpers/overlay-consistency-harness.js. The one exception is the getSettings-rejection case: StorageManager reads chrome.storage in callback form and resolves `{}` on any storage error, so no storage-boundary failure can make getSettings reject; that case stubs StorageManager.getSettings directly, as the task brief requires.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { GLOBAL, preset, settle, shownValue, clickOption, storedActivePresetId, injected, navigateTo, setUpOverlayScenario, openChat } from '../helpers/overlay-consistency-harness.js';
@@ -69,7 +69,7 @@ const writeFailures = {
     'timeout (never settles)': (callback) => (callback ? undefined : new Promise(() => {})),
 };
 
-describe("I-07: re-picking the stored group on a new chat injects that group's global-prompt choice", () => {
+describe("re-picking the stored group on a new chat injects that group's global-prompt choice", () => {
     let tearDown;
     // Rejections still unhandled when checked; one handled a tick late fires rejectionHandled and leaves the list.
     let unhandled;
