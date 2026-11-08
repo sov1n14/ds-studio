@@ -543,15 +543,24 @@ describe('createLiveSyncListener — preset list reload', () => {
         expect(customSelect.render).not.toHaveBeenCalled();
     });
 
-    it('does not throw when customSelect has not been created yet (getCustomSelect returns falsy)', async () => {
-        const { ctx } = buildCtx({ customSelect: null });
+    // The reload runs in an un-awaited async chain, so a throw on a missing customSelect never reaches the listener caller; it surfaces only as the reload stopping short. Assert the reload end state after the drain, not a synchronous not.toThrow.
+    it('still reloads presets and refreshes the edit button when customSelect has not been created yet (getCustomSelect returns null)', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p4', name: 'Delta', content: 'D', createdAt: 1, updatedAt: 1 },
+        ]);
+
+        const getCustomSelect = vi.fn(() => null);
+        const { ctx, state, updateEditPresetBtnState } = buildCtx();
+        ctx.getCustomSelect = getCustomSelect;
         useVirtualTime();
         const listener = startAndCapture(ctx);
 
-        expect(() => {
-            listener({ [K.PRESET_INDEX]: { oldValue: [], newValue: [] } }, 'sync');
-        }).not.toThrow();
+        listener({ [K.PRESET_INDEX]: { oldValue: [], newValue: ['p4'] } }, 'sync');
         await drainStorageChain();
+
+        expect(getCustomSelect, 'reload path must consult getCustomSelect').toHaveBeenCalled();
+        expect(state.presets).toEqual([expect.objectContaining({ id: 'p4', name: 'Delta' })]);
+        expect(updateEditPresetBtnState, 'edit-button state must refresh even without a custom select').toHaveBeenCalledTimes(1);
     });
 });
 

@@ -13,8 +13,6 @@ const K = StorageManager.KEYS;
 
 describe('restoreSettings - field-level guard coverage', () => {
     beforeEach(() => {
-        chrome.storage.local.store = {};
-        chrome.storage.sync.store = {};
         vi.restoreAllMocks();
     });
 
@@ -268,8 +266,6 @@ describe('restoreSettings - chatPresetMap merge end-state', () => {
  */
 describe('restoreSettings - autoRetry / autoContinue end-state', () => {
     beforeEach(() => {
-        chrome.storage.local.store = {};
-        chrome.storage.sync.store = {};
         vi.restoreAllMocks();
     });
 
@@ -327,8 +323,6 @@ describe('restoreSettings - autoOpenSidebar end-state', () => {
     const readLocal = async () => (await chrome.storage.local.get(KEY))[KEY];
 
     beforeEach(() => {
-        chrome.storage.local.store = {};
-        chrome.storage.sync.store = {};
         vi.restoreAllMocks();
     });
 
@@ -365,8 +359,6 @@ describe('restoreSettings - reply notification is not restored (device-local)', 
     const readLocal = async () => (await chrome.storage.local.get(KEY))[KEY];
 
     beforeEach(() => {
-        chrome.storage.local.store = {};
-        chrome.storage.sync.store = {};
         vi.restoreAllMocks();
     });
 
