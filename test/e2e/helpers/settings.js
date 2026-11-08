@@ -5,12 +5,12 @@
 import { evaluateInWorker } from './extension.js';
 
 /** Writes `values` into chrome.storage.local without any snapshot (caller owns restoration). */
-async function setLocal(context, values) {
+export async function setLocal(context, values) {
     await evaluateInWorker(context, (payload) => chrome.storage.local.set(payload), values);
 }
 
 /** Writes `values` into chrome.storage.sync, then local, so a sync-first reader and the local broadcast agree. */
-async function setBothAreas(context, values) {
+export async function setBothAreas(context, values) {
     await evaluateInWorker(context, async (payload) => {
         await chrome.storage.sync.set(payload);
         await chrome.storage.local.set(payload);
@@ -117,4 +117,28 @@ export function createSettingsSession(context) {
             }
         },
     };
+}
+
+/** Names of the keys that differ between two full dumps of one storage area: present in only one, or holding unequal JSON. */
+export function differingKeys(before, after) {
+    const names = new Set([...Object.keys(before), ...Object.keys(after)]);
+    return [...names].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key])).sort();
+}
+
+/**
+ * Puts both areas back to `snapshot` (a full `{ local, sync }` dump from `readBothAreas(context, null)`): drifted keys are set back, keys absent from the snapshot are removed.
+ * Sync goes first and local right after inside one worker call, for the same reason as `restoreBothAreas`; only drifted keys are written, so an area already equal to its snapshot costs no write.
+ */
+export async function restoreFullSnapshot(context, snapshot) {
+    await evaluateInWorker(context, async (saved) => {
+        for (const areaName of ['sync', 'local']) {
+            const current = await chrome.storage[areaName].get(null);
+            const names = new Set([...Object.keys(current), ...Object.keys(saved[areaName])]);
+            const drifted = [...names].filter((key) => JSON.stringify(current[key]) !== JSON.stringify(saved[areaName][key]));
+            const toSet = Object.fromEntries(drifted.filter((key) => key in saved[areaName]).map((key) => [key, saved[areaName][key]]));
+            const toRemove = drifted.filter((key) => !(key in saved[areaName]));
+            if (Object.keys(toSet).length > 0) await chrome.storage[areaName].set(toSet);
+            if (toRemove.length > 0) await chrome.storage[areaName].remove(toRemove);
+        }
+    }, snapshot);
 }
