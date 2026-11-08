@@ -58,6 +58,7 @@ The Global Prompt is a piece of text that is automatically appended to every con
 - **When No Prompt Group Is Selected**: With the blank option selected, or in an unbound conversation, the device-level toggle state is used instead.
 - **Existing Prompt Groups**: Prompt groups created before the upgrade are treated as enabled, matching the pre-upgrade behavior.
 - **Priority**: The master switch (top-right) has the highest priority — when the master switch is off, no injection occurs regardless of the global switch state.
+- **Live Update**: A Global Prompt edit made on this device takes effect immediately on already-open DeepSeek pages, without a reload. A change that arrives from another device through cloud sync does not update open pages live; it applies after the page reloads.
 
 ## Using Prompt Injection
 
@@ -86,6 +87,7 @@ Each conversation can be independently bound to a different prompt group:
 A prompt group dropdown is displayed directly in the center of the title bar at the top of the DeepSeek conversation page, allowing quick switching without opening the popup menu:
 
 - **Bidirectional Sync**: Changes made in either the overlay or the popup menu are immediately reflected in the other.
+- **Group Order**: The overlay lists prompt groups in the same order as the popup menu; a drag reorder in the popup updates the overlay live, without a page reload.
 - On mobile (< 768px), uses gap-mode positioning between buttons.
 - Built-in auto-stabilization: continuously adjusts position on page load until the layout is fully settled, ensuring it does not get stuck at an incorrect early measurement after a refresh.
 
