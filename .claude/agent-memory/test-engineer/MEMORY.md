@@ -1,6 +1,6 @@
 # Test Engineer Memory
 
-- [Service Worker Test Harness](sw-test-harness.md) — real pending-store + captured onChanged + Map alarms bootstrap for SW sweep specs; revert-check recipe
+- [Service Worker Test Harness](sw-test-harness.md) — real pending-store + captured onChanged + Map alarms bootstrap for SW sweep specs; vm importScripts-chain boot for wiring specs
 - [Stryker Dry Run Timeout](stryker-dry-run-timeout.md) — default 5min too short for 3000+ tests, use --dryRunTimeoutMinutes 15.
 - [Sidebar Hide Group Collapse](sidebar-hide-group-collapse.md) — group hides when all anchors queued; fallback needs no div parent of chat rows
 - [Stryker scoped run](reference_stryker_scoped_run.md) — CLI recipe, load-time mutants need fresh import, ignoreStatic hybrid coveredBy trap, happy-dom capture quirk
