@@ -1,4 +1,4 @@
-// 328 lines: single preset overlay controller — lifecycle (mount/unmount), positioning, resize observation, and select-change handling share tightly coupled DOM refs and overlay instance state; splitting would require passing the same mutable instance across files
+// 340 lines: single preset overlay controller — lifecycle (mount/unmount), positioning, resize observation, and select-change handling share tightly coupled DOM refs and overlay instance state; splitting would require passing the same mutable instance across files
 /**
  * DS Studio — PresetOverlay Controller
  * 取代 content-script.overlay.js，整合自訂 dropdown 元件、定位計算、ResizeObserver。
@@ -245,7 +245,17 @@
                 Promise.resolve(storage.saveActivePresetId(newId))
                     .catch(err => console.error('[DSS] preset-overlay onSelectChange: saveActivePresetId 失敗:', err));
                 ctx.updatePromptPrefixFromBinding();
+                if (!currentChatUuid) this._refreshGlobalPromptEnabled();
                 this.reposition();
+            },
+
+            /**
+             * 新對話重選時明確重算全域提示詞開關：重存相同的 activePresetId 不會觸發 onChanged 廣播，無法依賴設定變更廣播更新。
+             * 須在 pending id 發布與前綴重算之後呼叫（前綴重算的設定讀取先於本次讀取），且不串接寫入結果：寫入失敗、同步拋錯或永不完成時仍須重算。
+             */
+            _refreshGlobalPromptEnabled() {
+                Promise.resolve(ctx.refreshGlobalPromptEnabled())
+                    .catch(err => console.error('[DSS] preset-overlay onSelectChange: 全域提示詞開關重算失敗:', err));
             },
 
             findAndMount() {

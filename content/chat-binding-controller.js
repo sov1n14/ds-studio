@@ -1,4 +1,4 @@
-// 275 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 273 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -99,9 +99,7 @@
             return resolveGlobalPromptEnabledFor(resolveActivePresetIdFrom(settings), settings);
         }
 
-        // 重新讀取設定並解析全域提示詞開關；供設定變更廣播在 preset 相關金鑰
-        //（preset 內容、activePresetId、chatPresetMap、legacy 旗標）變動時，
-        // 以及 popup 切換 pending preset 時呼叫，確保下一則送出訊息即反映最新生效值。
+        // 重新讀取設定並解析全域提示詞開關；供設定變更廣播在 preset 相關金鑰（preset 內容、activePresetId、chatPresetMap、legacy 旗標）變動時、popup 切換 pending preset 時，以及新對話頁面內浮動選單重選 preset 時（preset-overlay.controller.js onSelectChange → _refreshGlobalPromptEnabled，經 content-script.js 的 overlay ctx 接線）呼叫，確保下一則送出訊息即反映最新生效值。
         async function refreshGlobalPromptEnabled() {
             const settings = await StorageManager.getSettings();
             state.isGlobalPromptEnabled = resolveDisplayedGlobalPromptEnabled(settings);

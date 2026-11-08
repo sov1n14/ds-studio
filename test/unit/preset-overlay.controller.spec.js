@@ -42,6 +42,7 @@ function makeCtx(overrides = {}) {
         setPendingPresetId:         vi.fn(),
         updatePromptPrefixFromBinding: vi.fn(),
         isExtensionContextValid:    vi.fn(() => true),
+        refreshGlobalPromptEnabled: vi.fn(() => Promise.resolve()),
         ...overrides,
     };
 }

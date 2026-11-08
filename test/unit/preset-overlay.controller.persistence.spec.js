@@ -267,3 +267,42 @@ describe('onSelectChange - rejected bind rolls the displayed selection back (R4)
         expect(selectedValue()).toBe('preset-B');
     });
 });
+
+describe('onSelectChange on a new chat - global-prompt refresh failure containment (I-07)', () => {
+    // Requirement: a pick on a new chat (no currentChatUuid) re-resolves the global-prompt flag through ctx.refreshGlobalPromptEnabled(); when that refresh rejects, the error is surfaced on the '[DSS]' console.error boundary together with the error itself, and never escapes as an unhandled rejection.
+    let overlay, ctx, errorSpy, unhandled, onUnhandled;
+    const refreshError = new Error('global-prompt refresh failed');
+
+    beforeEach(() => {
+        fakeStorageManager({ map: {}, failMap: false, failActive: false });
+        ctx = makeCtx({
+            getCurrentChatUuid:         vi.fn(() => null),
+            refreshGlobalPromptEnabled: vi.fn(() => Promise.reject(refreshError)),
+        });
+        overlay = createPresetOverlay(ctx);
+        overlay.reposition = vi.fn();
+
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        unhandled = [];
+        onUnhandled = (reason) => unhandled.push(reason);
+        process.on('unhandledRejection', onUnhandled);
+    });
+
+    afterEach(() => {
+        process.off('unhandledRejection', onUnhandled);
+        errorSpy.mockRestore();
+        overlay.unmount();
+        restoreStorageManager();
+    });
+
+    it('reports a rejected global-prompt refresh on the [DSS] console.error boundary, carrying the error', async () => {
+        overlay.onSelectChange('preset-A');
+        await flush();
+
+        expect(ctx.refreshGlobalPromptEnabled, 'guard against a vacuous pass: a pick on a new chat must refresh the global-prompt flag').toHaveBeenCalled();
+        const refreshLogs = errorSpy.mock.calls.filter(args => args.includes(refreshError));
+        expect(refreshLogs.length, 'the rejected refresh must be logged with the error it rejected with').toBeGreaterThan(0);
+        refreshLogs.forEach(args => expect(String(args[0]), 'the log of the refresh error must carry the [DSS] prefix').toMatch(/^\[DSS\] /));
+        expect(unhandled, 'the refresh promise must carry a .catch').toEqual([]);
+    });
+});

@@ -65,8 +65,6 @@ test.describe('global prompt', () => {
         await expect(popup.locator('#globalPromptToggle'), 'the popup switch turns on').toBeChecked();
         await expect(async () => {
             const reblocked = await openBlockingSends(page, HOME);
-            // Picking another group first makes the final pick a real change: re-picking the last-picked group does not refresh the switch (reported deviation, see the fixme test below).
-            await pickPreset(page, switchedOn);
             await pickPreset(page, switchedOff);
             const onPrompt = await sendAndCapturePrompt(page, reblocked, USER_TEXT);
             expect(onPrompt, 'after switching it on the global prompt comes before the group content').toBe(documentedPrompt({ reminder: `${globalPrompt}\n\n${switchedOff.content}`, text: USER_TEXT }));
@@ -94,9 +92,7 @@ test.describe('global prompt', () => {
         }).toPass({ timeout: 30_000 });
     });
 
-    // Product deviation (reported, not adjusted): docs/FEATURES.md Global Prompt says messages sent under a group whose switch is on carry the global prompt.
-    // Observed on 4.39.5: on a new conversation, picking in the overlay the same group that was picked last time (the stored activePresetId) sends no global prompt while the device-level switch is off.
-    test.fixme('picking the last-picked group again on a new conversation still sends the global prompt when that group switch is on', async ({ page, context, settings }) => {
+    test('picking the last-picked group again on a new conversation still sends the global prompt when that group switch is on', async ({ page, context, settings }) => {
         const group = groupWithGlobalSwitch('repick', true);
         const globalPrompt = 'E2E-GLOBAL-PROMPT-' + Date.now();
         await seedOnlyPreset(settings, context, group);

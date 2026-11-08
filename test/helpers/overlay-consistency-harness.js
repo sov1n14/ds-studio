@@ -2,12 +2,15 @@
  * Shared harness for content-script scenarios asserting "what the overlay displays" == "what will be injected".
  *
  * Real modules: content-script.js, ChatBinding, PresetOverlay, StorageManager, in-memory chrome.storage (clone semantics). Mocked trust boundaries only: chrome.runtime.sendMessage (the SW chat-map writer) and the settings relay the SW performs (chrome.storage.onChanged -> DSS_SETTINGS_CHANGED to the content script), played here because no service worker runs.
+ *
+ * Opt-in `setUpOverlayScenario({ isUnchangedWriteSilent: true })` gives chrome.storage.onChanged real Chrome semantics through `silenceUnchangedWrites` in chrome-storage-change-events.js. By default the in-memory fake reports every written key as a change.
  */
 import { vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import { setPathname } from './set-pathname.js';
 import { writeChatMapLayout, NO_RECEIVER, PORT_CLOSED, CONTEXT_INVALIDATED } from './chat-map-writer-harness.js';
+import { relaySettingsChanged, silenceUnchangedWrites } from './chrome-storage-change-events.js';
 
 export { contentScript };
 export const overlay = contentScript.PresetOverlay;
@@ -33,11 +36,6 @@ export async function waitForContentScriptBootstrap() {
     }
     throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
 }
-
-// Plays background/settings-routes.js: every committed storage change reaches the content script as DSS_SETTINGS_CHANGED.
-const relaySettingsChanged = (changes, area) => {
-    chrome.runtime.onMessage.callListeners({ type: 'DSS_SETTINGS_CHANGED', area, changes }, {}, () => {});
-};
 
 export async function seedPresets(presets) {
     const item = { dsPresetIndex: presets.map((p) => p.id) };
@@ -99,8 +97,9 @@ export async function unrelatedPresetEditArrives(p) {
 }
 
 /** Call from beforeEach; returns the teardown to call from afterEach. */
-export async function setUpOverlayScenario() {
+export async function setUpOverlayScenario({ isUnchangedWriteSilent = false } = {}) {
     await waitForContentScriptBootstrap();
+    const restoreNotify = isUnchangedWriteSilent ? silenceUnchangedWrites() : () => {};
     map = {};
     Object.assign(contentScript.state, { isEnabled: true, promptPrefix: '', globalDefaultPrompt: GLOBAL, isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     const originalSendMessage = chrome.runtime.sendMessage;
@@ -110,6 +109,7 @@ export async function setUpOverlayScenario() {
     document.body.appendChild(target);
     overlay.mountTo(target);
     return () => {
+        restoreNotify();
         chrome.storage.onChanged.removeListener(relaySettingsChanged);
         chrome.runtime.sendMessage = originalSendMessage;
         errorSpy.mockRestore();
