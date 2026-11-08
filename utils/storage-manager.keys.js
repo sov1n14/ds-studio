@@ -133,6 +133,19 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
     PRESET_KEY_PREFIX: 'dsPreset_',
 
     /**
+     * 待完成權限意圖：popup 於選用權限提示前記下要開啟哪項設定，權限授予後由 service worker 完成開啟（決策 D-26）。
+     * 每筆意圖各占一個 chrome.storage.local 金鑰（前綴 + 意圖名），各自獨立寫入與移除；前綴不列入 KEYS，同步合併因此不會把意圖寫進 sync。
+     */
+    PERMISSION_INTENT_KEY_PREFIX: 'dsPermissionIntent_',
+
+    /** 意圖名稱即 getSettings() 的欄位名。 */
+    PERMISSION_INTENTS: {
+        AUTO_COPY_REPLY: 'autoCopyReply',
+        AUTO_COPY_CODE: 'autoCopyCode',
+        REPLY_NOTIFICATION: 'replyNotification',
+    },
+
+    /**
      * Helper to get storage key for a specific preset
      */
     _presetKey(id) {

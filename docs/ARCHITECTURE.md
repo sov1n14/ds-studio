@@ -115,6 +115,7 @@ ds-studio/
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
 │   ├── notification-routes.js  ─  DSS_SHOW_NOTIFICATION route: validates title/body and shows a basic notification with chrome.notifications.create (v4.38.0)
 │   ├── clipboard-routes.js     ─  DSS_COPY_TO_CLIPBOARD route: queues writes, makes sure the offscreen document exists, then sends DSS_OFFSCREEN_WRITE_CLIPBOARD asking it to write the clipboard (v4.39.0)
+│   ├── permission-intent-routes.js ─  chrome.permissions.onAdded listener: turns on the setting of each pending permission intent whose permissions are held, then clears the intent (v4.39.3)
 │   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG routes: puts the service worker's StorageManager in chat-map writer mode, validates each op, applies it in one FIFO queue
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── offscreen/                  ─  Offscreen document (reason CLIPBOARD, v4.39.0)
@@ -185,8 +186,8 @@ ds-studio/
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
-│   ├── notification-permission.js ─  DSSNotificationPermission: wraps the chrome.permissions check and request for the optional notifications permission into a non-throwing popup interface (v4.38.0)
-│   ├── clipboard-permission.js ─  DSSClipboardPermission: wraps the chrome.permissions check and request for the optional clipboardWrite and offscreen permissions into a non-throwing popup interface (v4.39.0)
+│   ├── notification-permission.js ─  DSSNotificationPermission: wraps the chrome.permissions check and request for the optional notifications permission into a non-throwing interface shared by the popup and `background/permission-intent-routes.js` (v4.38.0)
+│   ├── clipboard-permission.js ─  DSSClipboardPermission: wraps the chrome.permissions check and request for the optional clipboardWrite and offscreen permissions into a non-throwing interface shared by the popup and `background/permission-intent-routes.js` (v4.39.0)
 │   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
 │   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
@@ -392,6 +393,19 @@ The background layer is the only place that calls `chrome.offscreen`; the conten
 - **`background/clipboard-routes.js`**: `DSSClipboardRoutes.install()` is called at service-worker top level so it survives worker restarts; it registers one `chrome.runtime.onMessage` listener, and an unknown type returns `false` without replying, leaving it to the other listeners. Writes are queued in order, and a failed write does not block the next one.
 - **Offscreen document lifecycle**: the document is tracked with a "pending creation promise plus created flag" and does not use `chrome.runtime.getContexts` or `chrome.offscreen.hasDocument` (not supported at the minimum version 111). `createDocument` creates `offscreen/clipboard-offscreen.html` with reason `CLIPBOARD`, and a report of "Only a single offscreen document" counts as the document already existing; when sending reports "Receiving end does not exist", the flag is cleared, the document is recreated, and the send is retried once.
 - **Optional `clipboardWrite` and `offscreen` permissions**: while `offscreen` is not granted, `chrome.offscreen` does not exist and the route replies `{ ok: false, error }`. Only the popup requests the permissions, through `utils/clipboard-permission.js`; background and the content script never request them.
+
+### Permission Intent Route (Permission Intent, v4.39.3)
+
+Chrome closes the action popup when it shows an optional-permission prompt, so the popup cannot finish its own write after `chrome.permissions.request`; the popup records a pending intent first and the service worker completes it. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+
+| Event | Listener | Effect in the service worker |
+|-|-|-|
+| `chrome.permissions.onAdded` | `background/permission-intent-routes.js` | Reads the pending intents with `StorageManager.getPendingPermissionIntents()`; for each one whose permissions are all held (`DSSClipboardPermission.hasClipboardPermission()` for `autoCopyReply` and `autoCopyCode`, `DSSNotificationPermission.hasNotificationPermission()` for `replyNotification`), saves the setting `true` through `StorageManager` and then clears the intent; an intent whose permissions are missing stays pending |
+
+- **`background/permission-intent-routes.js`**: `DSSPermissionIntentRoutes.install()` is called at service-worker top level so it survives worker restarts; it registers one `chrome.permissions.onAdded` listener, and an error thrown while completing intents is logged as `console.error('[DSS] permission-intent-routes onAdded:', err)`. `install()` throws a named load-order error when `StorageManager.PERMISSION_INTENTS`, `DSSClipboardPermission`, or `DSSNotificationPermission` is absent; the service worker loads `utils/clipboard-permission.js` and `utils/notification-permission.js` through `importScripts` before this file.
+- **Write order**: the setting is saved before the intent is cleared, so a failure in between keeps the intent and the next grant retries.
+- **Popup side**: records the intent before the request; clears it on a refusal or failure while the popup is open and before each save of the toggle; on opening, clears intents whose permissions are still not held, skipping intents recorded since that opening. See [POPUP.md](architecture/POPUP.md).
+- **Storage**: one `chrome.storage.local` key per intent (`dsPermissionIntent_<name>`); see [STORAGE.md](architecture/STORAGE.md).
 
 ### Data Flow
 

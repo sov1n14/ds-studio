@@ -159,7 +159,7 @@ describe('service-worker — installs the real chat-map routes with its own Stor
     }
 
     beforeEach(() => {
-        for (const k of ['importScripts', 'StorageManager', 'DSSSettingsRoutes', 'DSSPendingStoreRoutes', 'DSSEditorWindowRoutes', 'DSSChatMapRoutes', 'DSSNotificationRoutes', 'DSSClipboardRoutes', 'fetch']) saved[k] = globalThis[k];
+        for (const k of ['importScripts', 'StorageManager', 'DSSSettingsRoutes', 'DSSPendingStoreRoutes', 'DSSEditorWindowRoutes', 'DSSChatMapRoutes', 'DSSNotificationRoutes', 'DSSClipboardRoutes', 'DSSPermissionIntentRoutes', 'fetch']) saved[k] = globalThis[k];
         saved.onMessage = chrome.runtime.onMessage;
         saved.onChangedAdd = chrome.storage.onChanged.addListener;
     });
@@ -179,6 +179,7 @@ describe('service-worker — installs the real chat-map routes with its own Stor
         globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
         globalThis.DSSNotificationRoutes = { install: vi.fn() };
         globalThis.DSSClipboardRoutes = { install: vi.fn() };
+        globalThis.DSSPermissionIntentRoutes = { install: vi.fn() };
         globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
         globalThis.StorageManager = await importFreshStorageManager();
         loadRoutes(); // real background/chat-map-routes.js, publishes globalThis.DSSChatMapRoutes

@@ -91,6 +91,8 @@ function createChrome(world, hasOffscreen) {
         alarms: { create: vi.fn(), clear: vi.fn(async () => true), get: vi.fn(async () => undefined), onAlarm: createEvent() },
         tabs: { query: vi.fn(async () => []), sendMessage: vi.fn(async () => undefined) },
         windows: { create: vi.fn(async () => ({ id: 1 })), update: vi.fn(async () => ({})), remove: vi.fn(async () => undefined) },
+        // Chrome exposes chrome.permissions in every extension service worker (no manifest permission needed); background/permission-intent-routes.js registers onAdded on it at top level.
+        permissions: { contains: vi.fn(async () => false), request: vi.fn(async () => false), getAll: vi.fn(async () => ({ permissions: [], origins: [] })), onAdded: createEvent(), onRemoved: createEvent() },
     };
     chrome.runtime.sendMessage = (...args) => world.sendMessage(chrome, ...args);
     if (hasOffscreen) {

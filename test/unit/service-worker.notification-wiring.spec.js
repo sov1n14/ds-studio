@@ -1,7 +1,7 @@
 /**
  * background/service-worker.js — desktop-notification route wiring.
  *
- * Requirement (docs/spec/04-features.md §27, docs/ARCHITECTURE.md "回覆完成通知訊息路由"): the service worker loads background/notification-routes.js through importScripts and, at its top level, makes the DSS_SHOW_NOTIFICATION route live, so a { type: DSS_SHOW_NOTIFICATION, title, body } runtime message with string title and body shows a basic notification (icon assets/icons/icon128.png) through chrome.notifications.create and answers { ok: true }; a non-string title or body, a missing chrome.notifications (optional permission not granted) or a rejected create answers { ok: false, error }.
+ * Requirement (docs/spec/04-features.md §27, docs/ARCHITECTURE.md "Reply Notification Message Route"): the service worker loads background/notification-routes.js through importScripts and, at its top level, makes the DSS_SHOW_NOTIFICATION route live, so a { type: DSS_SHOW_NOTIFICATION, title, body } runtime message with string title and body shows a basic notification (icon assets/icons/icon128.png) through chrome.notifications.create and answers { ok: true }; a non-string title or body, a missing chrome.notifications (optional permission not granted) or a rejected create answers { ok: false, error }.
  *
  * Harness: each test runs the REAL service worker the way Chrome runs it: a fresh vm context acts as the worker global, background/service-worker.js runs in it as a classic script, and its own importScripts() call resolves every requested file relative to background/ and runs it in the same context, so top-level declarations are shared exactly as in a classic worker. Only trust boundaries are faked: chrome.* (in-memory storage, events that record listeners, notifications), fetch and console. No inter-module boundary is mocked and the suite-wide global from test/setup/vitest.setup.js is never touched.
  *
@@ -36,6 +36,8 @@ function createChrome(notificationsCreate) {
         alarms: { create: vi.fn(), clear: vi.fn(async () => true), get: vi.fn(async () => undefined), onAlarm: createEvent() },
         tabs: { query: vi.fn(async () => []), sendMessage: vi.fn(async () => undefined) },
         windows: { create: vi.fn(async () => ({ id: 1 })), update: vi.fn(async () => ({})), remove: vi.fn(async () => undefined) },
+        // Chrome exposes chrome.permissions in every extension service worker (no manifest permission needed); background/permission-intent-routes.js registers onAdded on it at top level.
+        permissions: { contains: vi.fn(async () => false), request: vi.fn(async () => false), getAll: vi.fn(async () => ({ permissions: [], origins: [] })), onAdded: createEvent(), onRemoved: createEvent() },
     };
     if (notificationsCreate) chrome.notifications = { create: notificationsCreate };
     return chrome;

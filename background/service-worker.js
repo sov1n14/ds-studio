@@ -24,6 +24,8 @@ importScripts(
     '../utils/storage-manager.js',
     '../utils/deepseek-api.js',
     '../utils/temporary-chat-constants.js',
+    '../utils/clipboard-permission.js',
+    '../utils/notification-permission.js',
     'pending-store.js',
     '../utils/message-constants.js',
     'service-worker-constants.js',
@@ -32,21 +34,17 @@ importScripts(
     'editor-window-routes.js',
     'notification-routes.js',
     'clipboard-routes.js',
-    'chat-map-routes.js'
+    'chat-map-routes.js',
+    'permission-intent-routes.js'
 );
 
-// 註冊設定訊息路由與變更廣播（頂層呼叫，確保 worker 重啟後仍存活）
+// 依序註冊（頂層呼叫，確保 worker 重啟後仍存活）：設定訊息路由與變更廣播、待刪佇列訊息路由、編輯器視窗關閉訊息路由、桌面通知訊息路由、剪貼簿寫入路由、權限授予監聽器（完成 popup 因權限提示關閉而未完成的設定開啟）
 DSSSettingsRoutes.install();
-
-// 註冊待刪佇列訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSPendingStoreRoutes.install();
-
-// 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSEditorWindowRoutes.install();
-
-// 註冊桌面通知訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSNotificationRoutes.install();
 DSSClipboardRoutes.install();
+DSSPermissionIntentRoutes.install();
 
 // 註冊 chat→preset 綁定表路由，並使本 worker 的 StorageManager 成為唯一寫入者（頂層呼叫，確保 worker 重啟後仍存活）
 DSSChatMapRoutes.install({ storageManager: StorageManager });

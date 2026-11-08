@@ -1,8 +1,8 @@
 /**
  * DS studio — 剪貼簿權限共用工具（utils/clipboard-permission.js）
  *
- * 單一職責：把 chrome.permissions 對選用權限 clipboardWrite 與 offscreen 的查詢與請求包成不會向呼叫端拋錯的 popup 介面（決策 U6-14：任一自動複製勾選框開啟時兩者一併請求）。
- * popup 層依規範不得直接呼叫 chrome.*，一律經由本模組。
+ * 單一職責：把 chrome.permissions 對選用權限 clipboardWrite 與 offscreen 的查詢與請求包成不會向呼叫端拋錯的介面（決策 U6-14：任一自動複製勾選框開啟時兩者一併請求）。
+ * popup 層依規範不得直接呼叫 chrome.*，一律經由本模組；service worker 的 background/permission-intent-routes.js 亦經由本模組查詢，權限集合僅此一處定義。
  * 無載入期副作用：載入僅完成全域指派；以 IIFE 包裹，避免與其他 popup 腳本共用的全域識別字衝突。
  */
 (() => {

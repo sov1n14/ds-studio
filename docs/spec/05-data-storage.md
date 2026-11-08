@@ -111,6 +111,7 @@
 | `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | (v4.6.2) Authoritative timestamp for prompt group ordering, used to determine which side's order is newer during cross-device merge. |
 | `promptPresets` | `PromptPreset[]` | — | *Migration detection only*: the v1.6.x single-array format; `initialize()` converts it to `dsPresetIndex` + `dsPreset_<id>` and deletes the key when found. |
 | `restored_messages` | object | {} | Restored censor reply records, containing message_id, fragments, etc. (local only, max 200 entries). |
+| `dsPermissionIntent_<name>` | boolean | — | (v4.39.3) Pending permission intent for `autoCopyReply`, `autoCopyCode`, or `replyNotification` (local only, never synced; outside `StorageManager.KEYS`). Written by the popup before an optional-permission prompt and cleared by the service worker after it turns the setting on; see [Feature Spec §26](04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370). |
 | `dss-device-id` | string | — | This device's id (local only, never synced; outside `StorageManager.KEYS`). Created once with `crypto.randomUUID()` by the service worker when the device first queues a temporary conversation for deletion, and written to that entry's `ownerDeviceId`. The remediation sweep uses it to tell own entries (`LEASE_TTL_MS`, 10 minutes) from entries owned by another device or by none (explicit release or `FOREIGN_LEASE_TTL_MS`, 24 hours). |
 
 ### Chat-Map Messages (`DSS_CHAT_MAP_MSG`)

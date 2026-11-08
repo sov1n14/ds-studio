@@ -1,7 +1,7 @@
 /**
  * DS Studio — StorageManager 本機專屬（local-only）設定方法群組
  * 負責僅存於裝置本機、不參與 chrome.storage.sync 同步／備份還原的設定：
- * 主功能開關、全域預設提示詞啟用狀態、回覆完成通知開關、已還原訊息快取。
+ * 主功能開關、全域預設提示詞啟用狀態、回覆完成通知開關、已還原訊息快取、待完成權限意圖。
  * 這些設定屬於裝置層級的操作狀態，不應隨帳號跨裝置同步。
  */
 (function (root) {
@@ -68,6 +68,37 @@
          */
         clearRestoredMessages() {
             return this._safeRemove('local', this.KEYS.RESTORED_MESSAGES);
+        },
+
+        /** 組出單筆權限意圖的 storage key。 */
+        _permissionIntentKey(intentName) {
+            return this.PERMISSION_INTENT_KEY_PREFIX + intentName;
+        },
+
+        /**
+         * 記下待完成權限意圖（決策 D-26）；僅存本機。
+         * @param {string} intentName - PERMISSION_INTENTS 的值
+         */
+        savePermissionIntent(intentName) {
+            return this._safeSet('local', { [this._permissionIntentKey(intentName)]: true });
+        },
+
+        /**
+         * 清除單筆權限意圖；未曾記下時為 no-op。
+         * @param {string} intentName - PERMISSION_INTENTS 的值
+         */
+        clearPermissionIntent(intentName) {
+            return this._safeRemove('local', this._permissionIntentKey(intentName));
+        },
+
+        /**
+         * 讀取目前仍待完成的權限意圖名稱。
+         * @returns {Promise<string[]>}
+         */
+        async getPendingPermissionIntents() {
+            const intentNames = Object.values(this.PERMISSION_INTENTS);
+            const data = await this._safeGet('local', intentNames.map(name => this._permissionIntentKey(name)));
+            return intentNames.filter(name => data[this._permissionIntentKey(name)] === true);
         },
     };
 

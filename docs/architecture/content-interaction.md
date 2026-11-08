@@ -268,7 +268,7 @@ The behavior rules for auto copy are in [Feature Spec §26](../spec/04-features.
 - **`content/auto-copy.relay.js`** (`DSSAutoCopyRelay`, v4.39.0): the isolated-world relay module; `notePending()` records a pending relay entry, and `start()` registers the single `dss:auto-copy-captured` listener and sends `DSS_COPY_TO_CLIPBOARD`; it never calls the clipboard API itself.
 - **`background/clipboard-routes.js`** (`DSSClipboardRoutes`, v4.39.0): receives `DSS_COPY_TO_CLIPBOARD` and delegates the write to the offscreen document; the message route is described in [ARCHITECTURE.md](../ARCHITECTURE.md#clipboard-write-message-route-clipboard-write-v4390).
 - **`offscreen/clipboard-offscreen.js`** (`DSSClipboardOffscreen`, v4.39.0): writes with `document.execCommand('copy')` inside the offscreen document and replies `{ ok }`.
-- **`utils/clipboard-permission.js`** (`DSSClipboardPermission`, v4.39.0): the popup-side permission check and request wrapper for `clipboardWrite` and `offscreen`; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **`utils/clipboard-permission.js`** (`DSSClipboardPermission`, v4.39.0): the permission check and request wrapper for `clipboardWrite` and `offscreen`, used by the popup and, for the check, by `background/permission-intent-routes.js`; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
 
 ### Gating (registerFeatureToggle)
 
@@ -292,7 +292,7 @@ The behavior rules for the reply-complete notification are in [Feature Spec §27
 
 - **`content/reply-notification.js`** (`DSstudio.ReplyNotification`): holds the gate `_isOn` and the observer, borrows `DSstudio.ReplyCompletion` (see [Auto Copy](#auto-copy-autocopy)) to decide which toolbars are newly completed replies, and sends a message when the tab is not in the foreground; it never calls `chrome.notifications` directly.
 - **`background/notification-routes.js`** (`DSSNotificationRoutes`): receives `DSS_SHOW_NOTIFICATION` and shows the notification; the message route is described in [ARCHITECTURE.md](../ARCHITECTURE.md#reply-notification-message-route-reply-notification-v4380).
-- **`utils/notification-permission.js`** (`DSSNotificationPermission`): the popup-side permission check and request wrapper; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **`utils/notification-permission.js`** (`DSSNotificationPermission`): the permission check and request wrapper, used by the popup and, for the check, by `background/permission-intent-routes.js`; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
 
 ### Gating (registerFeatureToggle)
 
