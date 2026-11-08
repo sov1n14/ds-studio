@@ -1,114 +1,97 @@
-import { describe, it, expect } from 'vitest';
-import constants from '../../utils/temporary-chat-constants.js';
+/**
+ * temporary-chat-constants contract, asserted on copies of the module evaluated INSIDE each test.
+ *
+ * Why the fresh load: test/setup/vitest.setup.js preloads utils/temporary-chat-constants.js, so every literal in it executes before any test runs. Stryker (ignoreStatic) treats a literal executed only at load time as a static mutant, so a spec that reads the preloaded copy (or a static import of it) never faces those mutants. vi.resetModules() + a dynamic import, and the classic-script evaluation below, re-run the literals within the test body, so a changed value fails here.
+ *
+ * Expected values are the cross-module storage-key and message-type contract: a typo in any value silently breaks the feature. DSS_LAST_SEEN_CHANGE_KEY_PREFIX comes from docs/spec/04-features.md (key `dss-last-seen-change:<uuid>`).
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-// These constants are the shared contract between modules.
-// A typo in any value would silently break the feature — hence dedicated assertions.
+const CONSTANTS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../utils/temporary-chat-constants.js');
 
-describe('temporary-chat-constants', () => {
-    it('DSS_TEMP_CHAT_STORAGE_KEY has the exact expected value', () => {
-        expect(constants.DSS_TEMP_CHAT_STORAGE_KEY).toBe('dss-temporary-chat-enabled');
+/** Every exported constant and its contract value; the module exports exactly these 27 names. */
+const CONTRACT = {
+    DSS_TEMP_CHAT_STORAGE_KEY: 'dss-temporary-chat-enabled',
+    DSS_TEMP_CHAT_CHANGED_EVENT: 'dss-temporary-chat-changed',
+    DSS_TEMP_CHAT_UUID_KEY: 'dss-temporary-chat-uuid',
+    DSS_CHAT_CREATE_MESSAGE_TYPE: 'DSS_CHAT_CREATE_DETECTED',
+    DSS_CHAT_COMPLETION_MESSAGE_TYPE: 'DSS_CHAT_COMPLETION_DETECTED',
+    DSS_FIBER_DELETE_MESSAGE_TYPE: 'DSS_FIBER_DELETE_SESSION',
+    DSS_FIBER_DELETE_RESULT_TYPE: 'DSS_FIBER_DELETE_RESULT',
+    DSS_AUTH_CAPTURED_TYPE: 'DSS_AUTH_CAPTURED',
+    DSS_HISTORY_NAV_TYPE: 'DSS_HISTORY_NAV',
+    DSS_FRAGMENT_COMPLETE_TYPE: 'DSS_FRAGMENT_COMPLETE',
+    DSS_PENDING_DELETES_SYNC_KEY: 'dss-pending-deletes-sync',
+    DSS_LAST_AUTH_TOKEN_KEY: 'dss-last-auth-token',
+    DSS_OPEN_TEMP_UUIDS_KEY: 'dss-open-temp-uuids',
+    DSS_DEVICE_ID_KEY: 'dss-device-id',
+    DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE: 'DSS_SCHEDULE_DELETE_RETRY',
+    DSS_MSG_TRACK_FOR_DELETION: 'DSS_TRACK_FOR_DELETION',
+    DSS_MSG_REMOVE_PENDING_DELETE: 'DSS_REMOVE_PENDING_DELETE',
+    DSS_MSG_REMOVE_OPEN_UUID: 'DSS_REMOVE_OPEN_UUID',
+    DSS_MSG_SET_LAST_AUTH_TOKEN: 'DSS_SET_LAST_AUTH_TOKEN',
+    DSS_MSG_HEARTBEAT: 'DSS_HEARTBEAT',
+    DSS_MSG_RELEASE_LEASE: 'DSS_RELEASE_LEASE',
+    DSS_MSG_GET_PENDING_UUIDS: 'DSS_GET_PENDING_UUIDS',
+    DSS_MSG_PENDING_UUIDS_CHANGED: 'DSS_PENDING_UUIDS_CHANGED',
+    DSS_LAST_SEEN_CHANGE_KEY_PREFIX: 'dss-last-seen-change:',
+    LEASE_TTL_MS: 600000, // 10 minutes
+    FOREIGN_LEASE_TTL_MS: 86400000, // 24 hours
+    HEARTBEAT_INTERVAL_MS: 60000, // 1 minute
+};
+
+let preloadedNamespace;
+
+/**
+ * Re-evaluates the constants module inside the calling test. The static specifier keeps Vite's resolver in charge (a runtime-computed path fails to resolve files outside test/, see testing-pitfalls red-for-the-right-reason).
+ */
+async function loadFreshConstants() {
+    vi.resetModules();
+    return (await import('../../utils/temporary-chat-constants.js')).default;
+}
+
+beforeEach(() => {
+    preloadedNamespace = globalThis.DSS_TEMP_CHAT;
+});
+
+afterEach(() => {
+    // Every fresh load republishes globalThis.DSS_TEMP_CHAT; put the preloaded copy back so later tests and modules resolve the suite-wide namespace.
+    globalThis.DSS_TEMP_CHAT = preloadedNamespace;
+});
+
+describe('temporary-chat-constants (module evaluated at test time)', () => {
+    it('re-evaluates the module inside the test and publishes the exported object as globalThis.DSS_TEMP_CHAT', async () => {
+        const fresh = await loadFreshConstants();
+
+        expect(fresh, 'dynamic import must yield the constants object').toBeTruthy();
+        expect(fresh, 'constants must be a fresh evaluation, not the setup preload').not.toBe(preloadedNamespace);
+        expect(globalThis.DSS_TEMP_CHAT, 'loading the module must publish its export object on globalThis').toBe(fresh);
     });
 
-    it('DSS_TEMP_CHAT_CHANGED_EVENT has the exact expected value', () => {
-        expect(constants.DSS_TEMP_CHAT_CHANGED_EVENT).toBe('dss-temporary-chat-changed');
+    it.each(Object.entries(CONTRACT))('%s has the exact contract value', async (name, value) => {
+        const fresh = await loadFreshConstants();
+
+        expect(fresh[name], `${name} must equal ${JSON.stringify(value)}`).toBe(value);
     });
 
-    it('DSS_TEMP_CHAT_UUID_KEY has the exact expected value', () => {
-        expect(constants.DSS_TEMP_CHAT_UUID_KEY).toBe('dss-temporary-chat-uuid');
+    it('exports exactly the contract constants and nothing else', async () => {
+        const fresh = await loadFreshConstants();
+
+        expect(fresh).toStrictEqual(CONTRACT);
     });
+});
 
-    it('DSS_CHAT_CREATE_MESSAGE_TYPE has the exact expected value', () => {
-        expect(constants.DSS_CHAT_CREATE_MESSAGE_TYPE).toBe('DSS_CHAT_CREATE_DETECTED');
-    });
+describe('temporary-chat-constants loaded as a Chrome classic script (no CommonJS module binding)', () => {
+    it('publishes the full namespace on globalThis without throwing', () => {
+        const src = readFileSync(CONSTANTS_PATH, 'utf-8');
+        // new Function code runs in global scope, so `module` resolves like it does for a classic script in Chrome.
+        expect(new Function('return typeof module')(), 'precondition: no module binding in global scope').toBe('undefined');
+        delete globalThis.DSS_TEMP_CHAT;
 
-
-    it('exports exactly twenty-seven constants', () => {
-        const keys = Object.keys(constants);
-        expect(keys).toHaveLength(27);
-        expect(keys).toContain('DSS_TEMP_CHAT_STORAGE_KEY');
-        expect(keys).toContain('DSS_TEMP_CHAT_CHANGED_EVENT');
-        expect(keys).toContain('DSS_TEMP_CHAT_UUID_KEY');
-        expect(keys).toContain('DSS_CHAT_CREATE_MESSAGE_TYPE');
-        expect(keys).toContain('DSS_CHAT_COMPLETION_MESSAGE_TYPE');
-        expect(keys).toContain('DSS_FIBER_DELETE_MESSAGE_TYPE');
-        expect(keys).toContain('DSS_FIBER_DELETE_RESULT_TYPE');
-        expect(keys).toContain('DSS_PENDING_DELETES_SYNC_KEY');
-        expect(keys).toContain('DSS_LAST_AUTH_TOKEN_KEY');
-        expect(keys).toContain('DSS_OPEN_TEMP_UUIDS_KEY');
-        expect(keys).toContain('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE');
-        expect(keys).toContain('DSS_MSG_TRACK_FOR_DELETION');
-        expect(keys).toContain('DSS_MSG_REMOVE_PENDING_DELETE');
-        expect(keys).toContain('DSS_MSG_REMOVE_OPEN_UUID');
-        expect(keys).toContain('DSS_MSG_SET_LAST_AUTH_TOKEN');
-        expect(keys).toContain('LEASE_TTL_MS');
-        expect(keys).toContain('HEARTBEAT_INTERVAL_MS');
-        expect(keys).toContain('DSS_MSG_HEARTBEAT');
-        expect(keys).toContain('DSS_MSG_RELEASE_LEASE');
-        expect(keys).toContain('DSS_MSG_GET_PENDING_UUIDS');
-        expect(keys).toContain('DSS_MSG_PENDING_UUIDS_CHANGED');
-        expect(keys).toContain('DSS_AUTH_CAPTURED_TYPE');
-        expect(keys).toContain('DSS_HISTORY_NAV_TYPE');
-        expect(keys).toContain('DSS_FRAGMENT_COMPLETE_TYPE');
-        expect(keys).toContain('DSS_LAST_SEEN_CHANGE_KEY_PREFIX');
-        expect(keys).toContain('DSS_DEVICE_ID_KEY');
-        expect(keys).toContain('FOREIGN_LEASE_TTL_MS');
-        expect(keys).not.toContain('DSS_SW_DELETE_MESSAGE_TYPE');
-    });
-
-    it('DSS_CHAT_COMPLETION_MESSAGE_TYPE has the exact expected value', () => {
-        expect(constants.DSS_CHAT_COMPLETION_MESSAGE_TYPE).toBe('DSS_CHAT_COMPLETION_DETECTED');
-    });
-
-    it('DSS_FIBER_DELETE_MESSAGE_TYPE has the exact expected value', () => {
-        expect(constants.DSS_FIBER_DELETE_MESSAGE_TYPE).toBe('DSS_FIBER_DELETE_SESSION');
-    });
-
-    it('DSS_FIBER_DELETE_RESULT_TYPE has the exact expected value', () => {
-        expect(constants.DSS_FIBER_DELETE_RESULT_TYPE).toBe('DSS_FIBER_DELETE_RESULT');
-    });
-
-    it('DSS_PENDING_DELETES_SYNC_KEY has the exact expected value', () => {
-        expect(constants.DSS_PENDING_DELETES_SYNC_KEY).toBe('dss-pending-deletes-sync');
-    });
-
-    it('DSS_LAST_AUTH_TOKEN_KEY has the exact expected value', () => {
-        expect(constants.DSS_LAST_AUTH_TOKEN_KEY).toBe('dss-last-auth-token');
-    });
-
-    it('DSS_OPEN_TEMP_UUIDS_KEY has the exact expected value', () => {
-        expect(constants.DSS_OPEN_TEMP_UUIDS_KEY).toBe('dss-open-temp-uuids');
-    });
-
-    it('DSS_AUTH_CAPTURED_TYPE has the exact expected value', () => {
-        expect(constants.DSS_AUTH_CAPTURED_TYPE).toBe('DSS_AUTH_CAPTURED');
-    });
-
-    it('DSS_HISTORY_NAV_TYPE has the exact expected value', () => {
-        expect(constants.DSS_HISTORY_NAV_TYPE).toBe('DSS_HISTORY_NAV');
-    });
-
-    it('DSS_FRAGMENT_COMPLETE_TYPE has the exact expected value', () => {
-        expect(constants.DSS_FRAGMENT_COMPLETE_TYPE).toBe('DSS_FRAGMENT_COMPLETE');
-    });
-
-    it.each([
-        ['DSS_MSG_TRACK_FOR_DELETION', 'DSS_TRACK_FOR_DELETION'],
-        ['DSS_MSG_REMOVE_PENDING_DELETE', 'DSS_REMOVE_PENDING_DELETE'],
-        ['DSS_MSG_REMOVE_OPEN_UUID', 'DSS_REMOVE_OPEN_UUID'],
-        ['DSS_MSG_SET_LAST_AUTH_TOKEN', 'DSS_SET_LAST_AUTH_TOKEN'],
-        ['LEASE_TTL_MS', 600000],
-        ['HEARTBEAT_INTERVAL_MS', 60000],
-        ['DSS_DEVICE_ID_KEY', 'dss-device-id'],
-        ['FOREIGN_LEASE_TTL_MS', 86400000], // 24 hours
-        ['DSS_MSG_HEARTBEAT', 'DSS_HEARTBEAT'],
-        ['DSS_MSG_RELEASE_LEASE', 'DSS_RELEASE_LEASE'],
-        ['DSS_MSG_GET_PENDING_UUIDS', 'DSS_GET_PENDING_UUIDS'],
-        ['DSS_MSG_PENDING_UUIDS_CHANGED', 'DSS_PENDING_UUIDS_CHANGED'],
-    ])('%s has the exact expected value', (name, value) => {
-        expect(constants[name]).toBe(value);
-    });
-
-    it('DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE has the exact expected value', () => {
-        expect(constants.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE).toBe('DSS_SCHEDULE_DELETE_RETRY');
+        expect(() => new Function(src)(), 'loading without a module binding must not throw').not.toThrow();
+        expect(globalThis.DSS_TEMP_CHAT).toStrictEqual(CONTRACT);
     });
 });

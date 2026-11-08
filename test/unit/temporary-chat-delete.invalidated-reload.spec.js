@@ -67,9 +67,10 @@ function arrangeTrackedTempChat() {
     Object.assign(TemporaryChatDelete.state, {
         capturedAuthToken: 'Bearer test-token',
         trackedTemporaryUuid: TEMP_UUID,
-        createDetected: false,
-        isCompletionDetected: false,
-        isPendingCreate: false,
+        createdSessionIds: new Set(),
+        sentSessionIds: new Set(),
+        enabledFirstSendIds: new Set(),
+        pendingTemporaryUuid: null,
         suppressNextUnloadDelete: false,
         isKeyboardRefresh: false,
     });

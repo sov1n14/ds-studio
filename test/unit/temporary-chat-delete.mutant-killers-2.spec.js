@@ -64,10 +64,10 @@ beforeEach(() => {
     Object.assign(TemporaryChatDelete.state, {
         capturedAuthToken: null,
         trackedTemporaryUuid: null,
-        createDetected: false,
-        isCompletionDetected: false,
-        isPendingCreate: false,
-        coOccurrenceTimer: null,
+        createdSessionIds: new Set(),
+        sentSessionIds: new Set(),
+        enabledFirstSendIds: new Set(),
+        pendingTemporaryUuid: null,
         suppressNextUnloadDelete: false,
         isKeyboardRefresh: false,
         isListening: false,
@@ -107,10 +107,13 @@ function fullHandlerDeps(state) {
 }
 
 describe('tracking.create — valid state', () => {
-    it('returns the tracking API instead of throwing when a state object is given', () => {
-        const api = TRACKING().create(TRACKING().createState());
-        expect(typeof api.trackUuid).toBe('function');
-        expect(typeof api.checkCoOccurrence).toBe('function');
+    it('returns a working tracking API instead of throwing when a state object is given', () => {
+        const state = TRACKING().createState();
+        const api = TRACKING().create(state);
+        setPathname('/a/chat/s/' + UUID_A);
+        api.recordCreatedSession(UUID_A);
+        api.recordCompletionSession(UUID_A, true);
+        expect(state.trackedTemporaryUuid).toBe(UUID_A);
     });
 });
 
@@ -190,14 +193,16 @@ describe('handlers — window messages without data are ignored safely', () => {
         'handleAuthMessage',
         'handleCreateMessage',
         'handleCompletionMessage',
+        'handleSessionMessage',
         'handleHistoryNavMessage',
         'handleWindowMessage',
     ])('%s does not throw for a same-window message whose data is null', (name) => {
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
+        setPathname('/a/chat/s/' + UUID_A);
         expect(() => TemporaryChatDelete[name]({ source: window, data: null })).not.toThrow();
         expect(TemporaryChatDelete.state.capturedAuthToken).toBeNull();
-        expect(TemporaryChatDelete.state.createDetected).toBe(false);
-        expect(TemporaryChatDelete.state.isCompletionDetected).toBe(false);
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+        expect(sentOfType(T().DSS_MSG_TRACK_FOR_DELETION)).toEqual([]);
     });
 });
 
@@ -235,12 +240,13 @@ describe('handlers.handleAuthMessage — SW response handling', () => {
     });
 });
 
-describe('handlers.handleCreateMessage — completes a co-occurrence that started with completion', () => {
-    it('completion first, then create, marks the current chat as temporary', () => {
+describe('handlers.handleCreateMessage — completes a match that started with the first send', () => {
+    it('first send in U with the switch on, then the create for U, marks U on its page', () => {
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
         setPathname('/a/chat/s/' + UUID_A);
-        TemporaryChatDelete.handleCompletionMessage(windowMessage({ type: T().DSS_CHAT_COMPLETION_MESSAGE_TYPE }));
-        TemporaryChatDelete.handleCreateMessage(windowMessage({ type: T().DSS_CHAT_CREATE_MESSAGE_TYPE }));
+        TemporaryChatDelete.handleCompletionMessage(windowMessage({ type: T().DSS_CHAT_COMPLETION_MESSAGE_TYPE, chatSessionId: UUID_A }));
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+        TemporaryChatDelete.handleCreateMessage(windowMessage({ type: T().DSS_CHAT_CREATE_MESSAGE_TYPE, createdSessionId: UUID_A }));
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
     });
 });
@@ -699,30 +705,6 @@ describe('tracking.trackUuid — SW route handling', () => {
             expect(() => tracking.trackUuid(UUID_A)).not.toThrow();
         });
         expect(state.trackedTemporaryUuid).toBe(UUID_A);
-    });
-});
-
-describe('tracking.checkCoOccurrence — a completed window cancels its timer', () => {
-    it('the first window timer does not wipe a second, still-open window', () => {
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-        const state = TRACKING().createState();
-        const tracking = TRACKING().create(state);
-        setPathname('/a/chat/s/' + UUID_A);
-        state.createDetected = true;
-        tracking.checkCoOccurrence();
-        vi.advanceTimersByTime(100);
-        state.isCompletionDetected = true;
-        tracking.checkCoOccurrence();
-        expect(state.trackedTemporaryUuid).toBe(UUID_A);
-
-        vi.advanceTimersByTime(400);
-        setPathname('/a/chat/s/' + UUID_B);
-        state.createDetected = true;
-        tracking.checkCoOccurrence();
-        vi.advanceTimersByTime(600);
-        state.isCompletionDetected = true;
-        tracking.checkCoOccurrence();
-        expect(state.trackedTemporaryUuid).toBe(UUID_B);
     });
 });
 

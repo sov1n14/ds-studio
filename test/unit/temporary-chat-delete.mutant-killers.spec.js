@@ -44,10 +44,10 @@ function resetState() {
     Object.assign(TemporaryChatDelete.state, {
         capturedAuthToken: null,
         trackedTemporaryUuid: null,
-        createDetected: false,
-        isCompletionDetected: false,
-        isPendingCreate: false,
-        coOccurrenceTimer: null,
+        createdSessionIds: new Set(),
+        sentSessionIds: new Set(),
+        enabledFirstSendIds: new Set(),
+        pendingTemporaryUuid: null,
         suppressNextUnloadDelete: false,
         isKeyboardRefresh: false,
         isListening: false,
@@ -61,6 +61,28 @@ function makeNav(destinationUrl, navigationType = 'push') {
 
 function chatUrl(uuid) {
     return 'https://chat.deepseek.com/a/chat/s/' + uuid;
+}
+
+function createMsg(createdSessionId) {
+    return new MessageEvent('message', { data: { type: globalThis.DSS_TEMP_CHAT.DSS_CHAT_CREATE_MESSAGE_TYPE, createdSessionId }, source: window });
+}
+
+function completionMsg(chatSessionId) {
+    return new MessageEvent('message', { data: { type: globalThis.DSS_TEMP_CHAT.DSS_CHAT_COMPLETION_MESSAGE_TYPE, chatSessionId }, source: window });
+}
+
+/** Every DSS_TRACK_FOR_DELETION request sent to background. */
+function trackRequests() {
+    return chrome.runtime.sendMessage.mock.calls
+        .map(([message]) => message)
+        .filter((message) => message?.type === globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION);
+}
+
+/** On the current page with the switch on: a create returns uuid, then the first message is sent in uuid. */
+function matchOnHomepage(uuid) {
+    globalThis.TemporaryChatEnabledFlag.__setCache(true);
+    TemporaryChatDelete.handleCreateMessage(createMsg(uuid));
+    TemporaryChatDelete.handleCompletionMessage(completionMsg(uuid));
 }
 
 beforeEach(() => {
@@ -92,13 +114,23 @@ describe('tracking — createState default values', () => {
         const state = globalThis.__DSS_TempChatDelete_tracking.createState();
         expect(state.capturedAuthToken).toBeNull();
         expect(state.trackedTemporaryUuid).toBeNull();
-        expect(state.createDetected).toBe(false);
-        expect(state.isCompletionDetected).toBe(false);
-        expect(state.isPendingCreate).toBe(false);
-        expect(state.coOccurrenceTimer).toBeNull();
+        ['createdSessionIds', 'sentSessionIds', 'enabledFirstSendIds'].forEach((key) => {
+            expect(state[key], key).toBeInstanceOf(Set);
+            expect(state[key].size, key).toBe(0);
+        });
+        expect(state.pendingTemporaryUuid).toBeNull();
         expect(state.suppressNextUnloadDelete).toBe(false);
         expect(state.isKeyboardRefresh).toBe(false);
         expect(state.isListening).toBe(false);
+    });
+
+    it('each state object owns its own session sets', () => {
+        const first = globalThis.__DSS_TempChatDelete_tracking.createState();
+        const second = globalThis.__DSS_TempChatDelete_tracking.createState();
+        ['createdSessionIds', 'sentSessionIds', 'enabledFirstSendIds'].forEach((key) => {
+            first[key].add(UUID_A);
+            expect(second[key].size, key).toBe(0);
+        });
     });
 });
 
@@ -169,46 +201,41 @@ describe('tracking — saveTrackedUuid set vs remove', () => {
     });
 });
 
-describe('tracking — checkCoOccurrence timer', () => {
-    beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
+describe('tracking — a matched session is marked once', () => {
+    it('after the matched U is tracked and deleted on leave, returning to U does not mark it again', () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        matchOnHomepage(UUID_A);
+        TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_A)));
+        setPathname('/a/chat/s/' + UUID_A);
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
 
-    it('second single-signal reuses existing timer', () => {
-        TemporaryChatDelete.state.createDetected = true;
-        TemporaryChatDelete.checkCoOccurrence();
-        const t1 = TemporaryChatDelete.state.coOccurrenceTimer;
-        expect(t1).not.toBeNull();
-        TemporaryChatDelete.state.createDetected = true;
-        TemporaryChatDelete.checkCoOccurrence();
-        expect(TemporaryChatDelete.state.coOccurrenceTimer).toBe(t1);
-    });
+        TemporaryChatDelete.state.capturedAuthToken = 'Bearer tok';
+        TemporaryChatDelete.handleNavigationEvent(makeNav('https://chat.deepseek.com/'));
+        setPathname('/');
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
 
-    it('co-occurrence clears timer to null', () => {
-        TemporaryChatDelete.state.createDetected = true;
-        TemporaryChatDelete.checkCoOccurrence();
-        expect(TemporaryChatDelete.state.coOccurrenceTimer).not.toBeNull();
-        TemporaryChatDelete.state.createDetected = true;
-        TemporaryChatDelete.state.isCompletionDetected = true;
-        TemporaryChatDelete.checkCoOccurrence();
-        expect(TemporaryChatDelete.state.coOccurrenceTimer).toBeNull();
-    });
+        TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_A)));
 
-    it('timer expiry resets coOccurrenceTimer to null', () => {
-        TemporaryChatDelete.state.isCompletionDetected = true;
-        TemporaryChatDelete.checkCoOccurrence();
-        expect(TemporaryChatDelete.state.coOccurrenceTimer).not.toBeNull();
-        vi.advanceTimersByTime(1000);
-        expect(TemporaryChatDelete.state.coOccurrenceTimer).toBeNull();
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+        expect(trackRequests()).toHaveLength(1);
     });
 });
 
-describe('tracking — trackUuid clears isPendingCreate', () => {
-    it('after co-occurrence on chat page, isPendingCreate is false', () => {
-        setPathname('/a/chat/s/' + UUID_A);
-        Object.assign(TemporaryChatDelete.state, { createDetected: true, isCompletionDetected: true });
-        TemporaryChatDelete.checkCoOccurrence();
-        expect(TemporaryChatDelete.state.isPendingCreate).toBe(false);
-        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
+describe('tracking — a create or first send without a valid session id is ignored', () => {
+    it.each([
+        ['an empty string', ''],
+        ['null', null],
+        ['undefined', undefined],
+        ['a number', 42],
+    ])('junk session id %s after the matched U leaves U as the only tracked conversation', (_label, junkId) => {
+        matchOnHomepage(UUID_A);
+        TemporaryChatDelete.handleCreateMessage(createMsg(junkId));
+        TemporaryChatDelete.handleCompletionMessage(completionMsg(junkId));
+
+        TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_A)));
+
+        expect(trackRequests().map((message) => message.uuid), 'a junk session id must never be sent as DSS_TRACK_FOR_DELETION').not.toContain(null);
+        expect(trackRequests(), 'only the matched U is tracked').toEqual([{ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION, uuid: UUID_A }]);
     });
 });
 
@@ -579,7 +606,7 @@ describe('handlers — handleBeforeUnload guards', () => {
     });
 });
 
-describe('handlers — handleWindowMessage dispatches all', () => {
+describe('handlers — handleWindowMessage dispatches auth', () => {
     it('auth capture', () => {
         const event = new MessageEvent('message', {
             data: { type: globalThis.DSS_TEMP_CHAT.DSS_AUTH_CAPTURED_TYPE, authorization: 'Bearer wm' },
@@ -588,27 +615,16 @@ describe('handlers — handleWindowMessage dispatches all', () => {
         TemporaryChatDelete.handleWindowMessage(event);
         expect(TemporaryChatDelete.state.capturedAuthToken).toBe('Bearer wm');
     });
+});
 
-    it('create detection', () => {
+describe('handlers — handleSessionMessage routes create and completion', () => {
+    it('a create (switch off) and a first send (switch on) for U, both through handleSessionMessage, track U on its page', () => {
+        setPathname('/a/chat/s/' + UUID_A);
+        globalThis.TemporaryChatEnabledFlag.__setCache(false);
+        TemporaryChatDelete.handleSessionMessage(createMsg(UUID_A));
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
-        const event = new MessageEvent('message', {
-            data: { type: globalThis.DSS_TEMP_CHAT.DSS_CHAT_CREATE_MESSAGE_TYPE },
-            source: window,
-        });
-        TemporaryChatDelete.handleWindowMessage(event);
-        expect(TemporaryChatDelete.state.createDetected).toBe(true);
-    });
-
-    it('completion detection', () => {
-        vi.useFakeTimers();
-        globalThis.TemporaryChatEnabledFlag.__setCache(true);
-        const event = new MessageEvent('message', {
-            data: { type: globalThis.DSS_TEMP_CHAT.DSS_CHAT_COMPLETION_MESSAGE_TYPE },
-            source: window,
-        });
-        TemporaryChatDelete.handleWindowMessage(event);
-        expect(TemporaryChatDelete.state.isCompletionDetected).toBe(true);
-        vi.useRealTimers();
+        TemporaryChatDelete.handleSessionMessage(completionMsg(UUID_A));
+        expect(trackRequests()).toEqual([{ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TRACK_FOR_DELETION, uuid: UUID_A }]);
     });
 });
 
@@ -671,16 +687,15 @@ describe('entry — handleRefreshKeydown precise matching', () => {
     });
 });
 
-describe('handlers — marking requires both isPendingCreate AND enabledFlag', () => {
-    it('isPendingCreate true + flag false does NOT mark', () => {
-        TemporaryChatDelete.state.isPendingCreate = true;
+describe('handlers — navigation marks only the matched uuid, and only with the switch on', () => {
+    it('matched U + switch off at navigation does NOT mark U', () => {
+        matchOnHomepage(UUID_A);
         globalThis.TemporaryChatEnabledFlag.__setCache(false);
         TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_A)));
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
     });
 
-    it('flag true + isPendingCreate false does NOT mark', () => {
-        TemporaryChatDelete.state.isPendingCreate = false;
+    it('switch on + nothing matched does NOT mark the destination', () => {
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
         TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_A)));
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
@@ -688,18 +703,21 @@ describe('handlers — marking requires both isPendingCreate AND enabledFlag', (
 });
 
 describe('handlers — context invalidated guard', () => {
-    it('returns early when chrome.runtime.id is undefined', () => {
+    it('returns early when chrome.runtime.id is undefined: the matched destination is not marked and stays matched', () => {
+        setPathname('/');
+        matchOnHomepage(UUID_B);
         const originalId = chrome.runtime.id;
         chrome.runtime.id = undefined;
-        setPathname('/a/chat/s/' + UUID_A);
-        Object.assign(TemporaryChatDelete.state, {
-            trackedTemporaryUuid: UUID_A, capturedAuthToken: 'Bearer tok', isPendingCreate: true,
-        });
-        globalThis.TemporaryChatEnabledFlag.__setCache(true);
+        try {
+            TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_B)));
+        } finally {
+            chrome.runtime.id = originalId;
+        }
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+
+        // The bail consumed nothing: with the context back, navigation to UUID_B marks it.
         TemporaryChatDelete.handleNavigationEvent(makeNav(chatUrl(UUID_B)));
-        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
-        expect(TemporaryChatDelete.state.isPendingCreate).toBe(true);
-        chrome.runtime.id = originalId;
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_B);
     });
 });
 

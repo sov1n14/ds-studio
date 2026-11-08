@@ -1,7 +1,7 @@
 /**
  * DS studio — Temporary Chat Delete / 追蹤狀態部件
- * 單一職責：擁有共享狀態物件、UUID 的 sessionStorage 持久化，以及 create + completion
- * 的 co-occurrence 偵測。
+ * 單一職責：擁有共享狀態物件、UUID 的 sessionStorage 持久化，以及以 session 身分
+ * （create 回應的 id 與 completion 請求的 chat_session_id）判定臨時對話。
  * 常數由 temporary-chat-constants.js 在前載入提供（classic script，無 ESM import）。
  * 無載入期副作用：入口檔 temporary-chat-delete.js 負責組合本部件。
  */
@@ -12,8 +12,6 @@
     const chatSessionId = root.DSSChatSessionId ||
         (typeof require !== 'undefined' ? require('../utils/chat-session-id.js') : {});
 
-    const CO_OCCURRENCE_WINDOW_MS = 1000;
-
     /**
      * 建立唯一的共享狀態物件。所有部件皆以參照共用此物件，不得自行保存旗標副本。
      * 啟用旗標不在此處：由 TemporaryChatEnabledFlag 集中持有。
@@ -23,12 +21,14 @@
             capturedAuthToken: null,
             // 追蹤中的臨時對話 UUID（null 表示無追蹤；同步至 sessionStorage 以跨刷新保存）
             trackedTemporaryUuid: null,
-            // co-occurrence 視窗信號旗標
-            createDetected: false,
-            isCompletionDetected: false,
-            // create + completion 於視窗內同時出現時為 true，觸發 UUID 標記
-            isPendingCreate: false,
-            coOccurrenceTimer: null,
+            // 本文件內 create 回應建立的 session id（僅本文件建立的對話才可能是臨時對話）
+            createdSessionIds: new Set(),
+            // 本文件內已觀察到 completion 請求的 session id（用於判定是否為首次送出）
+            sentSessionIds: new Set(),
+            // 首次送出時切換為開啟的 session id；與 createdSessionIds 交集者即為臨時對話
+            enabledFirstSendIds: new Set(),
+            // 已配對但尚未導航抵達的臨時對話 UUID；導航只會標記等於此值的目的地
+            pendingTemporaryUuid: null,
             // Navigation API navigate 事件中設定，阻止 beforeunload 重複刪除同一次離開
             suppressNextUnloadDelete: false,
             // 鍵盤補充刷新旗標（F5 / Ctrl+R / Cmd+R）
@@ -78,6 +78,11 @@
         return chatSessionId.extractChatSessionId(urlOrPath);
     }
 
+    /** session id 須為非空字串（缺少或格式不符的訊息一律忽略，不標記） */
+    function isSessionId(value) {
+        return typeof value === 'string' && value !== '';
+    }
+
     /**
      * 綁定共享狀態，回傳追蹤相關操作。
      * @param {object} state - createState() 產生的共享狀態物件
@@ -92,7 +97,7 @@
         function trackUuid(uuid) {
             state.trackedTemporaryUuid = uuid;
             saveTrackedUuid(uuid);
-            state.isPendingCreate = false;
+            state.pendingTemporaryUuid = null;
             // 委派 SW 的待刪佇列路由（content 層不直接觸碰 chrome.storage）；
             // fire-and-forget，失敗僅記錄不中斷追蹤流程；
             // 外層 try/catch 攔截 context invalidated 時 sendMessage 的同步擲出
@@ -111,35 +116,47 @@
         }
 
         /**
-         * 檢查 create 與 completion 兩個信號是否在視窗內同時出現。
-         * 若已同時出現：清除計時器並設定 isPendingCreate。
-         * 若只有單一信號：啟動超時計時器，逾時後重置兩個旗標。
+         * 判定 sessionId 是否為臨時對話：本文件 create 回應建立，且首次送出時切換為開啟。
+         * 配對成功即消耗該 id（同一對話只標記一次）；目前已位於該對話頁面時立即追蹤，
+         * 否則留待導航抵達該 UUID 時由 handlers 追蹤。
+         * @param {string} sessionId
          */
-        function checkCoOccurrence() {
-            if (state.createDetected && state.isCompletionDetected) {
-                clearTimeout(state.coOccurrenceTimer);
-                state.coOccurrenceTimer = null;
-                state.createDetected = false;
-                state.isCompletionDetected = false;
-                state.isPendingCreate = true;
-
-                // 競態修正：若 SPA 在 co-occurrence 完成前已導航至新對話，立即標記
-                const currentUuid = extractUuidFromUrl();
-                if (currentUuid) {
-                    trackUuid(currentUuid);
-                }
-                return;
-            }
-            if (state.coOccurrenceTimer === null) {
-                state.coOccurrenceTimer = setTimeout(() => {
-                    state.createDetected = false;
-                    state.isCompletionDetected = false;
-                    state.coOccurrenceTimer = null;
-                }, CO_OCCURRENCE_WINDOW_MS);
+        function matchTemporarySession(sessionId) {
+            if (!state.createdSessionIds.has(sessionId)) return;
+            if (!state.enabledFirstSendIds.has(sessionId)) return;
+            state.enabledFirstSendIds.delete(sessionId);
+            state.pendingTemporaryUuid = sessionId;
+            if (extractUuidFromUrl() === sessionId) {
+                trackUuid(sessionId);
             }
         }
 
-        return { loadTrackedUuid, saveTrackedUuid, extractUuidFromUrl, trackUuid, checkCoOccurrence };
+        /**
+         * 記錄 create 回應建立的 session id，並嘗試配對（completion 可能先到）。
+         * @param {string} sessionId
+         */
+        function recordCreatedSession(sessionId) {
+            if (!isSessionId(sessionId)) return;
+            state.createdSessionIds.add(sessionId);
+            matchTemporarySession(sessionId);
+        }
+
+        /**
+         * 記錄 completion 請求所屬的 session id；僅首次送出時的切換狀態決定能否成為臨時對話，
+         * 避免切換關閉時開始的對話在中途開啟切換後被誤刪。
+         * @param {string} sessionId
+         * @param {boolean} isEnabled - 送出當下的切換狀態
+         */
+        function recordCompletionSession(sessionId, isEnabled) {
+            if (!isSessionId(sessionId)) return;
+            if (!state.sentSessionIds.has(sessionId)) {
+                state.sentSessionIds.add(sessionId);
+                if (isEnabled) state.enabledFirstSendIds.add(sessionId);
+            }
+            matchTemporarySession(sessionId);
+        }
+
+        return { loadTrackedUuid, saveTrackedUuid, extractUuidFromUrl, trackUuid, recordCreatedSession, recordCompletionSession };
     }
 
     const bundle = { createState, create, loadTrackedUuid, saveTrackedUuid, extractUuidFromUrl };

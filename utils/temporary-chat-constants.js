@@ -13,10 +13,10 @@ const DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed';
 // sessionStorage key：目前追蹤中的臨時對話 UUID；值為 UUID 字串或空字串（無追蹤時）
 const DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid';
 
-// window.postMessage type：main world XHR/fetch hook 偵測到新對話建立請求時發送
+// window.postMessage type：main world XHR/fetch hook 讀到 chat_session/create 回應時發送；payload {createdSessionId: string}（回應的 data.biz_data.chat_session.id）
 const DSS_CHAT_CREATE_MESSAGE_TYPE = 'DSS_CHAT_CREATE_DETECTED';
 
-// window.postMessage type：XHR hook 偵測到 /api/v0/chat/completion 時發送
+// window.postMessage type：main world XHR/fetch hook 偵測到 /api/v0/chat/completion 請求時發送；payload {chatSessionId: string|null}（請求主體的 chat_session_id）
 const DSS_CHAT_COMPLETION_MESSAGE_TYPE = 'DSS_CHAT_COMPLETION_DETECTED';
 
 // window.postMessage type：ISOLATED world 要求 MAIN world 透過 React Fiber 刪除對話

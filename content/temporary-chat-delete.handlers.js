@@ -50,27 +50,35 @@
         }
 
         /**
-         * 處理來自 MAIN world 的新對話建立偵測訊息（DSS_CHAT_CREATE_DETECTED）。
+         * 處理來自 MAIN world 的新對話建立訊息（DSS_CHAT_CREATE_DETECTED { createdSessionId }）。
+         * 不受切換狀態限制：切換可能在頁面載入的 create 之後才開啟，id 仍須保留供首次送出時配對。
          * @param {MessageEvent} e
          */
         function handleCreateMessage(e) {
             if (e.source !== window) return;
             if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_CHAT_CREATE_MESSAGE_TYPE) return;
-            if (!readEnabledFlag()) return;
-            state.createDetected = true;
-            tracking.checkCoOccurrence();
+            tracking.recordCreatedSession(e.data.createdSessionId);
         }
 
         /**
-         * 處理來自 MAIN world 的 completion API 偵測訊息（DSS_CHAT_COMPLETION_DETECTED）。
+         * 處理來自 MAIN world 的 completion 請求訊息（DSS_CHAT_COMPLETION_DETECTED { chatSessionId }）。
+         * 一律記錄（判定首次送出），並附上送出當下的切換狀態。
          * @param {MessageEvent} e
          */
         function handleCompletionMessage(e) {
             if (e.source !== window) return;
             if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_CHAT_COMPLETION_MESSAGE_TYPE) return;
-            if (!readEnabledFlag()) return;
-            state.isCompletionDetected = true;
-            tracking.checkCoOccurrence();
+            tracking.recordCompletionSession(e.data.chatSessionId, readEnabledFlag());
+        }
+
+        /**
+         * 常駐的 session 觀察器：路由 create 與 completion 訊息。
+         * 由入口檔於 init 掛載且不隨切換卸載，確保切換開啟前發生的 create 與首次送出都被觀察到。
+         * @param {MessageEvent} e
+         */
+        function handleSessionMessage(e) {
+            handleCreateMessage(e);
+            handleCompletionMessage(e);
         }
 
         /**
@@ -89,20 +97,19 @@
         }
 
         /**
-         * 統一處理所有 postMessage（根據 type 路由至對應處理器）。
+         * 統一處理切換期間的 postMessage（根據 type 路由至對應處理器）。
+         * create 與 completion 由常駐的 handleSessionMessage 處理，不在此重複路由。
          * @param {MessageEvent} e
          */
         function handleWindowMessage(e) {
             handleAuthMessage(e);
-            handleCreateMessage(e);
-            handleCompletionMessage(e);
             handleHistoryNavMessage(e);
         }
 
         /**
          * Navigation API navigate 事件處理器：
          * 1. 若離開的是追蹤中的臨時對話（且非刷新/同 URL），執行刪除。
-         * 2. 若有待定建立旗標且導航目的地是對話頁面，標記該 UUID 為臨時對話。
+         * 2. 若導航目的地正是已配對的臨時對話 UUID，標記該 UUID（其他對話一律不標記）。
          * @param {NavigateEvent} event
          */
         function handleNavigationEvent(event) {
@@ -149,12 +156,10 @@
                 }
             }
 
-            // 標記新建立的臨時對話：有待定旗標且目的地是對話頁面
-            if (state.isPendingCreate && readEnabledFlag()) {
-                const destinationUuid = extractUuidFromUrl(destinationUrl);
-                if (destinationUuid) {
-                    tracking.trackUuid(destinationUuid);
-                }
+            // 標記新建立的臨時對話：目的地必須正是已配對（本文件建立且以開啟狀態首次送出）的 UUID
+            const isPendingDestination = !!destUuid && destUuid === state.pendingTemporaryUuid;
+            if (isPendingDestination && readEnabledFlag()) {
+                tracking.trackUuid(destUuid);
             }
         }
 
@@ -215,6 +220,7 @@
             handleAuthMessage,
             handleCreateMessage,
             handleCompletionMessage,
+            handleSessionMessage,
             handleHistoryNavMessage,
             handleWindowMessage,
             handleNavigationEvent,

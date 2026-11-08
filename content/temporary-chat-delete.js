@@ -1,7 +1,7 @@
 /**
  * DS studio — Temporary Chat Delete（入口檔）
  * 單一職責：組合各部件、擁有監聽器生命週期與初始化流程。
- * 臨時對話的定義：切換開啟時，由 create + completion API 共同觸發標記的對話。
+ * 臨時對話的定義：本文件內 create 回應建立、且首次送出（completion）時切換為開啟的對話。
  * 歷史對話（直接導航至已存在對話）永遠不會被刪除。
  *
  * 載入順序（manifest.json 必須依此順序）：
@@ -135,6 +135,8 @@ const TemporaryChatDelete = (() => {
     async function init() {
         const CHANGED_EVENT = globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_CHANGED_EVENT;
         window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
+        // 常駐 session 觀察器：不隨切換卸載，切換開啟前的 create 與首次送出狀態也須被記錄
+        window.addEventListener('message', handlers.handleSessionMessage);
 
         const flag = _flag();
         flag.startSync();
@@ -167,12 +169,14 @@ const TemporaryChatDelete = (() => {
         initEnabledFlagFromStorage,
         loadTrackedUuid: tracking.loadTrackedUuid,
         saveTrackedUuid: tracking.saveTrackedUuid,
-        checkCoOccurrence: tracking.checkCoOccurrence,
+        recordCreatedSession: tracking.recordCreatedSession,
+        recordCompletionSession: tracking.recordCompletionSession,
         deleteTrackedAndClear: coordinator.deleteTrackedAndClear,
         handOffToServiceWorker: coordinator.handOffToServiceWorker,
         handleAuthMessage: handlers.handleAuthMessage,
         handleCreateMessage: handlers.handleCreateMessage,
         handleCompletionMessage: handlers.handleCompletionMessage,
+        handleSessionMessage: handlers.handleSessionMessage,
         handleHistoryNavMessage: handlers.handleHistoryNavMessage,
         handleWindowMessage: handlers.handleWindowMessage,
         handleBeforeUnload: handlers.handleBeforeUnload,

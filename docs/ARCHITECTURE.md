@@ -42,7 +42,7 @@ ds-studio/
 │   ├── temporary-chat-toggle.css    ─  Temporary chat toggle styles
 │   ├── temporary-chat-toggle.ui.js  ─  Temporary chat toggle-row UI creation and visual state
 │   ├── temporary-chat-delete.js     ─  Entry: delete logic for temporary conversations (v4.5.0)
-│   ├── temporary-chat-delete.tracking.js   ─  Shared state, UUID sessionStorage persistence, create+completion co-occurrence detection
+│   ├── temporary-chat-delete.tracking.js   ─  Shared state, UUID sessionStorage persistence, session-id matching for temporary-conversation detection
 │   ├── temporary-chat-delete.coordinator.js ─  Delete coordination (Fiber → API retry → SW alarm fallback)
 │   ├── temporary-chat-delete.handlers.js    ─  Event handlers for temporary-chat deletion
 │   ├── temporary-chat-delete-api.js ─  Delete API fetch wrapper for temporary chat
