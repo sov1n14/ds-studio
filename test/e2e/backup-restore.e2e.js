@@ -6,7 +6,7 @@ import { test as base, expect } from './fixtures.js';
 import { closeExtensionPages, openPopup, openPopupGroupList, popupGroupNames, waitForPopupFullyBound } from './helpers/popup.js';
 import { differingKeys, readBothAreas, restoreFullSnapshot, setBothAreas, setLocal } from './helpers/settings.js';
 
-// The popup Backup & Restore card (docs/FEATURES.md:315-325, docs/spec/05-data-storage.md:21-37, docs/architecture/EXPORT.md:66-79): Export Settings, Import Settings with its confirmation, rejected backup files, and the restored_messages export, clear and import controls.
+// The popup Backup & Restore card (docs/FEATURES.md:316-326, docs/spec/05-data-storage.md:21-37, docs/architecture/EXPORT.md:66-79): Export Settings, Import Settings with its confirmation, rejected backup files, and the restored_messages export, clear and import controls.
 // Popup only: no DeepSeek page is opened and no chat is touched.
 // An import overwrites storage broadly, so every test runs inside a full snapshot of BOTH storage areas, restored key for key afterwards (keys the test created are removed), even when the test fails.
 
@@ -170,8 +170,8 @@ test.describe('backup and restore: Export Settings', () => {
         expect(fileName, 'file name is ds-studio-backup-YYYYMMDD.json for today (docs/spec/05-data-storage.md:23)').toBe(`ds-studio-backup-${todayStamp()}.json`);
         const exported = JSON.parse(text);
         expect(Object.keys(exported).sort(), 'the file holds exactly the 28 getSettings() fields (docs/architecture/POPUP.md:225)').toEqual([...SETTINGS_FIELDS].sort());
-        expect(exported.pinnedPresetId, 'the pinned default travels with the backup (docs/FEATURES.md:47)').toBe(group.id);
-        expect(exported.promptPresets, 'the prompt groups travel with the backup (docs/FEATURES.md:321)').toContainEqual(expect.objectContaining({ id: group.id, name: group.name, content: group.content }));
+        expect(exported.pinnedPresetId, 'the pinned default travels with the backup (docs/FEATURES.md:48)').toBe(group.id);
+        expect(exported.promptPresets, 'the prompt groups travel with the backup (docs/FEATURES.md:322)').toContainEqual(expect.objectContaining({ id: group.id, name: group.name, content: group.content }));
         expect(exported.includeThinking, 'the includeThinking setting is exported as stored').toBe(includeThinking);
         expect(exported.chatWidth, 'the chat width setting is exported as stored').toBe(chatWidth);
     });
@@ -211,7 +211,7 @@ test.describe('backup and restore: Import Settings', () => {
                     includeThinking: area.includeThinking,
                     chatWidth: area.dsChatWidth,
                 };
-            }, `${areaName}: the new group is merged in (docs/spec/05-data-storage.md:25), the pin is restored (docs/FEATURES.md:47), activePresetId, includeThinking and the chat width are overwritten (docs/architecture/EXPORT.md:75)`).toEqual({
+            }, `${areaName}: the new group is merged in (docs/spec/05-data-storage.md:25), the pin is restored (docs/FEATURES.md:48), activePresetId, includeThinking and the chat width are overwritten (docs/architecture/EXPORT.md:75)`).toEqual({
                 group: { name: group.name, content: group.content }, isIndexed: true, pinnedPresetId: group.id, activePresetId: group.id, includeThinking, chatWidth,
             });
         }
@@ -318,16 +318,16 @@ test.describe('backup and restore: restored_messages', () => {
         await expectToast(popup, TOAST_RESTORED_EXPORTED);
 
         await popup.locator('#clearRestoredBtn').click();
-        // docs/FEATURES.md:325 and docs/spec/05-data-storage.md:37: the popup asks for confirmation before clearing, which the test accepts.
+        // docs/FEATURES.md:326 and docs/spec/05-data-storage.md:37: the popup asks for confirmation before clearing, which the test accepts.
         await expect(popup.locator('#modalOverlay'), 'the clear asks for confirmation').toBeVisible();
         await popup.locator('#modalActions .modal-btn').last().click();
         await expectToast(popup, TOAST_RESTORED_CLEARED);
-        await expect.poll(async () => Object.keys((await storedRestoredMessages(context)) ?? {}), 'no restored record is left (docs/FEATURES.md:325)').toEqual([]);
+        await expect.poll(async () => Object.keys((await storedRestoredMessages(context)) ?? {}), 'no restored record is left (docs/FEATURES.md:326)').toEqual([]);
 
         await importThroughPicker(popup, '#importRestoredBtn', jsonFile(exported.fileName, exported.text));
 
         await expectToast(popup, TOAST_RESTORED_IMPORTED);
-        await expect.poll(() => storedRestoredMessages(context), 'every exported record is back in local storage (docs/FEATURES.md:324)').toEqual(records);
+        await expect.poll(() => storedRestoredMessages(context), 'every exported record is back in local storage (docs/FEATURES.md:325)').toEqual(records);
         expect((await readBothAreas(context, ['restored_messages'])).sync, 'clear and import leave sync untouched: restored_messages is local-only (docs/architecture/STORAGE.md:80)').toEqual(syncBefore);
     });
 });

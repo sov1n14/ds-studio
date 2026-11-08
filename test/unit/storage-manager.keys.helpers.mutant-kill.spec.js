@@ -2,7 +2,7 @@
  * Pure helpers of utils/storage-manager.keys.js, observed through return values and through the public resolveSyncConflict() path.
  *
  * Requirements:
- * - _buildNextMeta(prevMeta, { chunkCount, chunkSizes }): the single helper every chat-map commit uses to build the next chatPresetMapMeta `{ version, chunkCount, chunkSizes[] }`. docs/architecture/STORAGE.md:153 and docs/spec/05-data-storage.md:88 document one rule of it: the version goes up by exactly 1 on every committed write.
+ * - _buildNextMeta(prevMeta, { chunkCount, chunkSizes }): the single helper every chat-map commit uses to build the next chatPresetMapMeta `{ version, chunkCount, chunkSizes[] }`. docs/architecture/STORAGE.md:153 and docs/spec/05-data-storage.md:94 document one rule of it: the version goes up by exactly 1 on every committed write.
  * - _buildNextMeta override contract: the helper JSDoc names the second argument only as "選擇性覆寫" (optional override), and no doc states the rules below; they are the helper's own optional-override contract. An override that is passed replaces the field, including 0 and an empty array (a map trimmed to no chunks); a field that is not passed keeps the previous value as a copy, so editing the next meta never alters the previous snapshot.
  * - Presets read from raw storage: dsPresetIndex lists the ids, each preset lives under dsPreset_<id>. An index id with no stored preset (a dangling id, e.g. a preset key removed on one device before the index caught up) is skipped, so resolveSyncConflict() still completes and the dangling id leaves the index.
  *

@@ -6,7 +6,7 @@ import { expectNoDownloadWithin } from './helpers/observation.js';
 import { closeExtensionPages, openPopup, waitForPopupFullyBound } from './helpers/popup.js';
 
 // The popup Export button (docs/spec/02-popup-ui.md:19 "triggers Markdown export on the active chat.deepseek.com tab"), clicked in the popup the way a user does.
-// Expected output: docs/spec/04-features.md:37-46 (title, turns, "## User" / "## DeepSeek" headings, "> **Thinking Process:**" blockquote, file name) and docs/FEATURES.md:270-275 (export options).
+// Expected output: docs/spec/04-features.md:37-46 (title, turns, "## User" / "## DeepSeek" headings, "> **Thinking Process:**" blockquote, file name) and docs/FEATURES.md:271-276 (export options).
 // export.e2e.js covers the content-script side by sending EXPORT_MARKDOWN itself; this spec covers the popup side: its button, its tab lookup and its two export checkboxes.
 // The kept chat is only read (exported), never sent to, renamed or deleted.
 
