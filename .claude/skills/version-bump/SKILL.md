@@ -45,14 +45,19 @@ The following change types are **not** considered code changes and therefore **d
 
 ## Pre-Bump Quality Gate
 
-Before finalizing a version bump, mutation testing must pass on the changed scope:
+Before finalizing a version bump, mutation testing must pass on the changed lines:
 
 | Timing | Command | Scope |
 |-|-|-|
-| Every version bump | `npx --prefix test stryker run test/stryker.config.json --mutate <touched-files-glob>` | Files changed in this commit |
+| Every version bump, right before its commit | `node test/scripts/stryker-scoped.mjs` from the repo root (or `npm run test:mutation:scoped --prefix test`) | Changed lines of production `.js` files against `HEAD` |
+| Before closing a branch | `node test/scripts/stryker-scoped.mjs --full --base origin/main` | Every production file the branch changed, whole file |
 | Release or full audit | `npm run test:mutation --prefix test` | Full `utils/` + `content/` |
 
-A surviving mutant that the lead classifies as "weak assertion" must be killed (test-engineer) before the bump proceeds. Equivalent mutants (lead judgment) are acceptable.
+The scoped script diffs the working tree against `--base` (default `HEAD`) for `.js` files under `popup/`, `background/`, `content/`, `utils/` and `offscreen/`, mutates only the changed line ranges, runs only the specs whose relative import graph reaches a changed file, and applies the gate below. It skips the files that `!` entries of `mutate` in `test/stryker.config.json` exclude and prints the skipped files. The script's Stryker config sets `thresholds.break` to `null`, so Stryker never fails the run on its score and the gate alone sets the exit code. It writes `test/reports/mutation.scoped.{html,json}` and exits 0 on pass, 1 otherwise. `--plan` prints the mutate ranges and the spec list without running Stryker. Run `git add -N <file>` on every new production file before the run.
+
+Gate: every in-range mutant is Killed or Ignored, and an in-range count of 0 fails. An Ignored mutant already has a recorded reason (a static mutant under `ignoreStatic`, or a line under a Stryker disable comment that gives its reason), so the gate passes it, and the script lists the in-range Ignored mutants separately for information. Each mutant that is neither Killed nor Ignored (Survived, NoCoverage, Timeout or other) gets a new test that kills it (test-engineer), or a written note that names it as an equivalent mutant with the reason (lead judgment).
+
+The script reuses the gitignored `test/stryker-incremental.scoped.json`. After a change to fixtures, mocks, helpers or the Stryker or vitest config, recycle that file before the run so no stale result is reused.
 
 ### Selector Health Check (Capture Sweep)
 

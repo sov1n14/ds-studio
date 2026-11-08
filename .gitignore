@@ -16,7 +16,7 @@ test-results/
 to-do/
 .stryker-tmp/
 reports/
-test/stryker-incremental.json
+test/stryker-incremental*.json
 tools/test_auth.txt
 tools/node_modules/
 tools/captures/

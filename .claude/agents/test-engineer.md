@@ -94,13 +94,15 @@ TDD is mandatory for the **logic layer** (state, settings, toggle/branch decisio
 
 When dispatched with a surviving mutant report from `test-executor`, your job is to write a test that kills that specific mutant.
 
-The dispatch provides: file path, line number, mutator name, and original → mutant code.
+The dispatch provides: file path, line number, mutator name, status (Survived, NoCoverage or Timeout), and original → mutant code.
 
 Workflow:
 1. Read the dispatch to understand what the mutant changed.
 2. Write a test that asserts the original behavior at that exact code point — so that the mutant (the altered version) would cause the test to fail.
 3. Run the new test to confirm it passes against the current (un-mutated) code.
-4. Done condition: the specific mutant is killed on the next Stryker run AND all existing tests remain green.
+4. Done condition: the specific mutant is Killed on the next `node test/scripts/stryker-scoped.mjs` run (gate in the `version-bump` skill, Pre-Bump Quality Gate) AND all existing tests remain green.
+
+A NoCoverage mutant needs a test that executes that line; a Timeout mutant needs a test that asserts the loop or wait terminates. When no assertion on the required behavior can tell the mutant from the original, report it to the lead as a candidate equivalent mutant with the reason, and write no test.
 
 Implementation Blindness still applies: derive assertions from the requirement (what the code SHOULD do), not from reading the implementation to see what it currently does. The mutant report itself describes the code point; use the function's documented/expected behavior to write the assertion.
 

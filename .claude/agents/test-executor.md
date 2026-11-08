@@ -42,17 +42,22 @@ Your report must contain:
 
 When dispatched for mutation testing, run Stryker and report results using the same reporting contract (verbatim, no diagnosis).
 
-Commands:
-- Full run: `npx --prefix test stryker run test/stryker.config.json` (from project root)
-- Scoped run: `npx --prefix test stryker run test/stryker.config.json --mutate <file-glob>` (e.g. `--mutate utils/debounce.js`)
+Commands (from project root; the `version-bump` skill, Pre-Bump Quality Gate, owns when each applies and the pass gate):
+- Scoped run: `node test/scripts/stryker-scoped.mjs`
+- Full-file branch run: `node test/scripts/stryker-scoped.mjs --full --base origin/main`
+- Plan only: `node test/scripts/stryker-scoped.mjs --plan`
+- Full run: `npx --prefix test stryker run test/stryker.config.json`
+
+Run the command exactly as the dispatch gives it, including the script's own flags (`--base`, `--full`, `--plan`).
 
 Your report must contain:
+- The script's exit code and its gate output verbatim: the in-scope mutant count, the table of not-Killed mutants, the `Gate PASS` or `Gate FAIL` line
 - Overall mutation score (percentage)
 - Killed / Survived / Timeout / No Coverage counts
-- Each surviving mutant verbatim: file path, line number, mutator name, original code → mutant code
+- Each not-Killed mutant verbatim: file path, line number, mutator name, status, original code → mutant code
 - Elapsed time
 
-The same prohibitions apply: no diagnosis, no file writes, no re-runs with modified flags.
+The same prohibitions apply: no diagnosis, no file writes of your own (the script writes its own reports), no other re-runs with modified flags.
 
 ## When You Cannot Run
 

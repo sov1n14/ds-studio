@@ -9,7 +9,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test -c playwright.config.js",
-    "test:mutation": "cd .. && npx --prefix test stryker run test/stryker.config.json"
+    "test:mutation": "cd .. && npx --prefix test stryker run test/stryker.config.json",
+    "test:mutation:scoped": "node scripts/stryker-scoped.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
