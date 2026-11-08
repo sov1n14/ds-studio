@@ -17,6 +17,7 @@
 - **Reference links toggle**: A checkbox controlling whether exported Markdown includes citation reference links.
 - **System time toggle**: A checkbox controlling whether current time is auto-injected at the beginning of each message.
 - **Export button**: A button that triggers Markdown export on the active `chat.deepseek.com` tab.
+- **Export button on a non-DeepSeek tab**: When the active tab is not a `chat.deepseek.com` page, the Export button opens the custom dialog titled "Notice" with the message "Please use this feature on the chat.deepseek.com page." The popup downloads nothing; the dialog has one OK button that closes it.
 - **State persistence**: All settings must be stored in `chrome.storage.sync` (with local fallback).
 - **Auto-save**: Settings are auto-saved on change, with a brief green "Saved" text indicator next to the title.
 - **Custom dialog system**: All dialogs (add prompt group, delete confirmation, error alerts) use an inline dialog controller (`Modal`) that renders a vertically centered overlay within the popup, replacing the browser's native `prompt()`/`confirm()`/`alert()`. (Renaming is done in the editor window's name input field.)
