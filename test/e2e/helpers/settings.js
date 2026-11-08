@@ -9,6 +9,11 @@ export async function setLocal(context, values) {
     await evaluateInWorker(context, (payload) => chrome.storage.local.set(payload), values);
 }
 
+/** Writes `values` into chrome.storage.sync only, without any snapshot (caller owns restoration, e.g. through `settings.track`); for keys the extension keeps in sync alone, such as the interface locale. */
+export async function setSync(context, values) {
+    await evaluateInWorker(context, (payload) => chrome.storage.sync.set(payload), values);
+}
+
 /** Writes `values` into chrome.storage.sync, then local, so a sync-first reader and the local broadcast agree. */
 export async function setBothAreas(context, values) {
     await evaluateInWorker(context, async (payload) => {

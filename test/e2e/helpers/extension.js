@@ -80,3 +80,17 @@ export async function findTabId(context, urlPart) {
 export async function sendToTab(context, tabId, message) {
     return evaluateInWorker(context, ({ id, payload }) => chrome.tabs.sendMessage(id, payload), { id: tabId, payload: message });
 }
+
+/**
+ * Evaluates `fn(arg)` in a page of the extension origin that runs no extension script (its manifest.json), then closes that page.
+ * For state that lives in the extension origin but not in the service worker, such as the localStorage the popup shares with the editor window.
+ */
+export async function evaluateInExtensionOrigin(context, extensionId, fn, arg) {
+    const page = await context.newPage();
+    try {
+        await page.goto(`${EXTENSION_SCHEME}${extensionId}/manifest.json`);
+        return await page.evaluate(fn, arg);
+    } finally {
+        await page.close();
+    }
+}
