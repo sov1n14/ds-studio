@@ -28,6 +28,7 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 | Host Re-Renders Overwrite Extension State | writes a class, attribute, or flag onto a host-page element and later reads it back, or simulates a host state change (native toggle, React re-render) on elements the extension tracks | [host-rerenders-overwrite-extension-state.md](references/host-rerenders-overwrite-extension-state.md) |
 | Visibility Guards Need a Live Capture | stubs `checkVisibility`, `getBoundingClientRect`, or computed `display` to exercise a guard that decides by whether a host element is visible, or models a responsive layout such as narrow versus desktop | [visibility-guards-need-live-capture.md](references/visibility-guards-need-live-capture.md) |
 | Host Contract Names: Assert Against the Live Page | asserts a CSS custom property, class, or attribute name the extension writes for host-page CSS to read (such as `--dsl-button-color-hover`), or takes that name's expected value from the extension's own code | [host-contract-names-from-live-page.md](references/host-contract-names-from-live-page.md) |
+| Global Interceptors: Drive the User's Own Action Through Them | tests code that intercepts or blocks a host-page API (a monkey-patch on `Element.prototype` scroll methods, a capture-phase `preventDefault`, a message filter), where a legitimate user gesture on a host control reaches the same API, possibly through several calls in one gesture | [interceptors-need-user-path.md](references/interceptors-need-user-path.md) |
 
 ## Adding a New Lesson
 
