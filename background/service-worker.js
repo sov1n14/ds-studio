@@ -28,6 +28,7 @@ importScripts(
     '../utils/notification-permission.js',
     'pending-store.js',
     '../utils/message-constants.js',
+    '../utils/editor-flush-channel.js',
     'service-worker-constants.js',
     'settings-routes.js',
     'pending-store-routes.js',

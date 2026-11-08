@@ -3,9 +3,16 @@
  *
  * Real modules: editor.js and its editor.* parts (preloaded by test/setup/vitest.setup.js), StorageManager, DSSDebounce, DSSPresetDomain, the i18n apply helper. The only double is the trust boundary: the in-memory chrome.storage from test/fixtures/chrome-storage-mock.js, plus window.close, which a test environment cannot honour. DSSTabControl (a chrome.tabs wrapper) stays absent, a case the editor supports.
  *
+ * chrome.runtime.onMessage listeners that the editor page registers are captured in `pageMessageListeners` instead of joining the shared mock event, so a scenario can deliver runtime messages to this page alone (see test/helpers/editor-window-flush-doubles.js connectRuntimeBus).
+ *
+ * Scripts that popup/editor/editor.html declares beyond the ones known when this harness was written (EDITOR_SCRIPTS_KNOWN) are loaded before editor.js, in declaration order, so a new editor part or utils/ wrapper reaches the page the way the real window loads it. utils/tab-control.js stays deliberately absent.
+ *
  * Timers are faked from the moment editor.js loads, so the debounce and any bounded wait the editor uses run on test-controlled time, and leftover timers die in cleanup() instead of writing into the next test's storage.
  */
 import { vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import StorageManager from '../../utils/storage-manager.js';
 import '../../utils/debounce.js';
 import '../../popup/popup.preset-domain.js';
@@ -28,6 +35,40 @@ const EDITOR_BODY_HTML = `
 
 const STEP_MS = 50;
 
+// Repo paths of the editor.html scripts this harness already provides (preloaded by test/setup/vitest.setup.js or imported above), plus utils/tab-control.js (deliberately absent) and editor.js (imported per test).
+const EDITOR_SCRIPTS_KNOWN = new Set([
+    'utils/logger.js', 'utils/debounce.js', 'utils/message-constants.js', 'utils/tab-control.js',
+    'utils/storage-manager.keys.js', 'utils/storage-manager.rw.js', 'utils/storage-manager.sync.js', 'utils/storage-manager.sync.retry.js',
+    'utils/storage-manager.restore.js', 'utils/storage-manager.tombstone.js', 'utils/storage-manager.preset-merge.js', 'utils/storage-manager.preset-recency.js',
+    'utils/storage-manager.presets.js', 'utils/storage-manager.chatmap.diff.js', 'utils/storage-manager.chatmap.ops.js', 'utils/storage-manager.chatmap.js',
+    'utils/storage-manager.chatmap.client.js', 'utils/storage-manager.local.js', 'utils/storage-manager.init.js', 'utils/storage-manager.setters.js',
+    'utils/storage-manager.settings-read.js', 'utils/storage-manager.js',
+    'utils/i18n.locales.zhTW.js', 'utils/i18n.locales.en.js', 'utils/i18n.locales.js', 'utils/i18n.js',
+    'popup/popup.i18n-apply.js', 'popup/popup.preset-domain.js',
+    'popup/editor/editor.parse.js', 'popup/editor/editor.render.js', 'popup/editor/editor.storage.js', 'popup/editor/editor.autosave.js', 'popup/editor/editor.js',
+]);
+const SCRIPT_LOADERS = import.meta.glob(['../../utils/*.js', '../../popup/*.js', '../../popup/editor/*.js']);
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** Repo paths of editor.html scripts outside EDITOR_SCRIPTS_KNOWN, in declaration order. */
+function newEditorScriptPaths() {
+    const html = readFileSync(resolve(PROJECT_ROOT, 'popup/editor/editor.html'), 'utf-8');
+    const srcs = [...html.matchAll(/<script +src="([^"]+)"/g)].map(m => m[1]);
+    return srcs.map((s) => {
+        const parts = ['popup', 'editor'];
+        s.split('/').forEach((seg) => { if (seg === '..') parts.pop(); else if (seg !== '.') parts.push(seg); });
+        return parts.join('/');
+    }).filter(p => !EDITOR_SCRIPTS_KNOWN.has(p));
+}
+
+async function importNewEditorScripts() {
+    for (const repoPath of newEditorScriptPaths()) {
+        const load = SCRIPT_LOADERS[`../../${repoPath}`];
+        if (!load) throw new Error(`harness: popup/editor/editor.html declares ${repoPath}, which the harness glob cannot load (extend SCRIPT_LOADERS in test/helpers/editor-window-harness.js)`);
+        await load();
+    }
+}
+
 export function createEditorWindowHarness() {
     const originalLocation = globalThis.location;
     const listenerTargets = [...new Set([window, globalThis, document])];
@@ -38,6 +79,9 @@ export function createEditorWindowHarness() {
     let closeSpies = [];
     // Call-through spies on each area's set(), created after seeding, so every write the editor makes is observable at the chrome.storage boundary.
     let writeSpies = [];
+    // onMessage listeners the editor page registered, in registration order (see the file header).
+    const pageMessageListeners = [];
+    let messageListenerSpies = [];
 
     const el = {
         get nameInput() { return document.getElementById('editorNameInput'); },
@@ -74,8 +118,17 @@ export function createEditorWindowHarness() {
             });
         }));
 
+        messageListenerSpies = [
+            vi.spyOn(chrome.runtime.onMessage, 'addListener').mockImplementation((fn) => { pageMessageListeners.push(fn); }),
+            vi.spyOn(chrome.runtime.onMessage, 'removeListener').mockImplementation((fn) => {
+                const idx = pageMessageListeners.indexOf(fn);
+                if (idx !== -1) pageMessageListeners.splice(idx, 1);
+            }),
+        ];
+
         vi.useFakeTimers();
         vi.resetModules();
+        await importNewEditorScripts();
         await import('../../popup/editor/editor.js');
         document.dispatchEvent(new Event('DOMContentLoaded'));
 
@@ -141,6 +194,9 @@ export function createEditorWindowHarness() {
         }
         addListenerSpies.length = 0;
         closeSpies.forEach(spy => spy.mockRestore());
+        messageListenerSpies.forEach(spy => spy.mockRestore());
+        messageListenerSpies = [];
+        pageMessageListeners.length = 0;
         writeSpies = [];
         storageAreas.forEach(area => {
             area.setQuotaError(false);
@@ -150,5 +206,5 @@ export function createEditorWindowHarness() {
         document.body.innerHTML = '';
     }
 
-    return { el, openPresetEditor, type, pressEscape, firePagehide, presetWriteCount, closeCallCount, closeSnapshots, advanceUntil, readPreset, failStorageWrites, hangStorageWrites, cleanup };
+    return { el, pageMessageListeners, openPresetEditor, type, pressEscape, firePagehide, presetWriteCount, closeCallCount, closeSnapshots, advanceUntil, readPreset, failStorageWrites, hangStorageWrites, cleanup };
 }

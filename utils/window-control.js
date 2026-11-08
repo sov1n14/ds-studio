@@ -3,7 +3,8 @@
  *
  * 單一職責：以 chrome.storage.session 保存視窗 ID，維持「同一 storageKey 只有一個視窗」
  * 的真正單例（決策 D5）。視窗 ID 存在 popup 閉包之外，popup 關閉後再次點擊仍能聚焦既有視窗；
- * 目標 URL 不同時直接導向新 URL，避免顯示前一組內容。
+ * 目標 URL 不同時直接導向新 URL，避免顯示前一組內容；編輯視窗導向前先請它存檔（最多約 1 秒），名稱重複時取消導向。
+ * 相依：utils/message-constants.js 與 utils/editor-flush-channel.js（存檔請求的共用請求端）需先載入。
  * 無載入期副作用：載入僅完成全域指派。
  */
 
@@ -38,26 +39,74 @@ async function persistWindowId(storageKey, windowId) {
 }
 
 /**
+ * 找出 storageKey 對應的編輯視窗 slot（純查詢）。
+ * @param {string} storageKey - session 儲存鍵
+ * @returns {string|null} DSS_EDITOR_WINDOW.STORAGE_KEYS 的屬性名稱；非編輯視窗時為 null
+ */
+function findEditorSlot(storageKey) {
+    const storageKeys = globalThis.DSS_EDITOR_WINDOW?.STORAGE_KEYS;
+    if (!storageKeys) return null;
+    return Object.keys(storageKeys).find((slot) => storageKeys[slot] === storageKey) ?? null;
+}
+
+/**
+ * 解析編輯視窗存檔請求通道（瀏覽器：popup.html 先載入；Node.js 測試：直接 require），缺失即拋出並指名修法。
+ * @returns {(slot: string) => Promise<string|undefined>} 共用的 requestEditorFlush
+ */
+function resolveRequestEditorFlush() {
+    const channel = globalThis.DSSEditorFlushChannel
+        || (typeof require !== 'undefined' ? require('./editor-flush-channel.js') : null);
+    if (typeof channel?.requestEditorFlush === 'function') return channel.requestEditorFlush;
+    throw new Error('[DSS] window-control: globalThis.DSSEditorFlushChannel is missing — load utils/editor-flush-channel.js before utils/window-control.js');
+}
+
+/**
+ * 導覽前請 storageKey 對應的編輯視窗先存檔（最多約 1 秒，見 utils/editor-flush-channel.js）。
+ * 非編輯視窗時不送請求並回傳 undefined；無接收端、同步拋錯、回應缺漏或逾時同樣回傳 undefined，由呼叫端照常導覽。
+ * @param {string} storageKey - session 儲存鍵
+ * @returns {Promise<string|undefined>} 編輯視窗回報的 status
+ */
+async function requestFlushBeforeNavigation(storageKey) {
+    const slot = findEditorSlot(storageKey);
+    if (slot === null) return undefined;
+    return resolveRequestEditorFlush()(slot);
+}
+
+/**
  * 聚焦既有視窗，並在目前 URL 與請求不符時導向新 URL。
+ * 導向前先請編輯視窗存檔；名稱重複時取消導向，視窗留在原群組顯示錯誤。
  * @param {number} windowId - 已保存的視窗 ID
  * @param {string} url - 請求的 URL
+ * @param {string} storageKey - session 儲存鍵
  * @returns {Promise<Object|null>} 既有視窗物件；視窗已關閉時為 null
  */
-async function focusExistingWindow(windowId, url) {
+async function focusExistingWindow(windowId, url, storageKey) {
     let existingWindow;
     try {
         existingWindow = await chrome.windows.get(windowId, { populate: true });
+    } catch {
+        // 視窗已關閉：交由呼叫端重新建立
+        return null;
+    }
+
+    const tab = existingWindow?.tabs?.[0];
+    const isNavigationNeeded = Boolean(tab) && typeof tab.id === 'number' && tab.url !== url;
+    const flushStatus = isNavigationNeeded ? await requestFlushBeforeNavigation(storageKey) : undefined;
+    const duplicateStatus = globalThis.DSS_EDITOR_WINDOW?.FLUSH_STATUS?.DUPLICATE;
+    // 存檔狀態常數缺失時無法辨識名稱重複，維持照常導覽；僅存檔回報已定義的名稱重複狀態才取消導覽
+    const isNavigationCancelled = duplicateStatus !== undefined && flushStatus === duplicateStatus;
+
+    try {
         await chrome.windows.update(windowId, { focused: true });
     } catch {
         // 視窗已關閉：交由呼叫端重新建立
         return null;
     }
 
+    if (!isNavigationNeeded || isNavigationCancelled) return existingWindow;
+
     try {
-        const tab = existingWindow?.tabs?.[0];
-        if (tab && typeof tab.id === 'number' && tab.url !== url) {
-            await chrome.tabs.update(tab.id, { url });
-        }
+        await chrome.tabs.update(tab.id, { url });
     } catch (err) {
         // 視窗可能並行關閉；已聚焦的結果仍然有效
         console.error('[DSS] window-control.focusExistingWindow:', err);
@@ -80,7 +129,7 @@ async function openSingletonWindow({ url, createOptions, storageKey } = {}) {
 
     const storedWindowId = await readStoredWindowId(storageKey);
     if (storedWindowId !== null) {
-        const existingWindow = await focusExistingWindow(storedWindowId, url);
+        const existingWindow = await focusExistingWindow(storedWindowId, url, storageKey);
         if (existingWindow) return { window: existingWindow, created: false };
     }
 

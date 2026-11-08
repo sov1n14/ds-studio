@@ -12,6 +12,16 @@
     // 編輯器視窗常數
     globalThis.DSS_EDITOR_WINDOW = {
         CLOSE_MESSAGE_TYPE: 'DSS_CLOSE_EDITOR_WINDOWS',
+        // 關窗或導覽前請編輯視窗先存檔：請求 { type, slot }（slot 為 STORAGE_KEYS 的屬性名稱），回應 { status }
+        FLUSH_MESSAGE_TYPE: 'DSS_FLUSH_EDITOR_WINDOW',
+        // 存檔請求的回應狀態；只有 DUPLICATE（名稱重複）會讓呼叫端取消關窗或導覽
+        FLUSH_STATUS: {
+            CLEAN: 'clean',
+            SAVED: 'saved',
+            DUPLICATE: 'duplicate',
+            FAILED: 'failed',
+            TIMEOUT: 'timeout',
+        },
         STORAGE_KEYS: {
             global: 'dss-editor-window-id-global',
             preset: 'dss-editor-window-id-preset',

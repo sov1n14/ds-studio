@@ -1,5 +1,5 @@
 /**
- * Load-order contract for popup/editor/editor.html (classic scripts, so order is the dependency graph). Expected order: logger and debounce first; every utils/storage-manager.* part, then the storage-manager.js entry that mixes them in; message constants and tab control; the i18n locales then i18n.js; the shared popup helpers; the editor parts; editor.js last. The storage-manager part sequence must also be identical to the one declared by manifest.json, popup/popup.html and background/service-worker.js, so the editor never assembles the bundle differently from the other contexts. (storage-manager.loader-contract.spec.js only checks presence and part-before-entry; this spec pins the full editor order.)
+ * Load-order contract for popup/editor/editor.html (classic scripts, so order is the dependency graph). Expected order: logger and debounce first; every utils/storage-manager.* part, then the storage-manager.js entry that mixes them in; message constants and tab control; the i18n locales then i18n.js; the shared popup helpers; the editor parts; utils/editor-flush-channel.js (the chrome.runtime wrapper that owns the editor flush listener); editor.js last. The storage-manager part sequence must also be identical to the one declared by manifest.json, popup/popup.html and background/service-worker.js, so the editor never assembles the bundle differently from the other contexts. (storage-manager.loader-contract.spec.js only checks presence and part-before-entry; this spec pins the full editor order.)
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
@@ -36,6 +36,7 @@ const EXPECTED = [
     'editor.render.js',
     'editor.storage.js',
     'editor.autosave.js',
+    '../../utils/editor-flush-channel.js',
     'editor.js',
 ];
 

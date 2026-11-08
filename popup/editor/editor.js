@@ -9,13 +9,15 @@
  *   1. input 事件標記 dirty 並觸發防抖儲存（500ms）
  *   2. blur / visibilitychange(hidden) / pagehide 作為備援立即寫入
  *   3. Esc 先寫入未存內容，落定後才關閉視窗（名稱重複時保持開啟）
+ *   4. 背景程式關窗或 popup 導覽前送來存檔請求，寫入後回報 FLUSH_STATUS（名稱重複時呼叫端保留視窗）
  *
  * 載入順序（editor.html 中 bundle 必須先於 entry）：
  *   1. editor.parse.js    → globalThis.__DS_Editor_parse
  *   2. editor.render.js   → globalThis.__DS_Editor_render
  *   3. editor.storage.js  → globalThis.__DS_Editor_storage
  *   4. editor.autosave.js → globalThis.__DS_Editor_autosave
- *   5. editor.js          （本檔，合入以上四個 bundle）
+ *   5. utils/editor-flush-channel.js → globalThis.DSSEditorFlushChannel（存檔請求的 chrome.runtime 包裝）
+ *   6. editor.js          （本檔，合入以上各 bundle）
  */
 
 'use strict';
@@ -27,10 +29,16 @@ const { parseTarget } = globalThis.__DS_Editor_parse || {};
 const { renderDisabledState, updateSaveStatus } = globalThis.__DS_Editor_render || {};
 const { saveContent, loadContent } = globalThis.__DS_Editor_storage || {};
 const { createAutosaveController, settleWithin } = globalThis.__DS_Editor_autosave || {};
+// popup 層不直接呼叫 chrome.*：存檔請求監聽器由 utils/editor-flush-channel.js 註冊
+const { listenForFlushRequests } = globalThis.DSSEditorFlushChannel || {};
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 // Esc 等待寫入落定的上限：逾時仍關閉視窗，避免儲存卡住時視窗無法關閉
 const ESC_SAVE_WAIT_MS = 1500;
+// 回應存檔請求前等待寫入落定的上限：須短於呼叫端約 1 秒的等待，讓逾時結果仍能送達
+const FLUSH_REQUEST_WAIT_MS = 800;
+// 存檔請求的回應狀態（utils/message-constants.js）
+const { FLUSH_STATUS } = globalThis.DSS_EDITOR_WINDOW || {};
 
 // ─────────────────────────────────────────────
 // 主程式進入點
@@ -125,6 +133,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     window.addEventListener('pagehide', flushInBackground);
 
+    /**
+     * 立即寫入未存內容，最多等待 waitMs，並以 FLUSH_STATUS 回報結果；Esc 與背景程式的存檔請求共用。
+     * @param {number} waitMs
+     * @returns {Promise<string>}
+     */
+    async function flushPendingEdits(waitMs) {
+        if (!autosave.hasPendingWork()) return FLUSH_STATUS.CLEAN;
+        return toFlushStatus(await settleWithin(autosave.flush(), waitMs));
+    }
+
     let isEscapeFlushPending = false;
 
     /**
@@ -138,13 +156,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         isEscapeFlushPending = true;
         try {
-            const outcome = await settleWithin(autosave.flush(), ESC_SAVE_WAIT_MS);
-            if (outcome.status === 'rejected' && isDuplicateNameError(outcome.reason)) return;
+            const status = await flushPendingEdits(ESC_SAVE_WAIT_MS);
+            if (status === FLUSH_STATUS.DUPLICATE) return;
             window.close();
         } finally {
             isEscapeFlushPending = false;
         }
     }
+
+    // 背景程式關窗或 popup 導覽前的存檔請求：只回應本視窗的 slot
+    listenForFlushRequests(target.type, () => flushPendingEdits(FLUSH_REQUEST_WAIT_MS));
 
     window.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
@@ -165,6 +186,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 function isDuplicateNameError(err) {
     return err?.code === 'DUPLICATE_NAME';
 }
+
+/**
+ * 將 settleWithin 的結果轉為 FLUSH_STATUS（純查詢）。
+ * @param {{ status: 'fulfilled' | 'rejected' | 'timeout', reason?: unknown }} outcome
+ * @returns {string}
+ */
+function toFlushStatus(outcome) {
+    if (outcome.status === 'fulfilled') return FLUSH_STATUS.SAVED;
+    if (outcome.status === 'timeout') return FLUSH_STATUS.TIMEOUT;
+    return isDuplicateNameError(outcome.reason) ? FLUSH_STATUS.DUPLICATE : FLUSH_STATUS.FAILED;
+}
+
 
 // ─────────────────────────────────────────────
 // 測試介面匯出（雙模式：window namespace + module.exports）
