@@ -296,7 +296,7 @@ When enabled, the current system time and local timezone offset are automaticall
 
 - **Format**: `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`
 - **Example**: `Current Time: 2026/06/14 20:19:32 (UTC+08:00)`
-- **Duplicate Prevention**: If the text input area already starts with the `Current Time:` prefix, injection is skipped.
+- **Duplicate Prevention**: If the text input area already starts with a `Current Time:` line, that line and the blank or whitespace-only lines after it are removed, and one fresh timestamp line is prepended, so the sent message carries a single time line. A `Current Time:` line elsewhere in the text is kept as user text. A text input that holds only a timestamp line is left unsent unless an attachment or image is present; then the old line is replaced by a fresh one.
 - **Settings Location**: First item in the **Features** card of the popup menu.
 - **Master Switch Awareness**: This toggle is disabled when the master switch is turned off.
 

@@ -36,6 +36,18 @@
         (typeof require !== 'undefined' ? require('./mobile-device.js') : {});
     const { isMobileDevice } = mobileDevice;
 
+    // 使用者文字開頭的「Current Time: ...」行（含其後的空白行）；系統時間開啟時剝除，改由注入補上最新時間戳
+    const LEADING_SYSTEM_TIME_LINE_PATTERN = /^Current Time:[^\n]*(?:\n|$)(?:[ \t]*\n)*/;
+
+    /**
+     * 剝除使用者文字最開頭的舊時間戳行，避免重複注入時間。僅比對文字開頭，其他位置不動。
+     * @param {string} text
+     * @returns {string}
+     */
+    function stripLeadingSystemTimeLine(text) {
+        return text.replace(LEADING_SYSTEM_TIME_LINE_PATTERN, '');
+    }
+
     /**
      * 建立 PromptInjector 實例。ctx 的 getter/setter 直接讀寫 content-script.js
      * 模組層級的 let 變數，確保狀態異動對本模組即時可見，反之亦然。
@@ -64,12 +76,15 @@
             const injectionPrefix = buildInjectionPrefix();
             const rawVal = textarea.value;
             const userInputMatch = rawVal.match(/<user-input>\n([\s\S]*)\n<\/user-input>$/);
-            const currentVal = userInputMatch ? userInputMatch[1] : rawVal;
+            const isShowSystemTime = ctx.getIsShowSystemTime();
+            const unwrappedVal = userInputMatch ? userInputMatch[1] : rawVal;
+            // 系統時間開啟時剝除開頭的舊時間戳，確保送出內容僅有一行 Current Time
+            const currentVal = isShowSystemTime ? stripLeadingSystemTimeLine(unwrappedVal) : unwrappedVal;
             const hasUserText = currentVal.trim() !== '';
 
             if (!hasUserText && !isSendableWithoutText) return false;
 
-            const systemTimePrefix = ctx.getIsShowSystemTime() ? `Current Time: ${ctx.formatSystemTime()}\n\n` : '';
+            const systemTimePrefix = isShowSystemTime ? `Current Time: ${ctx.formatSystemTime()}\n\n` : '';
 
             let newVal;
             // 無文字但可送出（僅附件/圖片）：僅注入時間戳與提示前綴，不包裝 <user-input>
