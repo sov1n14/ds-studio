@@ -61,6 +61,7 @@ export function installServiceWorkerHarness() {
         globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
         globalThis.DSSChatMapRoutes = { install: vi.fn() };
         globalThis.DSSNotificationRoutes = { install: vi.fn() };
+        globalThis.DSSClipboardRoutes = { install: vi.fn() };
         globalThis.fetch = vi.fn();
         const addListener = chrome.storage.onChanged.addListener;
         chrome.storage.onChanged.addListener = (listener) => { swOnChanged = listener; };

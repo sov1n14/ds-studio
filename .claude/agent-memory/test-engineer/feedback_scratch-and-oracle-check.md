@@ -12,3 +12,5 @@ Before reporting a red phase for a not-yet-existing module, copy the spec to a s
 **How to apply:** recycle the scratch specs afterwards per [[scratch-scripts-via-stdin]]. The `.claude/agent-memory/` directory is git-tracked here: append to MEMORY.md, never overwrite it.
 
 When one test combines several behaviours (multi-node record plus a dedupe re-add), check the mutant against the whole test: a re-add of the second fragment node re-supplied exactly the toolbar the `slice(0, 1)` mutant dropped, so the test would have stayed green; re-add the first node instead (2026-11-08, reply-completion gap tests).
+
+Efficient variant (2026-11-08, clipboard-offscreen): one oracle file switched by `process.env.MUTANT` plus one sed-copied spec, looped as `MUTANT=x npx vitest run ...`; strip ANSI (`sed 's/\x1b\[[0-9;]*m//g'`) BEFORE grepping the "Tests" summary line or the grep matches nothing. A reference oracle passing a vi.resetModules + import.meta.glob spec that requires exactly one load-time listener per test also proves the glob reloads the module fresh each test. Concurrent agents leave their own zz-* scratch files in test/unit; recycle only your own.

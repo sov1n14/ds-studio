@@ -52,7 +52,7 @@
 
 - **Domain**: `chat.deepseek.com`
 - **Platform**: Chrome Extension Manifest V3
-- **Permissions**: `storage`, `activeTab`, `alarms` (for background service worker scheduled retries and sync); optional permission `notifications` (v4.38.0, `optional_permissions`, requested only when the user turns on "Reply-complete notification"; for the behavior see [Feature Spec §27](04-features.md#27-reply-complete-notification-reply-notification-v4380))
+- **Permissions**: `storage`, `activeTab`, `alarms` (for background service worker scheduled retries and sync); optional permission `notifications` (v4.38.0, `optional_permissions`, requested only when the user turns on "Reply-complete notification"; for the behavior see [Feature Spec §27](04-features.md#27-reply-complete-notification-reply-notification-v4380)); optional permissions `clipboardWrite` and `offscreen` (v4.39.0, `optional_permissions`, requested together only when the user checks either auto copy checkbox; for the behavior see [Feature Spec §26](04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370))
 
 ### DOM Selectors
 

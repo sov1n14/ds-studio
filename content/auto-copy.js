@@ -8,6 +8,7 @@
  *   - 判斷：每批次交由 DSstudio.ReplyCompletion.newToolbarsFromRecords 找出新出現的工具列（捲動重新掛載的舊工具列不計）；isStoppedReply 為真的工具列（被停止的回覆）整個略過。
  *   - 觸發：DeepSeek 的 React onClick 只接受受信任事件，故不呼叫 button.click()，改在按鈕上派送冒泡的 dss:react-click 事件，由 MAIN world 的 content/react-click-bridge.main.js 呼叫 React onClick。
  *   - 順序：每個工具列先複製回覆（工具列第一個按鈕），再依文件順序複製該工具列所屬項目內每個程式碼區塊的複製按鈕（banner 的第一個按鈕，非下載）。
+ *   - 失焦補寫（決策 U6-14）：派送的事件帶字串 detail 'auto-copy'，讓 MAIN world 橋接器只擷取本模組觸發的寫入；每次派送前呼叫 DSSAutoCopyRelay.notePending() 登記待轉交項目（content/auto-copy.relay.js 未載入時略過，聚焦時的複製不受影響）。
  */
 (function () {
     'use strict';
@@ -22,8 +23,9 @@
     const CODE_COPY_BUTTON_SELECTOR = '.' + _Selectors.CODE_BLOCK_CLASS + '-banner '
         + _Selectors.ROLE_BUTTON_DIV_SELECTOR + ':first-of-type';
 
-    // 事件名稱與 content/react-click-bridge.main.js 一致（跨 world 無共用載入器）
+    // 事件名稱與 detail 標記與 content/react-click-bridge.main.js 一致（跨 world 無共用載入器）
     const REACT_CLICK_EVENT = 'dss:react-click';
+    const AUTO_COPY_DETAIL = 'auto-copy';
 
     const AutoCopy = {
         // === 狀態 ===
@@ -86,10 +88,17 @@
             toolbars
                 .filter((toolbar) => !this._replyCompletion.isStoppedReply(toolbar))
                 .forEach((toolbar) => {
-                    this._collectTargets(toolbar).forEach((button) => {
-                        button.dispatchEvent(new CustomEvent(REACT_CLICK_EVENT, { bubbles: true }));
-                    });
+                    this._collectTargets(toolbar).forEach((button) => this._dispatchCopyClick(button));
                 });
+        },
+
+        /**
+         * 先向轉交模組登記待轉交項目，再於按鈕上派送帶自動複製標記的 dss:react-click。
+         * @param {Element} button
+         */
+        _dispatchCopyClick(button) {
+            globalThis.DSSAutoCopyRelay?.notePending();
+            button.dispatchEvent(new CustomEvent(REACT_CLICK_EVENT, { bubbles: true, detail: AUTO_COPY_DETAIL }));
         },
 
         /** 依閘門狀態啟動或中斷唯一的 MutationObserver */

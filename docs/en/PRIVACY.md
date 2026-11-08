@@ -38,6 +38,16 @@ An optional permission that is not requested at install. The browser asks for it
 - The state of the "Reply-complete notification" toggle is stored only in local `chrome.storage.local` and is never synced.
 - Switching the toggle back to "Off" only stops notifications and does not remove the granted permission.
 
+### `clipboardWrite` and `offscreen` (optional)
+
+Optional permissions that are not requested at install. The browser asks for both together only when you check "Auto copy reply content" or "Auto copy code block content" in the popup menu; if you refuse, the checkbox stays unchecked and the Extension does not get these permissions. They are used to write the same reply or code text to the clipboard on your behalf when the DeepSeek tab is not focused and the browser rejects the site's own copy.
+
+- The copied text stays on your local device and is never sent to any server or third party.
+- The Extension only writes to the clipboard and never reads what is on it.
+- The write goes through a local offscreen document that loads only the Extension's own bundled script and makes no network request.
+- Chrome shows the "Modify data you copy and paste" prompt when `clipboardWrite` is requested; `offscreen` has no prompt.
+- Unchecking the checkbox only stops auto copy and does not remove the granted permissions.
+
 ### Content Scripts
 
 The Extension injects content scripts into `chat.deepseek.com` to provide its features (prompt injection, UI adjustments, censor-restored message recovery, etc.). These scripts:

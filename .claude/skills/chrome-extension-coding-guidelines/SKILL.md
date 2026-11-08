@@ -28,6 +28,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 | `popup/` | Rendering, user input, calling `utils/` | Call `chrome.*` directly; hold business logic |
 | `background/` | Service-worker lifecycle, cross-tab coordination, alarms, message routing | Touch the DOM |
 | `content/` | DOM reading and injection on `chat.deepseek.com`, DeepSeek selectors, `MutationObserver` wiring | Call `chrome.storage.*`, `chrome.alarms.*`, or any other service-worker-only API (exception: see §1 StorageManager exception below) |
+| `offscreen/` | Offscreen documents (one per purpose, e.g. the clipboard write via `document.execCommand('copy')`) that answer `chrome.runtime` messages from `background/` | Call `chrome.*` beyond `chrome.runtime` messaging; hold business logic or state |
 | `utils/` | Reusable logic — storage, i18n, messaging, formatting, validation | Reference the DOM; contain layer-specific branching |
 
 **Layer access rules:**

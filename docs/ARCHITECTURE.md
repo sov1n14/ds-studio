@@ -95,9 +95,10 @@ ds-studio/
 │   ├── auto-open-sidebar.js   ─  以 MutationObserver 偵測收合側欄的展開按鈕，每次出現即派送 dss:react-click 事件讓側欄保持開啟（v4.36.0）
 │   ├── auto-click.delay.js    ─  自動點擊輪次的 0–3 秒隨機延遲（0.1 秒級距，v4.35.0）
 │   ├── auto-retry.js          ─  自動重試／自動繼續生成的共用輪次迴圈：各自受開關閘控，每輪隨機延遲後在重試與繼續生成按鈕上派送 dss:react-click 事件（v4.11.0，v4.35.0 改版，v4.35.4 改為事件觸發）
-│   ├── react-click-bridge.main.js ‡ ─  MAIN-world 橋接：收到 dss:react-click 時以能通過 isTrusted 檢查的合成 nativeEvent 呼叫按鈕的 React onClick，無 onClick 時退回 click()（v4.35.4）
+│   ├── react-click-bridge.main.js ‡ ─  MAIN-world 橋接：收到 dss:react-click 時以能通過 isTrusted 檢查的合成 nativeEvent 呼叫按鈕的 React onClick，無 onClick 時退回 click()；另包裝 navigator.clipboard.writeText，自動複製的寫入被拒絕時以 dss:auto-copy-captured 事件交出文字（v4.35.4，擷取於 v4.39.0）
 │   ├── reply-completion.js    ─  純判斷：從 MutationRecord 找出新出現的訊息工具列、判斷回覆是否被停止，供自動複製與回覆完成通知使用（v4.37.0）
 │   ├── auto-copy.js           ─  回覆完成時依兩個開關對該回覆與其程式碼區塊的複製按鈕派送 dss:react-click 事件（v4.37.0）
+│   ├── auto-copy.relay.js     ─  isolated world 轉交：接受 MAIN-world 擷取到的失焦自動複製文字並送出 DSS_COPY_TO_CLIPBOARD 訊息（v4.39.0）
 │   ├── reply-notification.js  ─  新回覆完成且分頁不在前景時送出 DSS_SHOW_NOTIFICATION 訊息，請 background 顯示桌面通知（v4.38.0）
 │   ├── editor-window-autoclose.js ─  window focus → 送出 DSS_CLOSE_EDITOR_WINDOWS 訊息，關閉所有開啟中的編輯視窗（v4.29.0）
 │   ├── go-top.css           ─  GoToTop 與匯出 toast 樣式
@@ -113,8 +114,12 @@ ds-studio/
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS 路由＋向 DeepSeek 分頁廣播 DSS_SETTINGS_CHANGED
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN 路由
 │   ├── notification-routes.js  ─  DSS_SHOW_NOTIFICATION 路由：驗證 title／body 後以 chrome.notifications.create 顯示 basic 通知（v4.38.0）
+│   ├── clipboard-routes.js     ─  DSS_COPY_TO_CLIPBOARD 路由：依序排隊、確保 offscreen 文件存在後送出 DSS_OFFSCREEN_WRITE_CLIPBOARD 請其寫入剪貼簿（v4.39.0）
 │   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG 路由：將 service worker 的 StorageManager 切換為 chat-map 寫入者模式，逐一驗證 op 並於單一 FIFO 佇列中套用
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS 路由：關閉追蹤中的編輯視窗並清除其 session 鍵（v4.29.0）
+├── offscreen/                  ─  offscreen 文件（reason CLIPBOARD，v4.39.0）
+│   ├── clipboard-offscreen.html ─  offscreen 文件外殼，只載入 clipboard-offscreen.js
+│   └── clipboard-offscreen.js   ─  收到 DSS_OFFSCREEN_WRITE_CLIPBOARD 時以 textarea + document.execCommand('copy') 寫入剪貼簿並回覆 { ok }
 ├── popup/                   ─  擴充功能 action UI
 │   ├── popup.html           ─  雙欄設定介面（v3.0.0：標頭、提示詞組、編輯器等）
 │   ├── popup-button.css     ─  按鈕元件樣式
@@ -181,6 +186,7 @@ ds-studio/
 │   ├── tab-control.js          ─  DeepSeek 分頁查詢／傳送輔助函式，含 ACTIVE_PRESET_CHANGED 廣播（DSSTabControl）
 │   ├── window-control.js       ─  openSingletonWindow：以 chrome.storage.session 保證單一視窗（DSSWindowControl）
 │   ├── notification-permission.js ─  DSSNotificationPermission：把 chrome.permissions 對選用權限 notifications 的查詢與請求包成不拋錯的 popup 介面（v4.38.0）
+│   ├── clipboard-permission.js ─  DSSClipboardPermission：把 chrome.permissions 對選用權限 clipboardWrite 與 offscreen 的查詢與請求包成不拋錯的 popup 介面（v4.39.0）
 │   ├── chat-session-id.js      ─  對話 session ID 擷取共用工具
 │   ├── i18n.js                 ─  國際化引擎：setLocale / t / onLocaleChanged，不含 DOM（v4.3.3）
 │   ├── i18n.locales.zhTW.js    ─  zh_TW 字串字典，純資料
@@ -372,6 +378,20 @@ Background 層是唯一呼叫 `chrome.notifications` 的位置；內容腳本只
 - **`utils/message-constants.js`** 以單純的 `globalThis` 指派公開 `globalThis.DSS_SHOW_NOTIFICATION`（`'DSS_SHOW_NOTIFICATION'`），發送端 `content/reply-notification.js` 與接收端 `background/notification-routes.js` 共用；常數檔缺席時接收端拋出具名的載入順序錯誤。
 - **`background/notification-routes.js`** 的 `DSSNotificationRoutes.install()` 於 service worker 頂層呼叫，因此 worker 重啟後仍存在；它註冊一個 `chrome.runtime.onMessage` 監聽器，未知類型回傳 `false` 且不回應，交由其他監聽器處理。
 - **選用權限 `notifications`**：未授予時 `chrome.notifications` 不存在，路由回覆 `{ ok: false, error }`。權限只由 popup 經 `utils/notification-permission.js` 請求，background 與內容腳本不請求權限。
+
+### 剪貼簿寫入訊息路由 (Clipboard Write, v4.39.0)
+
+Background 層是唯一呼叫 `chrome.offscreen` 的位置；內容腳本只送出訊息，offscreen 文件只回應 background 的訊息。行為規格見 [功能規格 §26](spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+
+| 訊息類型 | 發送端 → 接收端 | Payload | 效果 |
+|-|-|-|-|
+| `DSS_COPY_TO_CLIPBOARD` | `content/auto-copy.relay.js` → `background/clipboard-routes.js` | `{ text }`（字串） | 驗證 `text` 為字串，依收到順序排入寫入佇列，確保 offscreen 文件存在後送出 `DSS_OFFSCREEN_WRITE_CLIPBOARD`；offscreen 回覆 `{ ok: true }` 時回覆 `{ ok: true }`，否則記錄並回覆 `{ ok: false, error }` |
+| `DSS_OFFSCREEN_WRITE_CLIPBOARD` | `background/clipboard-routes.js` → `offscreen/clipboard-offscreen.js` | `{ text }`（字串） | 以 textarea、`select()` 與 `document.execCommand('copy')` 寫入剪貼簿並回覆 `{ ok }`；`text` 不是字串時回覆 `{ ok: false }` |
+
+- **`utils/message-constants.js`** 以單純的 `globalThis` 指派公開 `globalThis.DSS_COPY_TO_CLIPBOARD` 與 `globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD`；`content/auto-copy.relay.js` 與 `background/clipboard-routes.js` 共用前者，常數檔缺席時兩者拋出具名的載入順序錯誤。`offscreen/clipboard-offscreen.js` 不載入常數檔，以同值的具名常數宣告後者。
+- **`background/clipboard-routes.js`** 的 `DSSClipboardRoutes.install()` 於 service worker 頂層呼叫，因此 worker 重啟後仍存在；它註冊一個 `chrome.runtime.onMessage` 監聽器，未知類型回傳 `false` 且不回應，交由其他監聽器處理。寫入依序排隊，前一筆失敗不阻塞後一筆。
+- **offscreen 文件生命週期**：以「建立中 promise 加已建立旗標」追蹤文件，不使用 `chrome.runtime.getContexts` 與 `chrome.offscreen.hasDocument`（最低版本 111 不支援）。`createDocument` 以 reason `CLIPBOARD` 建立 `offscreen/clipboard-offscreen.html`，回報「Only a single offscreen document」視為文件已存在；送出訊息回報「Receiving end does not exist」時清除旗標、重建並只重試一次。
+- **選用權限 `clipboardWrite` 與 `offscreen`**：未授予 `offscreen` 時 `chrome.offscreen` 不存在，路由回覆 `{ ok: false, error }`。權限只由 popup 經 `utils/clipboard-permission.js` 請求，background 與內容腳本不請求權限。
 
 ### 資料流
 

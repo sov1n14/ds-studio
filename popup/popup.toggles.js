@@ -1,6 +1,7 @@
+// 253 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure, and the two permission-gated groups (reply notification, auto-copy) share one ensurePermission gate; splitting per toggle would scatter identical wiring across files
 /**
  * DS studio — Popup Feature Toggles 模組
- * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
+ * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、自動複製回覆與程式碼區塊、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
  * 使用 factory 模式接收 ctx 上下文物件。
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -17,6 +18,7 @@
  * @param {Function} ctx.getActivePresetId - 取得目前活躍 preset id
  * @param {Function} ctx.setActivePresetId - 設定目前活躍 preset id
  * @param {Object} [ctx.DSSNotificationPermission] - 通知權限包裝模組；未提供時使用 popup.html 載入的全域實例
+ * @param {Object} [ctx.DSSClipboardPermission] - 剪貼簿權限包裝模組；未提供時使用 popup.html 載入的全域實例
  */
 function createToggleManager(ctx) {
     const {
@@ -24,13 +26,16 @@ function createToggleManager(ctx) {
         getPresets, setPresets, getActivePresetId, setActivePresetId,
     } = ctx;
     const notificationPermission = ctx.DSSNotificationPermission ?? globalThis.DSSNotificationPermission;
+    const clipboardPermission = ctx.DSSClipboardPermission ?? globalThis.DSSClipboardPermission;
 
-    /** 確認已取得通知權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false（決策 D-08）。 */
-    async function ensureNotificationPermission() {
-        if (!notificationPermission) return false;
-        if (await notificationPermission.hasNotificationPermission()) return true;
-        return (await notificationPermission.requestNotificationPermission()) === true;
+    /** 確認權限包裝模組回報已取得權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false（決策 D-08）。 */
+    async function ensurePermission(permissionModule, hasMethodName, requestMethodName) {
+        if (!permissionModule) return false;
+        if (await permissionModule[hasMethodName]()) return true;
+        return (await permissionModule[requestMethodName]()) === true;
     }
+    const ensureNotificationPermission = () => ensurePermission(notificationPermission, 'hasNotificationPermission', 'requestNotificationPermission');
+    const ensureClipboardPermission = () => ensurePermission(clipboardPermission, 'hasClipboardPermission', 'requestClipboardPermission');
 
     /** 取得目前活躍的 preset 物件；無活躍 preset（含已刪除／已清空）時回傳 null。 */
     function resolveActivePreset() {
@@ -197,21 +202,22 @@ function createToggleManager(ctx) {
             });
         }
 
-        if (autoCopyReplyToggle) {
-            autoCopyReplyToggle.addEventListener('change', async () => {
-                await StorageManager.saveAutoCopyReply(autoCopyReplyToggle.checked);
+        // --- 自動複製開關：勾選前須取得剪貼簿權限，遭拒或失敗時退回未勾選且不寫入（決策 U6-14） ---
+        const bindAutoCopyToggle = (toggle, saveValue) => {
+            if (!toggle) return;
+            toggle.addEventListener('change', async () => {
+                const isTurningOn = toggle.checked;
+                if (isTurningOn && !(await ensureClipboardPermission())) {
+                    toggle.checked = false;
+                    return;
+                }
+                await saveValue(isTurningOn);
                 await refreshSyncStatus();
                 showSaveStatus();
             });
-        }
-
-        if (autoCopyCodeToggle) {
-            autoCopyCodeToggle.addEventListener('change', async () => {
-                await StorageManager.saveAutoCopyCode(autoCopyCodeToggle.checked);
-                await refreshSyncStatus();
-                showSaveStatus();
-            });
-        }
+        };
+        bindAutoCopyToggle(autoCopyReplyToggle, (isEnabled) => StorageManager.saveAutoCopyReply(isEnabled));
+        bindAutoCopyToggle(autoCopyCodeToggle, (isEnabled) => StorageManager.saveAutoCopyCode(isEnabled));
 
         websearchRadios.forEach(r => {
             r.addEventListener('change', async () => {

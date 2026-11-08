@@ -47,6 +47,12 @@
     // 內容腳本請 background 顯示桌面通知的訊息型別
     globalThis.DSS_SHOW_NOTIFICATION = 'DSS_SHOW_NOTIFICATION';
 
+    // 內容腳本請 background 寫入剪貼簿的訊息型別
+    globalThis.DSS_COPY_TO_CLIPBOARD = 'DSS_COPY_TO_CLIPBOARD';
+
+    // background 請 offscreen 文件寫入剪貼簿的訊息型別（offscreen/clipboard-offscreen.js 不載入本檔，另以同值常數宣告）
+    globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD = 'DSS_OFFSCREEN_WRITE_CLIPBOARD';
+
     // === 測試匯出（瀏覽器情境為 no-op） ===
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
@@ -56,6 +62,8 @@
             DSS_CHAT_MAP_MSG: globalThis.DSS_CHAT_MAP_MSG,
             DSS_CONTENT_MSG: globalThis.DSS_CONTENT_MSG,
             DSS_SHOW_NOTIFICATION: globalThis.DSS_SHOW_NOTIFICATION,
+            DSS_COPY_TO_CLIPBOARD: globalThis.DSS_COPY_TO_CLIPBOARD,
+            DSS_OFFSCREEN_WRITE_CLIPBOARD: globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD,
         };
     }
 })();

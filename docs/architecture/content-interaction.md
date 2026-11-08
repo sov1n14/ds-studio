@@ -208,8 +208,9 @@ DeepSeek 按鈕的 React `onClick` 只在 `e.nativeEvent.isTrusted === true` 且
 - **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js`、`auto-open-sidebar.js`、`auto-copy.js` 與本檔各自宣告（跨 world 無共用載入器）。
 - **觸發**：讀取目標元素自身 `__reactProps$*` 上的 `onClick`，以最小 synthetic event 呼叫：`nativeEvent` 為 `Object.create(Event.prototype, { isTrusted: { value: true } })`（通過上述檢查），另帶 `target` / `currentTarget` 與空實作的 `preventDefault` / `stopPropagation`。
 - **備援**：元素沒有 React `onClick` 時呼叫 `el.click()`。
+- **剪貼簿擷取**（v4.39.0）：本檔包裝 `navigator.clipboard.writeText`，只對 `detail` 為 `'auto-copy'` 的點擊登記約 1500 ms 的待擷取項目，且只在網站的寫入 Promise 拒絕時派送 `dss:auto-copy-captured`；包裝永遠回傳原呼叫的結果（含同步拋錯），不改變網站看到的結果。規則見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
 - **錯誤處理**：監聽器本體以 try/catch 包覆，React `onClick` 拋錯時以 `console.error('[DSS] react-click-bridge:', err)` 記錄。
-- **重複執行防護**：`window.__dssIsReactClickBridgeInstalled` 旗標為防禦性防護：同一視窗內腳本被執行兩次時仍只有一個監聽器，一次 `dss:react-click` 只呼叫一次 `onClick`。
+- **重複執行防護**：`window.__dssIsReactClickBridgeInstalled` 旗標為防禦性防護：同一視窗內腳本被執行兩次時仍只有一個監聽器與一層包裝，一次 `dss:react-click` 只呼叫一次 `onClick`。
 
 ### 載入順序
 
@@ -263,6 +264,10 @@ manifest 中 `content/auto-open-sidebar.js` 緊接 `content/auto-expand-messages
 
 - **`content/reply-completion.js`**（`DSstudio.ReplyCompletion`）：純判斷模組，不修改 DOM。`newToolbarsFromRecords(records)` 回傳本批次新出現、依文件順序且不重複的訊息工具列；`isStoppedReply(toolbar)` 的檢查範圍為 `toolbar.parentElement`。判定規則與實作限制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
 - **`content/auto-copy.js`**（`DSstudio.AutoCopy`）：持有兩個閘門 `_isReplyOn`、`_isCodeOn` 與觀察器，負責找出目標按鈕與派送事件。
+- **`content/auto-copy.relay.js`**（`DSSAutoCopyRelay`，v4.39.0）：isolated world 的轉交模組；`notePending()` 登記待轉交項目，`start()` 註冊唯一的 `dss:auto-copy-captured` 監聽器並送出 `DSS_COPY_TO_CLIPBOARD`；它不直接呼叫剪貼簿 API。
+- **`background/clipboard-routes.js`**（`DSSClipboardRoutes`，v4.39.0）：接收 `DSS_COPY_TO_CLIPBOARD` 並委託 offscreen 文件寫入，訊息路由見 [ARCHITECTURE.md](../ARCHITECTURE.md#剪貼簿寫入訊息路由-clipboard-write-v4390) 。
+- **`offscreen/clipboard-offscreen.js`**（`DSSClipboardOffscreen`，v4.39.0）：offscreen 文件內以 `document.execCommand('copy')` 寫入並回覆 `{ ok }`。
+- **`utils/clipboard-permission.js`**（`DSSClipboardPermission`，v4.39.0）：popup 端對 `clipboardWrite` 與 `offscreen` 的權限查詢與請求包裝，開關流程見 [POPUP.md](POPUP.md) 與 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
 
 ### 閘控 (registerFeatureToggle)
 
@@ -272,12 +277,12 @@ manifest 中 `content/auto-open-sidebar.js` 緊接 `content/auto-expand-messages
 
 - **觀察器**：`content/auto-copy.js` 以 `body` 為根節點，因為新對話頁尚無訊息列表，切換對話時列表可能整個重新掛載；「新出現」的判斷已由 `ReplyCompletion` 限定於虛擬列表項目內。掛載與中斷條件見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
 - **批次處理**：每批 `MutationRecord` 先交給 `newToolbarsFromRecords`，再略過 `isStoppedReply` 為真的工具列。回覆按鈕以 `ROLE_BUTTON_DIV_SELECTOR` 定位，程式碼區塊按鈕則在工具列所屬的 `VIRTUAL_ITEM_KEY_SELECTOR` 項目內以 `.md-code-block-banner` 定位；選取規則與順序見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
-- **點擊**：派送機制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，橋接端見 [React 點擊橋接](#react-點擊橋接-react-click-bridge) 。
+- **點擊**：派送機制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，橋接端與失焦補寫的擷取見 [React 點擊橋接](#react-點擊橋接-react-click-bridge) 。
 - **錯誤處理**：`MutationObserver` 回呼以 try/catch 包覆，處理拋出的錯誤以 `console.error('[DSS] auto-copy:處理新工具列失敗:', error)` 記錄並維持觀察。
 
 ### 載入順序
 
-`start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+`start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。`content/auto-copy.relay.js`（v4.39.0）的 `start()` 在 `DSS_COPY_TO_CLIPBOARD` 缺席時拋出具名的載入順序錯誤；`content/auto-copy.js` 在轉交模組未載入時略過登記，分頁有焦點時的複製不受影響。
 ## 回覆完成通知 (ReplyNotification)
 
 回覆完成通知的行為規則見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) ，儲存鍵見 [STORAGE.md](STORAGE.md) ；本節說明內容腳本、background 路由與 popup 權限包裝的分工與實作細節。

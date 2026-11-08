@@ -117,3 +117,6 @@
 - [Red-phase loader pattern](red_phase_loader.md) — existsSync + import.meta.glob for not-yet-existing modules, prove with sibling file
 - [Popup permission toggle red](project_popup_permission_toggle_red.md) — markup-gated reds need injected-markup oracle; onChanged write recorder catches transient saves
 - [Reply-notification harness](project_reply_notification_harness.md) — routed sendMessage failure modes, foreground getters, Object.create(globalThis) load env; once-per-batch open question
+- [Clipboard routes offscreen fake](project_clipboard_routes_offscreen_fake.md) — stateful offscreen-world fake for SW clipboard route; fresh module per test via resetModules + glob
+- [vi.fn marks rejections handled](pitfall_vifn_marks_rejections_handled.md) — vitest 3 spy attaches then-handlers; use a plain function boundary to prove a rejection is caught
+- [Auto-copy capture harness](project_auto_copy_capture_harness.md) — U6-14 fake Clipboard, open the relay window with a focused click before negatives

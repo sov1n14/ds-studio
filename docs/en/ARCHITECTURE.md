@@ -95,9 +95,10 @@ ds-studio/
 │   ├── auto-open-sidebar.js   ─  MutationObserver-based detection of the collapsed sidebar's open button; dispatches a dss:react-click event on every appearance to keep the sidebar open (v4.36.0)
 │   ├── auto-click.delay.js    ─  0–3 s random delay for auto-click rounds, in 0.1 s steps (v4.35.0)
 │   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, dispatches a dss:react-click event on the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0, event-triggered since v4.35.4)
-│   ├── react-click-bridge.main.js ‡ ─  MAIN-world bridge: on dss:react-click, calls the button's React onClick with a synthetic nativeEvent that passes the isTrusted check, falling back to click() when there is no onClick (v4.35.4)
+│   ├── react-click-bridge.main.js ‡ ─  MAIN-world bridge: on dss:react-click, calls the button's React onClick with a synthetic nativeEvent that passes the isTrusted check, falling back to click() when there is no onClick; also wraps navigator.clipboard.writeText and hands over the text through a dss:auto-copy-captured event when an auto copy write is rejected (v4.35.4, capture added in v4.39.0)
 │   ├── reply-completion.js    ─  Pure decisions: finds newly appeared message toolbars from MutationRecords and tells whether a reply was stopped, for auto copy and the reply-complete notification (v4.37.0)
 │   ├── auto-copy.js           ─  When a reply finishes, dispatches dss:react-click on the copy buttons of that reply and its code blocks, per the two toggles (v4.37.0)
+│   ├── auto-copy.relay.js     ─  Isolated-world relay: accepts the unfocused auto copy text captured by the MAIN world and sends a DSS_COPY_TO_CLIPBOARD message (v4.39.0)
 │   ├── reply-notification.js  ─  When a new reply finishes and the tab is not in the foreground, sends a DSS_SHOW_NOTIFICATION message asking background to show a desktop notification (v4.38.0)
 │   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
@@ -113,8 +114,12 @@ ds-studio/
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
 │   ├── notification-routes.js  ─  DSS_SHOW_NOTIFICATION route: validates title/body and shows a basic notification with chrome.notifications.create (v4.38.0)
+│   ├── clipboard-routes.js     ─  DSS_COPY_TO_CLIPBOARD route: queues writes, makes sure the offscreen document exists, then sends DSS_OFFSCREEN_WRITE_CLIPBOARD asking it to write the clipboard (v4.39.0)
 │   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG routes: puts the service worker's StorageManager in chat-map writer mode, validates each op, applies it in one FIFO queue
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
+├── offscreen/                  ─  Offscreen document (reason CLIPBOARD, v4.39.0)
+│   ├── clipboard-offscreen.html ─  Offscreen document shell that loads only clipboard-offscreen.js
+│   └── clipboard-offscreen.js   ─  On DSS_OFFSCREEN_WRITE_CLIPBOARD, writes the clipboard with a textarea + document.execCommand('copy') and replies { ok }
 ├── popup/                   ─  Extension action UI
 │   ├── popup.html           ─  Two-column config UI (v3.0.0: header, presets, editor, etc.)
 │   ├── popup-button.css     ─  Button component styles
@@ -181,6 +186,7 @@ ds-studio/
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
 │   ├── notification-permission.js ─  DSSNotificationPermission: wraps the chrome.permissions check and request for the optional notifications permission into a non-throwing popup interface (v4.38.0)
+│   ├── clipboard-permission.js ─  DSSClipboardPermission: wraps the chrome.permissions check and request for the optional clipboardWrite and offscreen permissions into a non-throwing popup interface (v4.39.0)
 │   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
 │   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
@@ -372,6 +378,20 @@ The background layer is the only place that calls `chrome.notifications`; the co
 - **`utils/message-constants.js`** publishes `globalThis.DSS_SHOW_NOTIFICATION` (`'DSS_SHOW_NOTIFICATION'`) as a plain `globalThis` assignment, shared by the sender `content/reply-notification.js` and the receiver `background/notification-routes.js`; when the constants file is absent, the receiver throws a named load-order error.
 - **`background/notification-routes.js`**: `DSSNotificationRoutes.install()` is called at service-worker top level so it survives worker restarts; it registers one `chrome.runtime.onMessage` listener, and an unknown type returns `false` without replying, leaving it to the other listeners.
 - **Optional `notifications` permission**: while it is not granted, `chrome.notifications` does not exist and the route replies `{ ok: false, error }`. Only the popup requests the permission, through `utils/notification-permission.js`; background and the content script never request it.
+
+### Clipboard Write Message Route (Clipboard Write, v4.39.0)
+
+The background layer is the only place that calls `chrome.offscreen`; the content script only sends a message, and the offscreen document only answers messages from background. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+
+| Message type | Sender → receiver | Payload | Effect |
+|-|-|-|-|
+| `DSS_COPY_TO_CLIPBOARD` | `content/auto-copy.relay.js` → `background/clipboard-routes.js` | `{ text }` (string) | Verifies `text` is a string, queues the write in arrival order, makes sure the offscreen document exists, then sends `DSS_OFFSCREEN_WRITE_CLIPBOARD`; replies `{ ok: true }` when the offscreen document replies `{ ok: true }`, and otherwise logs and replies `{ ok: false, error }` |
+| `DSS_OFFSCREEN_WRITE_CLIPBOARD` | `background/clipboard-routes.js` → `offscreen/clipboard-offscreen.js` | `{ text }` (string) | Writes the clipboard with a textarea, `select()`, and `document.execCommand('copy')` and replies `{ ok }`; replies `{ ok: false }` when `text` is not a string |
+
+- **`utils/message-constants.js`** publishes `globalThis.DSS_COPY_TO_CLIPBOARD` and `globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD` as plain `globalThis` assignments; `content/auto-copy.relay.js` and `background/clipboard-routes.js` share the former, and both throw a named load-order error when the constants file is absent. `offscreen/clipboard-offscreen.js` does not load the constants file and declares the latter as a named constant with the same value.
+- **`background/clipboard-routes.js`**: `DSSClipboardRoutes.install()` is called at service-worker top level so it survives worker restarts; it registers one `chrome.runtime.onMessage` listener, and an unknown type returns `false` without replying, leaving it to the other listeners. Writes are queued in order, and a failed write does not block the next one.
+- **Offscreen document lifecycle**: the document is tracked with a "pending creation promise plus created flag" and does not use `chrome.runtime.getContexts` or `chrome.offscreen.hasDocument` (not supported at the minimum version 111). `createDocument` creates `offscreen/clipboard-offscreen.html` with reason `CLIPBOARD`, and a report of "Only a single offscreen document" counts as the document already existing; when sending reports "Receiving end does not exist", the flag is cleared, the document is recreated, and the send is retried once.
+- **Optional `clipboardWrite` and `offscreen` permissions**: while `offscreen` is not granted, `chrome.offscreen` does not exist and the route replies `{ ok: false, error }`. Only the popup requests the permissions, through `utils/clipboard-permission.js`; background and the content script never request them.
 
 ### Data Flow
 

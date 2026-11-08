@@ -1,4 +1,4 @@
-// 359 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
+// 361 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
 /**
  * DS studio — Popup Controller（入口）
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
@@ -6,7 +6,8 @@
  *       popup.editor-window.js（createEditorWindowManager）、popup.width-sliders.js（createWidthSliderManager）、
  *       popup.markdown-export.js（createMarkdownExportManager）、popup.toggles.js（createToggleManager）、
  *       popup.preset-domain.js（DSSPresetDomain）、popup.locale.js（bindLocaleSwitcher）、
- *       popup.settings-view.js（applySettingsToDom）、utils/notification-permission.js（DSSNotificationPermission）
+ *       popup.settings-view.js（applySettingsToDom）、utils/notification-permission.js（DSSNotificationPermission）、
+ *       utils/clipboard-permission.js（DSSClipboardPermission）
  * 需在本檔案之前以 <script> 載入上述模組。
  */
 
@@ -292,6 +293,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     toggleManager = window.__DS_PopupToggles.createToggleManager({
         StorageManager,
         DSSNotificationPermission: window.DSSNotificationPermission,
+        DSSClipboardPermission: window.DSSClipboardPermission,
         refreshSyncStatus,
         showSaveStatus,
         applyMasterSwitchUI,

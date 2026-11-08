@@ -52,7 +52,7 @@
 
 - **網域**：`chat.deepseek.com`
 - **平台**：Chrome 擴充功能 Manifest V3
-- **權限**：`storage`、`activeTab`、`alarms`（用於 background service worker 的排程重試與同步）；選用權限 `notifications`（v4.38.0，`optional_permissions`，僅在使用者開啟「回覆完成通知」時請求，行為見 [功能規格 §27](04-features.md#27-回覆完成通知-reply-notification-v4380) ）
+- **權限**：`storage`、`activeTab`、`alarms`（用於 background service worker 的排程重試與同步）；選用權限 `notifications`（v4.38.0，`optional_permissions`，僅在使用者開啟「回覆完成通知」時請求，行為見 [功能規格 §27](04-features.md#27-回覆完成通知-reply-notification-v4380) ）；選用權限 `clipboardWrite` 與 `offscreen`（v4.39.0，`optional_permissions`，僅在使用者勾選任一自動複製核取方塊時一併請求，行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ）
 
 ### DOM 選取
 
