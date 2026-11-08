@@ -58,6 +58,51 @@ export async function popupPinButton(popup, name) {
     return row.locator('.ds-select__item-btn--pin');
 }
 
+/** The names of the groups the dropdown currently shows (rows hidden by the search filter are left out), top to bottom (the panel must be open). */
+export function popupVisibleGroupNames(popup) {
+    return popup.locator('#presetSelectList [role="option"]:visible .ds-select__item-name').allTextContents();
+}
+
+/** The blank "(No Prompt Group)" row at the top of the dropdown panel. */
+export function popupBlankRow(popup) {
+    return popup.locator('#presetSelectPanel .ds-select__item--empty');
+}
+
+/** The localized label of the blank option, read from its own row, so a spec compares the picked label with it instead of a hardcoded string. */
+export async function popupBlankLabel(popup) {
+    return (await popupBlankRow(popup).locator('.ds-select__item-name').textContent()).trim();
+}
+
+/** Picks the group named `name` by clicking its row name in the dropdown, and waits until the trigger shows it. */
+export async function pickGroupInPopup(popup, name) {
+    await openPopupGroupList(popup);
+    await popupGroupRow(popup, name).locator('.ds-select__item-name').click();
+    await expect(popupPickedGroup(popup), 'the popup trigger shows the picked group').toHaveText(name);
+}
+
+/** The delete (✕) button of the group named `name`; it appears on row hover, so the row is hovered first. */
+export async function popupDeleteButton(popup, name) {
+    const row = popupGroupRow(popup, name);
+    await row.hover();
+    return row.locator('.ds-select__item-btn--delete');
+}
+
+/** The delete-all (✕) button of the blank row; it appears on row hover, so the row is hovered first. */
+export async function popupDeleteAllButton(popup) {
+    const row = popupBlankRow(popup);
+    await row.hover();
+    return row.locator('.ds-select__item-btn--delete-all');
+}
+
+/** Answers the open confirmation dialog with its danger (confirm) button when `isConfirmed`, else with its other (cancel) button, and waits until the dialog closes. */
+export async function answerPopupConfirmation(popup, isConfirmed) {
+    await expect(popup.locator('#modalOverlay'), 'the confirmation dialog opens').toBeVisible();
+    const actions = popup.locator('#modalActions');
+    await expect(actions.locator('.modal-btn'), 'the confirmation offers cancel and a danger confirm').toHaveCount(2);
+    await (isConfirmed ? actions.locator('.modal-btn--danger') : actions.locator('.modal-btn:not(.modal-btn--danger)')).click();
+    await expect(popup.locator('#modalOverlay'), 'the confirmation dialog closes').toBeHidden();
+}
+
 /** Adds a group named `name` through the popup "+" button and its naming dialog. */
 export async function addGroupInPopup(popup, name) {
     await popup.locator('#addPresetBtn').click();

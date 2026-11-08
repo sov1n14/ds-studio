@@ -13,6 +13,17 @@ export async function gotoWithOverlay(page, url = DEEPSEEK_ORIGIN + '/') {
     await expect(presetOverlay(page), 'the preset overlay is shown (precondition)').toBeVisible();
 }
 
+/** Opens a new tab on the DeepSeek home page (a new conversation), runs `check(tab)`, then closes the tab. */
+export async function inNewHomeTab(context, check) {
+    const tab = await context.newPage();
+    try {
+        await gotoWithOverlay(tab, DEEPSEEK_ORIGIN + '/');
+        await check(tab);
+    } finally {
+        await tab.close();
+    }
+}
+
 /** Blocks every send request of `page`, then loads `url` (the home page by default) and waits for the preset overlay. */
 export async function openBlockingSends(page, url = DEEPSEEK_ORIGIN + '/') {
     const blocked = await blockSendRequests(page);

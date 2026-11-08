@@ -38,3 +38,23 @@ export async function expectNoDownloadWithin(context, durationMs, message) {
         throw new Error(`${message}: ${downloads.length} download(s) started within ${durationMs} ms: ${JSON.stringify(downloads)}`);
     }
 }
+
+/**
+ * Fails when `context` opens a page within `durationMs` whose URL, read when the window ends, contains `urlPart`; passes otherwise.
+ * The URL is read at the end because a window can open on about:blank before it loads its target. Like `expectNeverWithin`, the window is the assertion itself.
+ * @param {import('@playwright/test').BrowserContext} context
+ */
+export async function expectNoPageWithin(context, urlPart, durationMs, message) {
+    const opened = [];
+    const record = (page) => opened.push(page);
+    context.on('page', record);
+    try {
+        await new Promise((resolve) => setTimeout(resolve, durationMs));
+    } finally {
+        context.off('page', record);
+    }
+    const matching = opened.map((page) => page.url()).filter((url) => url.includes(urlPart));
+    if (matching.length > 0) {
+        throw new Error(`${message}: ${matching.length} page(s) opened within ${durationMs} ms: ${JSON.stringify(matching)}`);
+    }
+}

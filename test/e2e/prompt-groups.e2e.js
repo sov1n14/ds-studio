@@ -5,23 +5,12 @@ import {
     popupGroupNames, popupGroupRow, popupPickedGroup, popupPinButton,
 } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, presetOverlay, seedOnlyPreset, seedOnlyPresets, trackPresetsCreatedDuringTest } from './helpers/presets.js';
-import { documentedPrompt, gotoWithOverlay, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
+import { documentedPrompt, gotoWithOverlay, inNewHomeTab, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
 
 // Managing Prompt Groups in the popup (docs/FEATURES.md, Managing Prompt Groups; docs/spec/01-prompt-system.md sections 1 and 6; docs/spec/02-popup-ui.md sections 7 and 15).
 // The popup page is opened in a tab; every send request is aborted in the browser, and every touched storage key (plus each group the popup creates) is restored after the test.
 
 const USER_TEXT = 'e2e prompt group probe (aborted before it leaves the browser)';
-
-/** Opens a new tab on the DeepSeek home page (a new conversation), runs `check(tab)`, then closes the tab. */
-async function inNewHomeTab(context, check) {
-    const tab = await context.newPage();
-    try {
-        await gotoWithOverlay(tab, DEEPSEEK_ORIGIN + '/');
-        await check(tab);
-    } finally {
-        await tab.close();
-    }
-}
 
 test.describe('managing prompt groups in the popup', () => {
     test.beforeEach(async ({ settings }) => {
