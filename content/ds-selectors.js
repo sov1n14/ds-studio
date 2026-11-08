@@ -47,7 +47,7 @@
     const VIRTUAL_ITEM_KEY_ATTR = 'data-virtual-list-item-key';
     const VIRTUAL_ITEM_KEY_SELECTOR = '[data-virtual-list-item-key]';
 
-    /** 虛擬列表「目前可見項目」容器 */
+    /** 虛擬列表「目前可見項目」容器；長程式碼區塊對話中可能同時命中 2 個容器（2026-11-08 實頁重測觀察到 n=2），此為已接受行為：消費端若需要全部可見項目，須以 querySelectorAll 或 closest 取用（harvest.dom.js、content-script.export.js、quote-reply.js）；僅探測存在或取首個命中的 querySelector 不受影響（harvest.js、harvest.dom.js）；不得假設選擇器只命中單一容器 */
     const VISIBLE_ITEMS_SELECTOR = '.ds-virtual-list-visible-items';
 
     /** 可見的虛擬列表項目包裝（共用組件，不匯出） */
