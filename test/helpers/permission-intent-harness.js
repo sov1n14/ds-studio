@@ -142,15 +142,15 @@ export async function settle(trigger) {
     }
 }
 
-/** Mounts the real popup.html, builds the element map popup.js builds and binds a real toggle manager to it. */
-export function openPopup() {
+/** Mounts the real popup.html, builds the element map popup.js builds and binds a real toggle manager to it. `storageManager` replaces the StorageManager the toggle manager receives through ctx (default: the real one). */
+export function openPopup({ storageManager = StorageManager } = {}) {
     mountPopupHtml();
     const dom = {};
     document.querySelectorAll('[id]').forEach((el) => { dom[el.id] = el; });
     dom.websearchRadios = [...document.querySelectorAll('input[name="websearchToggle"]')];
     dom.replyNotificationRadios = [...document.querySelectorAll('input[type="radio"][name="replyNotificationToggle"]')];
     globalThis.__DS_PopupToggles.createToggleManager({
-        StorageManager,
+        StorageManager: storageManager,
         DSSClipboardPermission: globalThis.DSSClipboardPermission,
         DSSNotificationPermission: globalThis.DSSNotificationPermission,
         refreshSyncStatus: vi.fn(async () => {}),
