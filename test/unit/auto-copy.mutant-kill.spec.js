@@ -5,7 +5,7 @@
  * Requirements asserted:
  *   A. Reply copy and code copy are independent: a new toolbar without a reply copy button (no direct div[role="button"] child) still gets its code blocks copied, and nothing is reported as an error.
  *   B. A new toolbar that is no longer inside a virtual-list item when its turn comes (copying an earlier reply of the same batch made the host page re-render it out of its item) has no code blocks to copy: nothing is activated for it and nothing is reported as an error.
- *   C. A failure while copying (an activation attempt that throws) is reported through console.error('[DSS] auto-copy:處理新工具列失敗:', error) and does not stop the feature: the next new reply is still copied.
+ *   C. With reply and code copy on, a code block copy whose activation attempt throws is reported through console.error('[DSS] auto-copy:處理新工具列失敗:', error) and does not cost the reply its copy: the reply copy is still activated and is the last activation (the clipboard must end holding the full reply); the feature keeps working, so the next new reply is still copied, code blocks first and the reply last.
  *   D. Loading content/auto-copy.js starts it (manifest entry point): with its dependencies on the globals and no Node module system, a new reply after load is copied without anyone calling start().
  *   E. Exports: in a CommonJS environment module.exports is the AutoCopy object; in a window environment window.DSstudio.AutoCopy is that object and existing window.DSstudio members survive; loading works where only one of the two exists.
  *   F. A missing dependency makes loading fail with an Error naming the missing file, never a TypeError, also when globalThis.DSstudio or globalThis.__DS_StorageManager_keys does not exist at all.
@@ -128,24 +128,25 @@ describe('processing a new toolbar', () => {
         expect(errors).not.toHaveBeenCalled();
     });
 
-    it('C. an activation attempt that throws is logged with the auto-copy prefix and the error, and the next new reply is still copied', async () => {
+    it('C. reply and code copy on, the last code block copy throws: the error is logged with the auto-copy prefix, the reply copy is still activated last, and the next new reply is still copied', async () => {
         const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
         const { list } = mountPage();
         await loadAutoCopy(BOTH);
         const first = awaitingItem(4, 'first');
-        const { copy } = addCodeBlock(first.item, 'first', 0);
+        addCodeBlock(first.item, 'first', 0);
+        const { copy } = addCodeBlock(first.item, 'first', 1);
         const failure = new Error('dispatch failed');
         copy.dispatchEvent = () => { throw failure; };
 
         await completeNewReply(list, first);
-        expect(activations(), 'the reply copy ran before the failing code block').toEqual(['first:reply']);
+        expect(activations(), 'code block #0 copied, #1 failed, then the reply copy still ran last').toEqual(['first:code#0', 'first:reply']);
         expect(errors).toHaveBeenCalledTimes(1);
         expect(errors).toHaveBeenCalledWith(ERROR_PREFIX, failure);
 
         const control = awaitingItem(6, 'control');
         addCodeBlock(control.item, 'control', 0);
         await completeNewReply(list, control);
-        expect(activations(), 'the feature keeps working after the failure').toEqual(['first:reply', 'control:reply', 'control:code#0']);
+        expect(activations(), 'the feature keeps working after the failure').toEqual(['first:code#0', 'first:reply', 'control:code#0', 'control:reply']);
     });
 });
 
@@ -162,7 +163,7 @@ describe('loading content/auto-copy.js', () => {
 
         await completeNewReply(list, fresh);
 
-        expect(activations()).toEqual(['new:reply', 'new:code#0']);
+        expect(activations()).toEqual(['new:code#0', 'new:reply']);
     });
 });
 
@@ -265,7 +266,7 @@ describe('a dependency absent from the globals is taken from require()', () => {
         addCodeBlock(fresh.item, 'new', 0);
         await completeNewReply(list, fresh);
 
-        expect(activations()).toEqual(['new:reply', 'new:code#0']);
+        expect(activations()).toEqual(['new:code#0', 'new:reply']);
     });
 
     it('G2. DSstudio.Selectors absent: ds-selectors.js is required and both copy buttons are found', async () => {
@@ -280,7 +281,7 @@ describe('a dependency absent from the globals is taken from require()', () => {
         addCodeBlock(fresh.item, 'new', 0);
         await completeNewReply(list, fresh);
 
-        expect(activations()).toEqual(['new:reply', 'new:code#0']);
+        expect(activations()).toEqual(['new:code#0', 'new:reply']);
     });
 });
 

@@ -2,12 +2,12 @@
 /**
  * content/auto-copy.js — auto-copy reply content and auto-copy code block content (red phase: the module does not exist yet).
  *
- * Requirement (user request): two Features toggles. (a) Auto-copy code block content: click the code block's copy button automatically. (b) Auto-copy reply content: when a new message toolbar (「快捷功能條」) appears, click its copy button automatically; a toolbar that is not new (an old one scrolled back into view) MUST NOT be clicked. Decisions: D-07 a stopped / aborted reply gets no auto-copy; U6-04 code blocks are copied only when the reply completes (its new toolbar appears), never when a banner mounts while streaming; U6-05 both toggles default off; U6-07 with both on, the reply copy comes first, then the code blocks.
+ * Requirement (user request): two Features toggles. (a) Auto-copy code block content: click the code block's copy button automatically. (b) Auto-copy reply content: when a new message toolbar (「快捷功能條」) appears, click its copy button automatically; a toolbar that is not new (an old one scrolled back into view) MUST NOT be clicked. Decisions: D-07 a stopped / aborted reply gets no auto-copy; U6-04 code blocks are copied only when the reply completes (its new toolbar appears), never when a banner mounts while streaming; U6-05 both toggles default off; U6-07 (revised) with both on, every code block copy runs first, in document order, and the reply copy runs last, so the clipboard ends holding the full reply (the content the user ultimately pastes); both toggles stay on, the copy logic never turns either off.
  *
  * Contract under test:
  *   - Gates (content/feature-toggle.js): reply copy = master "isEnabled" ON && "isAutoCopyReplyEnabled" true; code copy = master ON && "isAutoCopyCodeEnabled" true. Initial values via DSS_GET_SETTINGS, changes via DSS_SETTINGS_CHANGED.
  *   - A new toolbar is one returned by DSstudio.ReplyCompletion.newToolbarsFromRecords for a mutation batch on the message list; a toolbar for which isStoppedReply is true is skipped entirely.
- *   - For each new, non-stopped toolbar: reply copy activates the toolbar's first direct role="button" child (copy, index 0) once; code copy activates the copy button (first banner button) of every code block inside that toolbar's own item once, in document order, never the download button and never a code block of another item.
+ *   - For each new, non-stopped toolbar: reply copy activates the toolbar's first direct role="button" child (copy, index 0) once; code copy activates the copy button (first banner button) of every code block inside that toolbar's own item once, in document order, never the download button and never a code block of another item. With both on, the code block copies come first and the reply copy last.
  *   - Activation goes through `dss:react-click` on the target button (the bridge contract), asserted as the guarded React onClick accepting the event (see test/helpers/auto-copy-harness.js).
  *
  * Every negative scenario carries a positive control in the same test (a later new toolbar that IS copied), so "nothing happened" cannot pass because the module never ran.
@@ -85,7 +85,7 @@ describe('a new reply completes (new toolbar in an already-mounted item)', () =>
         expect(activations()).toEqual(['new:code#0', 'new:code#1']);
     });
 
-    it('both on: the reply copy first, then each code block copy (U6-07)', async () => {
+    it('both on: each code block copy first in document order, then the reply copy last (U6-07 revised); both toggles stay on, so the next new reply is copied the same way', async () => {
         const { list } = mountPage({ oldCodeBlock: true });
         await loadAutoCopy(BOTH);
         const fresh = awaitingItem(4, 'new');
@@ -94,7 +94,12 @@ describe('a new reply completes (new toolbar in an already-mounted item)', () =>
 
         await completeNewReply(list, fresh);
 
-        expect(activations()).toEqual(['new:reply', 'new:code#0', 'new:code#1']);
+        expect(activations(), 'first reply: code blocks first, the full reply last').toEqual(['new:code#0', 'new:code#1', 'new:reply']);
+
+        const next = awaitingItem(6, 'next');
+        addCodeBlock(next.item, 'next', 0);
+        await completeNewReply(list, next);
+        expect(activations(), 'both toggles still on: the next reply gets both, its reply copy last').toEqual(['new:code#0', 'new:code#1', 'new:reply', 'next:code#0', 'next:reply']);
     });
 
     it('code copy on, reply without code blocks: nothing is activated (no fallback to other items)', async () => {
@@ -168,7 +173,7 @@ describe('toolbars that are not a newly completed reply are never copied', () =>
         const control = awaitingItem(6, 'control');
         addCodeBlock(control.item, 'control', 0);
         await completeNewReply(list, control);
-        expect(activations(), 'positive control: a later normal reply').toEqual(['control:reply', 'control:code#0']);
+        expect(activations(), 'positive control: a later normal reply').toEqual(['control:code#0', 'control:reply']);
     });
 
     it('scroll re-mount: an item scrolled out and back in with its toolbar (and code block) inside is not copied', async () => {
@@ -237,13 +242,13 @@ describe('gating', () => {
         const control = awaitingItem(6, 'control');
         addCodeBlock(control.item, 'control', 0);
         await completeNewReply(list, control);
-        expect(activations(), 'positive control: master on').toEqual(['control:reply', 'control:code#0']);
+        expect(activations(), 'positive control: master on').toEqual(['control:code#0', 'control:reply']);
     });
 
     it.each([
         ['reply copy turned off', REPLY_ONLY, [REPLY_KEY, false, true], ['first:reply']],
         ['code copy turned off', CODE_ONLY, [CODE_KEY, false, true], ['first:code#0']],
-        ['master switch turned off', BOTH, [MASTER_KEY, false, true], ['first:reply', 'first:code#0']],
+        ['master switch turned off', BOTH, [MASTER_KEY, false, true], ['first:code#0', 'first:reply']],
     ])('%s after being on: the next new reply is not copied (the observer stops)', async (_name, initial, change, firstCopies) => {
         const { list } = mountPage();
         await loadAutoCopy(initial);
@@ -261,7 +266,7 @@ describe('gating', () => {
         expect(activations(), 'after turning off').toEqual(firstCopies);
     });
 
-    it('turning code copy on while reply copy stays on: the next new reply gets both, the reply first', async () => {
+    it('turning code copy on while reply copy stays on: the next new reply gets both, the code block first and the reply last', async () => {
         const { list } = mountPage();
         await loadAutoCopy(REPLY_ONLY);
         broadcast(changes([CODE_KEY, true, false]));
@@ -271,6 +276,6 @@ describe('gating', () => {
 
         await completeNewReply(list, fresh);
 
-        expect(activations()).toEqual(['new:reply', 'new:code#0']);
+        expect(activations()).toEqual(['new:code#0', 'new:reply']);
     });
 });

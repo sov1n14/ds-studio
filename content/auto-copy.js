@@ -1,13 +1,13 @@
 /**
  * DS studio — Auto Copy（自動複製回覆／程式碼區塊）
- * 單一職責：新回覆完成（其訊息工具列新出現）時，依開關自動觸發該回覆的複製按鈕與其程式碼區塊的複製按鈕。
+ * 單一職責：新回覆完成（其訊息工具列新出現）時，依開關自動觸發該回覆的程式碼區塊複製按鈕與回覆複製按鈕。
  *
  * 行為：
  *   - 閘控：由 content/feature-toggle.js 以「總開關 isEnabled 且自身鍵」決定；回覆為 isAutoCopyReplyEnabled，程式碼區塊為 isAutoCopyCodeEnabled。本層不直讀儲存區。
  *   - 觀察：任一閘門開啟時以單一 MutationObserver（childList、subtree）觀察 document.body；全關時中斷。以 body 為根是因為新對話頁尚無訊息列表、切換對話時列表可能整個重新掛載，而「新出現」的判斷已由 ReplyCompletion 限定於虛擬列表項目內。
  *   - 判斷：每批次交由 DSstudio.ReplyCompletion.newToolbarsFromRecords 找出新出現的工具列（捲動重新掛載的舊工具列不計）；isStoppedReply 為真的工具列（被停止的回覆）整個略過。
  *   - 觸發：DeepSeek 的 React onClick 只接受受信任事件，故不呼叫 button.click()，改在按鈕上派送冒泡的 dss:react-click 事件，由 MAIN world 的 content/react-click-bridge.main.js 呼叫 React onClick。
- *   - 順序：每個工具列先複製回覆（工具列第一個按鈕），再依文件順序複製該工具列所屬項目內每個程式碼區塊的複製按鈕（banner 的第一個按鈕，非下載）。
+ *   - 順序：每個工具列先依文件順序複製該工具列所屬項目內每個程式碼區塊的複製按鈕（banner 的第一個按鈕，非下載），最後複製回覆（工具列第一個按鈕），使兩個開關皆開啟時剪貼簿最終保留完整回覆；任一按鈕派送失敗只記錄錯誤，不影響其後目標。
  *   - 失焦補寫（決策 U6-14）：派送的事件帶字串 detail 'auto-copy'，讓 MAIN world 橋接器只擷取本模組觸發的寫入；每次派送前呼叫 DSSAutoCopyRelay.notePending() 登記待轉交項目（content/auto-copy.relay.js 未載入時略過，聚焦時的複製不受影響）。
  */
 (function () {
@@ -60,17 +60,17 @@
         },
 
         /**
-         * 依目前閘門組出單一工具列的觸發目標：先回覆、後程式碼區塊。
+         * 依目前閘門組出單一工具列的觸發目標：先程式碼區塊、最後回覆（剪貼簿最終保留完整回覆）。
          * @param {Element} toolbar
          * @returns {Element[]}
          */
         _collectTargets(toolbar) {
             const targets = [];
+            if (this._isCodeOn) targets.push(...this._findCodeCopyButtons(toolbar));
             if (this._isReplyOn) {
                 const replyButton = this._findReplyCopyButton(toolbar);
                 if (replyButton) targets.push(replyButton);
             }
-            if (this._isCodeOn) targets.push(...this._findCodeCopyButtons(toolbar));
             return targets;
         },
 
@@ -88,8 +88,20 @@
             toolbars
                 .filter((toolbar) => !this._replyCompletion.isStoppedReply(toolbar))
                 .forEach((toolbar) => {
-                    this._collectTargets(toolbar).forEach((button) => this._dispatchCopyClick(button));
+                    this._collectTargets(toolbar).forEach((button) => this._dispatchCopyClickSafely(button));
                 });
+        },
+
+        /**
+         * 派送單一按鈕並隔離其失敗：記錄錯誤後繼續，確保最後的回覆複製仍會執行。
+         * @param {Element} button
+         */
+        _dispatchCopyClickSafely(button) {
+            try {
+                this._dispatchCopyClick(button);
+            } catch (error) {
+                console.error('[DSS] auto-copy:處理新工具列失敗:', error);
+            }
         },
 
         /**

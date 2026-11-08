@@ -105,13 +105,14 @@ describe('unfocused auto-copy: the site\'s writeText rejects', () => {
         expect(copies).toEqual([copyMessage('new reply')]);
     });
 
-    it('reply copy and code copy on: one message per copy, the reply first, then each code block in document order', async () => {
+    it('reply copy and code copy on: one message per copy, each code block first in document order, the reply last (the last message carries the full reply text)', async () => {
         const { list } = await setup({ values: BOTH });
 
         await newReply(list, 4, 'new', { codeBlocks: 2 });
         await flush();
 
-        expect(copies).toEqual([copyMessage('new reply'), copyMessage('new code #0'), copyMessage('new code #1')]);
+        expect(copies).toEqual([copyMessage('new code #0'), copyMessage('new code #1'), copyMessage('new reply')]);
+        expect(copies.at(-1), 'the last clipboard write the service worker performs is the full reply').toEqual(copyMessage('new reply'));
     });
 });
 
@@ -122,7 +123,7 @@ describe('focused auto-copy: the site\'s writeText resolves', () => {
         await newReply(list, 4, 'new', { codeBlocks: 1 });
         await flush();
 
-        expect(clipboardState.writes, 'precondition: both copy clicks reached the site').toEqual(['new reply', 'new code #0']);
+        expect(clipboardState.writes, 'precondition: both copy clicks reached the site, the code block first, the reply last').toEqual(['new code #0', 'new reply']);
         expect(copies).toEqual([]);
     });
 });
