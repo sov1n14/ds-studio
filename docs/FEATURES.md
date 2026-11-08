@@ -310,7 +310,7 @@ When DeepSeek replaces the original model reply with messages like "I'm sorry, I
 - **Display**: Restored replies are marked with a **⚠ Content Restored** badge.
 - **Thinking Process**: If the original reply contains a thinking process, it is reconstructed as a collapsible thinking block with the thinking time displayed.
 - **Cross-Refresh Persistence**: Restored records are automatically saved locally (up to 200 entries). After refreshing the page or returning to the conversation later, censored messages will still be automatically restored.
-- **Backup Management**: In the popup menu's **Backup & Restore** section, you can export/import restoration record backups or clear all restored records with one click.
+- **Backup Management**: In the popup menu's **Backup & Restore** section, you can export/import restoration record backups or clear all restored records after a confirmation dialog.
 
 ## Backup and Restore Settings
 
@@ -322,7 +322,7 @@ In the popup menu's **Backup & Restore** section:
 | **Restore Settings (Import JSON)** | Select a JSON backup file. UI settings are overwritten; prompt groups are merged by ID, keeping the newer version for the same ID; conversation bindings (chatPresetMap) are also merged |
 | **Export Restore Records** | Independently backup the restoration records of censored replies |
 | **Import Restore Records** | Independently restore restoration records of censored replies |
-| **Clear All Restored Records** | Delete all restoration records of censored replies with one click |
+| **Clear All Restored Records** | Delete all restoration records of censored replies after you confirm in a dialog; the action cannot be undone |
 
 ## Cloud Sync Conflict Handling
 
