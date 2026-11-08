@@ -19,7 +19,6 @@ reports/
 test/stryker-incremental.json
 tools/test_auth.txt
 tools/node_modules/
-tools/.pw-profile/
 tools/captures/
 tools/screenshots/
 .browser-profile/

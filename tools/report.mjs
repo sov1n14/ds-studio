@@ -70,12 +70,35 @@ for (const key of sortedKeys) {
 
 // ── Matched-nowhere summary ────────────────────────────────────────
 
-if (matchedNowhere.length > 0) {
-  console.log(`\n## Matched nowhere (0 in every scenario)\n`);
-  for (const key of matchedNowhere) {
-    const sel = captures[0]?.counts[key]?.selector ?? '?';
-    console.log(`- ${key}: \`${sel}\``);
-  }
+// Accepted in DECISIONS: these selectors only match on page states the sweep does not reach, so 0 everywhere is expected.
+const ACCEPTED_MATCHED_NOWHERE = [
+  'CONTINUE_BUTTON_FALLBACK_SELECTOR',
+  'CONTINUE_BUTTON_SELECTOR',
+  'EXPAND_BUTTON_CONTAINER_SELECTOR',
+  'EXPAND_BUTTON_ICON_SELECTOR',
+  'RETRY_BUTTON_SELECTOR',
+];
+
+const selectorOf = key => captures.find(c => c.counts[key])?.counts[key].selector ?? '?';
+
+console.log(`\n## Accepted matched-nowhere (need special page states)\n`);
+for (const key of ACCEPTED_MATCHED_NOWHERE) {
+  const matchedIn = captures
+    .map((c, i) => ({ label: labels[i], count: c.counts[key]?.count }))
+    .filter(m => m.count > 0);
+  let status;
+  if (!allKeys.has(key)) status = 'NOT IN CAPTURES (constant missing from sweep)';
+  else if (matchedIn.length === 0) status = 'matched nowhere (as accepted)';
+  else status = `MATCHED in ${matchedIn.map(m => `${m.label}=${m.count}`).join(', ')} (no longer matched-nowhere)`;
+  console.log(`- ${key}: ${status} — \`${selectorOf(key)}\``);
 }
 
-console.log(`\n${sortedKeys.length} constants × ${labels.length} scenario(s). ${matchedNowhere.length} matched nowhere.`);
+const unexpected = matchedNowhere.filter(key => !ACCEPTED_MATCHED_NOWHERE.includes(key));
+console.log(`\n## Unexpected matched-nowhere\n`);
+if (unexpected.length === 0) {
+  console.log('- (none)');
+} else {
+  for (const key of unexpected) console.log(`- ${key}: \`${selectorOf(key)}\``);
+}
+
+console.log(`\n${sortedKeys.length} constants × ${labels.length} scenario(s). ${matchedNowhere.length} matched nowhere (${unexpected.length} unexpected).`);
