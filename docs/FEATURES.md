@@ -21,6 +21,7 @@
 - [System Time Injection](#system-time-injection)
 - [Restoring Censored Replies](#restoring-censored-replies)
 - [Backup and Restore Settings](#backup-and-restore-settings)
+- [Language Switcher](#language-switcher)
 - [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
 - [Master Switch Linkage](#master-switch-linkage)
 - [Legacy Data Migration](#legacy-data-migration)
@@ -323,6 +324,16 @@ In the popup menu's **Backup & Restore** section:
 | **Export Restore Records** | Independently backup the restoration records of censored replies |
 | **Import Restore Records** | Independently restore restoration records of censored replies |
 | **Clear All Restored Records** | Delete all restoration records of censored replies after you confirm in a dialog; the action cannot be undone |
+
+## Language Switcher
+
+The popup offers two interface languages: English and Traditional Chinese (繁體中文).
+
+- **Operation**: In the popup's **Export** card, click the globe button and pick a language in the panel.
+- **Popup**: The popup reloads after you pick, so every label appears in the new language.
+- **DeepSeek pages**: Open DeepSeek tabs relabel the extension's in-page text live, with no page refresh.
+- **Default**: Traditional Chinese applies until you pick a language.
+- **Storage**: The choice is saved to cloud sync storage; see [Popup Architecture](architecture/POPUP.md), section "Language / Locale Switcher", for details.
 
 ## Cloud Sync Conflict Handling
 
