@@ -11,6 +11,8 @@ export const CONVERSATIONS = Object.freeze({
     fiveThinkingReplies: '8176d3c0-ab31-451d-b913-1599192b6b0c',
     /** Long conversation with code blocks (too slow to export). */
     longWithCode: '992fe9b3-9d38-46c1-8eb5-109193fc300d',
+    /** Very long conversation (bottom scrollTop about 45800 at 1280x720) whose first mounted message still reaches into the viewport at the bottom; never delete it, go-top-native.e2e.js depends on it. */
+    veryLongThread: '0ecaa661-fdb2-4d41-9f87-41d8262af32d',
 });
 
 export const MESSAGE_IN_VIEW_SELECTOR = `${DSSelectors.VISIBLE_ITEMS_SELECTOR} ${DSSelectors.MESSAGE_SELECTOR}`;

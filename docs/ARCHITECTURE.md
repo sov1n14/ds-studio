@@ -218,8 +218,10 @@ The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `tes
 - `edit-message.e2e.js`: with the edit box open, the quote reply and preset prefix land in the main composer and the edit box keeps only the original text (v4.36.8 regression).
 - `export.e2e.js`: Markdown export file name timestamp, thinking sections, cite links and collapsed-thinking parity.
 - `go-top.e2e.js`: clicking, or pressing Enter on, the button scrolls the message list to the very top.
+- `go-top-native.e2e.js`: on the very long thread `CONVERSATIONS.veryLongThread`, a trusted native scroll-to-bottom click during Go Top leaves the list at the bottom; a native scroll-to-bottom click from the top shows the Go Top button at the bottom; a native click during the export's scroll-to-top does not stop the export, and its output equals an undisturbed export.
 - `hide-thinking.e2e.js`: "Hide Thinking Process" on collapses every thinking block and off expands them.
 - `master-switch.e2e.js`: master switch off removes go-top and hides the preset overlay; on brings both back.
+- `popup-order.e2e.js`: opens `popup/popup.html` and checks that the Features and UI Adjustments cards render their controls in the order set by `test/unit/popup-card-order.spec.js`, both in DOM order and top to bottom on screen, and attaches a screenshot.
 - `preset-overlay.e2e.js`: a picked preset makes the composer carry its content at send time; the empty option drops it.
 - `prevent-auto-scroll.e2e.js`: on, page scripts cannot scroll the list down while the wheel and upward scrolls still work; off restores it.
 - `prompt-injection.e2e.js`: the sent prompt carries only the typed text with no preset, and the preset content before the typed text once picked.
