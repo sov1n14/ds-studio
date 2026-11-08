@@ -126,9 +126,7 @@ test.describe('prompt group editor window', () => {
         await closeExtensionPages(context);
     });
 
-    // Product deviation (reported, not adjusted): docs/FEATURES.md step 6 and docs/spec/01-prompt-system.md section 1 say Esc saves unsaved content before the editor window closes.
-    // Observed on 4.39.5: Esc pressed right after typing (inside the 500 ms auto-save debounce) closes the window and the typed name and content are lost.
-    test.fixme('Esc pressed right after typing saves the typed name and content before the editor window closes', async ({ context, settings, extensionId }) => {
+    test('Esc pressed right after typing saves the typed name and content before the editor window closes', async ({ context, settings, extensionId }) => {
         const stamp = Date.now();
         const addedName = 'E2E esc ' + stamp;
         const renamed = addedName + ' renamed';

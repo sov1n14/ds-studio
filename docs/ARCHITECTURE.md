@@ -157,10 +157,11 @@ ds-studio/
 │   └── editor/              ─  Standalone 1280×720 prompt editor (v3.0.0)
 │       ├── editor.html      ─  Editor page markup
 │       ├── editor.css       ─  Editor page styles
-│       ├── editor.js        ─  Query-string target, auto-save, dirty-flag broadcast
+│       ├── editor.js        ─  Query-string target, auto-save wiring, Esc save-then-close
 │       ├── editor.parse.js  ─  Prompt text parsing bundle
 │       ├── editor.render.js ─  Editor UI rendering bundle
-│       └── editor.storage.js ─  Editor storage read/write bundle
+│       ├── editor.storage.js ─  Editor storage read/write bundle
+│       └── editor.autosave.js ─  Auto-save controller bundle: dirty flag, debounce, in-flight save, flush
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
 │   ├── storage-manager.js   ─  Entry: StorageManager object, chat-map writer flag, per-context FIFO write queue, bundle mixin
 │   ├── storage-manager.keys.js          ─  Storage key names, defaults, ChatMapDispatchError, _buildNextMeta
@@ -226,7 +227,7 @@ The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `tes
 - `popup-order.e2e.js`: opens `popup/popup.html` and checks that the Features and UI Adjustments cards render their controls in the order set by `test/unit/popup-card-order.spec.js`, both in DOM order and top to bottom on screen, and attaches a screenshot.
 - `preset-overlay.e2e.js`: a picked preset makes the composer carry its content at send time; the empty option drops it.
 - `prevent-auto-scroll.e2e.js`: on, page scripts cannot scroll the list down while the wheel and upward scrolls still work; off restores it.
-- `prompt-groups.e2e.js`: a group added with + in the popup and edited in its editor window appears in the in-page overlay and its content is sent; pinning preselects a group on new conversations only, one at a time, and unpinning restores the blank option; dragging a group by its handle reorders the popup list, and the order survives reopening the popup; one `test.fixme` case expects Esc pressed right after typing to save the typed name and content before the editor window closes.
+- `prompt-groups.e2e.js`: a group added with + in the popup and edited in its editor window appears in the in-page overlay and its content is sent; pinning preselects a group on new conversations only, one at a time, and unpinning restores the blank option; dragging a group by its handle reorders the popup list, and the order survives reopening the popup; Esc pressed right after typing saves the typed name and content before the editor window closes.
 - `prompt-injection.e2e.js`: the sent prompt carries only the typed text with no preset, and the preset content before the typed text once picked.
 - `quote-reply.e2e.js`: a reply selection quoted into the composer becomes a blockquote; with the master switch off no quote button shows.
 - `sidebar.e2e.js`: auto-hide shrinks the sidebar to 60px and widens it on hover; auto-open shows a collapsed sidebar again.
@@ -372,7 +373,7 @@ The standalone prompt editor opens as its own OS window, so it can end up buried
 - **`utils/message-constants.js`** publishes `globalThis.DSS_EDITOR_WINDOW` with `CLOSE_MESSAGE_TYPE` (`'DSS_CLOSE_EDITOR_WINDOWS'`) and `STORAGE_KEYS` (`global: 'dss-editor-window-id-global'`, `preset: 'dss-editor-window-id-preset'`). It is a plain `globalThis` assignment rather than a top-level `const`, because a top-level `const` does not become a `globalThis` property. All three consumers — `content/editor-window-autoclose.js`, `background/editor-window-routes.js`, `popup/popup.editor-window.js` — read the same file, so the storage keys have one definition; each throws a named load-order error when the constants file is absent.
 - **`content/editor-window-autoclose.js`** is the sender: a `focus` listener on `window` posts `{ type: CLOSE_MESSAGE_TYPE }` and swallows the rejection, since a sleeping service worker with no receiver is expected rather than exceptional. It forwards the event and nothing more — window removal and session-storage access both belong to the background layer.
 - **`background/editor-window-routes.js`** owns that side. `DSSEditorWindowRoutes.install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener; unknown types return `false` without responding, leaving the worker's other listeners free to handle them. Each id is handled independently: a `chrome.windows.remove()` rejection (the user already closed that window) is logged via `console.error` and the storage key is removed in a `finally` regardless, so one stale id cannot leave the other tracked window open or its key behind.
-- **No data loss**: the editor's own auto-save pipeline — 500 ms debounced on `input`, immediate flush on `blur` / `visibilitychange` / `pagehide` — writes dirty content before the window goes away, the same guarantee that already covered the `Esc` shortcut.
+- **Best-effort save**: `chrome.windows.remove()` does not wait for the editor, and the editor's auto-save (500 ms debounced on `input`, flush on `blur` / `visibilitychange` / `pagehide`) is fire-and-forget during unload, so text typed just before the focus returns can be lost; only `Esc` waits for the save (see [Auto-save pipeline](architecture/POPUP.md#auto-save-pipeline-editor-side)).
 
 ### Reply Notification Message Route (Reply Notification, v4.38.0)
 

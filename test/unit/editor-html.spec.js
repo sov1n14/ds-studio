@@ -35,6 +35,7 @@ const EXPECTED = [
     'editor.parse.js',
     'editor.render.js',
     'editor.storage.js',
+    'editor.autosave.js',
     'editor.js',
 ];
 

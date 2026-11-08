@@ -112,6 +112,7 @@ import '../../content/mobile-sidebar-swipe.js';
 import '../../popup/editor/editor.parse.js';
 import '../../popup/editor/editor.render.js';
 import '../../popup/editor/editor.storage.js';
+import '../../popup/editor/editor.autosave.js';
 
 // ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
 // The controller feature-detects it (typeof ResizeObserver === 'undefined') and
