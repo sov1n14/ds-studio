@@ -6,6 +6,8 @@ export default mergeConfig(base, defineConfig({
     test: {
         root: 'test',
         // Text-parse contract specs (including the popup toggle specs that regex-parse popup source) read source files as text; Stryker's instrumented copies break their regexes, and mutant switching keeps the text identical across mutants, so they can never kill a mutant.
-        exclude: ['unit/content-script-global-collisions.spec.js', 'unit/storage-manager.loader-contract.spec.js', 'unit/editor-html.spec.js', 'unit/popup-prevent-auto-scroll-toggle.spec.js', 'unit/popup-websearch-toggle.spec.js'],
+        exclude: ['unit/content-script-global-collisions.spec.js', 'unit/storage-manager.loader-contract.spec.js', 'unit/editor-html.spec.js', 'unit/popup-prevent-auto-scroll-toggle.spec.js', 'unit/popup-websearch-toggle.spec.js',
+            // 經 permission-intent-harness 以正則解析 service-worker.js 的 importScripts 清單（或在全新 vm 啟動它），Stryker 插樁後解析失敗或看不到變異體。
+            'unit/permission-intent.scenario.spec.js', 'unit/permission-intent.mutant-kill.spec.js', 'unit/service-worker.permission-intent-wiring.spec.js'],
     },
 }));

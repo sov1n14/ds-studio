@@ -200,8 +200,8 @@ ds-studio/
     ├── vitest.config.js     ─  Vitest configuration, default environment happy-dom; selector and DOM-structure specs opt into jsdom per file with `// @vitest-environment jsdom`
     ├── playwright.config.js ─  Playwright configuration (`*.e2e.js`, one worker)
     ├── stryker.scoped.config.mjs ─  Stryker configuration for the scoped run: the full config with the mutate list, spec list, incremental file and reports overridden
-    ├── stryker-vitest.scoped.config.js ─  Vitest configuration the scoped Stryker run uses, limited to the specs reaching the changed files
-    ├── scripts/             ─  Mutation tooling: `mutation-scope.mjs` (changed-line ranges, spec import graph, gate helpers) and `stryker-scoped.mjs` (the runner behind `npm run test:mutation:scoped`)
+    ├── stryker-vitest.scoped.config.js ─  Vitest configuration the scoped Stryker run uses, limited to the selected specs (all specs when a changed file is setup-loaded)
+    ├── scripts/             ─  Mutation tooling: `mutation-scope.mjs` (changed-line ranges, spec selection (import graph, path literals, setup-loaded files), gate helpers) and `stryker-scoped.mjs` (the runner behind `npm run test:mutation:scoped`)
     ├── setup/               ─  Test setup and preload
     ├── unit/                ─  Unit test specs
     ├── e2e/                 ─  Playwright specs, run locally against `.browser-profile/`

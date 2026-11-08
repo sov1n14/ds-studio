@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * 限定範圍突變測試：只突變 git diff 改動的行，只跑會碰到改動檔的 spec，並要求範圍內突變體全數 Killed。
+ * 限定範圍突變測試：只突變 git diff 改動的行，只跑會碰到改動檔的 spec（改動檔被 vitest setup 載入時跑全部 spec），並要求範圍內突變體全數 Killed。
  * --base 指定比較基準（預設 HEAD，即未提交的改動）；--full 突變整個改動檔（收分支前搭配 --base origin/main）；--plan 只印計算結果不跑 Stryker。
  *
  * Usage: node test/scripts/stryker-scoped.mjs [--base <ref>] [--full] [--plan]
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dropExcluded, evaluateGate, findSpecsReaching, parseChangedRanges, toMutateArgs } from './mutation-scope.mjs';
+import { dropExcluded, evaluateGate, findSpecsReaching, parseChangedRanges, selectSpecs, toMutateArgs } from './mutation-scope.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SOURCE_DIRS = ['popup', 'background', 'content', 'utils', 'offscreen'];
@@ -36,13 +36,16 @@ function readTextOrNull(repoPath) {
     }
 }
 
-async function listSpecs() {
+/** 讀 Stryker 實際使用的 vitest 設定，回傳會跑的 spec 與每個 spec 前都會載入的 setup 檔（皆為 repo 相對 POSIX 路徑）。 */
+async function loadVitestScope() {
     const { default: config } = await import(pathToFileURL(join(ROOT, 'test', 'stryker-vitest.config.js')).href);
-    // exclude 以 test/ 為根，例如 unit/x.spec.js
+    // exclude 與 setupFiles 以 test/ 為根，例如 unit/x.spec.js、./setup/vitest.setup.js
     const excluded = new Set((config.test.exclude ?? []).map((path) => `test/${path}`));
-    return readdirSync(join(ROOT, 'test', 'unit'), { recursive: true })
+    const specs = readdirSync(join(ROOT, 'test', 'unit'), { recursive: true })
         .map((path) => `test/unit/${path.replaceAll('\\', '/')}`)
         .filter((path) => path.endsWith('.spec.js') && !excluded.has(path));
+    const setupPaths = (config.test.setupFiles ?? []).map((path) => posix.join('test', path));
+    return { specs, setupPaths };
 }
 
 function printGate(result) {
@@ -70,8 +73,10 @@ async function main() {
         return 0;
     }
 
-    const specs = await listSpecs();
-    const reaching = [...new Set(files.flatMap((file) => findSpecsReaching(file, specs, readTextOrNull)))].sort();
+    const { specs, setupPaths } = await loadVitestScope();
+    const setupLoaded = files.filter((file) => findSpecsReaching(file, setupPaths, readTextOrNull).length > 0);
+    if (setupLoaded.length > 0) console.log(`Setup-loaded (all specs selected): ${setupLoaded.join(', ')}`);
+    const reaching = selectSpecs(files, specs, setupPaths, readTextOrNull);
     const mutateArgs = isFull ? files : toMutateArgs(ranges);
     if (reaching.length === 0) {
         console.log(`No spec reaches the changed files: ${files.join(', ')}`);

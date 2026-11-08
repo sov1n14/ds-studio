@@ -4,12 +4,15 @@
  * Requirement:
  *   - parseChangedRanges(diffText): raw `git diff -U0` text (LF or CRLF) -> { '<repo-relative path>': [[start, end], ...] } of NEW-side ranges, sorted, overlapping or adjacent ranges merged. Only `+++ b/<path>` under popup/, background/, content/, utils/, offscreen/ and ending in `.js`. `@@ -a,b +c,d @@` -> [c, c+d-1]; `+c` -> [c, c]; d = 0 -> no range; a file with only deletions or `+++ /dev/null` is omitted. Empty input -> {}.
  *   - toMutateArgs(ranges): ['<path>:<start>-<end>', ...], one per range, files in sorted path order.
- *   - findSpecsReaching(target, specPaths, readFile): sorted subset of specPaths whose transitive relative import graph reaches target. Specifiers: import ... from, export ... from, bare import, import(), require(), either quote. Relative = ./ or ../, resolved against the importer's directory; no extension also tries .js, .mjs. Non-relative ignored, cycles terminate, missing files (readFile -> null) ignored.
+ *   - findSpecsReaching(target, specPaths, readFile): sorted subset of specPaths whose transitive relative import graph reaches target. Specifiers: import ... from, export ... from, bare import, import(), require(), either quote. Relative = ./ or ../, resolved against the importer's directory; no extension also tries .js, .mjs. Non-relative ignored, cycles terminate, missing files (readFile -> null) ignored. A spec is ALSO included when any file under test/ in its relative import graph (the spec itself, helpers, fixtures) holds a string literal (single, double or backtick quote) ending with the target's repo-relative path, where the character before the path is the opening quote or '/' — this catches specs that load production files as text (fs.readFileSync + new Function, loadClassicScript('content/x.js')). Line comments and block comments are stripped before the scan; files outside test/ reached through the graph are not scanned for the literal.
  *   - evaluateGate(report, ranges): Stryker mutation-testing-report JSON. In scope = file is a key of ranges (report keys may use backslashes) and location.start.line inside one of its ranges, inclusive. Returns { pass, inScope, ignored, notKilled }; inScope counts every in-scope mutant, Ignored included; ignored = in-scope mutants with status 'Ignored' (they already carry a recorded reason: ignoreStatic or a disable comment); notKilled = in-scope mutants whose status is neither 'Killed' nor 'Ignored'; both lists hold { file, line, id, mutatorName, status }, sorted by file then line; pass = notKilled empty AND inScope > 0.
+ *   - selectSpecs(targets, specPaths, setupPaths, readFile): sorted, duplicate-free array of spec paths. setupPaths = the vitest setupFiles (repo-relative), loaded before every spec. Per target: when findSpecsReaching(target, setupPaths, readFile) would return a setup file (same import and string-literal rules), every spec in specPaths is selected; otherwise the specs from findSpecsReaching(target, specPaths, readFile). Result = union over targets; empty targets -> [].
  *   - dropExcluded(ranges, baseMutate): baseMutate = the mutate array of test/stryker.config.json. Returns { ranges, dropped }: a new ranges object without the files named by '!'-prefixed exact-path entries (non-'!' entries do not restrict), and dropped = the removed paths, sorted. The input ranges object is not mutated.
  */
 import { describe, it, expect } from 'vitest';
-import { parseChangedRanges, toMutateArgs, findSpecsReaching, evaluateGate, dropExcluded } from '../scripts/mutation-scope.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { parseChangedRanges, toMutateArgs, findSpecsReaching, evaluateGate, dropExcluded, selectSpecs } from '../scripts/mutation-scope.mjs';
 
 const lf = (lines) => lines.join('\n') + '\n';
 const crlf = (lines) => lines.join('\r\n') + '\r\n';
@@ -234,14 +237,13 @@ describe('findSpecsReaching', () => {
         expect(findSpecsReaching('test/scripts/tool.mjs', ['test/unit/mjs.spec.js'], reader(files))).toEqual(['test/unit/mjs.spec.js']);
     });
 
-    it('excludes a spec that imports other modules, a non-relative path spelled like the target, and a similarly named file', () => {
+    it('excludes a spec that imports other modules and a similarly named file', () => {
         const files = {
             ...base,
             'content/ax.js': 'export const ax = 0;\n',
             'test/unit/none.spec.js': [
                 "import fs from 'node:fs';",
                 "import { describe } from 'vitest';",
-                "import 'content/x.js';",
                 "import { y } from '../../content/y.js';",
                 "import { ax } from '../../content/ax.js';",
             ].join('\n') + '\n',
@@ -289,6 +291,115 @@ describe('findSpecsReaching', () => {
         };
         const specs = ['test/unit/b.spec.js', 'test/unit/c.spec.js', 'test/unit/a.spec.js', 'test/unit/0.spec.js'];
         expect(findSpecsReaching(TARGET, specs, reader(files))).toEqual(['test/unit/0.spec.js', 'test/unit/a.spec.js', 'test/unit/b.spec.js']);
+    });
+
+    describe('text-loaded targets: a string literal of the repo-relative path in a file under test/', () => {
+        const LITERAL_SPEC = 'test/unit/literal.spec.js';
+        const literalSpec = { [LITERAL_SPEC]: "const X = loadClassicScript('content/x.js');\n" };
+
+        it('includes a spec that reads the target as text via fs.readFileSync(path.resolve(__dirname, ...)) and new Function', () => {
+            const files = {
+                'utils/f.js': 'var F = 1;\n',
+                'test/unit/text-load.spec.js': [
+                    "import fs from 'node:fs';",
+                    "import path from 'node:path';",
+                    "const src = fs.readFileSync(path.resolve(__dirname, '../../utils/f.js'), 'utf8');",
+                    "const F = new Function(src + '; return F;')();",
+                ].join('\n') + '\n',
+            };
+            expect(findSpecsReaching('utils/f.js', ['test/unit/text-load.spec.js'], reader(files))).toEqual(['test/unit/text-load.spec.js']);
+        });
+
+        it('includes a spec whose test/helpers/ helper calls loadClassicScript with the repo-relative target path', () => {
+            const files = {
+                ...base,
+                'test/helpers/load-classic-script.js': "import fs from 'fs';\nexport function loadClassicScript(relPath) { return fs.readFileSync(relPath, 'utf-8'); }\n",
+                'test/helpers/x-loader.js': "import { loadClassicScript } from './load-classic-script.js';\nexport const loadX = () => loadClassicScript('content/x.js');\n",
+                'test/unit/classic.spec.js': "import { loadX } from '../helpers/x-loader.js';\n",
+            };
+            expect(findSpecsReaching(TARGET, ['test/unit/classic.spec.js'], reader(files))).toEqual(['test/unit/classic.spec.js']);
+        });
+
+        it.each([
+            ['double-quoted repo-relative', 'const X = loadClassicScript("content/x.js");'],
+            ['backtick relative', 'const src = fs.readFileSync(`../../content/x.js`, "utf8");'],
+            ['backtick interpolated-root', 'const src = fs.readFileSync(`${ROOT}/content/x.js`, "utf8");'],
+        ])('includes a spec holding the target path in a %s literal', (_form, line) => {
+            const files = { ...base, 'test/unit/form.spec.js': line + '\n' };
+            expect(findSpecsReaching(TARGET, ['test/unit/form.spec.js'], reader(files))).toEqual(['test/unit/form.spec.js']);
+        });
+
+        it('includes a spec whose target literal follows, on the same line, a string literal containing // (a URL is not a line comment)', () => {
+            const files = {
+                ...base,
+                'test/unit/url-then-literal.spec.js': "const ORIGIN = 'https://example.com'; const X = loadClassicScript('content/x.js');\n",
+            };
+            expect(findSpecsReaching(TARGET, ['test/unit/url-then-literal.spec.js'], reader(files))).toEqual(['test/unit/url-then-literal.spec.js']);
+        });
+
+        it('excludes a spec that mentions the quoted target path only in // line comments, while a real literal still counts', () => {
+            const files = {
+                ...base,
+                ...literalSpec,
+                'test/unit/line-comment.spec.js': [
+                    "// const src = fs.readFileSync(path.resolve(__dirname, '../../content/x.js'));",
+                    "import { y } from '../../content/y.js'; // was loadClassicScript('content/x.js')",
+                ].join('\n') + '\n',
+            };
+            const specs = ['test/unit/line-comment.spec.js', LITERAL_SPEC];
+            expect(findSpecsReaching(TARGET, specs, reader(files))).toEqual([LITERAL_SPEC]);
+        });
+
+        it('excludes a spec and a helper that mention the quoted target path only in /* */ block comments, while a real literal still counts', () => {
+            const files = {
+                ...base,
+                ...literalSpec,
+                'test/unit/block-comment.spec.js': [
+                    '/**',
+                    " * Loads 'content/x.js' as a classic script, e.g. loadClassicScript('content/x.js').",
+                    ' */',
+                    "import { y } from '../../content/y.js'; /* fs.readFileSync(\"../../content/x.js\") */",
+                ].join('\n') + '\n',
+                'test/helpers/documented.js': [
+                    '/**',
+                    " * @param {string} relPath  Path relative to the repo root, e.g. 'content/x.js'.",
+                    ' */',
+                    'export function load(relPath) { return relPath; }',
+                ].join('\n') + '\n',
+                'test/unit/doc-helper.spec.js': "import { load } from '../helpers/documented.js';\nload('content/y.js');\n",
+            };
+            const specs = ['test/unit/block-comment.spec.js', 'test/unit/doc-helper.spec.js', LITERAL_SPEC];
+            expect(findSpecsReaching(TARGET, specs, reader(files))).toEqual([LITERAL_SPEC]);
+        });
+
+        it('does not scan production files reached through the graph for the literal, but still follows their import edge to the target', () => {
+            const files = {
+                ...base,
+                ...literalSpec,
+                'content/y.js': "const SELF_PATH = 'content/x.js';\nexport const y = SELF_PATH;\n",
+                'content/z.js': "const SELF_PATH = 'content/x.js';\nimport { x } from './x.js';\nexport const z = x;\n",
+                'test/unit/via-prod-literal.spec.js': "import { y } from '../../content/y.js';\n",
+                'test/unit/via-prod-import.spec.js': "import { z } from '../../content/z.js';\n",
+            };
+            const specs = ['test/unit/via-prod-literal.spec.js', 'test/unit/via-prod-import.spec.js', LITERAL_SPEC];
+            expect(findSpecsReaching(TARGET, specs, reader(files))).toEqual([LITERAL_SPEC, 'test/unit/via-prod-import.spec.js']);
+        });
+
+        it('excludes near-miss literals (path followed by more characters, or a longer directory name), while an exact literal still counts', () => {
+            const files = {
+                ...base,
+                ...literalSpec,
+                'test/unit/near-miss.spec.js': [
+                    "const a = fs.readFileSync(path.resolve(__dirname, '../../content/x.json'));",
+                    "const b = loadClassicScript('content/x.jsx');",
+                    "const c = loadClassicScript('xcontent/x.js');",
+                    'const d = fs.readFileSync("../../xcontent/x.js");',
+                    'const e = fs.readFileSync(`mycontent/x.js`);',
+                ].join('\n') + '\n',
+            };
+            const specs = ['test/unit/near-miss.spec.js', LITERAL_SPEC];
+            expect(findSpecsReaching(TARGET, specs, reader(files))).toEqual([LITERAL_SPEC]);
+        });
     });
 });
 
@@ -535,5 +646,78 @@ describe('dropExcluded', () => {
         expect(unchanged.ranges).not.toBe(ranges);
         expect(unchanged.ranges).toEqual(snapshot);
         expect(ranges).toEqual(snapshot);
+    });
+});
+
+describe('selectSpecs', () => {
+    const reader = (files) => (path) => (Object.prototype.hasOwnProperty.call(files, path) ? files[path] : null);
+    const SETUP = 'test/setup/vitest.setup.js';
+    // Four existing specs, listed out of order: only reach-x reaches content/x.js and only reach-y reaches content/y.js by their own imports.
+    const SPECS = ['test/unit/reach-y.spec.js', 'test/unit/unrelated.spec.js', 'test/unit/reach-x.spec.js', 'test/unit/both.spec.js'];
+    const ALL_SORTED = ['test/unit/both.spec.js', 'test/unit/reach-x.spec.js', 'test/unit/reach-y.spec.js', 'test/unit/unrelated.spec.js'];
+    const base = {
+        'content/x.js': 'export const x = 1;\n',
+        'content/y.js': 'export const y = 2;\n',
+        'content/w.js': 'export const w = 3;\n',
+        'test/unit/reach-x.spec.js': "import { x } from '../../content/x.js';\n",
+        'test/unit/reach-y.spec.js': "import { y } from '../../content/y.js';\n",
+        'test/unit/both.spec.js': "import { x } from '../../content/x.js';\nimport { y } from '../../content/y.js';\n",
+        'test/unit/unrelated.spec.js': "import { describe } from 'vitest';\n",
+    };
+
+    it('selects every spec, sorted, when the setup file imports the target directly', () => {
+        const files = { ...base, [SETUP]: "import { vi } from 'vitest';\nimport '../../content/x.js';\n" };
+        expect(selectSpecs(['content/x.js'], SPECS, [SETUP], reader(files))).toEqual(ALL_SORTED);
+    });
+
+    it('selects every spec when the setup file imports a module that imports the target', () => {
+        const files = {
+            ...base,
+            'content/hub.js': "import { x } from './x.js';\nexport const hub = x;\n",
+            [SETUP]: "import '../../content/hub.js';\n",
+        };
+        expect(selectSpecs(['content/x.js'], SPECS, [SETUP], reader(files))).toEqual(ALL_SORTED);
+    });
+
+    it('selects every spec when the setup file names the target in a string literal', () => {
+        const files = { ...base, [SETUP]: "const src = loadClassicScript('content/x.js');\n" };
+        expect(selectSpecs(['content/x.js'], SPECS, [SETUP], reader(files))).toEqual(ALL_SORTED);
+    });
+
+    it('selects only the reaching specs when the setup file loads other modules and mentions the target only in a comment', () => {
+        const files = { ...base, [SETUP]: "// content/x.js is loaded by the specs that need it: loadClassicScript('content/x.js')\nimport '../../content/w.js';\n" };
+        expect(selectSpecs(['content/x.js'], SPECS, [SETUP], reader(files))).toEqual(['test/unit/both.spec.js', 'test/unit/reach-x.spec.js']);
+    });
+
+    it('selects every spec when one of two targets is setup-loaded and the other is not', () => {
+        const files = { ...base, [SETUP]: "import '../../content/w.js';\n" };
+        expect(selectSpecs(['content/x.js', 'content/w.js'], SPECS, [SETUP], reader(files))).toEqual(ALL_SORTED);
+    });
+
+    it('returns [] for no targets, even when the setup file loads production files', () => {
+        const files = { ...base, [SETUP]: "import '../../content/x.js';\n" };
+        expect(selectSpecs([], SPECS, [SETUP], reader(files))).toEqual([]);
+    });
+
+    it('returns the sorted, duplicate-free union of the reaching specs when there are no setup files', () => {
+        expect(selectSpecs(['content/y.js', 'content/x.js'], SPECS, [], reader(base))).toEqual([
+            'test/unit/both.spec.js',
+            'test/unit/reach-x.spec.js',
+            'test/unit/reach-y.spec.js',
+        ]);
+    });
+
+    it('selects the go-top specs for content/go-top.scroll.js in this repo, which only the real vitest setup file loads', () => {
+        const root = path.resolve(__dirname, '../..');
+        const repoReader = (rel) => {
+            try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; }
+        };
+        const goTopSpec = 'test/unit/go-top.no-container-lock.scenario.spec.js';
+        const otherSpec = 'test/unit/settings-routes.spec.js';
+        // Guard the loader first, so a broken reader cannot pass for a selection defect.
+        expect(repoReader(SETUP)).toContain("import '../../content/go-top.scroll.js';");
+        expect(repoReader(goTopSpec)).not.toBeNull();
+        expect(repoReader(otherSpec)).not.toBeNull();
+        expect(selectSpecs(['content/go-top.scroll.js'], [otherSpec, goTopSpec], [SETUP], repoReader)).toEqual([goTopSpec, otherSpec]);
     });
 });
