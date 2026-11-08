@@ -31,22 +31,28 @@
         const extractUuidFromUrl = tracking.extractUuidFromUrl;
 
         /**
-         * 處理來自 MAIN world XHR hook 的授權 token 訊息（DSS_AUTH_CAPTURED）。
-         * 無論切換狀態如何皆保存 token（離開時刪除可能在切換關閉後才發生）。
+         * 只把 MAIN world XHR hook 的授權 token（DSS_AUTH_CAPTURED）存入本分頁記憶體：不傳背景、不寫儲存。
          * @param {MessageEvent} e
+         * @returns {boolean} 是否為本視窗的 DSS_AUTH_CAPTURED 訊息
          */
-        function handleAuthMessage(e) {
-            if (e.source !== window) return;
-            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_AUTH_CAPTURED_TYPE) return;
+        function holdAuthMessage(e) {
+            if (e.source !== window) return false;
+            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_AUTH_CAPTURED_TYPE) return false;
             state.capturedAuthToken = e.data.authorization || null;
-            if (!e.data.authorization) return;
-            // 委派 SW 的待刪佇列路由；fire-and-forget，失敗僅記錄
-            Promise.resolve(chrome.runtime.sendMessage({
-                type: globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN,
-                token: e.data.authorization,
-            }))
+            return true;
+        }
+
+        /** 把 token 交給 SW 的待刪佇列路由（DSS_SET_LAST_AUTH_TOKEN）；無 token 時不送。fire-and-forget，失敗僅記錄。 */
+        function relayAuthToken(token) {
+            if (!token) return;
+            Promise.resolve(chrome.runtime.sendMessage({ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN, token }))
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })
-                .catch((err) => console.error('[DSS] temporary-chat-delete.handlers handleAuthMessage:', err));
+                .catch((err) => console.error('[DSS] temporary-chat-delete.handlers relayAuthToken:', err));
+        }
+
+        /** 監聽器掛載期間的 auth 訊息：保存 token 並立即交給 SW（離開時刪除可能在切換關閉後才發生）。 */
+        function handleAuthMessage(e) {
+            if (holdAuthMessage(e)) relayAuthToken(state.capturedAuthToken);
         }
 
         /**
@@ -217,6 +223,8 @@
         }
 
         return {
+            holdAuthMessage,
+            relayAuthToken,
             handleAuthMessage,
             handleCreateMessage,
             handleCompletionMessage,

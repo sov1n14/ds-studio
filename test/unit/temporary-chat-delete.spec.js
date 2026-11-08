@@ -107,6 +107,18 @@ function completionMessage(chatSessionId, source = window) {
     return new MessageEvent('message', { data: { type: 'DSS_CHAT_COMPLETION_DETECTED', chatSessionId }, source });
 }
 
+/** Names of the storage areas (chrome.storage local and sync, the page's sessionStorage and localStorage) whose contents include text. */
+async function storageAreasContaining(text) {
+    const webStorageText = (store) => JSON.stringify(Array.from({ length: store.length }, (_, i) => [store.key(i), store.getItem(store.key(i))]));
+    const areas = {
+        'chrome.storage.local': JSON.stringify(await chrome.storage.local.get(null)),
+        'chrome.storage.sync': JSON.stringify(await chrome.storage.sync.get(null)),
+        sessionStorage: webStorageText(sessionStorage),
+        localStorage: webStorageText(localStorage),
+    };
+    return Object.keys(areas).filter((name) => areas[name].includes(text));
+}
+
 /** Every DSS_TRACK_FOR_DELETION request sent to background (the observable "marked temporary" output). */
 function trackRequests() {
     return chrome.runtime.sendMessage.mock.calls
@@ -1345,18 +1357,60 @@ describe('P — listener lifecycle', () => {
         sessionStorage.clear();
     });
 
-    it('P8: with no tracked uuid and the flag disabled, init() leaves the listeners detached', async () => {
+    it('P8: with no tracked uuid and the flag disabled, init() keeps the auth token in the tab only and leaving issues no delete', async () => {
+        // Live scenario: switch off, the user opens a conversation U, DeepSeek posts the auth header, creates U and the user sends the first message in U, then leaves by tab close and by SPA navigation home.
+        // User-ruled requirement: while the switch is off the token stays in this tab's memory; it is neither sent to the service worker nor written to any storage. Holding it must not make a switch-off conversation deletable.
+        const U = 'eeee8888-2222-3333-4444-555555555555';
         sessionStorage.clear();
         settingsStore[globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_STORAGE_KEY] = false;
         resetState();
+        setPathname(`/a/chat/s/${U}`);
+        global.TemporaryChatDeleteApi.deleteChatSession.mockClear();
+        global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mockClear();
+        const navigation = new EventTarget();
+        Object.defineProperty(window, 'navigation', { value: navigation, configurable: true, writable: true });
+        const postMessageSpy = vi.spyOn(window, 'postMessage');
 
-        await TemporaryChatDelete.init();
+        try {
+            await TemporaryChatDelete.init();
 
-        window.dispatchEvent(new MessageEvent('message', {
-            data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer should-be-ignored' },
-            source: window,
-        }));
-        expect(TemporaryChatDelete.state.capturedAuthToken).toBeNull();
+            window.dispatchEvent(new MessageEvent('message', {
+                data: { type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer captured-while-off' },
+                source: window,
+            }));
+            window.dispatchEvent(createMessage(U));
+            window.dispatchEvent(completionMessage(U));
+
+            expect(TemporaryChatDelete.state.capturedAuthToken, 'the tab keeps the token in memory while the switch is off').toBe('Bearer captured-while-off');
+            const sent = () => chrome.runtime.sendMessage.mock.calls.map(([message]) => message);
+            expect(sent().filter((message) => JSON.stringify(message ?? null).includes('captured-while-off')), 'no runtime message may carry the token while the switch is off').toEqual([]);
+            expect(await storageAreasContaining('captured-while-off'), 'no storage area may hold the token while the switch is off').toEqual([]);
+
+            // Leave by tab close, by Navigation API push home and by the history hook's SPA nav.
+            window.dispatchEvent(new Event('beforeunload'));
+            const navigate = new Event('navigate');
+            navigate.destination = { url: 'https://chat.deepseek.com/' };
+            navigate.navigationType = 'push';
+            navigation.dispatchEvent(navigate);
+            window.dispatchEvent(new MessageEvent('message', {
+                data: { type: 'DSS_HISTORY_NAV', url: 'https://chat.deepseek.com/' },
+                source: window,
+            }));
+            await Promise.resolve();
+
+            expect(trackRequests()).toEqual([]);
+            expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+            expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).not.toHaveBeenCalled();
+            expect(postMessageSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'DSS_FIBER_DELETE_SESSION' }), '*');
+            const swDeleteTypes = ['DSS_REMOVE_OPEN_UUID', 'DSS_SCHEDULE_DELETE_RETRY', 'DSS_RELEASE_LEASE', 'DSS_REMOVE_PENDING_DELETE'];
+            expect(sent().filter((message) => swDeleteTypes.includes(message?.type))).toEqual([]);
+        } finally {
+            TemporaryChatDelete.detachListeners();
+            delete window.navigation;
+            setPathname('/');
+            sessionStorage.clear();
+        }
     });
 
     it('P9: with the flag disabled at init(), a create still reaches the session observer — switching on, then the first send in U tracks U', async () => {

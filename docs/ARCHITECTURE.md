@@ -310,7 +310,7 @@ per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) �
 
 Temporary conversation deletion uses a two-layer architecture for reliability:
 
-- **Layer 1 (real-time, content script)**: `beforeunload` calls `fetch(..., { keepalive: true })` directly. SPA navigation uses Fiber/API deletion.
+- **Layer 1 (real-time, content script)**: `beforeunload` calls `fetch(..., { keepalive: true })` directly with the auth token that a resident listener in `content/temporary-chat-delete.js` captures on every page load, so turning the toggle on after the page loaded still deletes on tab close. SPA navigation uses Fiber/API deletion.
 - **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup`, `chrome.runtime.onInstalled`, the `dss-delete-retry` alarm, and the sync-area `chrome.storage.onChanged` listener each call `remediatePendingDeletes()`, which reads the shared pending-delete queue from `chrome.storage.sync` and retries every lease-expired entry with the device's own locally-cached auth token. The function takes no argument and applies the same lease gate on all four paths.
 - **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount, lastActiveAt, ownerDeviceId }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any expired queue entry.
 - **Owning device**: `ownerDeviceId` is the id stored under the `chrome.storage.local` key `dss-device-id`, never synced. `addPendingDelete()` creates it once per device with `crypto.randomUUID()` inside the store mutex; when that local write fails the entry is stored with a `null` owner, so every device treats it as foreign.

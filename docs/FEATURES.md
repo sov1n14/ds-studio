@@ -96,6 +96,7 @@ On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control
 - **Purpose**: When turned on, any **new conversation created from the homepage** is marked as temporary. When you leave that temporary conversation, the extension automatically calls the DeepSeek deletion API to remove it — ideal for one-off questions you do not want to keep.
 - **Only newly created conversations are deleted**: A conversation is marked temporary only when it was created in the current page load and its first message was sent while the toggle was on. **Existing conversations opened from the history list are never marked and never deleted** — even with the toggle on, even if you send a message right after opening one, entering and leaving a history conversation does not delete it.
 - **Started while the toggle is off**: A conversation whose first message was sent while the toggle was off is never marked, even if you turn the toggle on later in the same conversation.
+- **Turned on after the page loaded**: Turning the toggle on in an already-open DeepSeek tab behaves the same as having it on at page load: after you open a new temporary conversation, closing the tab or navigating the page away deletes it.
 - **Default off**: The toggle defaults to off. When off, no new conversations are marked.
 - **Already-marked conversations after turning off**: If you created temporary conversations while the toggle was on and then turn it off, those conversations are still deleted when you leave them (the mark belongs to the conversation itself). Turning off the toggle only stops **future** new conversations from being marked.
 - **Toggle exists only on the homepage**: When you leave the homepage (the URL is anything other than `chat.deepseek.com/`), the toggle is automatically removed from the page; returning to the homepage re-displays it. Removing the toggle does not change its on/off state.
@@ -107,6 +108,7 @@ On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control
   - Typing a different URL in the address bar, clicking an external link, closing the tab, or closing the browser.
 - **Scenarios that do NOT trigger deletion**:
   - Page refresh (F5, the refresh button, Ctrl+R / Cmd+R).
+  - Switching to another browser tab (the conversation stays open in its own tab).
   - After the extension is updated or reloaded, clicking the "Refresh" button on the on-page "DS Studio has been updated" toast to reload the page (v4.34.2). Closing the tab instead still deletes the temporary conversation.
   - Navigating to the current URL (typing the current URL in the address bar and pressing Enter, which is equivalent to re-entering the page).
   - Entering or leaving a non-temporary history conversation.

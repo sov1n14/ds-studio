@@ -78,6 +78,7 @@ const TemporaryChatDelete = (() => {
     /**
      * 掛載所有事件監聽器（冪等：已掛載時直接返回）。
      * 必須使用 handlers 上的同一份函式參照，否則卸載會靜默失效。
+     * 由卸載轉為掛載的那一刻（切換開啟），把關閉期間只留在本分頁記憶體的 token 交給背景一次。
      */
     function attachListeners() {
         if (state.isListening) return;
@@ -92,6 +93,7 @@ const TemporaryChatDelete = (() => {
             window.navigation.addEventListener('navigate', handlers.handleNavigationEvent);
         }
         document.addEventListener('keydown', handlers.handleRefreshKeydown, true);
+        handlers.relayAuthToken(state.capturedAuthToken);
     }
 
     /**
@@ -125,6 +127,18 @@ const TemporaryChatDelete = (() => {
         }
     }
 
+    /**
+     * 常駐的授權 token 擷取：頁面載入即掛載、不隨切換卸載。
+     * MAIN world hook 只在 token 值改變時才 postMessage，若僅在切換開啟後才擷取，切換關閉期間送出的唯一一次 DSS_AUTH_CAPTURED 會遺失，之後離開時即無 token 可刪除。
+     * 監聽器卸載期間（切換關閉）只把 token 留在本分頁記憶體，不傳背景、不寫儲存；切換開啟時由 attachListeners 交給背景。
+     * 監聽器已掛載時由 handleWindowMessage 處理 auth，此處跳過以免重複處理。
+     * @param {MessageEvent} e
+     */
+    function handleResidentAuthMessage(e) {
+        if (state.isListening) return;
+        handlers.holdAuthMessage(e);
+    }
+
     // ── 初始化 ───────────────────────────────────────────────────────────────
 
     /**
@@ -137,13 +151,14 @@ const TemporaryChatDelete = (() => {
         window.addEventListener(CHANGED_EVENT, handlers.handleToggleChanged);
         // 常駐 session 觀察器：不隨切換卸載，切換開啟前的 create 與首次送出狀態也須被記錄
         window.addEventListener('message', handlers.handleSessionMessage);
+        // 常駐 auth 擷取：切換關閉時只在記憶體保存 token，供之後開啟切換的離開刪除使用
+        window.addEventListener('message', handleResidentAuthMessage);
 
         const flag = _flag();
         flag.startSync();
         flag.subscribe(handleEnabledFlagChanged);
 
-        // 先恢復追蹤 UUID，再掛載監聽器，確保 handleWindowMessage（含 auth token 擷取）
-        // 在 await 之前即已就緒，避免 DSS_AUTH_CAPTURED 訊息在等待儲存時遺失
+        // 先恢復追蹤 UUID，再掛載監聽器，確保 handleWindowMessage 在 await 之前即已就緒
         state.trackedTemporaryUuid = tracking.loadTrackedUuid();
         // 刷新後恢復追蹤即續傳心跳（防禦性參照，缺失不拋）
         if (state.trackedTemporaryUuid) _root.TemporaryChatHeartbeat?.start?.(state.trackedTemporaryUuid);

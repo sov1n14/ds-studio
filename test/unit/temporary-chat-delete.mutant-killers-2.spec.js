@@ -457,11 +457,27 @@ describe('entry — beforeunload listener', () => {
 });
 
 describe('entry — message listener', () => {
-    it('detached: an auth message is no longer captured', () => {
+    it('detached: an SPA navigation away from the tracked chat starts no deletion, while auth capture keeps working', async () => {
+        // Kills skipping removeEventListener('message', handleWindowMessage) in detachListeners:
+        // a leftover handleWindowMessage would route DSS_HISTORY_NAV into handleNavigationEvent,
+        // which leaves tracked UUID_A with a token and so posts DSS_FIBER_DELETE_SESSION and clears tracking.
+        trackOnChatPage(UUID_A, null);
+        const postSpy = vi.spyOn(window, 'postMessage');
         TemporaryChatDelete.attachListeners();
         TemporaryChatDelete.detachListeners();
+
+        // Auth capture stays resident on every page load: it survives the detach.
         window.dispatchEvent(windowMessage({ type: T().DSS_AUTH_CAPTURED_TYPE, authorization: 'Bearer late' }));
-        expect(TemporaryChatDelete.state.capturedAuthToken).toBeNull();
+        expect(TemporaryChatDelete.state.capturedAuthToken).toBe('Bearer late');
+
+        window.dispatchEvent(windowMessage({ type: T().DSS_HISTORY_NAV_TYPE, url: chatUrl(UUID_B) }));
+        await flush();
+
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
+        expect(postSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: T().DSS_FIBER_DELETE_MESSAGE_TYPE }), '*');
+        expect(sentOfType(T().DSS_MSG_REMOVE_OPEN_UUID)).toEqual([]);
+        expect(sentOfType(T().DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE)).toEqual([]);
+        expect(deleteFetches()).toHaveLength(0);
     });
 });
 
