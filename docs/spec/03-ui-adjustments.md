@@ -1,152 +1,151 @@
-# UI 調整功能規格
+# UI Adjustment Feature Specifications
 
-> 📂 [DS studio 文件](../) › [功能規格](../SPEC.md) › UI 調整
+> 📂 [DS studio Documentation](../) › [Feature Specifications](../SPEC.md) › UI Adjustments
 >
-> **相關架構**：[內容腳本](../architecture/CONTENT_SCRIPTS.md)
+> **Related Architecture**: [Content Scripts](../architecture/CONTENT_SCRIPTS.md)
 
-## 9. 側邊欄自動隱藏
+## 9. Sidebar Auto-Hide
 
-- **開關**：彈出選單「UI 調整」卡片中的核取方塊，用於啟用/停用此功能。
-- **儲存鍵**：`dsSidebarAutoHide`（布林值，預設 `false`）。
-- **收合行為**：啟用時，側邊欄（`SIDEBAR_WRAPPER_SELECTOR`，`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）在滑鼠離開時收合至 60px 寬度。內部內容（`SIDEBAR_INNER_SELECTOR`，`div:has(> .ds-scroll-area > .ds-scroll-area)`）透過負值 `margin-left` 位移，隱藏在收合的容器後方。
-- **展開行為**：滑鼠懸停時，經過 150ms 延遲（進入延遲），側邊欄展開至原始儲存寬度，內部邊距清除。
-- **收合觸發**：滑鼠離開時，經過 400ms 延遲（離開延遲），側邊欄收合回 60px。視窗縮放也會透過防抖（200ms）的調整大小處理器觸發重新收合。
-- **下拉選單感知**：當側邊欄有待處理的收合計時器，且滑鼠進入浮動/下拉式元素（透過 `.ds-floating-position-wrapper` 偵測），收合計時器會取消，側邊欄保持展開。浮動元素上的 `mouseleave` 監聽器會在使用者移開時觸發收合。此功能透過 `document` 上的捕獲階段 `mouseover` 監聽器（在 `setupHoverZone()` 中）實作，使用 `el.closest()` 支援精確的子元素層級判定，對 React portal 渲染在側邊欄 DOM 階層外的下拉選單具有穩固性。
-- **CSS 轉場**：透過注入的 `<style>` 實現流暢動畫：`transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1)` 及 `transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)`。
-- **溢位處理**：容器設有 `overflow: hidden`，但 DeepSeek 原生收合啟用時除外（此時窄條必須完全可見）。
-- **主開關感知**：當主開關（`isEnabled`）關閉時，無論自身開關狀態為何，模組都會停用。重新開啟時，模組會重新讀取自身開關狀態。
-- **SPA 韌性**：
-  - `document.body` 上的 `MutationObserver` 偵測側邊欄 DOM 節點是否被取代（SPA 導航），重新綁定事件並重新收合。
-  - 側邊欄專屬的 `MutationObserver` 監控 DeepSeek 的原生收合/展開循環，在需要時重新套用自訂收合狀態。
-  - （v4.36.1）收合意圖存於 `_wantsCollapsed`、指標位置存於 `_isPointerInside`：DeepSeek 原生切換改寫 wrapper 整個 `className` 而抹除 `ds-sidebar-auto-hide-collapsed` 時，若意圖為收合且指標不在側邊欄內，側邊欄觀察器立即重新收合，不必等到下一次滑鼠離開。
-- **設定變更監聽**：以 `content/feature-toggle.js` 的 `registerFeatureToggle({ ownKey: 'dsSidebarAutoHide' })` 註冊，經 `chrome.runtime.onMessage` 接收 service worker 廣播的 `DSS_SETTINGS_CHANGED`，即時反映 `dsSidebarAutoHide` 與 `isEnabled` 的變化，無須重新整理頁面即可啟用/停用。
-- **啟動**：從儲存空間讀取 `dsSidebarAutoHide` 與 `isEnabled`，若兩者皆為 true 則啟用。
+- **Toggle**: A checkbox in the popup menu's "UI Adjustments" card to enable/disable this feature.
+- **Storage Key**: `dsSidebarAutoHide` (boolean, default `false`).
+- **Collapse Behavior**: When enabled, the sidebar (`SIDEBAR_WRAPPER_SELECTOR`, `div:has(> div > .ds-scroll-area > .ds-scroll-area)`) collapses to 60px width when the mouse leaves. Inner content (`SIDEBAR_INNER_SELECTOR`, `div:has(> .ds-scroll-area > .ds-scroll-area)`) is offset via a negative `margin-left`, hidden behind the collapsed container.
+- **Expand Behavior**: On mouse hover, after a 150ms delay (enter delay), the sidebar expands back to its stored original width, and the inner padding is cleared.
+- **Collapse Trigger**: On mouse leave, after a 400ms delay (leave delay), the sidebar collapses back to 60px. Window resize also triggers re-collapse via a debounced (200ms) resize handler.
+- **Dropdown Awareness**: When the sidebar has a pending collapse timer and the mouse enters a floating/dropdown element (detected via `.ds-floating-position-wrapper`), the collapse timer is cancelled and the sidebar stays expanded. A `mouseleave` listener on the floating element triggers collapse when the user moves away. This is implemented via a capture-phase `mouseover` listener on `document` (in `setupHoverZone()`), using `el.closest()` for precise descendant-level matching, making it robust against React portals rendered outside the sidebar's DOM hierarchy.
+- **CSS Transitions**: Smooth animations via injected `<style>`: `transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1)` and `transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)`.
+- **Overflow Handling**: The container has `overflow: hidden`, except when DeepSeek's native collapse is active (the narrow strip must remain fully visible).
+- **Master Switch Awareness**: When the master switch (`isEnabled`) is off, the module is disabled regardless of its own toggle state. When re-enabled, the module re-reads its own toggle state.
+- **SPA Resilience**:
+  - A `MutationObserver` on `document.body` detects whether the sidebar DOM node has been replaced (SPA navigation), rebinding events and re-collapsing.
+  - A sidebar-specific `MutationObserver` monitors DeepSeek's native collapse/expand cycle, reapplying the custom collapse state when needed.
+  - (v4.36.1) The collapse intent lives in `_wantsCollapsed` and the pointer position in `_isPointerInside`: when a DeepSeek native toggle rewrites the wrapper's whole `className` and wipes `ds-sidebar-auto-hide-collapsed`, the sidebar observer re-collapses immediately if the intent is collapsed and the pointer is not inside the sidebar, without waiting for the next mouse leave.
+- **Settings Change Listener**: Registers via `registerFeatureToggle({ ownKey: 'dsSidebarAutoHide' })` from `content/feature-toggle.js`, receiving the service worker's `DSS_SETTINGS_CHANGED` broadcast over `chrome.runtime.onMessage` to reflect changes to `dsSidebarAutoHide` and `isEnabled` in real time, enabling/disabling without a page refresh.
+- **Startup**: Reads `dsSidebarAutoHide` and `isEnabled` from storage; enables if both are true.
 
-## 10. 對話區域寬度調整
+## 10. Conversation Area Width Adjustment
 
-- **開關與滑桿**：彈出選單「UI 調整」卡片中的切換開關與範圍滑桿控制此功能。
-- **儲存鍵**：`dsChatWidth`（數字，30–100，預設 `70`）與 `dsChatWidthEnabled`（布林值，預設 `false`）。
-- **範圍**：30% 至 100% 視口寬度，透過 `Math.min(Math.max(...))` 限制。
-- **CSS 注入**：注入 `<style>` 元素，設定：
-  - `max-width: Xvw !important` 作用於 `VIRTUAL_LIST_SELECTOR`（`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`，訊息清單），透過 `--message-list-max-width` 自訂屬性
-  - `margin-left: auto !important; margin-right: auto !important; padding-left: 0 !important; padding-right: 0 !important` 作用於 `CONTENT_COLUMN_SELECTOR`（內容欄，置中）
-- **主開關感知**：當主開關（`isEnabled`）關閉時停用；開啟時重新讀取自身開關。
-- **SPA 韌性**：`._765a5cd`（或 `document.body` 備援）上的 `MutationObserver` 在 DOM 變更後重新注入 CSS，防抖 200ms。
-- **儲存監聽器**：監聽 `dsChatWidth`、`dsChatWidthEnabled` 與 `isEnabled` 的變化，即時套用或移除樣式。
+- **Toggle and Slider**: A toggle switch and range slider in the popup menu's "UI Adjustments" card control this feature.
+- **Storage Keys**: `dsChatWidth` (number, 30–100, default `70`) and `dsChatWidthEnabled` (boolean, default `false`).
+- **Range**: 30% to 100% viewport width, clamped via `Math.min(Math.max(...))`.
+- **CSS Injection**: Injects a `<style>` element that sets:
+  - `max-width: Xvw !important` targeting `VIRTUAL_LIST_SELECTOR` (`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`, message list), via the `--message-list-max-width` custom property
+  - `margin-left: auto !important; margin-right: auto !important; padding-left: 0 !important; padding-right: 0 !important` targeting `CONTENT_COLUMN_SELECTOR` (the content column, centering)
+- **Master Switch Awareness**: Disabled when the master switch (`isEnabled`) is off; re-reads its own toggle when re-enabled.
+- **SPA Resilience**: A `MutationObserver` on `._765a5cd` (or `document.body` as fallback) re-injects CSS after DOM changes, debounced at 200ms.
+- **Storage Listener**: Monitors changes to `dsChatWidth`, `dsChatWidthEnabled`, and `isEnabled`, applying or removing styles in real time.
 
-## 11. 輸入框寬度調整
+## 11. Input Box Width Adjustment
 
-- **開關與滑桿**：彈出選單「UI 調整」卡片中的獨立切換開關與範圍滑桿。
-- **儲存鍵**：`dsInputWidth`（數字，30–100，預設 `70`）與 `dsInputWidthEnabled`（布林值，預設 `false`）。
-- **範圍**：30% 至 100% 視口寬度，與對話區域寬度獨立。
-- **CSS 注入**：注入 `<style>` 元素，設定 `max-width: Xvw !important` 與 `width: min(100%, Xvw) !important` 作用於 `CONTENT_COLUMN_SELECTOR`、`CONTENT_COLUMN_SELECTOR FLOATING_BUTTON_BAR_SELECTOR`、`FLOATING_BUTTON_BAR_SELECTOR`（新對話頁面的獨立選取器）、`INPUT_COMPOSER_WRAPPER_SELECTOR`（輸入區域容器，已含訊息清單根節點路徑，故獨立使用），並設定 `margin-left: auto` 與 `margin-right: auto` 以置中。
-- **對話區域寬度限制**：當對話區域寬度調整啟用時，有效輸入框寬度會受對話區域寬度限制（`getEffectivePercent()`）。若對話區域寬度為 70% 而輸入框寬度設為 100%，實際套用的寬度為 70%。這確保輸入框不會超過對話容器寬度。該模組也會監控 `dsChatWidth` 與 `dsChatWidthEnabled` 的變化，進行即時重新限制。
-- **主開關感知**：模式與對話區域寬度相同。
-- **SPA 韌性**：相同的 `MutationObserver` 模式，200ms 防抖，監控 `._765a5cd` 的 `class` 屬性變化。
-- **獨立性**：對話區域寬度與輸入框寬度獨立運作——不同的儲存鍵、開關、滑桿與 CSS 目標。
+- **Toggle and Slider**: A separate toggle switch and range slider in the popup menu's "UI Adjustments" card.
+- **Storage Keys**: `dsInputWidth` (number, 30–100, default `70`) and `dsInputWidthEnabled` (boolean, default `false`).
+- **Range**: 30% to 100% viewport width, independent of conversation area width.
+- **CSS Injection**: Injects a `<style>` element that sets `max-width: Xvw !important` and `width: min(100%, Xvw) !important` targeting `CONTENT_COLUMN_SELECTOR`, `CONTENT_COLUMN_SELECTOR FLOATING_BUTTON_BAR_SELECTOR`, `FLOATING_BUTTON_BAR_SELECTOR` (separate selectors for the new-conversation page), and `INPUT_COMPOSER_WRAPPER_SELECTOR` (input area container; it already contains the message-list-root path, so it is used standalone), with `margin-left: auto` and `margin-right: auto` for centering.
+- **Conversation Area Width Clamping**: When conversation area width adjustment is enabled, the effective input box width is clamped to the conversation area width (`getEffectivePercent()`). If the conversation area width is 70% and the input box width is set to 100%, the actual applied width is 70%. This ensures the input box never exceeds the conversation container width. The module also monitors changes to `dsChatWidth` and `dsChatWidthEnabled` for real-time re-clamping.
+- **Master Switch Awareness**: Same pattern as conversation area width.
+- **SPA Resilience**: Same `MutationObserver` pattern, 200ms debounce, monitoring `class` attribute changes on `._765a5cd`.
+- **Independence**: Conversation area width and input box width operate independently — different storage keys, toggles, sliders, and CSS targets.
 
-## 16. 自動展開訊息 (Auto Expand Messages) — v4.32.0
+## 16. Auto Expand Messages — v4.32.0
 
-- **開關位置**：彈出選單「UI 調整」卡片中的 `#autoExpandMessagesToggle` 核取方塊。
-- **儲存鍵**：`dsAutoExpandMessages`（布林值，預設 `false`）。
-- **行為**：啟用時，自動點擊頁面上處於收合狀態的「展開」按鈕，使所有訊息預設展開。收合狀態的判斷依據為展開按鈕圖示帶有 `rotate(180deg)` 的 `transform` 樣式。
-- **防止重複點擊**：已處理過的按鈕以 `data-dss-auto-expanded="1"` 標記，避免重複點擊。
-- **啟用行為**：呼叫 `enable()` 時，先以 `_scanExisting()` 掃描頁面上所有現存的展開按鈕並逐一處理，再啟動 `MutationObserver` 監聽後續新增節點。
-- **停用行為**：呼叫 `disable()` 時，先一次性掃描頁面上所有展開按鈕容器，對其中處於展開狀態的按鈕逐一點擊以收合，接著移除所有 `data-dss-auto-expanded` 屬性，最後斷開 `MutationObserver`。
-- **安全防護**：點擊展開按鈕前檢查 `isConnected`，防止對已脫離 DOM 的節點執行無效點擊。
-- **MutationObserver 策略**：監聽 `document.body`，`childList: true, subtree: true`，對新增節點逐一檢查其子孫與 `node.closest(container)` 是否為展開按鈕容器（`EXPAND_BUTTON_CONTAINER_SELECTOR`）；容器選擇器含 `:has(> .ds-icon)`，圖示可能晚於容器插入，因此需向上檢查祖先。
-- **選擇器**：展開按鈕容器選擇器 `EXPAND_BUTTON_CONTAINER_SELECTOR`（`.ds-collapsible-text-toggle-button > div:has(> .ds-icon)`）與圖示選擇器 `EXPAND_BUTTON_ICON_SELECTOR`（`.ds-collapsible-text-toggle-button .ds-icon`）定義於 `content/ds-selectors.js`。
-- **主開關感知**：透過 `content/feature-toggle.js` 的 `registerFeatureToggle` 機制，總開關與自身開關的閘控由 background 訊息路由統一提供，不直接讀取 `chrome.storage`。
-- **實作位置**：`content/auto-expand-messages.js`。`start()` 於模組載入時自動呼叫。
+- **Toggle Location**: The `#autoExpandMessagesToggle` checkbox in the popup menu's "UI Adjustments" card.
+- **Storage Key**: `dsAutoExpandMessages` (boolean, default `false`).
+- **Behavior**: When enabled, automatically clicks collapsed "expand" buttons on the page so all messages are expanded by default. Collapsed state is determined by whether the expand button icon has a `transform` style containing `rotate(180deg)`.
+- **Duplicate Click Prevention**: Processed buttons are marked with `data-dss-auto-expanded="1"` to prevent repeated clicks.
+- **Enable Behavior**: When `enable()` is called, `_scanExisting()` first scans all existing expand buttons on the page and processes them one by one, then starts a `MutationObserver` to listen for subsequently added nodes.
+- **Disable Behavior**: When `disable()` is called, it first performs a one-time scan of all expand button containers on the page, clicking each expanded button to collapse it, then removes all `data-dss-auto-expanded` attributes, and finally disconnects the `MutationObserver`.
+- **Safety Guard**: Checks `isConnected` before clicking an expand button, preventing invalid clicks on removed nodes.
+- **MutationObserver Strategy**: Observes `document.body` with `childList: true, subtree: true`, checking each added node's descendants and `node.closest(container)` for an expand button container (`EXPAND_BUTTON_CONTAINER_SELECTOR`); the container selector contains `:has(> .ds-icon)` and the icon can be inserted after the container, so ancestors are checked too.
+- **Selectors**: The expand button container selector `EXPAND_BUTTON_CONTAINER_SELECTOR` (`.ds-collapsible-text-toggle-button > div:has(> .ds-icon)`) and icon selector `EXPAND_BUTTON_ICON_SELECTOR` (`.ds-collapsible-text-toggle-button .ds-icon`) are defined in `content/ds-selectors.js`.
+- **Master Switch Awareness**: Through the `registerFeatureToggle` mechanism in `content/feature-toggle.js`, both the master switch and own-toggle gating are provided uniformly via background message routing, without directly reading `chrome.storage`.
+- **Implementation Location**: `content/auto-expand-messages.js`. `start()` is called automatically on module load.
 
-## 17. 隱藏思考過程 (Hide Thinking Process)
+## 17. Hide Thinking Process
 
-- **開關位置**：彈出選單「UI 調整」卡片中的 `#hideThinkingToggle` 核取方塊，用於啟用/停用此功能。
-- **儲存鍵**：`dsHideThinking`（布林值，預設 `false`）。
-- **觀察器設定**：`MutationObserver` 以 `{ childList: true, subtree: true }` 設定掛載於 `document.body`，僅監聽 DOM 節點新增事件。不監聽 `attributes`，因此使用者手動展開思考區塊（修改 CSS class）不會觸發回調，確保展開的區塊不受影響。
-- **兩層搜尋**：回調先以 `closest(CONTAINER_SELECTOR)`（`THINK_BLOCK_SELECTOR`）在新增節點自身與其祖先中尋找思考區塊容器——標頭晚到時，`:has()` 使既有祖先容器才開始符合；僅當新增節點包含標頭時才收合，因此使用者展開區塊時重新掛載的內容節點不會再次收合。接著以 `querySelectorAll` 搜尋每個新增節點的子孫節點——處理容器為直接新增節點或深層嵌套兩種情況。
-- **安全防護**：點擊展開按鈕前執行 `isConnected` 與 CSS class 雙重驗證，防止對已脫離 DOM 的節點（`isConnected === false`）或已收合狀態（缺少展開 class）的按鈕執行無效點擊。
-- **啟用行為**：呼叫 `enable()` 時，先以 `applyToExisting()` 收合頁面上已存在的所有展開思考區塊，再啟動 MutationObserver 監聽後續新增節點。
-- **停用行為**：呼叫 `disable()` 時，斷開 MutationObserver，並自動展開所有由本功能收合的思考區塊（依 `data-ht-collapsed` 標記識別），使頁面恢復至功能啟用前的展開狀態。
-- **即時切換**：以 `registerFeatureToggle({ ownKey: 'dsHideThinking' })` 註冊，經 service worker 廣播的 `DSS_SETTINGS_CHANGED`（`chrome.runtime.onMessage`）同時反映 `dsHideThinking` 與 `isEnabled`，使功能可在不重新整理頁面的情況下即時啟用/停用。
-- **主開關感知**：當主開關（`isEnabled`）關閉時，無論自身開關狀態為何，模組都會停用。重新開啟時，模組會重新讀取 `dsHideThinking` 狀態。
-- **已知限制**：DeepSeek 使用虛擬列表渲染，捲動時已卸載的 DOM 節點重新掛載視為「新增節點」，因此重新滾回該區塊時思考區塊仍可能再次被自動收合。
+- **Toggle Location**: The `#hideThinkingToggle` checkbox in the popup menu's "UI Adjustments" card, used to enable/disable this feature.
+- **Storage Key**: `dsHideThinking` (boolean, default `false`).
+- **Observer Configuration**: A `MutationObserver` set with `{ childList: true, subtree: true }` attached to `document.body`, observing only DOM node additions. Does not observe `attributes`, so when a user manually expands a thinking block (modifying its CSS class), the callback is not triggered, ensuring expanded blocks remain unaffected.
+- **Two-Layer Search**: The callback first runs `closest(CONTAINER_SELECTOR)` (`THINK_BLOCK_SELECTOR`) on each added node, covering the node itself and its ancestors (when the header arrives later, `:has()` makes an existing ancestor container start matching); it collapses only if the added node contains the header, so content nodes remounted when the user expands a block never re-collapse it. It then searches each added node's descendants — handling both cases where the container is a direct added node or deeply nested.
+- **Safety Guard**: Before clicking the expand button, a dual check of `isConnected` and CSS class is performed, preventing invalid clicks on removed nodes (`isConnected === false`) or already-collapsed buttons (missing the expanded class).
+- **Enable Behavior**: When `enable()` is called, `applyToExisting()` first collapses all existing expanded thinking blocks on the page, then starts the MutationObserver to listen for subsequently added nodes.
+- **Disable Behavior**: When `disable()` is called, the MutationObserver is disconnected, and all thinking blocks collapsed by this feature (identified by the `data-ht-collapsed` marker) are automatically expanded, restoring the page to its pre-feature-enabled expanded state.
+- **Instant Toggle**: Registers via `registerFeatureToggle({ ownKey: 'dsHideThinking' })`, reflecting both `dsHideThinking` and `isEnabled` through the service worker's `DSS_SETTINGS_CHANGED` broadcast (`chrome.runtime.onMessage`), enabling the feature to be toggled on/off instantly without a page refresh.
+- **Master Switch Awareness**: When the master switch (`isEnabled`) is off, the module is disabled regardless of its own toggle state. When re-enabled, the module re-reads the `dsHideThinking` state.
+- **Known Limitation**: DeepSeek uses virtual list rendering, where DOM nodes unmounted during scrolling are treated as "added nodes" when remounted, so scrolling back to that area may cause the thinking block to be auto-collapsed again.
 
-## 18. 回到頂部按鈕 (GoToTop)
+## 18. Back to Top Button (GoToTop)
 
-- **目的**：在 DeepSeek 對話頁面提供一個「回到頂部」浮動按鈕，外觀與位置仿照原生的「回到底部」(Go Down) 按鈕，點擊後自動將對話捲動至最頂端。此功能**永久啟用**，無獨立開關，完全由擴充功能主開關控制。
-- **外觀規範**：GoToTop 按鈕必須與原生 Go Down 按鈕在外觀上像素級一致（34×34 圓形、邊框、背景、陰影、hover 效果）。實作採用 clone 優先策略——原生按鈕存在時以 `cloneNode(true)` 複製其內層的 `[role="button"]`（原生節點可能是定位包裝層）後移除定位 hash class `_0706cde`；原生按鈕不存在時以硬編碼模板重建相同標記（含 `__background` / `__border` / `__icon` 三個子層與 inline CSS 變數）。箭頭以 `transform: scaleY(-1)` 翻轉原生向下箭頭，`fill="currentColor"` 繼承主題顏色。不攜帶網站 hash class `_0706cde` 以避免被網站自身 JS 誤抓。
-- **注入閘控**：按鈕僅在「浮動按鈕列（`FLOATING_BUTTON_BAR_SELECTOR`）或原生按鈕 `._0706cde` 已就緒」時才注入；`_tryConnectDom()` 每 500ms 重試一次，最多 120 次（約 60 秒）。逾時仍未就緒則放棄注入、**完全不顯示任何按鈕**（按鈕只掛載於上述兩個錨點）。閘控的理由：直接開啟既有對話時輸入區可能尚在渲染，若不等待錨點就緒便注入，按鈕會被錯誤掛載至首個 `.ds-theme` 通知浮層。
-- **定位策略**：兩模式依原生按鈕與包裝容器的可用性自動切換，位置自動跟隨版面與視窗變化：
-  - **堆疊模式**（原生按鈕存在）：絕對定位於浮動按鈕列內，位於原生按鈕上方 8px（margin-bottom = 原生 margin-bottom + 原生高度 + 8px；預設 62px）。
-  - **獨佔模式**（原生按鈕不存在但容器存在）：佔據原生按鈕的標準位置（`position: absolute; bottom: 100%; right: 12px; margin-bottom: 20px`）。
-  - 兩者皆不存在時，`_injectButton()` 不建立任何按鈕並回傳 `false`。
-- **顯示/隱藏邏輯**：採用遲滯（hysteresis）設計避免邊界閃爍——首訊息底部離開視窗頂部（`getBoundingClientRect().bottom < 0`）時顯示；可驗證到達頂部（`scrollTop <= 1` 或 `[data-virtual-list-item-key="1"]` 完全可見）時隱藏；中間狀態維持當前顯示狀態。
-- **原生按鈕偵測**：主選擇器 `._0706cde:not(.dsw-gotop)`；降級為單一選擇器 `.ds-button--floating.ds-button--circle[role="button"]`（以 `closest` 排除 `.dsw-gotop` 內的比對，不限定於浮動按鈕列），並在回傳前對非 `_0706cde` 來源的匹配結果進行後驗證，排除 `ds-button--primary` / `ds-button--filled` / `ds-button--disabled` 按鈕，防止誤匹配頁面上的其他圓形按鈕。
-- **SPA 韌性**：wrapper observer 監控外層容器（`CONTENT_COLUMN_SELECTOR`），偵測 React re-render 後自動重新注入或模式轉換。模式轉換（solo ↔ stacked）複用同一元素（不重新建立），避免閃爍。
-- **路由變更**：切換對話時中止進行中的捲動、重設狀態、移除舊按鈕，待 DOM 穩定後經由 `_tryConnectDom()` 閘控重試迴圈重新注入——持續重試至輸入區包裝容器或原生按鈕就緒為止（每 500ms × 最多 120 次），取代舊有的一次性無重試注入，從根本上消除 SPA 路由切換時因 DOM 未就緒而按鈕不顯示的競爭問題。等待 DOM 穩定的計時器 handle 保存於 `_routeChangeTimer`，可由 `disable()` 取消。
-- **停用行為**：呼叫 `disable()` 時必須不留下任何仍會作用於頁面的殘留物——停止三個 observer（DOM、路由、wrapper）、移除 scroll 監聽器與按鈕、清除三個計時器（`_observerTimer`、`_enableRetryTimer`、`_routeChangeTimer`），並**呼叫** `_scrollReject` 以中止進行中的捲動（僅將其設為 null 不會停止捲動迴圈）。`_tryConnectDom()` 進入點的 `if (!this.enabled) return;` 為第二道防線，確保任何漏網的延遲回呼都不會在停用後重新注入按鈕或重啟 observer——停用後才建立的 wrapper observer 不會再被拆除，其自動補回邏輯會使按鈕在使用者重新整理前無法擺脫。
-- **捲動至頂部（可點擊中止）**：`scrollToTopAndWait()` 提供公開 API（供 Markdown 匯出整合），每輪輪詢直接寫入 `scrollContainer.scrollTop = 0` 一次到頂，搭配 MutationObserver 等待延遲載入的舊訊息掛載——虛擬列表若因此長高，收斂計數重置並再跳一次，最長 30 秒逾時。抵達時間僅取決於延遲載入的輪數，與對話長度無關。
-  - **向上一次到頂、向下逐步前進，是刻意的不對稱**：`harvest.js` 的向下擷取迴圈每步只前進 `0.9 * viewportHeight`，因為它必須讓沿途每則訊息都渲染出來並擷取，虛擬列表跳過的內容就是匯出漏掉的內容；`scrollToTopAndWait()` 沒有這個義務，它只需要抵達，路過的一概不要。請勿為了「一致性」把兩者統一。捲動期間按鈕**全程維持可點**（`aria-disabled` 恆為 `"false"`）；若捲動進行中再次點擊，會以 `reason: 'stopped-by-user'` 中止目前捲動於當下位置、**不重新開始**（切換式），再次點擊才會重新捲動。
-- **鍵盤與無障礙**：`<div role="button" tabindex="0">`，支援 Enter / Space 鍵盤觸發；`aria-label="回到頂部"`；`aria-disabled` 全程維持 `"false"`。
-- **實作位置**：`content/go-top.js`（入口）、`content/go-top.locate.js`（定位/可見性）、`content/go-top.render.combined.js`（渲染/注入/模式切換）、`content/go-top.scroll.js`（捲動引擎）、`content/go-top.css`；公開 API 掛載於 `window.DSstudio.GoToTop`。
+- **Purpose**: Provides a "Back to Top" floating button on the DeepSeek conversation page, mimicking the appearance and position of the native "Back to Bottom" (Go Down) button; clicking it automatically scrolls the conversation to the very top. This feature is **permanently enabled** with no independent toggle and is controlled entirely by the extension's master switch.
+- **Appearance Specification**: The GoToTop button must be pixel-identical in appearance to the native Go Down button (34×34 circle, border, background, shadow, hover effect). The implementation uses a clone-first strategy — when the native button exists, its inner `[role="button"]` is duplicated via `cloneNode(true)` (the native node may be a positioning wrapper) with the positioning hash class `_0706cde` removed; when the native button does not exist, an identical markup is rebuilt from a hardcoded template (containing `__background` / `__border` / `__icon` sublayers with inline CSS variables). The arrow is flipped using `transform: scaleY(-1)` on the native downward arrow, with `fill="currentColor"` inheriting the theme color. The site hash class `_0706cde` is not carried to prevent the site's own JS from mistakenly targeting it.
+- **Injection Gating**: The button is only injected when the "floating button bar (`FLOATING_BUTTON_BAR_SELECTOR`) or native button `._0706cde` is ready"; `_tryConnectDom()` retries every 500ms, up to 120 times (~60 seconds). If still not ready after timeout, injection is abandoned and **no button is displayed at all** (the button mounts only on the two anchors above). The gate exists because the input area may still be rendering when an existing conversation is opened directly; injecting without waiting for an anchor would mount the button on the first `.ds-theme` notification overlay.
+- **Positioning Strategy**: Two modes automatically switch based on the availability of the native button and wrapper container; position automatically follows layout and window changes:
+  - **Stacked Mode** (native button exists): Absolutely positioned within the floating button bar, 8px above the native button (margin-bottom = native margin-bottom + native height + 8px; default 62px).
+  - **Solo Mode** (native button absent but container exists): Occupies the native button's standard position (`position: absolute; bottom: 100%; right: 12px; margin-bottom: 20px`).
+  - When neither exists, `_injectButton()` creates no button and returns `false`.
+- **Show/Hide Logic**: Uses hysteresis design to prevent boundary flickering — shown when the first message's bottom leaves the viewport top (`getBoundingClientRect().bottom < 0`); hidden when verifiably at the top (`scrollTop <= 1` or `[data-virtual-list-item-key="1"]` fully visible); intermediate states maintain the current display state.
+- **Native Button Detection**: Primary selector `._0706cde:not(.dsw-gotop)`; the fallback is a single selector `.ds-button--floating.ds-button--circle[role="button"]` (matches inside `.dsw-gotop` are excluded via `closest`; not scoped to the floating button bar), and the module performs post-validation on non-`_0706cde` source matches before returning, excluding `ds-button--primary` / `ds-button--filled` / `ds-button--disabled` buttons to prevent mismatching other circular buttons on the page.
+- **SPA Resilience**: A wrapper observer monitors the outer container (`CONTENT_COLUMN_SELECTOR`), detecting React re-renders and automatically re-injecting or switching modes. Mode transitions (solo ↔ stacked) reuse the same element (no recreation) to avoid flickering.
+- **Route Changes**: When switching conversations, any in-progress scroll is aborted, state is reset, and the old button is removed. After the DOM stabilizes, `_tryConnectDom()` gated retry loop re-injects — continuously retrying until the input area wrapper container or native button is ready (every 500ms × up to 120 times), replacing the old one-shot no-retry injection and fundamentally eliminating the race condition where the button wouldn't appear during SPA route changes due to the DOM not being ready. The timer handle for waiting for DOM stabilization is stored in `_routeChangeTimer` and can be cancelled by `disable()`.
+- **Disable Behavior**: Calling `disable()` must leave no residual artifacts still acting on the page — stops three observers (DOM, route, wrapper), removes scroll listeners and the button, clears three timers (`_observerTimer`, `_enableRetryTimer`, `_routeChangeTimer`), and **calls** `_scrollReject` to abort any in-progress scroll (merely setting it to null would not stop the scroll loop). The `if (!this.enabled) return;` guard at the `_tryConnectDom()` entry point is a second line of defense, ensuring that any leaked delayed callbacks do not re-inject the button or restart observers after disable — a wrapper observer created after disable would never be torn down, and its auto-restore logic would make the button impossible to remove until the user refreshes the page.
+- **Scroll to Top (Clickable Abort)**: `scrollToTopAndWait()` provides a public API (for Markdown export integration). Each polling round directly writes `scrollContainer.scrollTop = 0` to jump to top in one shot, paired with a MutationObserver waiting for lazily loaded old messages to mount — if the virtual list grows as a result, the convergence counter resets and it jumps again, with a maximum 30-second timeout. Arrival time depends solely on the number of lazy-loading rounds, not on conversation length.
+  - **Jump to top in one shot going up, step-by-step going down, is intentionally asymmetric**: The `harvest.js` downward capture loop advances only `0.9 * viewportHeight` per step because it must render and capture every message along the way — content skipped by the virtual list is content lost from the export; `scrollToTopAndWait()` has no such obligation — it only needs to arrive, ignoring everything along the way. Do not unify the two for "consistency." During scrolling, the button **remains clickable at all times** (`aria-disabled` is always `"false"`); if clicked again while scrolling is in progress, the current scroll is aborted at the current position with `reason: 'stopped-by-user'` and **does not restart** (toggle-style); clicking again starts a new scroll.
+- **Keyboard and Accessibility**: `<div role="button" tabindex="0">`, supporting Enter / Space keyboard activation; `aria-label="Back to Top"`; `aria-disabled` remains `"false"` at all times.
+- **Implementation Location**: `content/go-top.js` (entry point), `content/go-top.locate.js` (positioning/visibility), `content/go-top.render.combined.js` (rendering/injection/mode switching), `content/go-top.scroll.js` (scroll engine), `content/go-top.css`; public API mounted at `window.DSstudio.GoToTop`.
 
-## 19. 行動裝置側欄滑動手勢 (Mobile Sidebar Swipe)
+## 19. Mobile Sidebar Swipe Gesture
 
-- **目的**：在行動裝置上，讓使用者在畫面中央 80% 區域內透過左右滑動手勢控制側邊欄 — 向右滑動展開、向左滑動收合，解決行動版缺乏側邊欄快速切換機制的問題。
-- **僅行動裝置**：透過 `content/mobile-device.js` 的 `isMobileDevice()` 依裝置外型判斷——User-Agent 符合 `/Mobi|Android|iPhone|iPad/i`（實體行動裝置與 Chrome DevTools 行動模擬），或為桌面模式的 iPadOS（`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`）時為行動裝置。僅具觸控能力（`maxTouchPoints > 0`）不構成行動裝置：以桌面 User-Agent 回報觸控點的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面。桌面環境完全零開銷，不綁定任何事件監聽器。
-- **觸發區域幾何**：觸控起點必須落在畫面正中央 80% × 80% 區域內（水平與垂直各扣除 10% 邊界）。此設計避免與 Chrome Android 系統返回手勢（螢幕邊緣觸發）及頂部狀態列／底部導航列的誤觸衝突：
+- **Purpose**: On mobile devices, allows users to swipe horizontally within the central 80% of the screen to open or close the sidebar (right-swipe opens, left-swipe closes), solving the lack of a quick sidebar toggle mechanism on mobile.
+- **Mobile Only**: Determined by form factor via `isMobileDevice()` in `content/mobile-device.js` — the device is mobile when the User-Agent matches `/Mobi|Android|iPhone|iPad/i` (real mobile devices and Chrome DevTools mobile emulation) or it is iPadOS in desktop mode (`navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`). Touch capability alone (`maxTouchPoints > 0`) does not make a device mobile: a device with a desktop User-Agent that reports touch points (touchscreen laptop, pen device, touch-injecting software such as Android emulators) is a desktop. Desktop environments have zero overhead, with no event listeners bound.
+- **Trigger Area Geometry**: The touch start point must fall within the central 80% × 80% area of the screen (10% margin excluded from each side horizontally and vertically). This design avoids conflicts with Chrome Android's system back gesture (triggered from screen edges) and accidental touches from the top status bar / bottom navigation bar:
   - `minX = innerWidth * 0.10`, `maxX = innerWidth * 0.90`
   - `minY = innerHeight * 0.10`, `maxY = innerHeight * 0.90`
-- **手勢辨識條件**（五項**全部**滿足才觸發點擊）：
-  | 條件 | 閾值 | 說明 |
+- **Gesture Recognition Conditions** (all five must be met to trigger):
+  | Condition | Threshold | Description |
   |-|-|-|
-  | a. 最小滑動距離 | `|deltaX| ≥ 50px`（`SWIPE_THRESHOLD_PX`） | 排除微小抖動（取絕對值，雙向對稱） |
-  | b. 水平主導 | `|deltaX| > |deltaY| × 1.5` | 排除垂直捲動類滑動 |
-  | c. 持續時間 | `< 500ms`（`SWIPE_MAX_DURATION_MS`） | 排除慢速拖曳 |
-  | d. 起點水平位置 | `clientX ∈ [10%, 90%] innerWidth` | 排除螢幕邊緣 |
-  | e. 起點垂直位置 | `clientY ∈ [10%, 90%] innerHeight` | 排除頂部/底部邊緣 |
-- **方向分支**：五項條件皆滿足後，依 `deltaX` 正負決定動作 — `deltaX > 0`（向右滑動）點擊展開按鈕，`deltaX < 0`（向左滑動）點擊收合按鈕。
-- **目標按鈕選擇器**：
-  - **展開按鈕**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`；降級路徑包含 5 個備用 class 組合。
-  - **收合按鈕**：主選擇器 `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]`；降級路徑包含 3 個備用 class 組合。
-- **DOM 輪詢**：`_tryConnectDom()` 每 500ms 輪詢一次目標按鈕，最多 60 次（約 30 秒），逾時靜默放棄（不拋錯）。
-- **主開關整合**：完全跟隨擴充功能主開關（`isEnabled`）。以不帶 `ownKey` 的 `registerFeatureToggle` 註冊，經 service worker 廣播的 `DSS_SETTINGS_CHANGED`（`chrome.runtime.onMessage`）接收 `isEnabled` 變化即時啟用/停用，無各別功能切換。
-- **生命週期方法**：
-  - `start()`：檢查行動裝置，確認後以 `registerFeatureToggle` 註冊主開關閘控（初始值經 `DSS_GET_SETTINGS` 取得），符合條件時啟用。
-  - `enable()`：啟動 DOM 輪詢。
-  - `disable()`：解除觸控事件監聽、清除輪詢計時器、重設手勢狀態。
-  - `destroy()`：呼叫 `disable()` 並解除 `registerFeatureToggle` 註冊。
-- **實作位置**：`content/mobile-sidebar-swipe.js`（入口）、`content/mobile-sidebar-swipe.button.js`（按鈕查找）、`content/mobile-sidebar-swipe.gesture.js`（手勢處理）、`content/mobile-sidebar-swipe.bind.js`（事件綁定）、`content/mobile-sidebar-swipe.lifecycle.js`（生命週期）；公開 API 掛載於 `window.DSstudio.MobileSidebarSwipe`。
+  | a. Minimum swipe distance | `|deltaX| ≥ 50px` (`SWIPE_THRESHOLD_PX`) | Excludes minor jitter |
+  | b. Horizontal dominance | `|deltaX| > |deltaY| × 1.5` | Excludes vertical-scroll-like swipes |
+  | c. Duration | `< 500ms` (`SWIPE_MAX_DURATION_MS`) | Excludes slow drags |
+  | d. Horizontal start position | `clientX ∈ [10%, 90%] innerWidth` | Excludes screen edges |
+  | e. Vertical start position | `clientY ∈ [10%, 90%] innerHeight` | Excludes top/bottom edges |
+- **Direction Detection**: After threshold check, `deltaX > 0` (right-swipe) triggers the open-sidebar button; `deltaX < 0` (left-swipe) triggers the close-sidebar button.
+- **Open Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`; fallback path includes 5 alternative class combinations.
+- **Close Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]`; fallback path includes 3 alternative class combinations.
+- **DOM Polling**: `_tryConnectDom()` polls for the target button every 500ms, up to 60 times (~30 seconds), silently giving up on timeout (no error thrown).
+- **Master Switch Integration**: Follows the extension's master switch (`isEnabled`) entirely. Registers via `registerFeatureToggle` without an `ownKey`, receiving `isEnabled` changes through the service worker's `DSS_SETTINGS_CHANGED` broadcast (`chrome.runtime.onMessage`) for instant enable/disable, with no individual feature toggle.
+- **Lifecycle Methods**:
+  - `start()`: Checks for mobile device, then registers the master switch gate via `registerFeatureToggle` (initial value fetched through `DSS_GET_SETTINGS`), enables if conditions are met.
+  - `enable()`: Starts DOM polling.
+  - `disable()`: Removes touch event listeners, clears polling timer, resets gesture state.
+  - `destroy()`: Calls `disable()` and unregisters the `registerFeatureToggle` registration.
+- **Implementation Location**: `content/mobile-sidebar-swipe.js` (entry), `content/mobile-sidebar-swipe.button.js` (button lookup), `content/mobile-sidebar-swipe.gesture.js` (gesture handling), `content/mobile-sidebar-swipe.bind.js` (event binding), `content/mobile-sidebar-swipe.lifecycle.js` (lifecycle); public API mounted at `window.DSstudio.MobileSidebarSwipe`.
 
-## 20. 防止自動回滾 (Prevent Auto-Scroll) — v4.12.0
+## 20. Prevent Auto-Scroll — v4.12.0
 
-- **目的**：讓預設僅在「回到頂部」與 Markdown 匯出期間短暫生效的防回滾保護，可由使用者設為**常駐**。此開關不新增任何攔截機制，只改變既有 `PreventAutoScroll` 補丁的生效期間。
-- **開關位置**：彈出選單「Features」卡片中的 `#preventAutoScrollToggle` 核取方塊（v4.32.0 自「UI 調整」卡片移至此處）。
-- **儲存鍵**：`dsPreventAutoScroll`（布林值，預設 `false`）。
-- **常駐狀態的存放位置**：與既有的 `enabled` 旗標並存於同一個隱藏 bridge 元素（`#dss-prevent-auto-scroll-bridge`）的 `dataset` 上，不使用模組層可變狀態。
-- **`disable()` 在常駐模式下為 no-op**：此守衛是必要的，而非防禦性冗餘。該旗標**沒有引用計數**，且 `harvest.js` 在 `finally` 中**無條件**呼叫 `disable()`；若不加守衛，使用者開啟常駐後只要匯出一次 Markdown，保護就會在匯出結束時被靜默關掉。`setPersistent(false)` 則刻意繞過此守衛直接寫入 `dataset`，否則關閉常駐將永遠無法解除保護。
-- **呼叫端零改動**：常駐邏輯完全收斂在共用節流點 `content/prevent-auto-scroll-bridge.js`。`harvest.js` 與 `go-top.scroll.js` 兩個既有呼叫端不需修改 —— go-top 既有的 `wasAlreadyEnabled` 保存還原邏輯在常駐模式下自然短路（`isEnabled()` 恆為真，故它不會 enable 也不會 disable）。
-- **即時切換**：`content/prevent-auto-scroll-bridge.js` 以 `registerFeatureToggle({ ownKey: 'dsPreventAutoScroll' })` 註冊，經 service worker 廣播的 `DSS_SETTINGS_CHANGED`（`chrome.runtime.onMessage`，僅處理 `area === 'local'`）同時反映 `dsPreventAutoScroll` 與 `isEnabled`，可在不重新整理頁面的情況下即時生效。任一鍵變更時，以廣播所附的新值更新該鍵，並與另一鍵的最新已知值一起重算生效狀態。
-- **主開關感知**：僅當主開關（`isEnabled`）為真**且** `dsPreventAutoScroll` 為真時才常駐。主開關關閉時常駐一律解除，即使自身開關為開。主開關鍵不存在時視為關閉。
-- **已知取捨（刻意接受，故預設關閉）**：既有 MAIN-world 補丁是 `Element.prototype` 層級的**全域**攔截，只擋**向下**捲動，且**無法區分**程式觸發與使用者觸發（無 `isTrusted`／呼叫堆疊判定）。因此常駐開啟時：
-  - DeepSeek 串流回覆的「自動跟隨捲到最新」會一併被擋，需自行向下捲動。
-  - 切換或開啟對話時若需向下定位才能落在正確位置，該定位也會被擋；向上定位不受影響。
-  - 原生滾輪／觸控板／捲軸拖曳不經這些 JS API，不受影響；但頁面上任何以 JS 呼叫這些 API 實作的「捲到底部」按鈕會被擋。
-- **實作位置**：`content/prevent-auto-scroll-bridge.js`（新增 `setPersistent()` / `isPersistent()` / `start()`，`disable()` 加入守衛）；公開 API 掛載於 `window.DSstudio.PreventAutoScroll`。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。
+- **Purpose**: Allows the anti-scroll-back protection that by default takes effect only briefly during "Back to Top" and Markdown export to be set as **persistent** by the user. This toggle adds no new interception mechanism; it only changes the active duration of the existing `PreventAutoScroll` patch.
+- **Toggle Location**: The `#preventAutoScrollToggle` checkbox in the popup menu's "Features" card (moved from the "UI Adjustments" card in v4.32.0).
+- **Storage Key**: `dsPreventAutoScroll` (boolean, default `false`).
+- **Persistent State Storage**: Coexists with the existing `enabled` flag on the `dataset` of the same hidden bridge element (`#dss-prevent-auto-scroll-bridge`), without using module-level mutable state.
+- **`disable()` is a No-Op in Persistent Mode**: This guard is necessary, not defensive redundancy. The flag **has no reference counting**, and `harvest.js` **unconditionally** calls `disable()` in its `finally` block; without the guard, once the user enables persistence, a single Markdown export would silently turn off the protection when the export finishes. `setPersistent(false)` intentionally bypasses this guard and writes directly to `dataset`, otherwise disabling persistence would never be able to lift the protection.
+- **Zero Changes to Call Sites**: The persistence logic is fully contained within the shared throttle point `content/prevent-auto-scroll-bridge.js`. The two existing call sites, `harvest.js` and `go-top.scroll.js`, require no modification — go-top's existing `wasAlreadyEnabled` save-and-restore logic naturally short-circuits in persistent mode (`isEnabled()` is always true, so it neither enables nor disables).
+- **Instant Toggle**: `content/prevent-auto-scroll-bridge.js` registers via `registerFeatureToggle({ ownKey: 'dsPreventAutoScroll' })`, reflecting both `dsPreventAutoScroll` and `isEnabled` through the service worker's `DSS_SETTINGS_CHANGED` broadcast (`chrome.runtime.onMessage`, handling only `area === 'local'`), taking effect instantly without a page refresh. When either key changes, that key is updated from the new value carried in the broadcast and the effective state is recomputed together with the latest known value of the other key.
+- **Master Switch Awareness**: Persistence is active only when the master switch (`isEnabled`) is true **and** `dsPreventAutoScroll` is true. When the master switch is off, persistence is always lifted, even if the own toggle is on. A missing master switch key is treated as off.
+- **Known Trade-offs (Intentionally Accepted, Hence Off by Default)**: The existing MAIN-world patch is a **global** intercept at the `Element.prototype` level that only blocks **downward** scrolling and **cannot distinguish** between programmatic and user-triggered scrolling (no `isTrusted` / call stack determination). Therefore, when persistence is on:
+  - DeepSeek's streaming reply "auto-follow to latest" is also blocked, requiring manual downward scrolling.
+  - When switching to or opening a conversation that requires downward positioning to land at the correct position, that positioning is also blocked; upward positioning is unaffected.
+  - Native mouse wheel / trackpad / scrollbar dragging does not go through these JS APIs and is unaffected; however, any "scroll to bottom" button on the page that uses these JS APIs will be blocked.
+- **Implementation Location**: `content/prevent-auto-scroll-bridge.js` (added `setPersistent()` / `isPersistent()` / `start()`, `disable()` with guard added); public API mounted at `window.DSstudio.PreventAutoScroll`. `start()` is called automatically on module load, following the startup convention of `content/hide-thinking.js`.
 
-## 22. 連網搜索 (Web Search) — v4.13.0
+## 22. Web Search — v4.13.0
 
-- **目的**：讓使用者指定 DeepSeek「智能搜索」切換按鈕的**起始狀態** —— `開啟`（起始為 `aria-pressed="true"`）、`關閉`（起始為 `"false"`）。此設定不新增任何頁面元素，只在每個啟動事件發生時校正既有按鈕一次。
-- **語意（v4.17.0、v4.17.1）**：此設定是**預設值，不是強制狀態**。每個啟動事件套用一次後即完全放手；使用者之後手動點擊該按鈕的結果會保留下來，擴充功能不會回點，直到下一個啟動事件發生。
-- **啟動事件（B、C 為 v4.17.1）**：三種事件各自觸發一次套用並重新武裝一次性旗標 —— (A) 內容腳本 `start()` 且主開關為開；(B) `dsWebSearchToggle` 新值經 `DSS_SETTINGS_CHANGED` 廣播抵達且主開關為開；(C) 主開關由關轉開。(B) 與 (C) 讓使用者在彈出選單改設定或重新開啟主開關時，已開啟的頁面不需重整即立刻套用。
-- **開關位置**：彈出選單「Features」卡片中的單選群組（v4.32.0）（`input[name="websearchToggle"]`，兩選項 `開啟` / `關閉`，每個選項以 `.segmented-option` 包裹；圓形 radio 的外觀由 `popup-locale.css` 中 `:is(.locale-option, .segmented-option) input[type="radio"]` 的共用規則提供，與語言切換面板同一份樣式）。`開啟` 為標記中預先勾選者。
-- **儲存鍵**：`dsWebSearchToggle`（字串，`'on'` | `'off'`，預設 `'on'`）。儲存區殘留的舊值 `'default'` 讀取時視為目前的等價值 `'on'`（`StorageManager.normalizeWebsearchToggle()`），不寫回儲存區；內容腳本端的 `_normalizeMode()` 把 `'off'` 以外的任何值（含未設定）視為 `'on'`。
-- **核心規則 —— 只在狀態不符時點擊**：`aria-pressed` 已等於目標狀態時絕不點擊，因為點擊是切換操作，相符時點擊反而把狀態切換走。狀態判定：`getAttribute('aria-pressed') === 'true'`。目標狀態由公開的 `mode` 屬性導出（`'on'` 對應 `true`）。
-- **一次性機制**：內部 `_isSpent` 旗標標記當前啟動事件的套用是否已用掉。找到按鈕並比對（不論是否需要點擊）後即設為已用掉並中止觀察器。已用掉之後，使用者手動翻轉與頁面重渲染掛上新按鈕都不會觸發點擊；只有新的啟動事件會透過 `_rearm()` 重置旗標，再套用一次，然後同樣放手。
-- **`_rearm()` 的順序不可調換**：`_rearm()` 依序執行 `disable()`、重置 `_isSpent`、`_recompute()`。`disable()` 的守衛是 `if (!this.enabled) return;`，所以絕不能先把 `enabled` 設為 `false` 再呼叫它 —— 那會讓守衛提前返回，把掛在 `document.body` 上的 `MutationObserver` 留成洩漏。同理，單獨重置 `_isSpent` 也不夠：`enable()` 的守衛是 `if (this.enabled) return;`，前一次套用後 `enabled` 仍為真，會提前返回而不重新套用。
-- **元素辨識（語言無關、雜湊無關）**：實頁有**兩個外觀相同**的 `.ds-toggle-button[aria-pressed]` 元素（深度思考與智能搜索），`document.querySelector` 固定取到第一個（錯的）。`findButton()` 採兩層辨識策略：**第一層**：合併 `.ds-toggle-button[aria-pressed]`（`TOGGLE_BUTTON_SELECTOR`）與 `[aria-pressed="true"], [aria-pressed="false"]`（`TOGGLE_BUTTON_FALLBACK_SELECTOR`）兩組候選（去重），以 `_pickByIcon()` 比對每個候選內 `<path d="...">` 的 `d` 屬性是否以 `SEARCH_ICON_PATH_PREFIX`（`'M7.9995999336'`，定義於 `content/ds-selectors.js`）開頭——搜尋圖示的 SVG path data 前綴在不同語言與建置版本間穩定，不依賴 label 文字或雜湊 class。**第二層（位置備援）**：第一層未命中時，若 `.ds-toggle-button[aria-pressed]` 候選數 ≥ 2，取第二個按鈕（開關群組內深度思考之後即為搜尋）；仍然找不到時回傳 `null`。不使用建置版雜湊類別（`f79352dc` / `_6dbc175` 每次部署會變）。
-- **觀察器僅用於等待按鈕出現**：`MutationObserver` 只掛在 body 的 `childList + subtree`，用途是等按鈕首次出現在 DOM。觀察器刻意不監看按鈕本身的 `attributes` / `attributeFilter: ['aria-pressed']` —— 監看它會回點使用者的手動翻轉，與一次性語意衝突。套用一次後觀察器即中止，直到下一個啟動事件重新武裝。
-- **主開關感知**：僅當主開關（`isEnabled`）為真時才動作。`isEnabled` 經 `registerFeatureToggle` 的 `onEnable`／`onDisable` 回呼、`dsWebSearchToggle` 經自身的 `chrome.runtime.onMessage` 監聽器，兩者都由 service worker 廣播的 `DSS_SETTINGS_CHANGED` 驅動（僅處理 `area === 'local'`），兩個分支都走 `_rearm()`。套用**尚未**發生時（按鈕還沒出現，或主開關起始為關），變更仍然有效，該次套用會採用當下最新的值。主開關轉為**關**時同樣重新武裝，但緊接的 `_recompute()` 會正確落在 `disable()`：不點擊任何按鈕，並取消待處理的套用與觀察器。
-- **`disable()` 不還原按鈕狀態**：與 `hide-thinking` 不同，本功能不擁有任何可還原的狀態 —— 停止動作即把按鈕留在現況，不做額外點擊。
-- **實作位置**：`content/websearch-toggle.js`（測試以 `module.exports` 取用）。`start()` 於模組載入時自動呼叫，沿用 `content/hide-thinking.js` 的啟動慣例。
+- **Purpose**: Allows the user to specify the **starting state** of DeepSeek's "Smart Search" toggle button — `On` (starting at `aria-pressed="true"`) or `Off` (starting at `"false"`). This setting adds no page elements; it simply corrects the existing button once per activation event.
+- **Semantics (v4.17.0, v4.17.1)**: This setting is a **default value, not a forced state**. After applying once per activation event, it completely releases control; any subsequent manual clicks on the button by the user are preserved — the extension does not click it back until the next activation event.
+- **Activation Events (B, C are v4.17.1)**: Three types of events each trigger one application and re-arm the one-shot flag — (A) content script `start()` with the master switch on; (B) a new `dsWebSearchToggle` value arriving via the `DSS_SETTINGS_CHANGED` broadcast with the master switch on; (C) master switch turning from off to on. (B) and (C) make a setting change in the popup, or re-enabling the master switch, apply immediately on already-open pages without a page refresh.
+- **Toggle Location**: A radio button group in the popup menu's "Features" card (v4.32.0) (`input[name="websearchToggle"]`, two options `On` / `Off`, each wrapped in a `.segmented-option`; the circular radio appearance is provided by the shared rule `:is(.locale-option, .segmented-option) input[type="radio"]` in `popup-locale.css`, sharing the same style as the language switch panel). `On` is the pre-checked option in the markup.
+- **Storage Key**: `dsWebSearchToggle` (string, `'on'` | `'off'`, default `'on'`). A residual legacy `'default'` value in storage is read as its current equivalent `'on'` (`StorageManager.normalizeWebsearchToggle()`) without writing back to storage; on the content-script side, `_normalizeMode()` treats any value other than `'off'` (including unset) as `'on'`.
+- **Core Rule — Click Only on State Mismatch**: When `aria-pressed` already equals the target state, never click, because clicking is a toggle operation — clicking when already matching would toggle the state away. State determination: `getAttribute('aria-pressed') === 'true'`. The target state is derived from the public `mode` property (`'on'` maps to `true`).
+- **One-Shot Mechanism**: The internal `_isSpent` flag marks whether the current activation event's application has been consumed. After finding the button and comparing (regardless of whether a click is needed), the flag is set to consumed and the observer is stopped. Once consumed, user manual toggles and page re-renders mounting new buttons do not trigger clicks; only a new activation event resets the flag via `_rearm()`, applies once more, then releases control again.
+- **`_rearm()` Order Must Not Be Swapped**: `_rearm()` executes in order: `disable()`, reset `_isSpent`, `_recompute()`. The `disable()` guard is `if (!this.enabled) return;`, so `enabled` must never be set to `false` before calling it — that would cause the guard to return early, leaving the `MutationObserver` attached to `document.body` as a leak. Similarly, resetting `_isSpent` alone is insufficient: the `enable()` guard is `if (this.enabled) return;`, and since `enabled` is still true from the previous application, it would return early without reapplying.
+- **Element Identification (Language-Independent, Hash-Independent)**: The live page has **two visually identical** `.ds-toggle-button[aria-pressed]` elements (Deep Thinking and Smart Search), and `document.querySelector` consistently returns the first one (wrong). `findButton()` uses a two-tier identification strategy: **Tier 1**: Combines `.ds-toggle-button[aria-pressed]` (`TOGGLE_BUTTON_SELECTOR`) and `[aria-pressed="true"], [aria-pressed="false"]` (`TOGGLE_BUTTON_FALLBACK_SELECTOR`) as two candidate sets (deduplicated), using `_pickByIcon()` to match each candidate's inner `<path d="...">` `d` attribute against whether it starts with `SEARCH_ICON_PATH_PREFIX` (`'M7.9995999336'`, defined in `content/ds-selectors.js`) — the search icon's SVG path data prefix is stable across languages and build versions, independent of label text or hashed classes. **Tier 2 (Position Fallback)**: When tier 1 finds no match, if there are ≥ 2 `.ds-toggle-button[aria-pressed]` candidates, take the second button (within the toggle group, Smart Search follows Deep Thinking); if still not found, return `null`. Does not use build-hashed classes (`f79352dc` / `_6dbc175` which change with each deployment).
+- **Observer Is Only for Waiting for Button Appearance**: The `MutationObserver` is only attached to body's `childList + subtree`, with the sole purpose of waiting for the button to first appear in the DOM. It deliberately skips `attributes` / `attributeFilter: ['aria-pressed']` observation on the button itself — watching it would click back user manual toggles, conflicting with the one-shot semantics. After one application, the observer stops, until the next activation event re-arms.
+- **Master Switch Awareness**: Only acts when the master switch (`isEnabled`) is true. `isEnabled` arrives through the `onEnable`/`onDisable` callbacks of `registerFeatureToggle` and `dsWebSearchToggle` through the module's own `chrome.runtime.onMessage` listener, both driven by the service worker's `DSS_SETTINGS_CHANGED` broadcast (handling only `area === 'local'`), with both branches going through `_rearm()`. When application **has not yet** occurred (button hasn't appeared, or master switch started as off), the change is still effective — that application uses the latest value when it runs. When the master switch turns **off**, it likewise re-arms, but the subsequent `_recompute()` correctly falls into `disable()`: no button is clicked, and pending applications and observers are cancelled.
+- **`disable()` Does Not Restore Button State**: Unlike `hide-thinking`, this feature does not own any restorable state — stopping means leaving the button in its current state, with no extra click.
+- **Implementation Location**: `content/websearch-toggle.js` (tests access via `module.exports`). `start()` is called automatically on module load, following the startup convention of `content/hide-thinking.js`.

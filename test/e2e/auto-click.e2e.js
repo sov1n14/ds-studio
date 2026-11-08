@@ -2,7 +2,7 @@ import { test, expect } from './fixtures.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { expectNeverWithin } from './helpers/observation.js';
 
-// Auto retry and auto continue click DeepSeek's retry / continue button once per round, every round waiting a random 0-3 s, while the button is on the page; each follows its own switch and the master switch (docs/FEATURES.md, 自動重試與自動繼續生成).
+// Auto retry and auto continue click DeepSeek's retry / continue button once per round, every round waiting a random 0-3 s, while the button is on the page; each follows its own switch and the master switch (docs/FEATURES.md, Auto Retry and Auto Continue).
 // DeepSeek's buttons act only through a React onClick that requires a trusted native event, so the synthetic buttons below count a click only when their own React onClick receives one: the counter is the button's observable side effect, exactly what a live DeepSeek button would act on.
 // The buttons are built from the selectors docs/FEATURES.md documents, on the home page, which shows neither native button.
 

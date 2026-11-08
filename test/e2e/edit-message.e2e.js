@@ -7,7 +7,7 @@ import { asBlockquote, dragSelectTwoReplyParagraphs } from './helpers/quote.js';
 import { DSSelectors } from './helpers/selectors.js';
 
 // Regression for v4.36.8: while DeepSeek's native edit box is open on a user message, the page holds two textareas (the edit box first, the main composer after it).
-// Composer actions must keep targeting the main composer: the picked preset's prefix (written at send time) and a quote reply land in the main composer, and the edit box keeps only the original message text (docs/FEATURES.md, 編輯訊息清理, 引用回覆, 使用提示詞注入).
+// Composer actions must keep targeting the main composer: the picked preset's prefix (written at send time) and a quote reply land in the main composer, and the edit box keeps only the original message text (docs/FEATURES.md, Edit Message Cleanup, Quote Reply, Using Prompt Injection).
 // Nothing is sent: the composer Send click is swallowed before DeepSeek's React root and every send endpoint is aborted; the edit is never submitted.
 
 const PRESET = createTestPreset('edit');

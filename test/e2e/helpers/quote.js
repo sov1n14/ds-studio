@@ -1,4 +1,4 @@
-// Selecting reply text the way a user does, and the blockquote format quote reply writes (docs/FEATURES.md, 引用回覆).
+// Selecting reply text the way a user does, and the blockquote format quote reply writes (docs/FEATURES.md, Quote Reply).
 
 import { expect } from '@playwright/test';
 import { DSSelectors } from './selectors.js';

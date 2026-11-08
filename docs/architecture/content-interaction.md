@@ -1,309 +1,309 @@
-# 使用者互動模組架構
+# User Interaction Module Architecture
 
-> 📂 [DS studio 文件](../) › [架構文件](../ARCHITECTURE.md) › [內容腳本模組](CONTENT_SCRIPTS.md) › 使用者互動
+> 📂 [DS studio Documentation](../) › [Architecture](../ARCHITECTURE.md) › [Content Script Modules](CONTENT_SCRIPTS.md) › User Interaction
 >
-> **相關規格**：[功能規格](../spec/04-features.md)
+> **Related Specifications**: [Feature Specifications](../spec/04-features.md)
 
-## 引用回覆模組 (Quote Reply)
+## Quote Reply Module
 
-`content/quote-reply.js` 實作 `QuoteReply` 單例，在 AI 回覆區域選取文字時顯示浮動的「引用回覆」按鈕。
+`content/quote-reply.js` implements a `QuoteReply` singleton that adds a floating "Quote Reply" button triggered by text selection in the AI response area.
 
-### 觸發與範圍
+### Trigger and Scope
 
-- **範圍防護**（`isSelectionInScope`）：只在選取範圍的 `anchorNode` 與 `focusNode` 都位於 `div.ds-virtual-list-visible-items` 內時啟動。跨出此容器的選取會被忽略。
-- **觸發事件**：`document.selectionchange`，統一經由單一的 `handleSelectionEvent` 排程器，debounce 250 ms（`QUOTE_REPLY_DEBOUNCE_MS`）。單一事件來源已足夠——滑鼠拖曳、Shift／方向鍵鍵盤選取與 IME 組字輸入都會觸發 `selectionchange`，因此不需要 `mouseup` 或 `keyup` 監聽器。`document.mousedown` 另行綁定，只用於點擊外部時關閉按鈕。
-- **快照策略**：`QuoteReply.selectedText` 在 debounce 結束時同步擷取。按鈕的 `click` 處理器使用此快照，而非重新讀取即時選取範圍——降低虛擬清單節點卸載造成的競態問題。
+- **Scope guard** (`isSelectionInScope`): Only activates when both `anchorNode` and `focusNode` of the selection reside inside `div.ds-virtual-list-visible-items`. Selections crossing outside this container are ignored.
+- **Trigger event**: `document.selectionchange`, funnelled through the single `handleSelectionEvent` scheduler with a 250 ms debounce (`QUOTE_REPLY_DEBOUNCE_MS`). One event source is enough — `selectionchange` already fires for mouse drags, Shift/Arrow keyboard selection, and IME-composed input alike, so no `mouseup` or `keyup` listener is needed. `document.mousedown` is bound separately, but only to dismiss the button on an outside click.
+- **Snapshot strategy**: `QuoteReply.selectedText` is captured synchronously at debounce-end. The button `click` handler uses this snapshot rather than re-reading the live selection — mitigates virtual-list node unmount race conditions.
 
-### 生命週期 (registerFeatureToggle)
+### Lifecycle (registerFeatureToggle)
 
-`QuoteReply.init()` 以 `ownKey: null` 向 `content/feature-toggle.js` 註冊模組，因此此功能沒有自身開關，只跟隨擴充功能總開關。`registerFeatureToggle` 向 background service worker 查詢（`DSS_GET_SETTINGS`）以決定初始狀態，之後回應 `DSS_SETTINGS_CHANGED` 廣播——模組從不直接讀取 `chrome.storage`。
+`QuoteReply.init()` registers the module with `content/feature-toggle.js` using `ownKey: null`, so the feature has no toggle of its own and follows the extension master switch alone. `registerFeatureToggle` resolves the initial state by asking the background service worker (`DSS_GET_SETTINGS`) and thereafter reacts to the `DSS_SETTINGS_CHANGED` broadcast — the module never reads `chrome.storage` directly.
 
-- `enable()` 建立按鈕元素，並附加 `selectionchange` 與 `mousedown` 的 document 監聽器。
-- `disable()` 解除兩者、清除待執行的 debounce 計時器、呼叫 `hideButton()`（同時移除 scroll／resize 監聽器），並移除按鈕元素，將 `btnEl` 重設為 `null`。
-- `dsI18n.onLocaleChanged` 訂閱是唯一的例外：`dsI18n` 未提供取消訂閱的方法，因此它在 `hasLocaleSubscription` 旗標後只註冊一次，並在停用循環中保留。功能關閉期間，因 `btnEl` 為 `null`，`handleLocaleChanged` 會立即返回。
-- `init()` 本身只註冊開關；監聽器延遲到總開關首次解析為開啟時才附加。`window.__DSS_QR_INITIALIZED__` 防護避免重複注入的腳本註冊兩次。
+- `enable()` creates the button element and attaches the `selectionchange` and `mousedown` document listeners.
+- `disable()` detaches both, clears the pending debounce timer, calls `hideButton()` (which also drops the scroll/resize listeners), and removes the button element, resetting `btnEl` to `null`.
+- The `dsI18n.onLocaleChanged` subscription is the one exception: `dsI18n` exposes no unsubscribe, so it is registered once behind the `hasLocaleSubscription` flag and left in place across disable cycles. While the feature is off, `handleLocaleChanged` returns immediately because `btnEl` is `null`.
+- `init()` itself only registers the toggle; listeners are attached lazily, the first time the master switch resolves to on. A `window.__DSS_QR_INITIALIZED__` guard keeps a duplicate script injection from registering twice.
 
-### 按鈕定位 (`unionClientRects` + `computeButtonPosition`)
+### Button Positioning (`unionClientRects` + `computeButtonPosition`)
 
-`handleSelectionChange` 收集 `range.getClientRects()` 的所有 client rect，經 `unionClientRects` 合併為單一邊界框（`top`/`left`/`bottom`/`right`/`width`）。面積為零的 rect 會被略過。
+`handleSelectionChange` collects all client rects from `range.getClientRects()` and merges them via `unionClientRects` into a single bounding box (`top`/`left`/`bottom`/`right`/`width`). Zero-area rects are skipped.
 
-`computeButtonPosition` 是純函式，依據該聯集 rect、按鈕尺寸與可視範圍尺寸計算 `{top, left, hidden}`：
+`computeButtonPosition` is a pure function computing `{top, left, hidden}` from that union rect, button dimensions, and viewport dimensions:
 
-- 預設：按鈕置於整個選取區塊頂端上方 16px，水平方向以聯集寬度置中。
-- 左右邊界限制：與可視範圍邊緣至少保留 10px。
-- 頂端翻轉：若計算出的 `top < 10`，按鈕移到聯集底部（區塊最後一行）下方 8px。
-- 隱藏：整個選取區塊已捲出可視範圍（`bottom < 0` 或 `top > vh`）時回傳。
+- Default: button placed 16px above the top of the full selection block, horizontally centred on the union width.
+- Left/right boundary clamping: minimum 10px margin from viewport edges.
+- Top flip: if computed `top < 10`, button moves 8px below the union bottom (last line of the block).
+- Hidden: returned when the full selection block has scrolled out of the viewport (`bottom < 0` or `top > vh`).
 
-### 捲動與尺寸變動處理
+### Scroll and Resize Handling
 
-單一的 `handleViewportChange` 處理器同時服務 `scroll`（capture、passive）與 `resize`。它只在按鈕可見期間（`showButton`）附加到 `window`，於 `hideButton` 時解除，並以 `isScrollAttached` 旗標追蹤，確保這組監聽器永不重複綁定。處理器以 `requestAnimationFrame` 延後再重新執行 `handleSelectionChange`，因此不會阻塞捲動執行緒。
+A single `handleViewportChange` handler serves both `scroll` (capture, passive) and `resize`. It is attached to `window` only while the button is visible (`showButton`) and detached on `hideButton`, tracked by the `isScrollAttached` flag so the pair is never double-bound. The handler defers to `requestAnimationFrame` before re-running `handleSelectionChange`, so it does not block the scroll thread.
 
-### Textarea 注入 (`injectQuote`)
+### Textarea Injection (`injectQuote`)
 
-將 `formatQuote(selectedText)` 附加到 textarea 的值：
+Appends `formatQuote(selectedText)` to the textarea value:
 
-- **`formatQuote`**：`text.split(/\r?\n/).map(l => '> ' + l).join('\n')`——每一行加上 Markdown 引用區塊前綴。
-- **React 感知寫入**：使用 `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set`（與 `content/prompt-injector.controller.js:84-85` 相同模式），接著派發 `input` 與 `change` 事件以觸發 React 狀態更新。
-- **附加邏輯**：textarea 為空 → 只放入引用文字；非空 → 既有內容 + `\n`（若尚未以 `\n` 結尾）+ 引用文字。
+- **`formatQuote`**: `text.split(/\r?\n/).map(l => '> ' + l).join('\n')` — each line receives a Markdown blockquote prefix.
+- **React-aware write**: Uses `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` (same pattern as `content/prompt-injector.controller.js:84-85`) followed by `input` and `change` event dispatch to trigger React state updates.
+- **Append logic**: empty textarea → quoted text only; non-empty → existing content + `\n` (if not already ending with `\n`) + quoted text.
 
-### CSS 注入
+### CSS Injection
 
-在 `document.head` 注入 `<style id="dss-quote-reply-style">`，內含 `.dss-quote-btn` 樣式：
+A `<style id="dss-quote-reply-style">` is injected into `document.head` with `.dss-quote-btn` styles:
 
-- `position: fixed; z-index: 2147483000`，確保疊在 DeepSeek UI 之上。
-- 淺色／深色模式同時由 `@media (prefers-color-scheme: dark)` 與 `html[data-theme="dark"]` 選擇器處理（後者涵蓋 DeepSeek 執行期的主題切換）。
-- **i18n 支援**（v4.3.3+）：按鈕標籤文字經由 `dsI18n.t('quoteReplyBtnLabel')` 取得而非寫死，並以 `dsI18n.onLocaleChanged(QuoteReply.handleLocaleChanged)` 訂閱，在使用者切換語言時即時更新按鈕文字，無需重新載入頁面。`handleLocaleChanged` 保留既有的 `<svg>` 節點，只重建標籤 `<span>`。
+- `position: fixed; z-index: 2147483000` for proper stacking above the DeepSeek UI.
+- Light/dark mode handled by both `@media (prefers-color-scheme: dark)` and `html[data-theme="dark"]` selectors (the latter covers DeepSeek's runtime theme toggle).
+- **i18n support** (v4.3.3+): The button label text is sourced via `dsI18n.t('quoteReplyBtnLabel')` instead of being hardcoded, and a `dsI18n.onLocaleChanged(QuoteReply.handleLocaleChanged)` subscription live-updates the button text when the user switches language without requiring a page reload. `handleLocaleChanged` preserves the existing `<svg>` node and rebuilds only the label `<span>`.
 
-### 關閉條件
+### Dismissal Conditions
 
-按鈕在以下情況隱藏：(1) 文字選取被清除或收合，(2) 選取節點離開範圍，(3) 選取範圍完全捲出可視範圍，(4) 視窗尺寸變動（重新計算位置，超出邊界則隱藏），(5) 使用者點擊按鈕以外的任何位置。
+The button hides when: (1) text selection is cleared or collapses, (2) selection node leaves scope, (3) the selection scrolls fully out of the viewport, (4) the window resizes (recomputes position, hides if out of bounds), (5) the user clicks anywhere outside the button.
 
-### 測試介面
+### Test Interface
 
-經由 `module.exports` 匯出（Node 環境防護）：`handleSelectionChange`、`injectQuote`、`unionClientRects`、`computeButtonPosition`、`isSelectionInScope`、`formatQuote`、`showButton`、`hideButton`、`getButtonEl`、`enable`、`disable`、`__resetState`、`__setState`、`__getState`。
+Exports via `module.exports` (Node-env guard): `handleSelectionChange`, `injectQuote`, `unionClientRects`, `computeButtonPosition`, `isSelectionInScope`, `formatQuote`, `showButton`, `hideButton`, `getButtonEl`, `enable`, `disable`, `__resetState`, `__setState`, `__getState`.
 
-## 編輯訊息清理模組 (Edit Message Cleanup)
+## Edit Message Cleanup Module
 
-`content/edit-message-cleanup.js` 從 DeepSeek 的編輯 textarea 中移除注入的提示詞外層包裝，讓使用者只編輯自己的原始訊息。它與 `content/prompt-injector.controller.js` 的提示詞注入流程（`injectPrefix`，經 `content-script.js` 轉出）互補：注入時包裝送出的訊息，重新編輯時由本模組拆開包裝。
+`content/edit-message-cleanup.js` strips the injected prompt wrapper from DeepSeek's edit textarea so the user edits only their original message. It complements the prompt-injection flow in `content/prompt-injector.controller.js` (`injectPrefix`, re-exported through `content-script.js`): injection wraps the outgoing message, this module unwraps it on re-edit.
 
-### 觸發與範圍
+### Trigger and Scope
 
-- **委派監聽器**：單一 document 層級的 `click` 處理器（`handleEditButtonClick`），經由 `window` 防護旗標冪等註冊。
-- **編輯按鈕解析**：`e.target.closest(EDIT_BUTTON_SELECTOR)`——使用者訊息項目（含 `.ds-collapsible-text` 的項目）內 `.ds-flex` 中帶 `[aria-disabled]` 的圖示按鈕（`EDIT_BUTTON_SELECTOR` = `EDIT_MESSAGE_BUTTON_SELECTOR`）。不符合的點擊提早返回（guard clause）。
+- **Delegated listener**: A single document-level `click` handler (`handleEditButtonClick`) registered idempotently via a `window` guard flag.
+- **Edit-button resolution**: `e.target.closest(EDIT_BUTTON_SELECTOR)` — the icon button with `[aria-disabled]` inside `.ds-flex` in a user-message item (an item containing `.ds-collapsible-text`) (`EDIT_BUTTON_SELECTOR` = `EDIT_MESSAGE_BUTTON_SELECTOR`). Non-matching clicks return early (guard clause).
 
-### 非同步 Textarea 偵測 (`waitForNewTextarea`)
+### Asynchronous Textarea Detection (`waitForNewTextarea`)
 
-編輯 textarea 在點擊**之後**才渲染，因此必須非同步偵測。天真的「往上找最近一個含 textarea 的祖先」做法是錯的：點擊當下頁面上唯一的 textarea 是底部主輸入框，而範圍廣的虛擬清單祖先正好包含它——該策略會同步解析到**錯誤**（空白）的 textarea，永遠不會等待真正的編輯框。因此偵測採用快照式且不依賴 class 的做法：
+The edit textarea renders AFTER the click, so it must be detected asynchronously. A naive "walk up to the nearest ancestor that contains a textarea" approach is wrong: at click time the only textarea on the page is the main bottom composer, and the broad virtual-list ancestor contains it — so that strategy resolves synchronously to the WRONG (empty) textarea and never waits for the real edit box. Detection is therefore snapshot-based and class-independent:
 
-- `handleEditButtonClick` 對點擊當下已存在的 textarea 建立快照：`new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))`（`'textarea'`，匹配含主輸入框的所有 textarea）。
-- **`waitForNewTextarea(preExisting, onFound)`**：經由 `MutationObserver`（`childList: true, subtree: true`）監看 `document.body`，取第一個**不在**快照中的 textarea——那必定是編輯 textarea。`onFound` 至多觸發一次，之後即中斷連線。硬性逾時 `DETECTION_TIMEOUT_MS`（2000ms）。若找到的 textarea 在發現時 `value` 仍為空（React 尚未填入），則對該 textarea 進行第二層監看，最多等待 `VALUE_WAIT_TIMEOUT_MS`（800ms）讓值填入。每次點擊的狀態（已解析旗標、逾時 id、observer）都是閉包區域變數——模組層級無可變狀態。
+- `handleEditButtonClick` snapshots the textareas already present at click time: `new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))` (`'textarea'`, matching every textarea including the main input).
+- **`waitForNewTextarea(preExisting, onFound)`**: watches `document.body` via `MutationObserver` (`childList: true, subtree: true`) and picks the first textarea NOT in the snapshot — that is definitively the edit textarea. Fires `onFound` at most once, then disconnects. Hard timeout `DETECTION_TIMEOUT_MS` (2000ms). If the found textarea's `value` is still empty at discovery (React not yet populated), a secondary watch on that specific textarea waits up to `VALUE_WAIT_TIMEOUT_MS` (800ms) for the value to populate. All per-click state (resolved flag, timeout id, observer) is closure-local — no module-level mutable state.
 
-### max-height 調整 (`applyMaxHeightAdjustments` + `computeDynamicMaxHeight`)
+### max-height Adjustments (`applyMaxHeightAdjustments` + `computeDynamicMaxHeight`)
 
-在偵測當下（`onFound`）套用一次，此時編輯 UI 已掛載且目標元素存在：
+Applied once at the detection moment (`onFound`), when the edit UI is mounted and the target elements exist:
 
-- **`.cc852ac5`**（`REMOVE_MAX_HEIGHT_SELECTOR`）：對每個符合的元素設定 inline `style.maxHeight = 'none'`——一律執行。
-- **`._646a522`**（`DYNAMIC_MAX_HEIGHT_SELECTOR`）：inline `style.maxHeight` 設為當下經純函式 `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` 計算出的動態值 = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX`（offset = 32px）。高度即時讀取：`window.innerHeight`，以及第一個 `CHAT_HEADER_SELECTOR`（`div:has(> .the-header)`，`HEIGHT_SOURCE_SELECTOR_A`）與第一個 `CONTENT_COLUMN_SELECTOR`（`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`，`HEIGHT_SOURCE_SELECTOR_B`）的 `getBoundingClientRect().height`。**來源缺失規則**：任一來源元素不在 DOM 中時，完全略過 `._646a522` 的調整（保持原樣）——`.cc852ac5` 的移除仍照常執行。只計算一次；不註冊 resize 監聽器。編輯結束時覆寫值不會還原。
+- **`.cc852ac5`** (`REMOVE_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight = 'none'` on every matched element — always runs.
+- **`._646a522`** (`DYNAMIC_MAX_HEIGHT_SELECTOR`): inline `style.maxHeight` set to a dynamic value computed at that moment via the pure `computeDynamicMaxHeight(windowHeight, sourceHeightA, sourceHeightB)` = `windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX` (offset = 32px). Heights are read in real time: `window.innerHeight`, and `getBoundingClientRect().height` of the first `CHAT_HEADER_SELECTOR` (`div:has(> .the-header)`, `HEIGHT_SOURCE_SELECTOR_A`) and first `CONTENT_COLUMN_SELECTOR` (`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`, `HEIGHT_SOURCE_SELECTOR_B`). **Missing-source rule**: if either source element is absent from the DOM, the `._646a522` adjustment is skipped entirely (left untouched) — the `.cc852ac5` removal still runs. Computed once; no resize listener. Overrides are not restored when editing ends.
 
-### 捲動定位 (`applyEditScrollPosition` + `computeScrollDelta` + `findScrollableAncestor`)
+### Scroll-into-position (`applyEditScrollPosition` + `computeScrollDelta` + `findScrollableAncestor`)
 
-max-height 調整與包裝清理完成後，捲動編輯框使其視覺上位於固定標頭 `CHAT_HEADER_SELECTOR` 下方 `EDIT_SCROLL_GAP_PX`（16px）處。由於 `.cc852ac5` 位於可捲動容器內，而 `CHAT_HEADER_SELECTOR` 是固定定位（不同的 z 層），對齊完全靠調整容器的 `scrollTop` 達成——而非重新定位元素。在 `requestAnimationFrame` 內執行一次（於 `applyMaxHeightAdjustments` + `applyTextareaCleanup` 之後），以量測清理後的版面。
+After the max-height adjustment and wrapper cleanup, the edit box is scrolled so it visually sits `EDIT_SCROLL_GAP_PX` (16px) below the fixed header `CHAT_HEADER_SELECTOR`. Because `.cc852ac5` lives inside a scrollable container while `CHAT_HEADER_SELECTOR` is fixed (different z-layers), the alignment is achieved purely by adjusting the container's `scrollTop` — not by repositioning the element. Run once inside a `requestAnimationFrame` (after `applyMaxHeightAdjustments` + `applyTextareaCleanup`) so the post-cleanup layout is measured.
 
-- **`computeScrollDelta(editBoxTop, headerBottom, gap)`**（純函式）：回傳 `editBoxTop − (headerBottom + gap)`——要**加到**捲動容器 `scrollTop` 的帶正負號像素量（正值向下捲，負值向上捲）。
-- **`findScrollableAncestor(el)`**：從 `el`（含自身）往上走，回傳最近一個 `scrollHeight > clientHeight` 的節點，否則回傳 `null`。
-- **`applyEditScrollPosition(root)`**（root 預設為 `document`，為 null 時也退回 `document`）：找到 `.cc852ac5`（編輯框）與 `CHAT_HEADER_SELECTOR`（標頭），從 `VIRTUAL_LIST_CONTAINER_SELECTOR`（`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`）開始經 `findScrollableAncestor` 解析真正的捲動容器（找不到可捲動祖先時退回該列表容器本身），即時讀取 `getBoundingClientRect()` 幾何資訊，再執行 `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`。**防護規則**：編輯框、標頭或捲動容器缺失時不執行任何動作（不拋出例外）。一次性調整；不註冊 resize／scroll 監聽器。
+- **`computeScrollDelta(editBoxTop, headerBottom, gap)`** (pure): returns `editBoxTop − (headerBottom + gap)` — the signed pixel amount to ADD to the scroller's `scrollTop` (positive scrolls down, negative scrolls up).
+- **`findScrollableAncestor(el)`**: walks up from `el` (inclusive) and returns the nearest node whose `scrollHeight > clientHeight`, else `null`.
+- **`applyEditScrollPosition(root)`** (root defaults to `document`, falls back to `document` when null): finds `.cc852ac5` (edit box) and `CHAT_HEADER_SELECTOR` (header), starts from `VIRTUAL_LIST_CONTAINER_SELECTOR` (`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`) and resolves the real scroller via `findScrollableAncestor` (falling back to the list container itself when no scrollable ancestor exists), reads `getBoundingClientRect()` geometry in real time, then `scrollContainer.scrollTop += computeScrollDelta(top, bottom, EDIT_SCROLL_GAP_PX)`. **Guard rule**: if the edit box, header, or scroll container is missing, it is a no-op (no throw). One-time adjustment; no resize/scroll listener.
 
-### 包裝萃取 (`extractUserInput` + `applyTextareaCleanup`)
+### Wrapper Extraction (`extractUserInput` + `applyTextareaCleanup`)
 
-- **`extractUserInput(text)`**：若 `text` 符合 `/<user-input>\n([\s\S]*)\n<\/user-input>$/`（與 `content/prompt-injector.controller.js` 中 `injectPrefix` 相同的尾端錨定 regex 形式），回傳內層內容，否則回傳 `null`。非字串輸入 → `null`。`$` 錨點代表 `</user-input>` 之後若有尾隨內容則不符合。
-- **`applyTextareaCleanup(textarea)`**：呼叫 `extractUserInput(textarea.value)`。符合時，以 `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` 將值改寫為**僅**內層內容，接著派發 `input`／`change` 事件（與 `quote-reply.js`／`content/prompt-injector.controller.js` 相同的 React 感知寫入）。沒有 `<user-input>` 包裝時，textarea 完全保持原樣且不派發任何事件（明確需求——一般訊息永遠不會被清空）。
+- **`extractUserInput(text)`**: Returns the inner content if `text` matches `/<user-input>\n([\s\S]*)\n<\/user-input>$/` (the same end-anchored regex shape as `injectPrefix` in `content/prompt-injector.controller.js`), else `null`. Non-string input → `null`. The `$` anchor means trailing content after `</user-input>` does not match.
+- **`applyTextareaCleanup(textarea)`**: Calls `extractUserInput(textarea.value)`. On a match, rewrites the value to ONLY the inner content using `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set` followed by `input`/`change` event dispatch (same React-aware write as `quote-reply.js` / `content/prompt-injector.controller.js`). When there is **no** `<user-input>` wrapper, the textarea is left completely untouched and no event is dispatched (explicit requirement — plain messages are never cleared).
 
-### 測試介面
+### Test Interface
 
-經由 `module.exports` 匯出（Node 環境防護）：`extractUserInput`、`computeDynamicMaxHeight`、`applyMaxHeightAdjustments`、`computeScrollDelta`、`findScrollableAncestor`、`applyEditScrollPosition`、`applyTextareaCleanup`、`waitForNewTextarea`、`handleEditButtonClick`，以及常數 `EDIT_BUTTON_SELECTOR`、`REMOVE_MAX_HEIGHT_SELECTOR`、`DYNAMIC_MAX_HEIGHT_SELECTOR`、`HEIGHT_SOURCE_SELECTOR_A`、`HEIGHT_SOURCE_SELECTOR_B`、`MAX_HEIGHT_OFFSET_PX`、`EDIT_SCROLL_GAP_PX`、`USER_INPUT_REGEX`、`DETECTION_TIMEOUT_MS`、`VALUE_WAIT_TIMEOUT_MS`。
+Exports via `module.exports` (Node-env guard): `extractUserInput`, `computeDynamicMaxHeight`, `applyMaxHeightAdjustments`, `computeScrollDelta`, `findScrollableAncestor`, `applyEditScrollPosition`, `applyTextareaCleanup`, `waitForNewTextarea`, `handleEditButtonClick`, plus constants `EDIT_BUTTON_SELECTOR`, `REMOVE_MAX_HEIGHT_SELECTOR`, `DYNAMIC_MAX_HEIGHT_SELECTOR`, `HEIGHT_SOURCE_SELECTOR_A`, `HEIGHT_SOURCE_SELECTOR_B`, `MAX_HEIGHT_OFFSET_PX`, `EDIT_SCROLL_GAP_PX`, `USER_INPUT_REGEX`, `DETECTION_TIMEOUT_MS`, `VALUE_WAIT_TIMEOUT_MS`.
 
-## 防止自動回滾模組 (PreventAutoScroll)
+## PreventAutoScroll Module
 
-PreventAutoScroll 模組採用雙檔架構，抑制 DeepSeek 自動捲動到最新訊息的行為。它以兩種不同模式運作：**暫時模式**，在受控操作（例如 Markdown 匯出或 go-top）期間生效；以及**持續模式**（v4.12.0），只要使用者保持 `dsPreventAutoScroll` 設定開啟就持續生效。
+The PreventAutoScroll module uses a two-file architecture to suppress DeepSeek's automatic scroll-to-latest behavior. It is active in two distinct modes: **transient**, for the duration of a controlled operation like Markdown export or go-top, and **persistent** (v4.12.0), for as long as the user leaves the `dsPreventAutoScroll` setting on.
 
-### 架構
+### Architecture
 
-- **`content/prevent-auto-scroll.js`**（MAIN world）：在頁面的 JavaScript context 中執行。monkey-patch `Element.prototype.scrollTo`、`Element.prototype.scrollBy`、`window.scrollTo`、`window.scrollBy`、`Element.prototype` 上的 `scrollTop` setter，以及 **`Element.prototype.scrollIntoView`**（bridge 啟用時無條件封鎖）。每個被 patch 的方法在允許或封鎖捲動前都會檢查 `_isBridgeEnabled()`。bridge 啟用（攔截生效）時，捲動到對話底部的呼叫會被抑制。
-- **`content/prevent-auto-scroll-bridge.js`**（ISOLATED world）：負責注入與控制的內容腳本。經由 `<script>` 元素以 `chrome.runtime.getURL('content/prevent-auto-scroll.js')` 注入 main-world 腳本。在文件中建立並管理一個隱藏的 `<div id="dss-prevent-auto-scroll-bridge" style="display:none">`，其 `dataset.enabled` 屬性供 main-world patch 讀取。
+- **`content/prevent-auto-scroll.js`** (MAIN world): Executes in the page's JavaScript context. Monkey-patches `Element.prototype.scrollTo`, `Element.prototype.scrollBy`, `window.scrollTo`, `window.scrollBy`, the `scrollTop` setter on `Element.prototype`, and **`Element.prototype.scrollIntoView`** (unconditionally blocked when bridge is enabled). Each patched method checks `_isBridgeEnabled()` before allowing or blocking the scroll. If the bridge is enabled (interception active), calls to scroll to the bottom of the conversation are suppressed.
+- **`content/prevent-auto-scroll-bridge.js`** (ISOLATED world): Content script that manages injection and control. Injects the main-world script via a `<script>` element using `chrome.runtime.getURL('content/prevent-auto-scroll.js')`. Creates and manages a hidden `<div id="dss-prevent-auto-scroll-bridge" style="display:none">` in the document whose `dataset.enabled` attribute is read by the main-world patch.
 
-### 控制流程
+### Control Flow
 
-- `enable()`：設定 `bridge.dataset.enabled = 'true'`。main-world patch 讀到後開始抑制自動捲動呼叫。從不觸碰持續狀態，因此在兩種模式下都保持冪等。
-- `disable()`：設定 `bridge.dataset.enabled = 'false'`——**但持續模式開啟時不執行任何動作**（v4.12.0）。
-- `isEnabled()`：讀取目前旗標。**沒有參照計數**——在持續模式以外，`disable()` 是無條件的全域關閉開關。任何可能巢狀執行於其他呼叫者啟用期間內的呼叫者，**必須**先以 `isEnabled()` 保存先前狀態再還原，而非盲目切換。
-- `setPersistent(shouldPersist)`（v4.12.0）：為 true 時啟用保護，並標記 `bridge.dataset.persistent = 'true'`。為 false 時清除標記，並直接強制寫入 `dataset.enabled = 'false'`——刻意繞過 `disable()` 自身的持續模式防護，否則關閉持續模式將永遠無法解除保護。
-- `isPersistent()`（v4.12.0）：讀取持續旗標。持續狀態與 `enabled` 存放在同一個隱藏 bridge 元素的 dataset 上，因此模組不保有模組範圍的可變狀態。
-- `start()`（v4.12.0）：於模組載入時自動呼叫，比照 `content/hide-thinking.js` 的啟動慣例。將總開關與自身開關的閘控委派給 `content/feature-toggle.js` 的 `registerFeatureToggle`，傳入 `ownKey: StorageManager.KEYS.PREVENT_AUTO_SCROLL`，啟用時呼叫 `setPersistent(true)`、停用時呼叫 `setPersistent(false)`。設定經 `DSS_GET_SETTINGS` 自 background 取得，後續變更則透過 `DSS_SETTINGS_CHANGED` 廣播接收。只有總開關啟用**且**此設定為 true 時，持續模式才會開啟。
+- `enable()`: Sets `bridge.dataset.enabled = 'true'`. The main-world patch reads this and begins suppressing auto-scroll calls. Never touches persistent state, so it stays idempotent in either mode.
+- `disable()`: Sets `bridge.dataset.enabled = 'false'` — **unless persistent mode is on, in which case it is a no-op** (v4.12.0).
+- `isEnabled()`: Reads the current flag. **There is no reference counting** — outside persistent mode, `disable()` is an unconditional global off-switch. Any caller that may run nested inside another caller's enabled window MUST save the prior state via `isEnabled()` and restore it, rather than blind-toggling.
+- `setPersistent(shouldPersist)` (v4.12.0): When true, enables protection and marks `bridge.dataset.persistent = 'true'`. When false, clears the mark and force-writes `dataset.enabled = 'false'` directly — deliberately bypassing `disable()`'s own persistent guard, which would otherwise make turning persistence off unable to ever release the protection.
+- `isPersistent()` (v4.12.0): Reads the persistent flag. Persistent state lives on the same hidden bridge element's dataset as `enabled`, so the module keeps no module-scope mutable state.
+- `start()` (v4.12.0): Auto-invoked at module load, mirroring `content/hide-thinking.js`'s bootstrap convention. Delegates master-switch and own-toggle gating to `registerFeatureToggle` from `content/feature-toggle.js` with `ownKey: StorageManager.KEYS.PREVENT_AUTO_SCROLL`, calling `setPersistent(true)` on enable and `setPersistent(false)` on disable. Settings are obtained from background via `DSS_GET_SETTINGS` and subsequent `DSS_SETTINGS_CHANGED` broadcasts. Persistent mode is on only when the master switch is enabled **and** this setting is true.
 
-### 使用者
+### Consumers
 
-三個使用者與此 bridge 協調，前兩者為巢狀關係：
+Three consumers coordinate with this bridge, and the first two nest:
 
-- **`harvest.js`** 在捲動至頂端階段前啟用它，並在整個由上而下的擷取完成後於 `finally` 中停用——因此整個匯出期間保持開啟。注意該 `finally` 區塊**無條件**呼叫 `disable()`；加上沒有參照計數，這正是 `disable()` 必須在持續模式下成為 no-op 的原因。若缺少該防護，一次 Markdown 匯出就會悄悄關掉使用者啟用的永久鎖定。
-- **`go-top.js`**（`scrollToTopAndWait`，位於 `go-top.scroll.js`）在單次捲動至頂端期間啟用它，並於 `cleanup()` 中還原先前狀態。由於 `harvest.js` 在自己的啟用期間內呼叫 `scrollToTopAndWait`，GoToTop 採用保存並還原的做法：只有當它是啟用的那次呼叫時才停用。此處若盲目 `disable()`，會在匯出途中移除 harvest 的保護。持續模式下此邏輯自然短路——`isEnabled()` 已為 true，因此 GoToTop 既不啟用也不停用。
-- **`dsPreventAutoScroll` popup 開關**（v4.12.0）經由 `start()` 的設定訂閱驅動 `setPersistent()`。兩個暫時性使用者不含任何持續模式邏輯：持續旗標位於共用的咽喉點，在呼叫者不做參照計數的前提下，這是唯一能讓與呼叫者無關的模式切換保持正確的位置。
+- **`harvest.js`** enables it before the scroll-to-top phase and disables it in a `finally` after the entire top-to-bottom capture completes — so it stays on for the whole export. Note that `finally` block calls `disable()` **unconditionally**; combined with the absence of reference counting, that is precisely why `disable()` is a no-op under persistent mode. Without that guard, one Markdown export would silently switch off a user-enabled permanent lock.
+- **`go-top.js`** (`scrollToTopAndWait`, in `go-top.scroll.js`) enables it for the duration of a single scroll-to-top and restores the prior state in `cleanup()`. Because `harvest.js` calls `scrollToTopAndWait` from inside its own enabled window, GoToTop uses save-and-restore: it disables only if it was the call that enabled. A blind `disable()` here would strip harvest's protection mid-export. Under persistent mode this logic short-circuits naturally — `isEnabled()` is already true, so GoToTop neither enables nor disables.
+- **The `dsPreventAutoScroll` popup toggle** (v4.12.0) drives `setPersistent()` via `start()`'s settings subscription. The two transient consumers carry no persistent-mode logic: the persistent flag lives at the shared choke point, which is the only place a caller-agnostic mode switch can be correct given that callers do not refcount.
 
-**範圍注意事項。** main-world patch 是 `Element.prototype` 層級的全域攔截，只封鎖**向下**捲動，且無法區分頁面發起與使用者發起的呼叫。這代表在持續模式下，DeepSeek 串流輸出時的跟隨捲動也會被抑制，任何需要向下捲動才能正確定位的對話切換也會被封鎖。原生滾輪／觸控板捲動不經過這些 JS API，不受影響。這項取捨正是此設定預設為 `false` 的原因。
+**Scope caveat.** The main-world patch is a global `Element.prototype`-level interception that blocks **downward** scrolls only and cannot distinguish page-initiated from user-initiated calls. Under persistent mode this means DeepSeek's streaming follow-scroll is also suppressed, and any conversation-switch that needs to scroll down to land correctly will be blocked too. Native wheel/trackpad scrolling does not route through these JS APIs and is unaffected. This trade-off is why the setting defaults to `false`.
 
-### 設計決策
+### Design Decisions
 
-- 內容腳本（isolated world）的所有捲動操作都使用其自身未被 patch 的 `Element.prototype` 參照，因此在頁面自動捲動被抑制時，`harvest.js` 與 `go-top.js` 仍可自由捲動。注意這描述的是不受 patch 影響，而非與其協調——啟用 patch 是每個使用者必須另外明確執行的步驟。
-- bridge 元素避免從 main world 呼叫 `chrome.*` API（main world 中無法使用）。
-- main-world 腳本包含冪等防護（`window.__dsvPreventAutoScrollInstalled`），防止重複注入。
-- 兩個檔案都宣告於 `manifest.json`：`prevent-auto-scroll.js` 為 `web_accessible_resource`，`prevent-auto-scroll-bridge.js` 位於 `content_scripts` 陣列。
+- The content script (isolated world) uses its own unpatched `Element.prototype` references for all scroll operations, so `harvest.js` and `go-top.js` can scroll freely while the page's auto-scroll is suppressed. Note this describes immunity from the patch, not coordination with it — enabling the patch is a separate, explicit step each consumer must take.
+- The bridge element avoids `chrome.*` API calls from the main world (which are unavailable there).
+- The main-world script includes an idempotency guard (`window.__dsvPreventAutoScrollInstalled`) to prevent double-injection.
+- Both files are declared in `manifest.json`: `prevent-auto-scroll.js` as a `web_accessible_resource`, `prevent-auto-scroll-bridge.js` in the `content_scripts` array.
 
-## 系統時間注入 (System Time Injection)
+## System Time Injection
 
-系統時間注入功能在使用者訊息前加上時間戳記，提供模型目前的日期與時間。
+The system time injection feature prepends a timestamp before user messages to provide the model with the current date and time.
 
-### Storage 鍵
+### Storage Key
 
-- `dsShowSystemTime`（boolean，預設 `false`）——儲存於 `KEYS.SHOW_SYSTEM_TIME` 鍵。
+- `dsShowSystemTime` (boolean, default `false`) — stored in the `KEYS.SHOW_SYSTEM_TIME` key.
 
-### Popup 開關
+### Popup Toggle
 
-Features 卡片中的核取方塊（`#showSystemTimeToggle`）控制此設定。它屬於感知總開關的子控制項：`isEnabled` 關閉時，此開關被停用。
+A checkbox in the Features card (`#showSystemTimeToggle`) controls the setting. It is part of the master-switch-aware sub-controls: when `isEnabled` is turned off, the toggle is disabled.
 
-### 內容腳本整合
+### Content Script Integration
 
-- `isShowSystemTime: false`——`content/chat-binding-controller.js` 中的執行期狀態欄位，於 `initSettings()` 期間經由 `applyInitialSettings()` 從 storage 初始化。
-- `formatSystemTime(date)`（預設為當下時間）——定義於 `content/content-script.export.time.js` 的純函式，回傳 24 小時制、補零並含本地時區偏移的 `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`。
-- `formatTimezoneOffset(date)`——同檔案中的純輔助函式，回傳時區偏移字串 `UTC±hh:mm`（例如 `UTC+08:00`、`UTC-03:45`）。
-- 在 `injectPrefix()`（`content/prompt-injector.controller.js`）中，系統時間加在注入前綴之前：
+- `isShowSystemTime: false` — runtime state field in `content/chat-binding-controller.js`, initialized from storage via `applyInitialSettings()` during `initSettings()`.
+- `formatSystemTime(date)` (defaults to the current time) — pure function in `content/content-script.export.time.js` returning `yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` in 24-hour format with zero-padding and local timezone offset.
+- `formatTimezoneOffset(date)` — pure helper in the same file returning the timezone offset string `UTC±hh:mm` (e.g., `UTC+08:00`, `UTC-03:45`).
+- In `injectPrefix()` (`content/prompt-injector.controller.js`), the system time is prepended before the injection prefix:
   ```
   Current Time: 2026/05/31 14:30:00 (UTC+08:00)\n\n
   ```
-  此字串插入在注入前綴（若有）與 `<user-input>` 包裝之前。
+  This string is inserted before the injection prefix (if any) and the `<user-input>` wrapper.
 
-### 重新注入防護
+### Re-injection Guard
 
-時間戳記在注入當下擷取一次（而非頁面載入時），因此每則訊息反映的是使用者按下送出的時間。若 `isShowSystemTime` 在兩則訊息之間變更（經由 popup 開關 + `DSS_SETTINGS_CHANGED` 廣播），新值於下一次送出時生效。
+The timestamp is captured once at injection time (not at page load), so each message reflects the time when the user pressed send. If `isShowSystemTime` changes between messages (via popup toggle + the `DSS_SETTINGS_CHANGED` broadcast), the new value takes effect on the next send.
 
-### 總開關感知
+### Master Switch Awareness
 
-`isEnabled` 為 `false` 時，`injectPrefix()` 提早回傳 `false`——不論 `isShowSystemTime` 為何，都不會加上系統時間。popup 中的開關也會被 `applyMasterSwitchUI()` 停用。
+When `isEnabled` is `false`, `injectPrefix()` returns `false` early — the system time is never prepended regardless of `isShowSystemTime`. The toggle in the popup is also disabled by `applyMasterSwitchUI()`.
 
-## 自動重試與自動繼續生成 (AutoRetry)
+## Auto Retry and Auto Continue (AutoRetry)
 
-`content/auto-retry.js` 以單一 `setTimeout` 鏈同時處理「重試」與「繼續生成」兩顆按鈕。
+`content/auto-retry.js` drives both the retry button and the continue-generating button from a single `setTimeout` chain.
 
-### Storage 鍵
+### Storage Keys
 
-- `isAutoRetryEnabled`（boolean，預設 `false`）——`KEYS.AUTO_RETRY`，閘控重試按鈕。
-- `isAutoContinueEnabled`（boolean，預設 `false`）——`KEYS.AUTO_CONTINUE`，閘控繼續生成按鈕。
+- `isAutoRetryEnabled` (boolean, default `false`) — `KEYS.AUTO_RETRY`, gates the retry button.
+- `isAutoContinueEnabled` (boolean, default `false`) — `KEYS.AUTO_CONTINUE`, gates the continue button.
 
-### Popup 開關
+### Popup Toggles
 
-Features 卡片中的 `#autoRetryToggle` 與 `#autoContinueToggle` 核取方塊分別經 `StorageManager.saveAutoRetry()` / `saveAutoContinue()` 寫入；兩者皆屬感知總開關的子控制項，並由 `popup/popup.live-sync.js` 即時反映 storage 變更。
+The `#autoRetryToggle` and `#autoContinueToggle` checkboxes in the Features card write through `StorageManager.saveAutoRetry()` / `saveAutoContinue()`. Both are master-switch-aware sub-controls, and `popup/popup.live-sync.js` reflects storage changes to them live.
 
-### 閘控 (registerFeatureToggle)
+### Gating (registerFeatureToggle)
 
-`start()` 對 `BUTTONS` 中的每顆按鈕各呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，因此每顆按鈕在「總開關 `isEnabled` 且自身鍵」皆開啟時才算閘門開啟。`enable(name)` / `disable(name)` 維護 `_openGates` 集合；本模組不直接讀取 storage。
+`start()` calls `registerFeatureToggle({ ownKey, onEnable, onDisable })` once per entry in `BUTTONS`, so each button's gate is open only when the master switch `isEnabled` and its own key are both on. `enable(name)` / `disable(name)` maintain the `_openGates` set; the module does not read storage directly.
 
-### 輪次迴圈
+### Round Loop
 
-- 任何時刻至多一個計時器（`_timer`）。`_openGates` 由空轉為非空時，`_scheduleRound()` 以 `DSSAutoClickDelay.nextDelayMs()`（`content/auto-click.delay.js`，0–3000ms、100ms 級距的均勻隨機值）排定下一輪。
-- `_runRound()` 對每個閘門開啟的按鈕依序嘗試其選擇器，找到後在該按鈕上派送一次冒泡的 `dss:react-click` 自訂事件（由 [React 點擊橋接](#react-點擊橋接-react-click-bridge)實際觸發按鈕），接著以新的隨機延遲排下一輪；不設觸發上限。每顆按鈕各自以 try/catch 隔離：拋出的錯誤會被記錄，同輪其他按鈕與下一輪照常進行。
-- `_openGates` 清空時 `_stopTimer()` 清除計時器，全關期間沒有任何計時器執行。
+- At most one timer (`_timer`) exists at any time. When `_openGates` goes from empty to non-empty, `_scheduleRound()` schedules the next round with `DSSAutoClickDelay.nextDelayMs()` (`content/auto-click.delay.js`, a uniform random value of 0–3000ms in 100ms steps).
+- `_runRound()` tries each open button's selectors in order and dispatches one bubbling `dss:react-click` custom event on the first match (the [React Click Bridge](#react-click-bridge) performs the actual click), then schedules the next round with a fresh random delay; there is no trigger cap. Each button is isolated in its own try/catch: a thrown error is logged, and the other buttons in the round and the next round still proceed.
+- When `_openGates` becomes empty, `_stopTimer()` clears the timer, so no timer runs while every toggle is off.
 
-### 按鈕定位
+### Button Location
 
-僅以 `content/ds-selectors.js` 的選擇器定位，不比對按鈕文字；繼續生成按鈕在主要選擇器命中時不嘗試備援，重試按鈕只用主要選擇器。
+Buttons are located only through the selectors in `content/ds-selectors.js`, never by button text; the continue button tries its fallback only when the primary selector finds nothing, and the retry button uses only its primary selector.
 
-| 按鈕 | 主要 | 備援 |
+| Button | Primary | Fallback |
 |-|-|-|
-| 重試 | `RETRY_BUTTON_SELECTOR`（`.ds-button--warning.ds-button--circle.ds-button--xs`） | — |
-| 繼續生成 | `CONTINUE_BUTTON_SELECTOR`（`._8e85838 > .ds-button[role="button"]`） | `CONTINUE_BUTTON_FALLBACK_SELECTOR`（`._6eef0b0`） |
+| Retry | `RETRY_BUTTON_SELECTOR` (`.ds-button--warning.ds-button--circle.ds-button--xs`) | — |
+| Continue generating | `CONTINUE_BUTTON_SELECTOR` (`._8e85838 > .ds-button[role="button"]`) | `CONTINUE_BUTTON_FALLBACK_SELECTOR` (`._6eef0b0`) |
 
-### React 點擊橋接 (React Click Bridge)
+### React Click Bridge
 
-DeepSeek 按鈕的 React `onClick` 只在 `e.nativeEvent.isTrusted === true` 且 `e.nativeEvent instanceof Event` 時動作；isolated world 內容腳本的 `element.click()` 屬不受信任事件而被忽略，isolated world 也讀不到元素上的 `__reactProps$*` expando。`content/react-click-bridge.main.js` 因此在頁面 MAIN world 執行：
+The React `onClick` on DeepSeek's buttons acts only when `e.nativeEvent.isTrusted === true` and `e.nativeEvent instanceof Event`; `element.click()` from an isolated-world content script is an untrusted event and is ignored, and the isolated world cannot read the element's `__reactProps$*` expando. `content/react-click-bridge.main.js` therefore runs in the page's MAIN world:
 
-- **載入方式**：由 manifest 中獨立的 `content_scripts` 項目以 `"world": "MAIN"` 靜態載入（有別於經 `main-world-injector.js` 注入的 web_accessible_resources 腳本），`matches: ["*://chat.deepseek.com/*"]`、`run_at: document_end`；靜態 MAIN world 宣告需要 Chrome 111（manifest `minimum_chrome_version`）。
-- **監聽**：自我安裝的 IIFE 在 `document` 上監聽 `dss:react-click`；事件名稱由 `auto-retry.js`、`auto-open-sidebar.js`、`auto-copy.js` 與本檔各自宣告（跨 world 無共用載入器）。
-- **觸發**：讀取目標元素自身 `__reactProps$*` 上的 `onClick`，以最小 synthetic event 呼叫：`nativeEvent` 為 `Object.create(Event.prototype, { isTrusted: { value: true } })`（通過上述檢查），另帶 `target` / `currentTarget` 與空實作的 `preventDefault` / `stopPropagation`。
-- **備援**：元素沒有 React `onClick` 時呼叫 `el.click()`。
-- **剪貼簿擷取**（v4.39.0）：本檔包裝 `navigator.clipboard.writeText`，只對 `detail` 為 `'auto-copy'` 的點擊登記約 1500 ms 的待擷取項目，且只在網站的寫入 Promise 拒絕時派送 `dss:auto-copy-captured`；包裝永遠回傳原呼叫的結果（含同步拋錯），不改變網站看到的結果。規則見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
-- **錯誤處理**：監聽器本體以 try/catch 包覆，React `onClick` 拋錯時以 `console.error('[DSS] react-click-bridge:', err)` 記錄。
-- **重複執行防護**：`window.__dssIsReactClickBridgeInstalled` 旗標為防禦性防護：同一視窗內腳本被執行兩次時仍只有一個監聽器與一層包裝，一次 `dss:react-click` 只呼叫一次 `onClick`。
+- **Loading**: statically loaded by its own manifest `content_scripts` entry with `"world": "MAIN"` (unlike the web_accessible_resources scripts injected via `main-world-injector.js`), `matches: ["*://chat.deepseek.com/*"]`, `run_at: document_end`; the static MAIN-world declaration requires Chrome 111 (manifest `minimum_chrome_version`).
+- **Listening**: a self-installing IIFE listens for `dss:react-click` on `document`; `auto-retry.js`, `auto-open-sidebar.js`, `auto-copy.js`, and this file each declare the event name (no shared loader across worlds).
+- **Triggering**: reads `onClick` from the target element's own `__reactProps$*` and calls it with a minimal synthetic event: `nativeEvent` is `Object.create(Event.prototype, { isTrusted: { value: true } })` (passing the check above), plus `target` / `currentTarget` and no-op `preventDefault` / `stopPropagation`.
+- **Fallback**: when the element has no React `onClick`, it calls `el.click()`.
+- **Clipboard capture** (v4.39.0): this file wraps `navigator.clipboard.writeText`, registers a pending capture entry of about 1500 ms only for clicks whose `detail` is `'auto-copy'`, and dispatches `dss:auto-copy-captured` only when the site's write Promise rejects; the wrapper always returns the result of the original call (including a synchronous throw), so what the site sees does not change. The rules are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **Error handling**: the listener body is wrapped in try/catch and logs `console.error('[DSS] react-click-bridge:', err)` when the React `onClick` throws.
+- **Double-evaluation guard**: the `window.__dssIsReactClickBridgeInstalled` flag is a defensive guard: if the script is evaluated twice in the same window, a single listener and a single wrapper layer remain, so one `dss:react-click` leads to one `onClick` call.
 
-### 載入順序
+### Load Order
 
-manifest 中 `content/auto-click.delay.js` 先於 `content/auto-retry.js` 載入；`start()` 在 `DSSFeatureToggle` 或 `DSSAutoClickDelay` 缺席時拋出具名的載入順序錯誤。
+In the manifest, `content/auto-click.delay.js` loads before `content/auto-retry.js`; `start()` throws a named load-order error when `DSSFeatureToggle` or `DSSAutoClickDelay` is absent.
 
-## 自動開啟側欄 (AutoOpenSidebar)
+## Auto Open Sidebar (AutoOpenSidebar)
 
-`content/auto-open-sidebar.js`（isolated world）在 DeepSeek 每次收合側欄時點擊一次收合軌道上的「展開側邊欄」按鈕，讓側欄保持開啟。
+`content/auto-open-sidebar.js` (isolated world) clicks the "open sidebar" button on DeepSeek's collapsed rail once each time the sidebar collapses, keeping the sidebar open.
 
-### Storage 鍵
+### Storage Key
 
-- `isAutoOpenSidebarEnabled`（boolean，預設 `false`）——`KEYS.AUTO_OPEN_SIDEBAR`，由 `StorageManager.saveAutoOpenSidebar(enabled)` 寫入 sync 與 local；`getSettings()` 欄位為 `autoOpenSidebar`，與 `autoContinue` 同樣納入 JSON 匯出與匯入還原。
+- `isAutoOpenSidebarEnabled` (boolean, default `false`) — `KEYS.AUTO_OPEN_SIDEBAR`, written to sync and local by `StorageManager.saveAutoOpenSidebar(enabled)`; the `getSettings()` field is `autoOpenSidebar`, included in JSON export and import (restore) like `autoContinue`.
 
-### Popup 開關
+### Popup Toggle
 
-UI Adjustments 卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 `autoOpenSidebarLabel`）位於 `#autoExpandMessagesToggle` 之後、`#chatWidthToggle` 之前，經 `StorageManager.saveAutoOpenSidebar()` 寫入；屬感知總開關的子控制項，並由 `popup/popup.live-sync.js` 即時反映 storage 變更。
+The `#autoOpenSidebarToggle` checkbox in the UI Adjustments card (label `autoOpenSidebarLabel`) sits after `#autoExpandMessagesToggle` and before `#chatWidthToggle`, and writes through `StorageManager.saveAutoOpenSidebar()`. It is a master-switch-aware sub-control, and `popup/popup.live-sync.js` reflects storage changes to it live.
 
-### 閘控 (registerFeatureToggle)
+### Gating (registerFeatureToggle)
 
-`start()` 以自身鍵 `isAutoOpenSidebarEnabled` 呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`；`enable()` 重設收合期狀態、註冊 `window` `resize` 監聽、掃描一次再啟動觀察器；`disable()` 中斷觀察器、移除 `resize` 監聽並重設收合期狀態。本模組不直接讀取 storage。
+`start()` calls `registerFeatureToggle({ ownKey, onEnable, onDisable })` once with its own key `isAutoOpenSidebarEnabled`; `enable()` resets the episode state, registers a `window` `resize` listener, scans once, and then starts the observer; `disable()` disconnects the observer, removes the `resize` listener, and resets the episode state. The module does not read storage directly.
 
-### 偵測與點擊
+### Detection and Clicking
 
-- **收合期**：收合狀態以側欄 wrapper（`SIDEBAR_WRAPPER_SELECTOR`，`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）是否符合 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_WRAPPER_COLLAPSED_SELECTOR`（wrapper 加上 `:has(> div:nth-child(2))`，即收合軌道作為第二個直接子層存在）判定，由 `wrapper.matches(...)` 檢查。收合期自 wrapper 符合該選擇器起、不再符合止；`_scanExisting()` 在非收合狀態時重設 `_hasClickedThisEpisode`，收合期內只點擊一次。
-- **觀察器**：生效期間在 `document.body` 上掛載 `MutationObserver`（`childList`、`subtree`、`attributes`，`attributeFilter: ['class']`），每批變更皆整頁重掃；按鈕的圖示 path 可能晚於按鈕節點插入，而 DeepSeek 依寬度斷點再收合時只改寫 wrapper 的 `class`，因此不只檢查新增節點。掃描拋出的錯誤以 `console.error('[DSS] auto-open-sidebar:', err)` 記錄。
-- **點擊**：收合期內尚未點擊時，對命中 `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR` 的按鈕派送冒泡的 `dss:react-click` 自訂事件，由 [React 點擊橋接](#react-點擊橋接-react-click-bridge)呼叫按鈕的 React `onClick`（無 React `onClick` 時退回 `element.click()`）。
-- **窄版型不點擊**（v4.36.3）：每次掃描先以 `content/ds-selectors.js` 側欄區塊的 `SIDEBAR_HAMBURGER_BUTTON_SELECTOR`（`div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])`）查找 DeepSeek header 的漢堡按鈕。漢堡按鈕在桌面與窄版型皆掛載，但只有窄版型（約 768px 以下）的 `checkVisibility()` 為真；收合軌道的展開按鈕則在兩種版型皆渲染且可見（34×34），無法以自身可見性區分版型。漢堡按鈕存在且 `typeof checkVisibility === 'function' && checkVisibility()` 為真時略過點擊且不消耗收合期（`_hasClickedThisEpisode` 與 `_lastClickAt` 皆不變），同一收合期內漢堡按鈕一旦變為不可見即點擊；缺少 `checkVisibility` 方法的漢堡按鈕不阻擋點擊。窄版型下 DeepSeek 會在任何展開後約 0.5–1.2 秒自行收回側欄，因此自動開啟不在該版型點擊。
-- **迴圈保險**：若新的收合期在上一次點擊後未滿 1500ms（`RECOLLAPSE_LOOP_WINDOW_MS`）即開始，且其間沒有 `window` `resize` 事件，設定 `_isSuppressedUntilResize` 並停止點擊；下一次 `resize` 解除保險並清除上次點擊時間。此保險避免窄螢幕下 DeepSeek 立即再收合時與本模組形成開合迴圈。
-- **行為**：使用者手動收合側欄也會開始新的收合期並再次點擊，因此開啟此功能等同讓側欄保持開啟。DeepSeek 在窄螢幕下於收合、展開、再收合之間重用同一個軌道按鈕節點、只改寫 wrapper 的 `className`，因此以收合期而非 DOM 節點判定是否已點擊。
+- **Collapsed episode**: The collapsed state is read from whether the sidebar wrapper (`SIDEBAR_WRAPPER_SELECTOR`, `div:has(> div > .ds-scroll-area > .ds-scroll-area)`) matches `SIDEBAR_WRAPPER_COLLAPSED_SELECTOR` from the Sidebar block of `content/ds-selectors.js` (the wrapper plus `:has(> div:nth-child(2))`, i.e. the collapse rail is present as a second direct child), checked with `wrapper.matches(...)`. An episode starts when the wrapper matches that selector and ends when it stops matching; `_scanExisting()` resets `_hasClickedThisEpisode` while not collapsed, and clicks at most once per episode.
+- **Observer**: While active, a `MutationObserver` (`childList`, `subtree`, `attributes` with `attributeFilter: ['class']`) on `document.body` rescans the whole page on every mutation batch; the button's icon path can be inserted after the button node, and DeepSeek's width breakpoints re-collapse the sidebar by rewriting only the wrapper's `class`, so checking only added nodes is not enough. Errors thrown by a scan are logged with `console.error('[DSS] auto-open-sidebar:', err)`.
+- **Clicking**: When the current episode has not been clicked yet, it dispatches the bubbling `dss:react-click` custom event on the button matched by `DSstudio.Selectors.SIDEBAR_OPEN_BUTTON_SELECTOR`; the [React Click Bridge](#react-click-bridge) calls the button's React `onClick` (falling back to `element.click()` when there is no React `onClick`).
+- **No click in the narrow layout** (v4.36.3): Each scan first looks up DeepSeek's header hamburger button with `SIDEBAR_HAMBURGER_BUTTON_SELECTOR` (`div.ds-button--xl[role="button"]:has(path[d^="M17.2027"])`) from the Sidebar block of `content/ds-selectors.js`. The hamburger is mounted in both the desktop and narrow layouts, but its `checkVisibility()` is true only in the narrow layout (about 768px and below); the collapsed rail's open button is rendered and visible (34×34) in both layouts, so its own visibility cannot tell the layouts apart. When the hamburger exists and `typeof checkVisibility === 'function' && checkVisibility()` is true, the click is skipped without consuming the episode (neither `_hasClickedThisEpisode` nor `_lastClickAt` changes), so the button is clicked once the hamburger becomes hidden within the same episode; a hamburger lacking the `checkVisibility` method does not block the click. In the narrow layout DeepSeek re-closes the sidebar by itself about 0.5–1.2 s after any open, which is why auto-open does not click there.
+- **Loop breaker**: If a new collapsed episode begins less than 1500ms after the previous click (`RECOLLAPSE_LOOP_WINDOW_MS`) with no `window` `resize` event in between, it sets `_isSuppressedUntilResize` and stops clicking; the next `resize` lifts the suppression and clears the last click time. This prevents an open-collapse loop with DeepSeek re-collapsing immediately at narrow widths.
+- **Behaviour**: A manual collapse by the user also starts a new episode and is clicked again, so enabling the feature effectively keeps the sidebar open. At narrow widths DeepSeek reuses the same rail button node across collapse, open, and re-collapse and only rewrites the wrapper's `className`, so whether a click already happened is tracked per episode rather than per DOM node.
 
-### 按鈕定位
+### Button Location
 
-`content/ds-selectors.js` 側欄區塊的 `SIDEBAR_OPEN_BUTTON_SELECTOR`：
+`SIDEBAR_OPEN_BUTTON_SELECTOR` in the Sidebar block of `content/ds-selectors.js`:
 
 ```
 div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.67272"])
 ```
 
-- **為何以圖示 path 區分**：此按鈕位於 DeepSeek 的收合軌道（`SIDEBAR_NATIVE_COLLAPSED_SELECTOR`，wrapper `> div:not(:has(.ds-scroll-area))`），與搜尋、新對話按鈕相鄰，三者的 class 字串完全相同，只有圖示 path 能區分展開側欄按鈕。
-- **排除的變體**：展開狀態下的側欄切換按鈕使用 `ds-button--iconLabelTertiary`，行動版漢堡選單按鈕使用 `ds-button--xl` 且圖示 path 不同，兩者皆不符合此選擇器。
+- **Why the icon path**: The button sits in DeepSeek's collapsed rail (`SIDEBAR_NATIVE_COLLAPSED_SELECTOR`, wrapper `> div:not(:has(.ds-scroll-area))`) next to the search and new-chat buttons, and all three share the identical class string, so only the icon path distinguishes the open-sidebar button.
+- **Excluded variants**: The expanded-state sidebar toggle uses `ds-button--iconLabelTertiary`, and the mobile hamburger button uses `ds-button--xl` with a different icon path, so neither matches this selector.
 
-### 載入順序
+### Load Order
 
-manifest 中 `content/auto-open-sidebar.js` 緊接 `content/auto-expand-messages.js` 之後載入，晚於 `content/ds-selectors.js` 與 `content/feature-toggle.js`；`start()` 在 `DSSFeatureToggle` 缺席時以 `console.warn` 記錄並略過註冊。
+In the manifest, `content/auto-open-sidebar.js` loads right after `content/auto-expand-messages.js`, after `content/ds-selectors.js` and `content/feature-toggle.js`; `start()` logs a `console.warn` and skips registration when `DSSFeatureToggle` is absent.
 
-## 自動複製 (AutoCopy)
+## Auto Copy (AutoCopy)
 
-自動複製的行為規則見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，儲存鍵見 [STORAGE.md](STORAGE.md) ；本節說明兩個檔案的分工與實作細節。
+The behavior rules for auto copy are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370), and the storage keys are in [STORAGE.md](STORAGE.md); this section covers the split between the two modules and their implementation details.
 
-### 模組分工
+### Module Split
 
-- **`content/reply-completion.js`**（`DSstudio.ReplyCompletion`）：純判斷模組，不修改 DOM。`newToolbarsFromRecords(records)` 回傳本批次新出現、依文件順序且不重複的訊息工具列；`isStoppedReply(toolbar)` 的檢查範圍為 `toolbar.parentElement`。判定規則與實作限制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
-- **`content/auto-copy.js`**（`DSstudio.AutoCopy`）：持有兩個閘門 `_isReplyOn`、`_isCodeOn` 與觀察器，負責找出目標按鈕與派送事件。
-- **`content/auto-copy.relay.js`**（`DSSAutoCopyRelay`，v4.39.0）：isolated world 的轉交模組；`notePending()` 登記待轉交項目，`start()` 註冊唯一的 `dss:auto-copy-captured` 監聽器並送出 `DSS_COPY_TO_CLIPBOARD`；它不直接呼叫剪貼簿 API。
-- **`background/clipboard-routes.js`**（`DSSClipboardRoutes`，v4.39.0）：接收 `DSS_COPY_TO_CLIPBOARD` 並委託 offscreen 文件寫入，訊息路由見 [ARCHITECTURE.md](../ARCHITECTURE.md#剪貼簿寫入訊息路由-clipboard-write-v4390) 。
-- **`offscreen/clipboard-offscreen.js`**（`DSSClipboardOffscreen`，v4.39.0）：offscreen 文件內以 `document.execCommand('copy')` 寫入並回覆 `{ ok }`。
-- **`utils/clipboard-permission.js`**（`DSSClipboardPermission`，v4.39.0）：popup 端對 `clipboardWrite` 與 `offscreen` 的權限查詢與請求包裝，開關流程見 [POPUP.md](POPUP.md) 與 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+- **`content/reply-completion.js`** (`DSstudio.ReplyCompletion`): a pure-decision module that never modifies the DOM. `newToolbarsFromRecords(records)` returns the message toolbars newly appeared in the batch, in document order and without duplicates; `isStoppedReply(toolbar)` checks the scope `toolbar.parentElement`. The completion rules and implementation constraints are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **`content/auto-copy.js`** (`DSstudio.AutoCopy`): holds the two gates `_isReplyOn` and `_isCodeOn` and the observer, and finds the target buttons and dispatches the events.
+- **`content/auto-copy.relay.js`** (`DSSAutoCopyRelay`, v4.39.0): the isolated-world relay module; `notePending()` records a pending relay entry, and `start()` registers the single `dss:auto-copy-captured` listener and sends `DSS_COPY_TO_CLIPBOARD`; it never calls the clipboard API itself.
+- **`background/clipboard-routes.js`** (`DSSClipboardRoutes`, v4.39.0): receives `DSS_COPY_TO_CLIPBOARD` and delegates the write to the offscreen document; the message route is described in [ARCHITECTURE.md](../ARCHITECTURE.md#clipboard-write-message-route-clipboard-write-v4390).
+- **`offscreen/clipboard-offscreen.js`** (`DSSClipboardOffscreen`, v4.39.0): writes with `document.execCommand('copy')` inside the offscreen document and replies `{ ok }`.
+- **`utils/clipboard-permission.js`** (`DSSClipboardPermission`, v4.39.0): the popup-side permission check and request wrapper for `clipboardWrite` and `offscreen`; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
 
-### 閘控 (registerFeatureToggle)
+### Gating (registerFeatureToggle)
 
-`start()` 註冊兩個閘門，`onEnable` / `onDisable` 設定對應閘門並同步觀察器。各閘門的生效條件見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，鍵名定義於 `utils/storage-manager.keys.js`。
+`start()` registers the two gates, and `onEnable` / `onDisable` set the matching gate and sync the observer. The conditions that activate each gate are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370), and the key names are defined in `utils/storage-manager.keys.js`.
 
-### 觀察與觸發
+### Observing and Triggering
 
-- **觀察器**：`content/auto-copy.js` 以 `body` 為根節點，因為新對話頁尚無訊息列表，切換對話時列表可能整個重新掛載；「新出現」的判斷已由 `ReplyCompletion` 限定於虛擬列表項目內。掛載與中斷條件見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
-- **批次處理**：每批 `MutationRecord` 先交給 `newToolbarsFromRecords`，再略過 `isStoppedReply` 為真的工具列。回覆按鈕以 `ROLE_BUTTON_DIV_SELECTOR` 定位，程式碼區塊按鈕則在工具列所屬的 `VIRTUAL_ITEM_KEY_SELECTOR` 項目內以 `.md-code-block-banner` 定位；選取規則與順序見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
-- **點擊**：派送機制見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ，橋接端與失焦補寫的擷取見 [React 點擊橋接](#react-點擊橋接-react-click-bridge) 。
-- **錯誤處理**：`MutationObserver` 回呼以 try/catch 包覆，處理拋出的錯誤以 `console.error('[DSS] auto-copy:處理新工具列失敗:', error)` 記錄並維持觀察。
+- **Observer**: `content/auto-copy.js` roots the observer at `body` because a new-chat page has no message list yet and switching chats may remount the whole list; the "newly appeared" decision is already restricted to virtual-list items by `ReplyCompletion`. Attach and detach conditions are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **Batch Handling**: Each batch goes to `newToolbarsFromRecords` first, then toolbars for which `isStoppedReply` is true are skipped. The reply button is located by `ROLE_BUTTON_DIV_SELECTOR`, and code block buttons by `.md-code-block-banner` inside the `VIRTUAL_ITEM_KEY_SELECTOR` item that owns the toolbar; the selection rules and order are in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **Clicking**: The dispatch mechanism is in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370), and the bridge that handles it, together with the capture for the unfocused fallback write, is described in [React Click Bridge](#react-click-bridge).
+- **Error Handling**: The `MutationObserver` callback is wrapped in try/catch; an error thrown while handling is logged as `console.error('[DSS] auto-copy:處理新工具列失敗:', error)` and observation continues.
 
-### 載入順序
+### Load Order
 
-`start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。`content/auto-copy.relay.js`（v4.39.0）的 `start()` 在 `DSS_COPY_TO_CLIPBOARD` 缺席時拋出具名的載入順序錯誤；`content/auto-copy.js` 在轉交模組未載入時略過登記，分頁有焦點時的複製不受影響。
-## 回覆完成通知 (ReplyNotification)
+`start()` throws a named load-order error when `DSSFeatureToggle`, `DSstudio.ReplyCompletion`, or `KEYS` is absent; the manifest position is in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370). `start()` in `content/auto-copy.relay.js` (v4.39.0) throws a named load-order error when `DSS_COPY_TO_CLIPBOARD` is absent; when the relay module is not loaded, `content/auto-copy.js` skips the registration, and copying while the tab is focused is unaffected.
+## Reply-Complete Notification (ReplyNotification)
 
-回覆完成通知的行為規則見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) ，儲存鍵見 [STORAGE.md](STORAGE.md) ；本節說明內容腳本、background 路由與 popup 權限包裝的分工與實作細節。
+The behavior rules for the reply-complete notification are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380), and the storage keys are in [STORAGE.md](STORAGE.md); this section covers the split between the content script, the background route, and the popup permission wrapper, and their implementation details.
 
-### 模組分工
+### Module Split
 
-- **`content/reply-notification.js`**（`DSstudio.ReplyNotification`）：持有閘門 `_isOn` 與觀察器，借用 `DSstudio.ReplyCompletion`（見 [自動複製](#自動複製-autocopy) ）判斷哪些工具列是新完成的回覆，並在分頁不在前景時送出訊息；它不直接呼叫 `chrome.notifications`。
-- **`background/notification-routes.js`**（`DSSNotificationRoutes`）：接收 `DSS_SHOW_NOTIFICATION` 並顯示通知，訊息路由見 [ARCHITECTURE.md](../ARCHITECTURE.md#回覆完成通知訊息路由-reply-notification-v4380) 。
-- **`utils/notification-permission.js`**（`DSSNotificationPermission`）：popup 端的權限查詢與請求包裝，開關流程見 [POPUP.md](POPUP.md) 與 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+- **`content/reply-notification.js`** (`DSstudio.ReplyNotification`): holds the gate `_isOn` and the observer, borrows `DSstudio.ReplyCompletion` (see [Auto Copy](#auto-copy-autocopy)) to decide which toolbars are newly completed replies, and sends a message when the tab is not in the foreground; it never calls `chrome.notifications` directly.
+- **`background/notification-routes.js`** (`DSSNotificationRoutes`): receives `DSS_SHOW_NOTIFICATION` and shows the notification; the message route is described in [ARCHITECTURE.md](../ARCHITECTURE.md#reply-notification-message-route-reply-notification-v4380).
+- **`utils/notification-permission.js`** (`DSSNotificationPermission`): the popup-side permission check and request wrapper; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
 
-### 閘控 (registerFeatureToggle)
+### Gating (registerFeatureToggle)
 
-`start()` 註冊單一閘門，`onEnable` / `onDisable` 設定 `_isOn` 並同步觀察器。生效條件見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) ，鍵名定義於 `utils/storage-manager.keys.js`。
+`start()` registers a single gate, and `onEnable` / `onDisable` set `_isOn` and sync the observer. The activation conditions are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380), and the key name is defined in `utils/storage-manager.keys.js`.
 
-### 觀察與通知
+### Observing and Notifying
 
-- **觀察器**：`content/reply-notification.js` 以 `body` 為根節點，理由同 [自動複製](#自動複製-autocopy) 的觀察器。掛載與中斷條件見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
-- **批次處理**：每批 `MutationRecord` 先交給 `newToolbarsFromRecords`，再略過 `isStoppedReply` 為真的工具列，剩餘數量即本批新完成的回覆數；前景判斷於批次處理當下進行。通知條件見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
-- **訊息內容**：`title` 與 `body` 於送出時取得，隨目前語系變化；i18n 鍵與文案見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
-- **錯誤處理**：`chrome.runtime.sendMessage` 失敗時記錄 `console.error('[DSS] reply-notification:送出通知訊息失敗:', error)`，處理路徑見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。`MutationObserver` 回呼以 try/catch 包覆，處理拋出的錯誤以 `console.error('[DSS] reply-notification:處理新工具列失敗:', error)` 記錄並維持觀察。
+- **Observer**: `content/reply-notification.js` roots the observer at `body` for the same reason as the observer in [Auto Copy](#auto-copy-autocopy). Attach and detach conditions are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **Batch Handling**: Each batch goes to `newToolbarsFromRecords` first, then toolbars for which `isStoppedReply` is true are skipped, and the remaining count is the number of newly completed replies in the batch; the foreground check runs while the batch is handled. The notification rule is in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **Message Content**: `title` and `body` are read at send time, so they follow the current locale; the i18n keys and copy are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **Error Handling**: On failure, `chrome.runtime.sendMessage` logs `console.error('[DSS] reply-notification:送出通知訊息失敗:', error)`; the handling path is in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380). The `MutationObserver` callback is wrapped in try/catch, and an error thrown while handling is logged as `console.error('[DSS] reply-notification:處理新工具列失敗:', error)` and observation continues.
 
-### 載入順序
+### Load Order
 
-`start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+`start()` throws a named load-order error when `DSSFeatureToggle`, `DSstudio.ReplyCompletion`, or `KEYS` is absent; the manifest position is in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).

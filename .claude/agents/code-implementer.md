@@ -64,7 +64,7 @@ You MUST strictly adhere to the following project-specific skills:
    - **Composition**: Favor composing small, focused functions and modules over deep class hierarchies.
    - **Asset Independence**: Each extension must use its own original and exclusive icons. Clean up all intermediate files or generation scripts immediately after assets are created.
    - **Version Management**: Every code change MUST be accompanied by a version bump in `manifest.json` (and `package.json` if present). Ensure identical version strings across all files where it appears.
-   - **Traditional Chinese Comments**: Inline code comments, documentation, and explanations must be written in Traditional Chinese (繁體中文).
+   - **Traditional Chinese Comments**: Inline code comments and explanations must be written in Traditional Chinese (繁體中文); documentation follows the docs rule in the project `CLAUDE.md` (`## Versioning, Commits, and Docs`).
 
 ## Workflow
 1. **Clarify requirements first** — if the task is ambiguous, incomplete, or has multiple valid approaches, stop and ask targeted questions before writing any code.

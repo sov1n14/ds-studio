@@ -25,7 +25,7 @@ DS studio is a **Chrome extension** that enhances the experience of using **[cha
 | **Edit Message Cleanup** | Strips injected prompt wrapper tags when editing a sent message so you see only your original text |
 | **Mobile Support** | Sidebar swipe gesture to solve the lack of quick sidebar switching on mobile |
 
-For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
+For detailed usage instructions, see the [Feature Guide](docs/FEATURES.md).
 
 ## Installation
 
@@ -45,13 +45,13 @@ For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
 
 ## Related Documents
 
-| Document | Language | Description |
-|-|-|-|
-| [Feature Guide](docs/en/FEATURES.md) | English | Complete usage instructions and feature introduction |
-| [Privacy Policy](PRIVACY.md) | English | Data handling and privacy practices |
-| [Specification](docs/SPEC.md) | Chinese | Technical specification and module index |
-| [Architecture](docs/ARCHITECTURE.md) | Chinese | Architecture design and data flow |
-| [Changelog](docs/CHANGELOG.md) | Chinese | Version history |
+| Document | Description |
+|-|-|
+| [Feature Guide](docs/FEATURES.md) | Complete usage instructions and feature introduction |
+| [Privacy Policy](PRIVACY.md) | Data handling and privacy practices |
+| [Specification](docs/SPEC.md) | Technical specification and module index |
+| [Architecture](docs/ARCHITECTURE.md) | Architecture design and data flow |
+| [Changelog](docs/CHANGELOG.md) | Version history |
 
 ## Development Technologies
 

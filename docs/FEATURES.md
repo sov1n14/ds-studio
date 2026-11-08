@@ -1,360 +1,360 @@
-# DS studio 功能指南
+# DS studio Feature Guide
 
-## 目錄
+## Table of Contents
 
-- [管理提示詞組](#管理提示詞組)
-- [全域提示詞](#全域提示詞)
-- [使用提示詞注入](#使用提示詞注入)
-- [對話綁定提示詞組](#對話綁定提示詞組)
-- [頁面內快速切換 Overlay](#頁面內快速切換-overlay)
-- [臨時對話](#臨時對話)
-- [UI 調整功能](#ui-調整功能)
-- [回到頂部按鈕](#回到頂部按鈕)
-- [行動裝置側欄滑動手勢](#行動裝置側欄滑動手勢)
-- [自動重試與自動繼續生成](#自動重試與自動繼續生成)
-- [自動開啟側欄](#自動開啟側欄)
-- [自動複製回覆與程式碼區塊](#自動複製回覆與程式碼區塊)
-- [回覆完成通知](#回覆完成通知)
-- [匯出對話](#匯出對話)
-- [引用回覆](#引用回覆)
-- [編輯訊息清理](#編輯訊息清理)
-- [系統時間注入](#系統時間注入)
-- [恢復被審查的回覆](#恢復被審查的回覆)
-- [備份與還原設定](#備份與還原設定)
-- [雲端同步衝突處理](#雲端同步衝突處理)
-- [主開關連動](#主開關連動)
-- [舊版資料遷移](#舊版資料遷移)
+- [Managing Prompt Groups](#managing-prompt-groups)
+- [Global Prompt](#global-prompt)
+- [Using Prompt Injection](#using-prompt-injection)
+- [Conversation-Bound Prompt Groups](#conversation-bound-prompt-groups)
+- [In-Page Quick Switch Overlay](#in-page-quick-switch-overlay)
+- [Temporary Conversation](#temporary-conversation)
+- [UI Adjustment Features](#ui-adjustment-features)
+- [Back to Top Button](#back-to-top-button)
+- [Mobile Sidebar Swipe Gesture](#mobile-sidebar-swipe-gesture)
+- [Auto Retry and Auto Continue](#auto-retry-and-auto-continue)
+- [Auto Open Sidebar](#auto-open-sidebar)
+- [Auto Copy Reply and Code Blocks](#auto-copy-reply-and-code-blocks)
+- [Reply-Complete Notification](#reply-complete-notification)
+- [Exporting Conversations](#exporting-conversations)
+- [Quote Reply](#quote-reply)
+- [Edit Message Cleanup](#edit-message-cleanup)
+- [System Time Injection](#system-time-injection)
+- [Restoring Censored Replies](#restoring-censored-replies)
+- [Backup and Restore Settings](#backup-and-restore-settings)
+- [Cloud Sync Conflict Handling](#cloud-sync-conflict-handling)
+- [Master Switch Linkage](#master-switch-linkage)
+- [Legacy Data Migration](#legacy-data-migration)
 
 ---
 
-## 管理提示詞組
+## Managing Prompt Groups
 
-提示詞組（Prompt Group）是 DS studio 的核心功能，讓您針對不同場景（程式碼審查、翻譯、寫作等）建立多組提示詞，並快速切換。
+Prompt Groups are the core feature of DS studio, allowing you to create multiple sets of prompts for different scenarios (code review, translation, writing, etc.) and switch between them quickly.
 
-1. 點擊瀏覽器右上角的擴充功能圖示開啟彈出選單。
-2. 在「Prompt Group」下拉選單中選取要使用的提示詞組，或保持空白選項不使用任何提示詞組。
-3. 下拉選單支援：
-   - **搜尋篩選**：輸入關鍵字即可即時過濾提示詞組名稱。
-   - **拖曳排序**：拖曳提示詞組左側的拖曳把手即可調整順序。
-4. 下拉選單右側的操作按鈕：
-   - **+**：新增提示詞組（會跳出命名對話框，名稱為必填）。
-   - **鉛筆**：編輯當前選中提示詞組的內容；未選中任何提示詞組時此按鈕停用。
-   - 各提示詞組懸浮時顯示圖釘（設為預設）與 ✕（刪除，需確認，hover 提示「刪除提示詞」）兩顆按鈕。
-5. **設定預設提示詞組（圖釘，v4.18.0）**：點擊某一組的圖釘即把它設為預設，圖釘會亮起並持續顯示，不必懸浮也看得到。之後每次開啟**新對話**（新分頁或按新增對話），系統都會自動預選這一組。
-   - 只有新對話會套用。切換到已存在的對話（網址帶有對話 ID）時一律不動它原本的提示詞組 —— 不論那個對話先前選過、或從來沒選過。
-   - 同一時間只能有一組預設。點另一組的圖釘會直接把預設換過去；再點一次已亮起的圖釘則取消預設，新對話恢復為不預選。
-   - 刪除已設為預設的提示詞組時，預設會一併清空。
-   - 預設會跟著「匯出設定」的備份檔一起走，匯入備份後同樣會還原。
-6. 提示詞內容與名稱透過鉛筆按鈕在獨立的 1280×720 編輯視窗中編輯，享有寬敞的編輯空間並維持自動儲存。視窗標題處的名稱輸入框會自動聚焦但不全選內容（v4.18.2），游標落在原名稱尾端，可直接續打或自行選取修改；重複點擊鉛筆按鈕會聚焦並重新載入既有的編輯視窗，使名稱輸入框每次都重新聚焦。按 `Esc` 可關閉編輯視窗（未存內容會先自動儲存）。切回 DeepSeek 分頁時，開啟中的編輯視窗會自動關閉（v4.29.0）—— 編輯視窗因此不會留在背景堆疊裡，`Esc` 與視窗右上角的關閉鈕同樣照舊可用；三種關閉方式都先寫入未存內容，不會遺失編輯結果。
-7. 系統允許刪除所有自訂提示詞組，下拉選單會永遠保留一個空白選項作為預設；懸浮於此空白選項時會顯示 ✕（刪除全部提示詞組，需確認）按鈕，可一次清空所有自訂提示詞組。
+1. Click the extension icon in the top-right corner of your browser to open the popup menu.
+2. In the **Prompt Group** dropdown, select the prompt group you want to use, or keep the blank option to use no prompt group.
+3. The dropdown supports:
+   - **Search Filtering**: Type keywords to filter prompt group names in real time.
+   - **Drag-to-Reorder**: Drag the handle on the left side of a prompt group to adjust its order.
+4. Action buttons to the right of the dropdown:
+   - **+**: Add a new prompt group (a naming dialog appears; name is required).
+   - **Pencil**: Edit the currently selected prompt group's content; disabled when no prompt group is selected.
+   - When hovering over a prompt group, a **pin** (set as default) and a **✕** (delete, with confirmation, tooltip "Delete Prompt") button appear.
+5. **Setting a default prompt group (pin, v4.18.0)**: Click a group's pin to make it the default. The pin lights up and stays visible without hovering. From then on, every **new conversation** (a new tab, or the new-chat button) opens with that group preselected.
+   - New conversations only. Switching to a conversation that already exists (its chat id is in the URL) never changes its prompt group — whether it had one bound before or never had one.
+   - Only one default at a time. Clicking another group's pin moves the default there; clicking the lit pin again removes the default, and new conversations go back to preselecting nothing.
+   - Deleting the group that is currently the default also clears the default.
+   - The default travels with the **Export Settings** backup file and is restored on import.
+6. Click the pencil button to edit prompt content and name in a dedicated 1280×720 editor window, providing ample editing space with auto-save. The name input in the window header is auto-focused with its text left unselected (v4.18.2) — the caret sits at the end of the existing name, so typing appends instead of replacing it; repeatedly clicking the pencil button focuses and reloads the existing editor window so the name input is re-focused every time. Press `Esc` to close the editor window (unsaved content is auto-saved first). Switching back to the DeepSeek tab also closes any open editor window automatically (v4.29.0), so editor windows never pile up in the background — `Esc` and the window's close button still work as before; all three close methods save unsaved content first, so nothing is lost.
+7. The system allows deleting all custom prompt groups: the dropdown always retains a blank option as the default, and hovering over it reveals a **✕** (delete all prompt groups, with confirmation) button that clears every custom prompt group at once.
 
-## 全域提示詞
+## Global Prompt
 
-全域提示詞（Global Prompt）是一段在所有對話中都會自動附加的提示文字，與各對話的提示詞組獨立運作。
+The Global Prompt is a piece of text that is automatically appended to every conversation, operating independently from per-conversation prompt groups.
 
-- **設定方式**：在彈出選單的「Global Prompt」區域中點擊鉛筆按鈕，在獨立編輯視窗中輸入內容。
-- **逐提示詞組的獨立開關（v4.20.0）**：卡片右側的開關控制全域提示詞是否注入，且**每個提示詞組各自記住自己的開關狀態**。例如提示詞組 A 開啟、提示詞組 B 關閉時，切到 A 送出的訊息會帶上全域提示詞，切到 B 則不會。切換提示詞組時開關會自動反映該組的設定。此設定隨提示詞組跨裝置同步。
-- **內容仍為單一份**：逐組獨立的只有開關，全域提示詞的**內容**始終是所有提示詞組共用的同一段文字。
-- **未選取提示詞組時**：選取空白選項或身處未綁定的對話時，改用裝置層級的開關狀態。
-- **既有提示詞組**：升級前既有的提示詞組一律視為開啟，行為與升級前一致。
-- **優先權**：主開關（右上角）優先權最高 — 主開關關閉時無論全域開關狀態為何皆不注入。
+- **How to Set**: In the popup menu's **Global Prompt** section, click the pencil button to open the dedicated editor window.
+- **Per-Prompt-Group Toggle (v4.20.0)**: The switch on the right side of the card controls whether the global prompt is injected, and **each prompt group remembers its own switch state**. With prompt group A on and prompt group B off, messages sent under A carry the global prompt while messages under B do not. Switching prompt groups updates the switch to reflect that group's own setting. This setting syncs across devices along with the prompt group.
+- **The Content Is Still Shared**: Only the toggle is per-group — the global prompt **content** remains a single shared string used by every prompt group.
+- **When No Prompt Group Is Selected**: With the blank option selected, or in an unbound conversation, the device-level toggle state is used instead.
+- **Existing Prompt Groups**: Prompt groups created before the upgrade are treated as enabled, matching the pre-upgrade behavior.
+- **Priority**: The master switch (top-right) has the highest priority — when the master switch is off, no injection occurs regardless of the global switch state.
 
-## 使用提示詞注入
+## Using Prompt Injection
 
-1. 前往 `chat.deepseek.com`，正常輸入您的訊息並發送。
-2. 擴充功能會在背景自動將當前選取的提示詞（以及全域提示詞）加入訊息前方。
-3. 隨時可透過下拉選單切換提示詞組，無需重新整理頁面。
-4. 不同對話可獨立綁定不同的提示詞組 — 系統會根據當前對話的 UUID 自動還原您上次為該對話設定的提示詞組。
-5. 不同瀏覽器分頁（Tab）的提示詞組設定互不影響 — 每個分頁獨立記憶當前選取的提示詞組。
-6. 新對話第一次發送訊息後，系統會自動將當前選取的提示詞綁定到新產生的對話 UUID。
+1. Go to `chat.deepseek.com`, type your message normally, and send it.
+2. The extension automatically prepends the currently selected prompt (and the global prompt, if enabled) to your message in the background.
+3. You can switch prompt groups via the dropdown at any time without refreshing the page.
+4. Different conversations can be independently bound to different prompt groups — the system automatically restores the prompt group you last set for a conversation based on its UUID.
+5. Different browser tabs operate independently — each tab remembers its currently selected prompt group.
+6. When you send the first message in a new conversation, the system automatically binds the currently selected prompt group to the newly generated conversation UUID.
 
-### 不使用任何提示詞組
+### Using No Prompt Group
 
-在下拉選單中選取空白選項即可。此時提示詞組的鉛筆編輯按鈕會呈現停用狀態，系統不會注入任何提示詞組內容。
-若您有設定「全域提示詞」且其開關為開啟狀態，該內容仍會被注入 —— 此時因未選取任何提示詞組，開關取用的是裝置層級的狀態。
+Select the blank option in the dropdown. The pencil button for editing the prompt group will be disabled, and the system will not inject any prompt group content.
+If you have set a Global Prompt with its toggle enabled, that content will still be injected — with no prompt group selected, the toggle falls back to the device-level state.
 
-## 對話綁定提示詞組
+## Conversation-Bound Prompt Groups
 
-每個對話可以獨立綁定不同的提示詞組：
+Each conversation can be independently bound to a different prompt group:
 
-- 切換對話時，下拉選單會自動切換到該對話綁定的提示詞組。
-- 新對話第一次發送訊息後，系統會自動將當前選取的提示詞綁定到新產生的對話 UUID。
-- 不同瀏覽器分頁（Tab）各自獨立：每個分頁可獨立設定不同的提示詞組，互不影響。
+- When switching conversations, the dropdown automatically switches to the bound prompt group.
+- After sending the first message in a new conversation, the system automatically binds the currently selected prompt group to the new conversation UUID.
+- Different browser tabs are independent: each tab can set a different prompt group without affecting others.
 
-## 頁面內快速切換 Overlay
+## In-Page Quick Switch Overlay
 
-在 DeepSeek 對話頁面頂端標題列中央直接顯示提示詞組下拉選單，無需開啟彈出選單即可快速切換提示詞組：
+A prompt group dropdown is displayed directly in the center of the title bar at the top of the DeepSeek conversation page, allowing quick switching without opening the popup menu:
 
-- 與彈出選單雙向同步 — 任一端的變更立即反映到另一端。
-- 行動版（< 768px）採用 gap 模式定位於按鈕之間。
-- 內建自動穩定機制：頁面載入時持續校正位置直到版面完全安定，確保重新整理後不會卡在錯誤的早期量測值。
+- **Bidirectional Sync**: Changes made in either the overlay or the popup menu are immediately reflected in the other.
+- On mobile (< 768px), uses gap-mode positioning between buttons.
+- Built-in auto-stabilization: continuously adjusts position on page load until the layout is fully settled, ensuring it does not get stuck at an incorrect early measurement after a refresh.
 
-## 臨時對話
+## Temporary Conversation
 
-在 `chat.deepseek.com` 首頁，浮動按鈕列（主輸入框上方四層的 div，`FLOATING_BUTTON_BAR_SELECTOR`）下方 38px 處會顯示一組「開關 + 臨時對話」控制項（開關在左、文字在右）：
+On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control appears 38px below the floating button bar (the div four levels above the main input, `FLOATING_BUTTON_BAR_SELECTOR`) (toggle on the left, label on the right):
 
-- **用途**：開啟後，**在首頁送出訊息「新建」的對話**會被標記為臨時對話；當您離開該臨時對話時，系統會自動呼叫 DeepSeek 刪除 API 將其刪除，適合不希望保留紀錄的臨時提問。
-- **只刪除新建的對話**：是否為臨時對話，以「是否呼叫了新建對話 API（`/api/v0/chat_session/create`）」判定。**從清單點開的歷史對話永遠不會被標記、也永遠不會被刪除**——即使開關開啟，進入並離開歷史對話也不會誤刪。
-- **預設關閉**：開關預設為關閉狀態。關閉時不會標記任何新對話。
-- **關閉開關後的已標記對話**：若您在開關開啟時建立了臨時對話，之後才關閉開關，該對話仍會在您離開時被刪除（標記跟隨對話本身）；關閉開關只停止「未來」新建對話被標記。
-- **開關僅存在於首頁**：離開首頁（網址不是 `chat.deepseek.com/`）時，開關會自動從畫面移除；回到首頁時自動重新顯示。移除開關不會改變開關的開啟／關閉狀態。
-- **狀態保存**：兩者的保存範圍不同。
-  - **開關狀態**儲存於 `chrome.storage.local`（鍵值 `dss-temporary-chat-enabled`），因此會**跨分頁與跨瀏覽器重啟保留**：您上次把它開著，下次開啟瀏覽器進入 DeepSeek 時它仍是開著的。同一時間開啟的多個分頁也會即時同步為同一個狀態。
-  - **目前追蹤中的臨時對話**儲存於該分頁的 `sessionStorage`（鍵值 `dss-temporary-chat-uuid`），僅在該分頁的工作階段內有效（含頁面內導航與重新整理），分頁關閉即消失。
-- **觸發刪除的情境**（僅針對已標記的臨時對話）：
-  - 切換到其他對話、回首頁、上一頁／下一頁等離開該臨時對話的導航。
-  - 於網址列輸入「其他」網址、點擊外部連結、關閉分頁或瀏覽器。
-- **不會刪除的情境**：
-  - 重新整理頁面（F5、重新整理按鈕、Ctrl+R／Cmd+R）。
-  - 擴充功能更新或重新載入後，點擊頁面上「DS Studio 已更新」提示中的「重新整理」按鈕重新載入頁面（v4.34.2）。若改為直接關閉分頁，臨時對話仍會被刪除。
-  - 導向「目前所在的網址」（於網址列輸入目前網址並按 Enter，等同重新進入）。
-  - 進入或離開非臨時的歷史對話。
-- **與主開關的關係**：首頁的此開關列隨主開關顯示與隱藏，主開關關閉時移除、開啟時重新注入；開關的啟用值與離開後刪除邏輯不受主開關控制，主開關關閉期間維持最後的值。
+- **Purpose**: When turned on, any **new conversation created from the homepage** is marked as temporary. When you leave that temporary conversation, the extension automatically calls the DeepSeek deletion API to remove it — ideal for one-off questions you do not want to keep.
+- **Only newly created conversations are deleted**: Whether a conversation is temporary is determined by whether the `POST /api/v0/chat_session/create` API was called. **Existing conversations opened from the history list are never marked and never deleted** — even with the toggle on, entering and leaving a history conversation does not delete it.
+- **Default off**: The toggle defaults to off. When off, no new conversations are marked.
+- **Already-marked conversations after turning off**: If you created temporary conversations while the toggle was on and then turn it off, those conversations are still deleted when you leave them (the mark belongs to the conversation itself). Turning off the toggle only stops **future** new conversations from being marked.
+- **Toggle exists only on the homepage**: When you leave the homepage (the URL is anything other than `chat.deepseek.com/`), the toggle is automatically removed from the page; returning to the homepage re-displays it. Removing the toggle does not change its on/off state.
+- **State persistence**: The toggle state and the tracked conversation are stored in different scopes.
+  - The **toggle state** is stored in `chrome.storage.local` (key `dss-temporary-chat-enabled`), so it **persists across tabs and browser restarts**: if you left it on last time, it is still on the next time you open the browser and visit DeepSeek. Multiple tabs open at the same time also sync to the same state in real time.
+  - The **currently tracked temporary conversation** is stored in the tab's `sessionStorage` (key `dss-temporary-chat-uuid`), valid only for that tab's session (including in-page navigation and page refresh); it is lost when the tab is closed.
+- **Scenarios that trigger deletion** (only for already-marked temporary conversations):
+  - Navigating to another conversation, returning to the homepage, back/forward navigation, or any other navigation away from the temporary conversation.
+  - Typing a different URL in the address bar, clicking an external link, closing the tab, or closing the browser.
+- **Scenarios that do NOT trigger deletion**:
+  - Page refresh (F5, the refresh button, Ctrl+R / Cmd+R).
+  - After the extension is updated or reloaded, clicking the "Refresh" button on the on-page "DS Studio has been updated" toast to reload the page (v4.34.2). Closing the tab instead still deletes the temporary conversation.
+  - Navigating to the current URL (typing the current URL in the address bar and pressing Enter, which is equivalent to re-entering the page).
+  - Entering or leaving a non-temporary history conversation.
+- **Relation to the master switch**: The homepage toggle row follows the master switch; it is removed when the master switch is off and re-injected when it turns on. The toggle's enabled value and the leave-then-delete logic are not controlled by the master switch and keep their last value while the master switch is off.
 
-### 跨裝置保護（v4.31.1）
+### Cross-Device Protection (v4.31.1)
 
-當您在某個分頁中使用臨時對話時，擴充功能會自動為該對話維持一份「租約」，防止其他裝置的補救機制在您仍在使用時誤刪該對話：
+When a temporary conversation is being used in a tab, the extension automatically maintains a lease for that conversation, preventing remediation mechanisms on other devices from deleting it while it is still in use:
 
-- **心跳續約**：追蹤開始後立即發送一次心跳，之後每 1 分鐘自動續約一次。心跳由內容腳本發送至 background service worker，由後者更新待刪佇列中該對話的租約時戳。
-- **租約存續時間（TTL）**：任何裝置的補救刪除流程在處理待刪項目時，會先檢查租約是否過期，過期門檻依「擁有裝置」而定。建立待刪項目的裝置套用 10 分鐘：僅當租約超過 10 分鐘未續約時才會執行刪除。10 分鐘設定為寬鬆值，以吸收 `chrome.storage.sync` 傳播延遲、背景分頁計時器節流與跨裝置時鐘偏移。
-- **擁有裝置規則（v4.34.2）**：每台裝置首次登記待刪項目時產生一組隨機裝置 ID，僅存於該裝置的 `chrome.storage.local`（永不同步），並寫入項目的 `ownerDeviceId`。其他裝置（以及未記錄擁有者的項目）須等到租約被明確釋放，或超過 24 小時未續約，才會刪除該對話。原因：一台閒置在別處的裝置（例如同一帳戶下的辦公室電腦）無法得知您是否仍在這台裝置上開著該對話，不應在您使用中時將其刪除。
-- **分頁解凍補發**：當分頁從背景回到前景（`visibilitychange`、`pageshow`），會立即補發一次心跳，避免租約因瀏覽器節流計時器而意外過期。
-- **自然停止**：分頁關閉、當機或被強制終止時，心跳自然停止，租約隨之到期。
-- **分頁防護**：補救掃描時，若本機仍有分頁正在顯示該對話，無論租約是否過期都會保留該對話並代為續約。
-- **已還原分頁交接（v4.33.2）**：Chrome「繼續瀏覽上次開啟的頁面」還原的分頁在離開追蹤中的臨時對話時，若本次 session 未擷取到 auth token，擴充功能將刪除作業交由 background service worker 處理，由下一次重試週期完成刪除。
+- **Heartbeat renewal**: An immediate heartbeat is sent when tracking begins, followed by automatic renewals every 1 minute. The heartbeat is sent from the content script to the background service worker, which updates the lease timestamp for that conversation in the pending-delete queue.
+- **Lease TTL**: Any device's remediation deletion process checks whether the lease has expired before processing a pending-delete item, and the expiry threshold depends on the owner device. The device that created the pending-delete item applies 10 minutes: deletion is performed only when the lease has gone unrenewed for more than 10 minutes. The 10 minutes are set generously to absorb `chrome.storage.sync` propagation delay, background tab timer throttling, and cross-device clock skew.
+- **Owner device rule (v4.34.2)**: Each device generates a random device ID the first time it registers a pending-delete item, stores it only in its own `chrome.storage.local` (never synced), and writes it to the item's `ownerDeviceId`. Other devices (and items with no recorded owner) delete the conversation only after the lease is explicitly released or has gone unrenewed for more than 24 hours. Reason: a device left idle elsewhere (for example an office computer on the same account) cannot know whether you still have the conversation open on this device, and must not delete it while you are using it.
+- **Tab unfreeze catch-up**: When the tab transitions from background to foreground (`visibilitychange`, `pageshow`), an immediate heartbeat is sent to prevent the lease from expiring due to browser timer throttling.
+- **Natural stop**: When the tab is closed, crashes, or is forcefully terminated, the heartbeat stops naturally and the lease expires on its own.
+- **Tab guard**: During a remediation scan, if a local tab is still showing the conversation, the scan keeps the conversation and renews its lease regardless of lease expiry.
+- **Restored tab hand-off (v4.33.2)**: When a tab restored by Chrome's "continue where you left off" navigates away from a tracked temporary conversation and no auth token was captured in this page session, the extension hands the deletion to the background service worker, which completes it within the next retry cycle.
 
-### 臨時對話的隱私保證涵蓋範圍
+### Privacy Guarantee
 
-臨時對話功能會在您離開對話後，自動呼叫刪除 API 將其從 DeepSeek 伺服器上移除。以下情境涵蓋此保證的實際效力範圍：
+The Temporary Conversation feature automatically calls the deletion API to remove the conversation from the DeepSeek server after you leave it. The following scenarios describe the effective scope of this guarantee:
 
-- **保證刪除的情境**：
-  - 正常的頁面內（SPA）導航離開至其他頁面或對話。
-  - 正常關閉瀏覽器分頁或視窗（包含關閉整個瀏覽器）。
-- **延遲至下次啟動才刪除的情境**：
-  - 電腦被強制關機（長按電源鍵、斷電）。
-  - 瀏覽器當機或被作業系統強制終止。
+- **Guaranteed deletion scenarios**:
+  - Normal in-page (SPA) navigation away to another page or conversation.
+  - Normally closing the browser tab or window (including closing the entire browser).
+- **Delayed deletion (on next browser launch) scenarios**:
+  - Computer is forcefully shut down (holding the power button, power outage).
+  - Browser crashes or is forcefully terminated by the operating system.
 
-本擴充功能僅為瀏覽器擴充功能，無法取得瀏覽器之外的系統層級控制權。若您需要最高等級的隱私保證，建議在關閉電腦前先正常關閉瀏覽器。
+This extension is a browser extension only and has no system-level control outside the browser. If you require the highest level of privacy assurance, close the browser normally before shutting down your computer.
 
-### 已知限制
+### Known Limitations
 
-| 情境 | 行為 |
+| Scenario | Behavior |
 |-|-|
-| 強制關機（電源鍵、斷電） | 對話殘留，直到下次開啟瀏覽器才會被補刪 |
-| 瀏覽器當機／被系統強制終止 | 同上 |
-| 長時間未開啟瀏覽器 | 對話殘留，直到瀏覽器被開啟 |
-| 登入權杖在補救刪除前過期 | 補救失敗，對話永久殘留 |
-| 補救裝置從未登入過同一 DeepSeek 帳戶 | 該裝置無法補刪，需等待有有效權杖的裝置啟動 |
-| Chrome 同步未開啟，或裝置未登入同一 Chrome 帳戶 | 跨裝置補救不會發生，各裝置僅能補刪自己標記的對話 |
-| 同一 DeepSeek 帳戶在另一裝置上「正在使用中」該對話 | 心跳續約機制會維持租約，其他裝置在租約有效期間（10 分鐘 TTL）不會執行刪除 |
-| 待刪項目重試達到上限次數 | 該項目會被從佇列中移除，對話永久殘留，且不會另行通知 |
-| 於無痕模式或不同步的設定檔中瀏覽 | `chrome.storage.sync` 可能無法使用或行為不同，跨裝置補救可能失效 |
-| 極短時間內大量追蹤／取消追蹤臨時對話 | 理論上可能觸及 `chrome.storage.sync` 寫入速率上限，屬理論邊界情境 |
+| Forced shutdown (power button, power outage) | Conversation persists until the browser is next opened, at which point remediation deletion occurs |
+| Browser crash / forcefully terminated by OS | Same as above |
+| Long idle without opening the browser | Conversation persists until the browser is opened |
+| Auth token expires before remediation deletion | Remediation fails; conversation persists permanently |
+| Remediation device has never logged into the same DeepSeek account | That device cannot remediate; must wait for a device with a valid token to start up |
+| Chrome sync is off, or the device is not signed into the same Chrome account | Cross-device remediation does not occur; each device can only remediate conversations it marked itself |
+| The same conversation is in use on another device under the same DeepSeek account | The heartbeat renewal mechanism maintains the lease; other devices do not delete while the lease is active (10-minute TTL) |
+| Pending-delete item reaches the retry limit | The item is removed from the queue; the conversation persists permanently with no further notification |
+| Browsing in incognito mode or a non-syncing profile | `chrome.storage.sync` may be unavailable or behave differently; cross-device remediation may fail |
+| Rapid tracking/un-tracking of temporary conversations in a short period | May theoretically hit the `chrome.storage.sync` write-rate limit; a theoretical boundary scenario |
 
-## UI 調整功能
+## UI Adjustment Features
 
-以下設定位於彈出選單的「UI Adjustments」卡片；「防止自動回滾」與「連網搜索」位於「Features」卡片，列於此處僅供參照：
+The following settings are in the popup menu's **UI Adjustments** card; **Prevent Auto-Scroll** and **Web Search** are in the **Features** card and are listed here for reference:
 
-| 功能 | 說明 |
+| Feature | Description |
 |-|-|
-| **側邊欄自動隱藏** | 滑鼠離開側邊欄時自動收合至 60px 寬度，滑鼠移入時展開，節省畫面空間 |
-| **隱藏思考過程** | DeepSeek 思考區塊（推理過程）在出現時自動收合；使用者手動展開的區塊不受影響；收合不影響匯出內容（見「匯出包含思考過程」）。位於「UI Adjustments」卡片 |
-| **自動展開訊息** | 自動點擊處於收合狀態的展開按鈕，讓所有訊息預設展開。停用時會自動收合畫面上所有已展開的訊息。位於「UI Adjustments」卡片，預設關閉 |
-| **防止自動回滾** | 全時抑制頁面的向下自動捲動，而非僅限「回到頂部」與 Markdown 匯出期間。**代價**：AI 回覆串流時畫面停在原處、不自動往下跟隨，需自行捲動；原生滾輪不受影響。位於「Features」卡片，預設關閉 |
-| **連網搜索** | 指定「智能搜索」按鈕的**起始狀態**：`開啟` 起始為 `aria-pressed="true"`、`關閉` 起始為 `"false"`。校正只在三種時機各發生一次——進入頁面、你在彈出選單改這個設定、主開關由關轉開；每次校正後即放手，你手動切換的結果會保留到下一次校正。只在狀態不符時點擊，不會在已符合時誤切。受主開關連動，位於「Features」卡片 |
-| **對話區域寬度** | 開啟切換開關後，透過滑桿調整對話訊息的顯示寬度（30%–100% 視口寬度） |
-| **編輯輸入框寬度** | 開啟切換開關後，透過滑桿獨立調整輸入框的顯示寬度（30%–100% 視口寬度）；輸入框寬度會自動受對話區域寬度限制，不會超出對話區域 |
+| **Auto-hide Sidebar** | Automatically collapses the sidebar to 60px width when the mouse leaves it, and expands on mouse hover, saving screen space |
+| **Collapse Thinking Process** | Automatically collapses DeepSeek's thinking blocks (reasoning process) when they appear; manually expanded blocks are unaffected; collapsing does not affect exported content (see "Include Thinking Process in Export"). Located in the **UI Adjustments** card |
+| **Auto Expand Messages** | Automatically clicks collapsed expand buttons so all messages are shown expanded by default. When disabled, all expanded messages on screen are collapsed back. Located in the **UI Adjustments** card, off by default |
+| **Prevent Auto-Scroll** | Suppresses the page's downward auto-scroll at all times, instead of only during back-to-top and Markdown export. **Trade-off**: the view stays put instead of following a streaming AI reply downward, so you scroll yourself; native wheel/trackpad scrolling is unaffected. Located in the **Features** card, off by default |
+| **Web Search** | Sets the starting state of the page's smart-search toggle: `On` starts it at `aria-pressed="true"`, `Off` starts it at `"false"`. Applied exactly once per activation event — entering the page, changing this setting in the popup, or turning the master switch back on. After each application the extension releases control, so your own manual toggling sticks until the next activation event. Clicks only on state mismatch, so it never toggles the state away. Controlled by the master switch, located in the **Features** card |
+| **Conversation Area Width** | After enabling the toggle, use the slider to adjust the conversation message display width (30%–100% viewport width) |
+| **Input Box Width** | After enabling the toggle, use the slider to independently adjust the input box display width (30%–100% viewport width); the input box width is automatically constrained by the conversation area width and will not exceed it |
 
-UI 調整功能會受右上角主開關控制，主開關關閉時一併停用。
+UI adjustment features are controlled by the master switch (top-right) — when the master switch is off, these adjustments are disabled.
 
-## 回到頂部按鈕
+## Back to Top Button
 
-「回到頂部」按鈕完全自動，無需任何設定：
+The **Back to Top** button is fully automatic and requires no configuration:
 
-- **外觀**：與 DeepSeek 原生的「回到底部」按鈕外觀完全一致（圓形、相同顏色與邊框），僅箭頭方向相反（向上）。
-- **出現時機**：當您向下捲動對話，離開第一則訊息後，按鈕會在右下角原生按鈕的上方自動出現。
-- **使用方式**：點擊按鈕即可自動捲動至對話最頂端；也可使用鍵盤（Enter 或 Space）。
-- **停止機制**：捲動過程中按鈕維持可點，再次點擊即可在當前位置停止捲動（不會重新開始）。
-- **隱藏時機**：當您已位於對話最頂端時，按鈕自動隱藏，不會佔用畫面空間。
-- **無需設定**：此功能隨擴充功能主開關自動啟用/停用。
-- **匯出整合**：自動整合至 Markdown 匯出流程以確保完整擷取對話。
+- **Appearance**: Visually identical to DeepSeek's native **Back to Bottom** button (circular, same color and border), with the arrow pointing upward.
+- **Trigger**: When you scroll down past the first message, the button appears above the native button in the bottom-right corner.
+- **Usage**: Click the button to automatically scroll to the top of the conversation; keyboard (Enter or Space) also works.
+- **Stop Mechanism**: The button remains clickable during scrolling — clicking it again stops scrolling at the current position (without restarting).
+- **Auto-Hide**: When you are already at the top of the conversation, the button automatically hides and does not take up screen space.
+- **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch.
+- **Export Integration**: Automatically integrated into the Markdown export flow to ensure full conversation capture.
 
-## 行動裝置側欄滑動手勢
+## Mobile Sidebar Swipe Gesture
 
-此功能僅在行動裝置上生效，無需任何設定：
+This feature only works on mobile devices and requires no configuration:
 
-- **觸發方式**：在 DeepSeek 對話頁面正中央 80% 區域（扣除上下左右各 10% 邊界）內，用手指左右滑動即可控制側邊欄 — 向右滑動展開側邊欄，向左滑動收合側邊欄。
-- **防誤觸**：系統會自動辨識滑動方向與距離 — 僅有明顯的水平滑動（≥ 50px、水平為主、< 500ms）才會觸發，垂直捲動或短暫觸摸不會誤觸。
-- **相容性**：觸發區域刻意避開螢幕左右邊緣，避免與 Chrome Android 的系統返回手勢衝突。
-- **無需設定**：此功能隨擴充功能主開關自動啟用/停用，無獨立開關。
+- **Trigger Method**: Swipe horizontally with your finger within the central 80% area of the DeepSeek conversation page (excluding 10% margins on each side) to open or close the sidebar. Right-swipe (left→right) opens the sidebar; left-swipe (right→left) closes it.
+- **Accidental Trigger Prevention**: The system automatically detects swipe direction and distance — only a clear horizontal swipe (≥ 50px, predominantly horizontal, < 500ms) triggers the action; vertical scrolling or brief touches do not activate it.
+- **Compatibility**: The trigger area deliberately avoids the screen edges to prevent conflicts with Chrome Android's system back gesture.
+- **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch and has no independent toggle.
 
-## 自動重試與自動繼續生成
+## Auto Retry and Auto Continue
 
-彈出選單「Features」卡片提供兩個各自獨立的開關，兩者預設皆為關閉：
+The popup menu's **Features** card provides two independent toggles, both off by default:
 
-| 開關 | 儲存鍵 | 說明 |
+| Toggle | Storage key | Description |
 |-|-|-|
-| **自動重試** | `isAutoRetryEnabled` | DeepSeek 回應失敗（例如「伺服器繁忙，請稍後再試」）而顯示重試按鈕時，自動代為點擊 |
-| **自動繼續生成** | `isAutoContinueEnabled` | DeepSeek 回覆中斷並顯示「繼續生成」按鈕時，自動代為點擊 |
+| **Auto retry** | `isAutoRetryEnabled` | When a DeepSeek response fails (e.g. "The server is busy. Please try again later.") and a retry button appears, the extension clicks it for you |
+| **Auto continue generating** | `isAutoContinueEnabled` | When a DeepSeek reply stops and a **Continue** button appears, the extension clicks it for you |
 
-- **輪次節奏**：只要任一開關開啟，擴充功能便以輪次運作——每輪先等待 0–3 秒之間、以 0.1 秒為級距的隨機延遲，再對已開啟且目前出現在頁面上的按鈕各點擊一次，接著以新的隨機延遲排下一輪。
-- **點擊次數**：不設上限。只要按鈕仍在畫面上，每輪都會再點擊一次，直到按鈕消失為止。
-- **按鈕定位**：僅以 CSS 選擇器定位，不比對按鈕文字，因此不受介面語言影響。重試按鈕以語意類別 `.ds-button--warning.ds-button--circle.ds-button--xs` 定位；繼續生成按鈕以 `._8e85838 > .ds-button[role="button"]` 為主、`._6eef0b0` 為備援。
-- **主開關連動**：兩個開關皆受主開關控制。主開關關閉，或兩個開關都關閉時，輪次計時器完全停止，不佔用資源。
-- **同步與備份**：兩個開關的狀態與其他功能開關一樣同步至雲端、納入備份與還原，並在彈出選單開啟期間即時反映其他裝置或分頁的變更。
+- **Round Cadence**: While at least one toggle is on, the extension works in rounds — each round waits a random delay between 0 and 3 seconds in 0.1-second steps, then clicks each enabled button that is currently on the page once, and then schedules the next round with a fresh random delay.
+- **Click Count**: Unlimited. As long as a button remains on screen, every round clicks it again until it disappears.
+- **Button Location**: Buttons are located by CSS selectors only, never by button text, so the interface language does not matter. The retry button uses the semantic classes `.ds-button--warning.ds-button--circle.ds-button--xs`; the continue button uses `._8e85838 > .ds-button[role="button"]` with `._6eef0b0` as a fallback.
+- **Master Switch Linkage**: Both toggles are controlled by the master switch. When the master switch is off, or both toggles are off, the round timer is stopped entirely and consumes no resources.
+- **Sync and Backup**: Like the other feature toggles, both states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
 
-## 自動開啟側欄
+## Auto Open Sidebar
 
-彈出選單「UI Adjustments」卡片中的「自動開啟側欄」開關（儲存鍵 `isAutoOpenSidebarEnabled`，預設關閉）會讓 DeepSeek 的側欄保持開啟：
+The **Auto open sidebar** toggle in the popup menu's **UI Adjustments** card (storage key `isAutoOpenSidebarEnabled`, off by default) keeps DeepSeek's sidebar open:
 
-- **運作方式**：開關開啟時，每當側欄收合，擴充功能就立即代為點擊一次收合軌道上的「展開側欄」按鈕。
-- **保持開啟**：每一次收合都會點擊，包括你手動收合側欄之後，因此開啟此功能等同讓側欄維持展開；想收合側欄時請先關閉此開關。
-- **按鈕定位**：僅以 CSS 選擇器定位，不比對按鈕文字，因此不受介面語言影響；同一次收合只點擊一次，不會重複點擊。
-- **窄螢幕保護**：視窗過窄時 DeepSeek 會在展開後立即再次收合側欄；若點擊後 1.5 秒內又被收合且期間未調整視窗大小，擴充功能會停止點擊，直到你下一次調整視窗大小。
-- **漢堡選單版面不點擊**：視窗窄到 DeepSeek 在頁首顯示漢堡選單按鈕時（約 768px 以下），DeepSeek 會在側欄展開後約 0.5–1.2 秒自行收回，因此只要漢堡選單按鈕可見，擴充功能就不點擊展開按鈕，側欄不會以抽屜形式自行彈出；視窗放寬、漢堡選單按鈕隱藏後即照常點擊。
-- **主開關連動**：受主開關控制，主開關關閉時開關停用、不再自動點擊。
-- **同步與備份**：開關狀態與其他功能開關一樣同步至雲端、納入備份與還原，並在彈出選單開啟期間即時反映其他裝置或分頁的變更。
+- **How It Works**: While the toggle is on, every time the sidebar collapses, the extension immediately clicks the "open sidebar" button on the collapsed rail once.
+- **Stays Open**: Every collapse is clicked, including after you collapse the sidebar manually, so enabling this feature effectively keeps the sidebar expanded; turn the toggle off first when you want the sidebar collapsed.
+- **Button Location**: The button is located by CSS selector only, never by button text, so the interface language does not matter; each collapse is clicked only once, never repeatedly.
+- **Narrow Window Guard**: When the window is too narrow, DeepSeek collapses the sidebar again right after it opens; if the sidebar collapses again within 1.5 seconds of a click with no window resize in between, the extension stops clicking until you next resize the window.
+- **No Click in the Hamburger Layout**: When the window is narrow enough for DeepSeek to show the hamburger menu button in the header (about 768px and below), DeepSeek closes the sidebar again by itself about 0.5–1.2 seconds after it opens, so the extension does not click the open button while the hamburger menu button is visible, and the sidebar never pops open as a drawer on its own; once the window widens and the hamburger menu button hides, clicking resumes as usual.
+- **Master Switch Linkage**: Controlled by the master switch; when the master switch is off, the toggle is disabled and no automatic click happens.
+- **Sync and Backup**: Like the other feature toggles, the state syncs to the cloud, is included in backup and restore, and reflects changes from other devices or tabs live while the popup is open.
 
-## 自動複製回覆與程式碼區塊
+## Auto Copy Reply and Code Blocks
 
-彈出選單「Features」卡片中的兩個核取方塊（預設關閉）會在 DeepSeek 回覆完成時自動按下 DeepSeek 自己的複製按鈕：
+Two checkboxes in the popup menu's **Features** card (both off by default) press DeepSeek's own copy buttons automatically when a reply finishes:
 
-| 開關 | 儲存鍵 | 複製內容 |
+| Toggle | Storage Key | What Is Copied |
 |-|-|-|
-| **自動複製回覆內容** | `isAutoCopyReplyEnabled` | 回覆訊息工具列的第一顆按鈕（複製整則回覆） |
-| **自動複製程式碼區塊內容** | `isAutoCopyCodeEnabled` | 該則回覆中每個程式碼區塊的複製按鈕，依出現順序逐一按下 |
+| **Auto copy reply content** | `isAutoCopyReplyEnabled` | The first button of the reply message's toolbar (copies the whole reply) |
+| **Auto copy code block content** | `isAutoCopyCodeEnabled` | The copy button of every code block in that reply, pressed one by one in order of appearance |
 
-- **觸發時機**：回覆完成、其訊息工具列出現在已顯示的訊息中時觸發；程式碼區塊只在回覆完成時複製，串流生成期間不複製。
-- **兩者皆開**：先複製回覆，再依序複製各程式碼區塊，因此剪貼簿最後留下的是最後一個程式碼區塊的內容。
-- **不會複製的情況**：頁面載入時既有的訊息、捲動回來重新顯示的舊訊息，以及被停止或中斷的回覆（出現「繼續生成」按鈕）。
-- **視窗失焦時的補寫**（v4.39.0）：瀏覽器會在 DeepSeek 分頁沒有焦點時拒絕網站寫入剪貼簿（Console 出現 `NotAllowedError: Document is not focused`）。回覆完成而分頁在背景或視窗失焦時，擴充功能會在網站的寫入被拒絕後，代為把同一段文字寫入剪貼簿；分頁有焦點時由網站自己寫入，不會重複寫入，你自己點擊複製按鈕也不受影響。
-- **選用權限**（v4.39.0）：補寫需要選用權限 `clipboardWrite` 與 `offscreen`，安裝時不要求。第一次勾選任一自動複製核取方塊時，瀏覽器會一併詢問；允許後才會儲存為勾選，拒絕則核取方塊退回未勾選。取消勾選只停止自動複製，不會移除已授予的權限。尚未授予權限的裝置上，失焦時不會補寫，分頁有焦點時的複製照常運作。Chrome 請求 `clipboardWrite` 時會顯示「Modify data you copy and paste」提示。
-- **隱私**：複製的文字只留在本機，不傳送到任何伺服器；擴充功能只寫入、從不讀取剪貼簿。行為規格見 [功能規格 §26](spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
-- **按鈕定位**：僅以 CSS 選擇器與結構定位，不比對按鈕文字，因此不受介面語言影響。
-- **主開關連動**：兩個開關皆受主開關控制，主開關關閉時停用、不再自動複製。
-- **同步與備份**：開關狀態與其他功能開關一樣同步至雲端、納入備份與還原，並在彈出選單開啟期間即時反映其他裝置或分頁的變更。
+- **When It Triggers**: When a reply finishes and its message toolbar appears inside an already-shown message; code blocks are copied only when the reply finishes, never while it is streaming.
+- **Both On**: The reply is copied first, then each code block in order, so the clipboard ends up holding the content of the last code block.
+- **Never Copied**: Messages already on the page at load, old messages scrolled back into view, and stopped or aborted replies (the "Continue generating" button is present).
+- **Fallback Write While Unfocused** (v4.39.0): The browser rejects the site's clipboard write while the DeepSeek tab is not focused (the console shows `NotAllowedError: Document is not focused`). When a reply finishes while the tab is in the background or the window is unfocused, the extension writes the same text to the clipboard itself after the site's write is rejected; while the tab is focused the site writes it, nothing is written twice, and your own clicks on a copy button are unaffected.
+- **Optional Permissions** (v4.39.0): The fallback write needs the optional permissions `clipboardWrite` and `offscreen`, which are not requested at install. The first time you check either auto copy checkbox, the browser asks for both together; the checkbox is saved as checked only after you allow, and refusing reverts it to unchecked. Unchecking only stops auto copy and does not remove the granted permissions. On a device without the permissions, nothing is written while unfocused, and copying while the tab is focused works as before. Chrome shows the "Modify data you copy and paste" prompt when `clipboardWrite` is requested.
+- **Privacy**: The copied text stays on your device and is never sent to any server; the extension only writes to the clipboard and never reads it. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+- **Button Location**: Buttons are located by CSS selectors and structure only, never by button text, so the interface language does not matter.
+- **Master Switch Linkage**: Both toggles are controlled by the master switch; when the master switch is off, they are disabled and nothing is copied.
+- **Sync and Backup**: Like the other feature toggles, the states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
 
-## 回覆完成通知
+## Reply-Complete Notification
 
-彈出選單「Features」卡片中的「回覆完成通知」開啟／關閉單選（儲存鍵 `isReplyNotificationEnabled`，預設關閉）會在 DeepSeek 回覆完成、而分頁不在前景時，顯示一則瀏覽器通知，讓你切到其他分頁或視窗等待時不必一直回來查看：
+The on/off radio **Reply-complete notification** in the popup menu's **Features** card (storage key `isReplyNotificationEnabled`, off by default) shows a browser notification when a DeepSeek reply finishes while the tab is not in the foreground, so you do not have to keep checking back while you wait in another tab or window:
 
-- **觸發時機**：新回覆完成（其訊息工具列出現在已顯示的訊息中）當下，DeepSeek 分頁不可見或視窗沒有焦點；分頁在前景時不通知。每個完成的回覆通知一次。
-- **不會通知的情況**：頁面載入時既有的訊息、捲動回來重新顯示的舊訊息，以及被停止或中斷的回覆（出現「繼續生成」按鈕）。
-- **通知內容**：標題與內文依介面語言顯示，繁體中文為「DeepSeek 回覆完成」與「回覆已生成完畢」。通知文字在本機產生，不含對話內容，也不傳送到任何伺服器。
-- **通知權限**：通知權限為選用權限，安裝時不要求。第一次把開關切到「開啟」時，瀏覽器會詢問是否允許通知；允許後才會儲存為開啟，拒絕則開關退回「關閉」。切回「關閉」只停止通知，不會移除已授予的權限。
-- **主開關連動**：此開關受主開關控制，主開關關閉時停用、不再通知。
-- **僅限本機**：開關狀態只存在目前裝置，不同步至雲端、不納入備份還原，也不被雲端衝突解決覆寫；彈出選單開啟期間仍即時反映本機其他分頁的變更。行為規格見 [功能規格 §27](spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+- **When It Triggers**: At the moment a new reply finishes (its message toolbar appears inside an already-shown message), the DeepSeek tab is hidden or its window has no focus; nothing is shown while the tab is in the foreground. Each finished reply notifies once.
+- **Never Notified**: Messages already on the page at load, old messages scrolled back into view, and stopped or aborted replies (the "Continue generating" button is present).
+- **Notification Content**: The title and body follow the interface language; in English they read "DeepSeek reply complete" and "The reply has finished generating". The text is generated locally, contains no conversation content, and is not sent to any server.
+- **Notification Permission**: The notification permission is optional and is not requested at install. The first time you switch the toggle to "On", the browser asks whether to allow notifications; the toggle is saved as on only after you allow it, and a refusal reverts it to "Off". Switching back to "Off" only stops notifications and does not remove the granted permission.
+- **Master Switch Linkage**: This toggle is controlled by the master switch; when the master switch is off, it is disabled and nothing is shown.
+- **Local Only**: The state lives only on the current device, is not synced to the cloud, is not included in backup and restore, and is not overwritten by cloud conflict resolution; while the popup is open it still reflects changes from other local tabs live. For the behavior specification see [Feature Spec §27](spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
 
-## 匯出對話
+## Exporting Conversations
 
-可將目前 DeepSeek 聊天室中的對話紀錄完整匯出為 Markdown (`.md`) 格式檔案。
+You can export the conversation history from the current DeepSeek chat room as a Markdown (`.md`) file.
 
-1. 在 `chat.deepseek.com` 頁面中，點擊擴充功能圖示。
-2. 按下「匯出當前頁面對話為 Markdown」按鈕。
-3. 系統會先自動捲動至對話頂端，再由上而下逐步擷取完整對話內容（包含長對話中尚未顯示在畫面上的訊息），畫面上會顯示目前擷取進度與已擷取則數。
-4. 擷取期間您仍可正常輸入與發送訊息，但請勿手動捲動對話記錄，以免擷取中斷。
-5. 進度提示上有「取消」按鈕，隨時可中止擷取（v4.19.0）。取消後已擷取的部分內容仍會匯出，不會白做。按下後按鈕會顯示「正在取消…」，實際停止發生在下一個擷取步驟的邊界。
-6. 擷取完成後，系統會自動下載 `.md` 檔案，並還原您原本的捲動位置。
-7. **不會因為對話太長而中斷**（v4.19.0）：只要還在持續擷取到新訊息，執行多久都不會被強制中止，只有在連續 20 秒完全沒有任何進展時才會判定停止。
-8. 若擷取被中斷（停滯、手動捲動干擾、或您自行取消），系統仍會匯出已收集的部分內容，並且：
-   - 在檔案末尾附上警告，標明**實際的**中斷原因與已擷取則數。
-   - 同時在頁面上顯示明顯的警告提示（v4.19.0）。舊版只在檔案末尾留一行警告，實務上完全看不見 —— 曾發生警告落在 12209 行檔案的第 12209 行，使用者以為匯出正常完成。
+1. On the `chat.deepseek.com` page, click the extension icon.
+2. Press the **Export current page conversation as Markdown** button.
+3. The system automatically scrolls to the top of the conversation, then progressively captures the full conversation content from top to bottom (including messages not yet visible on screen in long conversations). The current progress and the number of messages captured so far are displayed on screen.
+4. During capture, you can still type and send messages normally. However, do not manually scroll the conversation history, as this may interrupt the capture.
+5. The progress toast carries a **Cancel** button, so you can stop a capture at any time (v4.19.0). Cancelling still exports whatever was collected — the work is not thrown away. The button switches to "Cancelling..." once clicked; the actual stop happens at the next capture step boundary.
+6. Once capture is complete, the system automatically downloads the `.md` file and restores your original scroll position.
+7. **A long conversation will not interrupt the export** (v4.19.0). As long as new messages keep being captured, the run is never cut short no matter how long it takes. The run stops only after 20 continuous seconds with no progress at all.
+8. If the capture is interrupted — by a stall, by manual scrolling, or because you cancelled it — the system still exports the content collected so far, and:
+   - appends a warning at the end of the file naming the **actual** cause and the number of messages captured;
+   - shows a prominent warning toast on the page (v4.19.0). Earlier versions left only a single warning line at the end of the file, which in practice was invisible — in one reported case it landed on line 12209 of a 12209-line file, and the export looked like it had completed normally.
 
-### 匯出選項
+### Export Options
 
-在彈出選單中可控制以下匯出行為：
+The following export behaviors can be controlled in the popup menu:
 
-| 選項 | 說明 |
+| Option | Description |
 |-|-|
-| **匯出包含思考過程** | 選擇是否在匯出的 Markdown 中包含 AI 的思考過程（Thinking Process）；不論畫面上的思考區塊是否已收合都會匯出（見[匯出架構](architecture/EXPORT.md)） |
-| **匯出包含參考連結** | 選擇是否在匯出的 Markdown 中包含搜尋參考連結（例如 `[link-1]`） |
+| **Include Thinking Process in Export** | Choose whether to include the AI's thinking process in the exported Markdown; it is exported whether or not the on-screen thinking blocks are collapsed (see [Export Architecture](architecture/EXPORT.md)) |
+| **Include Reference Links in Export** | Choose whether to include search reference links (e.g., `[link-1]`) in the exported Markdown |
 
-## 引用回覆
+## Quote Reply
 
-在 AI 回覆區域中選取文字後，畫面上方自動出現「引用回覆」浮動按鈕：
+After selecting text within an AI reply area, a **Quote Reply** floating button appears at the top of the page:
 
-- **觸發範圍**：僅在使用者於 AI 回覆區域內選取文字時觸發。
-- **注入格式**：點擊按鈕後，將選取內容以 Markdown blockquote 格式（`> 內容`）附加至輸入框。
-- **多行支援**：多行選取時每行各自加上 `> ` 前綴。
-- **自動消失**：選取清除、點擊按鈕以外區域或按鈕滾出視口時自動隱藏。
+- **Trigger Scope**: Only activates when the user selects text within an AI reply area.
+- **Injection Format**: Clicking the button appends the selected content to the input box as a Markdown blockquote (`> content`).
+- **Multi-Line Support**: When multiple lines are selected, each line is prefixed with `> `.
+- **Auto-Dismiss**: Automatically hides when the selection is cleared, when clicking outside the button area, or when the button scrolls out of the viewport.
 
-## 編輯訊息清理
+## Edit Message Cleanup
 
-當您點擊 DeepSeek 的編輯訊息按鈕（v3.2.1）時，擴充功能會自動清理編輯框中因提示詞注入而產生的包裝標籤，讓您只看到自己原本輸入的文字：
+When you click DeepSeek's edit message button (v3.2.1), the extension automatically cleans up wrapper tags in the edit box that were injected by prompt injection, so you see only your original input text:
 
-- **觸發方式**：點擊訊息旁的編輯按鈕（使用者訊息工具列中的圖示按鈕，`EDIT_MESSAGE_BUTTON_SELECTOR`），擴充功能透過事件委派偵測點擊，等候 DeepSeek 非同步渲染出的編輯 textarea。
-- **清理內容**：若 textarea 的內容符合 `<user-input>...</user-input>` 包裝格式，自動剝除包裝，僅保留原始輸入。外層的 `<system-reminder>` 等注入內容一併移除。
-- **高度調整**：編輯框出現後，自動移除容器的 max-height 限制，並依視窗高度動態計算相關元素的 max-height，確保編輯區域有足夠的可視空間。編輯框會自動捲動至可見位置。
-- **完全自動**：此功能隨擴充功能注入即生效，無獨立開關，不受主開關連動。
+- **Trigger**: Clicking the edit button, an icon button in a user message's toolbar (`EDIT_MESSAGE_BUTTON_SELECTOR`); the extension detects the click via event delegation and waits for DeepSeek to asynchronously render the edit textarea.
+- **Cleanup Content**: If the textarea content matches the `<user-input>...</user-input>` wrapper format, the wrapper is stripped, keeping only the original input. Outer `<system-reminder>` and other injected content is also removed.
+- **Height Adjustment**: After the edit box appears, the container's max-height restriction is automatically removed, and the max-height of related elements is dynamically calculated based on the viewport height, ensuring the edit area has sufficient visible space. The edit box is automatically scrolled into view.
+- **Fully Automatic**: This feature is active as soon as the extension is injected; it has no independent toggle and is not gated by the master switch.
 
-## 系統時間注入
+## System Time Injection
 
-啟用後，每則發送的訊息開頭會自動加上目前系統時間及當地時區偏移。
+When enabled, the current system time and local timezone offset are automatically prepended to each sent message.
 
-- **格式**：`Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`
-- **範例**：`Current Time: 2026/06/14 20:19:32 (UTC+08:00)`
-- **重複防護**：若文字輸入區開頭已包含 `Current Time:` 前綴，則跳過注入。
-- **設定位置**：彈出選單「Features」卡片中的第一個項目。
-- **主開關感知**：主開關關閉時此切換會停用。
+- **Format**: `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)`
+- **Example**: `Current Time: 2026/06/14 20:19:32 (UTC+08:00)`
+- **Duplicate Prevention**: If the text input area already starts with the `Current Time:` prefix, injection is skipped.
+- **Settings Location**: First item in the **Features** card of the popup menu.
+- **Master Switch Awareness**: This toggle is disabled when the master switch is turned off.
 
-## 恢復被審查的回覆
+## Restoring Censored Replies
 
-當 DeepSeek 以「我暫時無法回答這個問題」等訊息取代原本的模型回覆（內容審查）時，擴充功能會自動從串流資料中還原原始回覆：
+When DeepSeek replaces the original model reply with messages like "I'm sorry, I cannot answer this question" (content moderation), the extension automatically restores the original reply from the stream data:
 
-- **運作方式**：完全自動，無需任何設定。
-- **顯示**：還原的回覆附有「⚠ 已復原內容」徽章。
-- **思考過程**：若原始回覆包含思考過程，也會重建為可折疊的思考區塊並顯示思考時間。
-- **跨重整保留**：還原記錄會自動保存在本機（最多 200 筆），重新整理頁面或之後再回到該對話時，被審查的訊息仍會自動恢復顯示。
-- **備份管理**：可在彈出選單的「Backup & Restore」區域匯出/匯入還原記錄備份，或一鍵清除所有已還原紀錄。
+- **Operation**: Fully automatic, no configuration required.
+- **Display**: Restored replies are marked with a **⚠ Content Restored** badge.
+- **Thinking Process**: If the original reply contains a thinking process, it is reconstructed as a collapsible thinking block with the thinking time displayed.
+- **Cross-Refresh Persistence**: Restored records are automatically saved locally (up to 200 entries). After refreshing the page or returning to the conversation later, censored messages will still be automatically restored.
+- **Backup Management**: In the popup menu's **Backup & Restore** section, you can export/import restoration record backups or clear all restored records with one click.
 
-## 備份與還原設定
+## Backup and Restore Settings
 
-在彈出選單的「Backup & Restore」區域：
+In the popup menu's **Backup & Restore** section:
 
-| 功能 | 說明 |
+| Feature | Description |
 |-|-|
-| **備份設定（匯出 JSON）** | 下載包含所有提示詞組與設定的 JSON 檔案 |
-| **還原設定（匯入 JSON）** | 選擇先前備份的 JSON 檔案。UI 設定被覆寫；提示詞組以 ID 為基礎合併，相同 ID 保留較新版本；對話綁定（chatPresetMap）同樣進行合併 |
-| **匯出復原備份** | 單獨備份「被審查回覆」的還原記錄 |
-| **匯入復原備份** | 單獨還原「被審查回覆」的還原記錄 |
-| **清除所有已還原紀錄** | 一鍵刪除所有被審查回覆的還原記錄 |
+| **Backup Settings (Export JSON)** | Download a JSON file containing all prompt groups and settings |
+| **Restore Settings (Import JSON)** | Select a JSON backup file. UI settings are overwritten; prompt groups are merged by ID, keeping the newer version for the same ID; conversation bindings (chatPresetMap) are also merged |
+| **Export Restore Records** | Independently backup the restoration records of censored replies |
+| **Import Restore Records** | Independently restore restoration records of censored replies |
+| **Clear All Restored Records** | Delete all restoration records of censored replies with one click |
 
-## 雲端同步衝突處理
+## Cloud Sync Conflict Handling
 
-所有設定變更（切換提示詞組、編輯內容、開關狀態、UI 調整）都會即時儲存到瀏覽器本地與雲端同步空間（`chrome.storage.sync`）。
+All setting changes (switching prompt groups, editing content, toggling switches, UI adjustments) are instantly saved to both local browser storage and the cloud sync space (`chrome.storage.sync`).
 
-若多台裝置同時編輯提示詞組：
+If multiple devices edit prompt groups simultaneously:
 
-1. 下次開啟彈出選單時會顯示「雲端同步衝突」對話框。
-2. 點擊「合併同步」後，系統會以 ID 為基礎合併兩邊的提示詞組，保留最新修改（依據 `updatedAt` 時間戳記）。
-3. 介面設定則以雲端版本覆寫本機版本（`isEnabled`、裝置層級的 `globalPromptEnabled` 回退鍵與 `isReplyNotificationEnabled` 除外，三者為裝置層級本機開關，不參與同步衝突解決）。各提示詞組自身的 `globalPromptEnabled` 欄位（v4.20.0）屬於提示詞組資料，隨提示詞組一同合併與跨裝置同步。
-4. 彈出選單標題列會即時顯示同步狀態：綠色「雲端同步」、紅色「未同步」、或紅色「內容過大，僅存本機」（當提示詞組總資料量超過 `chrome.storage.sync` 容量限制時，資料僅保留在本機，不進行雲端同步）。
+1. The next time you open the popup menu, a **Cloud Sync Conflict** dialog will appear.
+2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp).
+3. Interface settings are overwritten by the cloud version (except device-local toggles like `isEnabled`, the legacy device-level `globalPromptEnabled` fallback, and `isReplyNotificationEnabled`, which are excluded from sync conflict resolution). Each prompt group's own `globalPromptEnabled` field (v4.20.0) lives on the prompt group data itself and therefore syncs and merges along with it.
+4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only** when total prompt group data exceeds the `chrome.storage.sync` capacity limit, in which case data is kept locally only and cloud sync is skipped).
 
-## 主開關連動
+## Master Switch Linkage
 
-右上角主開關關閉時，所有子功能一併停用：
+When the master switch (top-right) is turned off, all sub-features are disabled together:
 
-- 側邊欄自動隱藏
-- 隱藏思考過程
-- 自動展開訊息
-- 自動重試與自動繼續生成
-- 自動開啟側欄
-- 自動複製回覆與程式碼區塊
-- 回覆完成通知
-- 防止自動回滾
-- 連網搜索
-- 系統時間注入
-- 對話區域與輸入框寬度調整
-- 頁面內 Overlay 選單
-- 回到頂部按鈕
-- 行動裝置側欄滑動手勢
+- Auto-hide sidebar
+- Collapse thinking process
+- Auto expand messages
+- Auto retry and auto continue generating
+- Auto open sidebar
+- Auto copy reply and code blocks
+- Reply-complete notification
+- Prevent auto-scroll
+- Web search toggle
+- System time injection
+- Conversation area and input box width adjustment
+- In-page overlay dropdown
+- Back to top button
+- Mobile sidebar swipe gesture
 
-確保一鍵關閉所有擴充功能行為。
+This ensures one-click disabling of all extension behaviors.
 
-## 舊版資料遷移
+## Legacy Data Migration
 
-從舊版升級時，原有的提示詞內容會自動遷移到「我的提示詞」組別，無需手動操作。
+When upgrading from an older version, existing prompt content is automatically migrated to a **My Prompts** group, requiring no manual action.
 
 ---
 
-> [返回 README](README.md) | [需求規格書](SPEC.md) | [技術架構](ARCHITECTURE.md) | [版本記錄](CHANGELOG.md)
+> [Back to README](../README.md) | [Specification](SPEC.md) | [Architecture](ARCHITECTURE.md) | [Changelog](CHANGELOG.md)

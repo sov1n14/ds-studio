@@ -1,99 +1,99 @@
-# 提示詞系統規格
+# Prompt System Specification
 
-> 📂 [DS studio 文件](../) › [功能規格](../SPEC.md) › 提示詞系統
+> [DS studio Docs](../) › [Feature Specification](../SPEC.md) › Prompt System
 >
-> **相關架構**：[儲存架構](../architecture/STORAGE.md) · [內容腳本](../architecture/CONTENT_SCRIPTS.md) · [Popup 架構](../architecture/POPUP.md)
+> **Related Architecture**: [Storage Architecture](../architecture/STORAGE.md) · [Content Scripts](../architecture/CONTENT_SCRIPTS.md) · [Popup Architecture](../architecture/POPUP.md)
 
-## 1. 提示詞組管理
+## 1. Prompt Group Management
 
-- **多組提示詞支援**：使用者可以建立、重新命名、刪除多組提示詞組，每組有唯一的名稱與內容。系統允許刪除所有自訂提示詞組，因為下拉選單永遠保留一個空白選項作為預設。
-- **切換提示詞組**：彈出選單中的自訂下拉選單可即時切換提示詞組。提示詞內容的檢視與編輯於獨立編輯視窗進行（見「獨立提示詞編輯視窗」）。
-- **新增流程**：點擊 `+` 開啟內嵌命名對話框。名稱為必填 — 空輸入時確認按鈕會停用，並顯示紅色 `* 必填` 指示。重複名稱會以警示對話框拒絕。
-- **重新命名流程**（v4.14.0）：點擊鉛筆按鈕（`#editPresetBtn`）開啟獨立編輯視窗，視窗標題處顯示**已聚焦但不全選**（v4.18.2；游標落在名稱尾端，避免直接輸入即覆蓋整個舊名稱）的名稱輸入框（`#editorNameInput`），修改名稱與內容共用同一條自動儲存管道（500ms 防抖 + blur/關窗 flush）。重複名稱在儲存時被拒絕（`DUPLICATE_NAME`），儲存狀態區顯示紅色錯誤，直到名稱唯一才寫入。已開著的編輯視窗再次點擊鉛筆會重新載入其分頁，使名稱輸入框每次都重新聚焦。
-- **刪除流程**：點擊 `✕` 開啟確認對話框，附有紅色危險樣式按鈕。若刪除的提示詞組為當前啟用中，系統會重設為空狀態（`activePresetId = ''`），而非自動選取其他提示詞組。所有指向被刪除提示詞組的 `chatPresetMap` 綁定都會被清理。空狀態選取時刪除按鈕為停用狀態。（v4.8.3）刪除同時會記錄一筆墓碑於 `dsPresetTombstones`（本地與同步兩端），確保刪除能正確透過同步合併傳播到其他裝置，而不只是清理本機的 `chatPresetMap` 綁定。
-- **一鍵刪除全部（v4.10.0）**：下拉選單的「(無提示詞組)」空白選項列右側新增一個 `✕` 按鈕（hover 提示：`刪除全部提示詞組`），點擊會開啟確認對話框（標題「刪除全部提示詞組」、內文「確定要刪除全部提示詞組嗎？此操作無法復原。」）。確認後會清空所有提示詞組、重設 `activePresetId` 為 `''`，並清除所有指向任一被刪除提示詞組的 `chatPresetMap` 綁定（而非僅單一 id），沿用單一刪除相同的墓碑同步機制。
-- **提示詞組列 hover 提示（v4.10.0，按鈕調整 v4.14.0）**：每列的 `✕`（刪除）按鈕有原生 `title` hover 提示「刪除提示詞」。v4.14.0 移除列內重新命名鉛筆（重新命名移至編輯視窗），`renameAriaLabel`／`editPresetNameTooltip` 兩個 i18n 鍵一併刪除。
-- **預設提示詞組（圖釘，v4.18.0）**：下拉選單每列在 `✕`（刪除）按鈕左側新增一顆圖釘按鈕（`.ds-select__item-btn--pin`）。點擊即把該組設為「預設」，圖釘亮起（`.ds-select__item-btn--pinned`，`aria-pressed="true"`）並以 `var(--primary-color)` 著色；再次點擊同一顆圖釘則取消預設。`title`／`aria-label` 依狀態切換（未釘選「設為預設（新對話自動選用）」、已釘選「取消預設」，i18n 鍵 `pinPresetAriaLabel`／`pinPresetTooltip`／`unpinPresetAriaLabel`／`unpinPresetTooltip`）。
-  - **唯一性**：預設以單一純量鍵 `pinnedPresetId` 儲存（空字串代表無預設），唯一性因此為結構上的必然，不需額外驗證，也不可能出現兩組同時釘選。
-  - **僅影響新對話**：釘選只在開啟新對話（URL 無 chat id）時生效，見 §6「新對話時的選取」。切換到既有對話一律不受影響。
-  - **釘選狀態不因 hover 而改變位置**：列內按鈕改以 `visibility` 而非 `display` 切換顯隱，版面盒始終存在，故已釘選的圖釘在滑鼠移入或移出該列時位置與尺寸都不變；直接 hover 已亮起的圖釘時亮起樣式維持並略微加強，不會看起來像未釘選。
-  - **刪除連動**：刪除單一提示詞組或一鍵刪除全部時，若被刪除的組正是預設，`pinnedPresetId` 一併清為 `''`（實作於 `popup/popup.pin-manager.js` 的 `clearPinIfDeleted()`；未受影響時完全不寫入儲存）。
-- **提示詞資料模型**：每組提示詞包含 `id`（字串）、`name`（字串）、`content`（字串）、`createdAt`（數字，紀元毫秒）、`updatedAt`（數字，紀元毫秒）。`id` 以 `preset-{timestamp}-{random}` 格式產生。內容於獨立編輯視窗中自動儲存：`input` 事件設定 dirty flag 並觸發 500ms 防抖寫入（v4.8.1 從 600ms 對齊為 500ms），`blur`、`visibilitychange` 與 `pagehide` 事件提供立即寫入保險（獨立視窗可能被作業系統直接關閉），僅在 dirty 時寫入以避免耗盡 Chrome sync 配額。
-- **獨立提示詞編輯視窗**（v3.0.0，名稱編輯 v4.14.0，Esc 關閉 v4.15.0，聚焦不全選 v4.18.2）：點擊鉛筆按鈕透過 `chrome.windows.create`（`type: 'popup'`，1280×720）開啟 `popup/editor/editor.html`。Query string 契約：`?target=global` 編輯全域提示詞；`?target=preset&id=<presetId>` 編輯該提示詞組內容。提示詞組目標的視窗標題處顯示已聚焦、但不全選內容的名稱輸入框（`#editorNameInput`，替代唯讀 `#editorTitle`），全域目標維持唯讀標題。每種目標各為單例 — 重複點擊鉛筆會聚焦既有視窗（`chrome.windows.update`）並將其分頁導向請求 URL（`chrome.tabs.update`，同 URL 即重新載入、不同 URL 切換至當前啟用的提示詞組；`pagehide` 自動儲存保證無資料遺失），視窗已關閉時才重新建立。提示詞組儲存後會廣播 `ACTIVE_PRESET_CHANGED` 使開啟中的 DeepSeek 分頁即時更新。無效的 query 參數或提示詞組已被刪除時，視窗呈現停用狀態並顯示說明文字。所有儲存一律經由 `StorageManager`。（v4.15.0）按 `Esc` 可關閉視窗，未存內容由 `pagehide` 自動儲存後才關閉，不會遺失。
+- **Multiple prompt group support**: Users can create, rename, and delete multiple prompt groups, each with a unique name and content. The system allows deleting all custom prompt groups because the dropdown always retains a blank option as the default.
+- **Switching prompt groups**: A custom dropdown in the popup menu allows instant switching between prompt groups. Viewing and editing prompt content is done in a separate editor window (see "Standalone Prompt Editor Window").
+- **Add flow**: Clicking `+` opens an inline naming dialog. The name is required — the confirm button is disabled on empty input, displaying a red `* Required` indicator. Duplicate names are rejected with an alert dialog.
+- **Rename flow** (v4.14.0): Clicking the pencil button (`#editPresetBtn`) opens the standalone editor window. The window title area displays a **focused but not fully selected** (v4.18.2; cursor placed at the end of the name to avoid overwriting the entire old name on direct input) name input field (`#editorNameInput`). Name and content modifications share the same auto-save pipeline (500ms debounce + blur/window-close flush). Duplicate names are rejected on save (`DUPLICATE_NAME`), with the save status area showing a red error until the name is unique. If the editor window is already open, clicking the pencil again reloads its tab so the name input refocuses each time.
+- **Delete flow**: Clicking `✕` opens a confirmation dialog with a red danger-styled button. If the deleted prompt group is currently active, the system resets to an empty state (`activePresetId = ''`) rather than auto-selecting another prompt group. All `chatPresetMap` bindings pointing to the deleted prompt group are cleaned up. The delete button is disabled when the blank option is selected. (v4.8.3) Deletion also records a tombstone in `dsPresetTombstones` (both local and sync), ensuring deletions propagate correctly through sync merge to other devices, rather than only cleaning up local `chatPresetMap` bindings.
+- **Delete all at once (v4.10.0)**: A `✕` button is added to the right of the "(No Prompt Group)" blank option row in the dropdown (hover tooltip: `Delete all prompt groups`), which opens a confirmation dialog (title "Delete All Prompt Groups", body "Are you sure you want to delete all prompt groups? This action cannot be undone."). Upon confirmation, all prompt groups are cleared, `activePresetId` is reset to `''`, and all `chatPresetMap` bindings pointing to any deleted prompt group are cleaned up (not just a single id), reusing the same tombstone sync mechanism as single deletion.
+- **Prompt group row hover tooltips (v4.10.0, button adjustments v4.14.0)**: Each row's `✕` (delete) button has a native `title` hover tooltip "Delete prompt". v4.14.0 removed the in-row rename pencil (renaming moved to the editor window), and the `renameAriaLabel`/`editPresetNameTooltip` i18n keys were removed as well.
+- **Default prompt group (pin, v4.18.0)**: A pin button (`.ds-select__item-btn--pin`) is added in each dropdown row to the left of the `✕` (delete) button. Clicking it sets the group as the "default"; the pin lights up (`.ds-select__item-btn--pinned`, `aria-pressed="true"`) and is colored with `var(--primary-color)`; clicking the same pin again unsets the default. The `title`/`aria-label` toggles based on state (unpinned: "Set as default (auto-selected for new conversations)"; pinned: "Unset default"; i18n keys `pinPresetAriaLabel`/`pinPresetTooltip`/`unpinPresetAriaLabel`/`unpinPresetTooltip`).
+  - **Uniqueness**: The default is stored as a single scalar key `pinnedPresetId` (empty string means no default). Uniqueness is structurally guaranteed — no additional validation is needed, and two groups cannot be pinned simultaneously.
+  - **Affects new conversations only**: Pinning only takes effect when opening a new conversation (URL has no chat id); see §6 "Selection on new conversations". Switching to an existing conversation is never affected.
+  - **Pin state does not shift on hover**: Row buttons use `visibility` instead of `display` for show/hide toggling, so the layout box is always present. Thus a pinned pin's position and size remain unchanged when the mouse enters or leaves the row; hovering directly over a lit pin maintains and slightly intensifies the lit style, never appearing unpinned.
+  - **Deletion linkage**: When deleting a single prompt group or deleting all, if the deleted group is the default, `pinnedPresetId` is also cleared to `''` (implemented in `popup/popup.pin-manager.js`'s `clearPinIfDeleted()`; no storage write occurs when unaffected).
+- **Prompt data model**: Each prompt group contains `id` (string), `name` (string), `content` (string), `createdAt` (number, epoch milliseconds), `updatedAt` (number, epoch milliseconds). The `id` is generated in `preset-{timestamp}-{random}` format. Content auto-saves in the standalone editor window: `input` events set a dirty flag and trigger a 500ms debounced write (v4.8.1 aligned from 600ms to 500ms); `blur`, `visibilitychange`, and `pagehide` events provide immediate write insurance (the standalone window may be closed directly by the OS), writing only when dirty to avoid exhausting the Chrome sync quota.
+- **Standalone Prompt Editor Window** (v3.0.0, name editing v4.14.0, Esc close v4.15.0, focus without select-all v4.18.2): Clicking the pencil button opens `popup/editor/editor.html` via `chrome.windows.create` (`type: 'popup'`, 1280×720). Query string contract: `?target=global` edits the global prompt; `?target=preset&id=<presetId>` edits that prompt group's content. For preset targets, the window title area displays a focused but not fully selected name input field (`#editorNameInput`, replacing the read-only `#editorTitle`); global targets retain the read-only title. Each target type is a singleton — re-clicking the pencil focuses the existing window (`chrome.windows.update`) and navigates its tab to the requested URL (`chrome.tabs.update`; same URL triggers a reload, different URL switches to the currently active prompt group; `pagehide` auto-save guarantees no data loss); a new window is created only if the previous one has been closed. After saving a prompt group, `ACTIVE_PRESET_CHANGED` is broadcast so open DeepSeek tabs update immediately. Invalid query parameters or a deleted prompt group cause the window to display a disabled state with explanatory text. All saves go through `StorageManager`. (v4.15.0) Pressing `Esc` closes the window; unsaved content is auto-saved by `pagehide` before closing, preventing data loss.
 
-## 2. 提示詞注入邏輯
+## 2. Prompt Injection Logic
 
-- **注入內容**：當功能啟用時，系統會在使用者輸入前加入組合前綴（全域提示詞 + 各提示詞組內容），以 XML 標籤包裹：
+- **Injection content**: When the feature is enabled, the system prepends a combined prefix (global prompt + prompt group content) before the user's input, wrapped in XML tags:
   ```
   <system-reminder>
-  [全域提示詞 + 各提示詞組內容（以 \n\n 連接）]
+  [Global prompt + prompt group content (joined with \n\n)]
   </system-reminder>
 
   <user-input>
-  [使用者原始輸入]
+  [User's original input]
   </user-input>
   ```
-  - `globalDefaultPrompt` 與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。`globalDefaultPrompt` 僅在全域提示詞開關（`globalPromptEnabled`）開啟時納入組合（v3.0.0）。
-  - 若兩者皆為空，則完全省略 `<system-reminder>` 區塊，但仍保留 `<user-input>` 包裹。
-  - 系統不會自動插入 `---` 分隔線。使用者對注入內容有完整控制權 — 任何分隔線、換行或格式都必須包含在提示詞文字中。
-- **注入觸發**：在以下情況執行注入：
-  - 使用者按下 `Enter` 鍵（排除 `Shift + Enter` 換行及 IME 組字狀態）。行動裝置（依 `content/mobile-device.js` 的 `isMobileDevice()` 判定：User-Agent 符合 `/Mobi|Android|iPhone|iPad/i`，或 `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1` 的桌面模式 iPadOS）上不攔截 `Enter`，保留瀏覽器預設的換行行為；以桌面 User-Agent 回報觸控點的裝置（觸控螢幕筆電、觸控筆裝置、Android 模擬器等觸控注入軟體）屬於桌面，`Enter` 照常攔截並注入。
-  - 使用者點擊畫面上的發送按鈕（CSS 選擇器：`div.ds-button[role="button"]`，亦可透過送出箭頭 SVG 圖示識別）。
-- **防護條件**：以下情況跳過注入：
-  - 透過開關停用功能。
-  - 使用者輸入為空（僅含空白字元）且無法在空白狀態下送出。
-  - 文字輸入區已含有注入過的前綴（開頭為 `<system-reminder>` 或 `<user-input>`）時，系統會**擷取 `<user-input>` 內的原文後重新注入**（含更新後的提示詞內容與時間戳），而非完全跳過注入。
-- **純附件／圖片送出（v4.21.1）**：文字輸入區為空但使用者仍可送出（僅附加檔案或圖片，畫面上的送出按鈕未處於停用狀態）時，**仍會執行注入**，而非因輸入為空而跳過：
-  - 是否「空白也可送出」直接讀取 DeepSeek 送出按鈕自身的狀態——按鈕帶 `ds-button--disabled` class、`aria-disabled="true"`，或 `disabled` 屬性為真即視為停用，無法在此情境下注入。
-  - 輸出僅包含時間戳行（系統時間開關開啟時）與提示詞組／全域提示詞前綴，**刻意省略整個 `<user-input>` 包裹**——沒有使用者文字可包。
-  - 觸發時機與一般送出相同：按下 `Enter` 或點擊送出按鈕皆會套用，判定方式與有文字時共用同一組送出按鈕定位邏輯。
-  - 若文字輸入區為空且送出按鈕本身也處於停用狀態（此時使用者原本就無法送出），仍維持跳過注入。
-  - **點擊路徑的 textarea 判定為三層優先序**：(1) 由被點擊的送出按鈕向上遍歷 DOM，找到的**非空** textarea 優先勝出；(2) 找不到時採用全域 `document.querySelector(ANY_TEXTAREA_SELECTOR)`（`'textarea'`，匹配含編輯框的所有 textarea）備援，若其為**非空**亦優先採用；向上遍歷與全域備援皆使用 `ANY_TEXTAREA_SELECTOR`；編輯視窗送出按鈕先取 `document.activeElement`（為 textarea 時），否則走上述向上遍歷與全域備援；主輸入框送出按鈕（composer 路徑）則一律解析為 `textarea[name="search"]`（`INPUT_TEXTAREA_SELECTOR`）；(3) 僅當全站都找不到非空 textarea 時，才選取空 textarea——向上遍歷找到的最近者優先，否則採用全域備援的結果，此為純附件／圖片送出情境實際命中的層級。
+  - `globalDefaultPrompt` and each prompt group's `promptPrefix` are joined with `\n\n`. `globalDefaultPrompt` is included only when the global prompt toggle (`globalPromptEnabled`) is on (v3.0.0).
+  - If both are empty, the `<system-reminder>` block is omitted entirely, but the `<user-input>` wrapper is still preserved.
+  - The system does not auto-insert a `---` separator. Users have full control over injected content — any separators, line breaks, or formatting must be included in the prompt text.
+- **Injection triggers**: Injection occurs when:
+  - The user presses `Enter` (excluding `Shift + Enter` for line breaks and IME composition state). On mobile devices, as defined by `isMobileDevice()` in `content/mobile-device.js` (User-Agent matches `/Mobi|Android|iPhone|iPad/i`, or iPadOS in desktop mode with `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`), `Enter` is not intercepted and the browser's default newline behavior is preserved; a device with a desktop User-Agent that reports touch points (touchscreen laptop, pen device, touch-injecting software such as Android emulators) is a desktop, so `Enter` is intercepted and injected as usual.
+  - The user clicks the on-screen send button (CSS selector: `div.ds-button[role="button"]`, also identifiable via the send-arrow SVG icon).
+- **Guard conditions**: Injection is skipped when:
+  - The feature is disabled via the toggle.
+  - User input is empty (whitespace only) and cannot be submitted in the blank state.
+  - If the text input area already contains an injected prefix (starts with `<system-reminder>` or `<user-input>`), the system **extracts the original text within `<user-input>` and re-injects** (with updated prompt content and timestamp) rather than skipping injection entirely.
+- **Attachment/image-only submission (v4.21.1)**: When the text input area is empty but the user can still submit (only attachments or images attached, and the on-screen send button is not disabled), **injection still occurs** rather than being skipped due to empty input:
+  - Whether "empty can still submit" is determined by reading the DeepSeek send button's own state — the button is considered disabled if it has the `ds-button--disabled` class, `aria-disabled="true"`, or a truthy `disabled` attribute.
+  - Output contains only the timestamp line (when the system time toggle is on) and prompt group/global prompt prefix, **deliberately omitting the entire `<user-input>` wrapper** — there is no user text to wrap.
+  - Trigger timing is the same as regular submission: both pressing `Enter` and clicking the send button apply, using the same send button detection logic as when text is present.
+  - If the text input area is empty and the send button itself is also disabled (the user cannot submit at all in this case), injection is still skipped as before.
+  - **Click path textarea resolution uses a three-tier priority**: (1) traverse up the DOM from the clicked send button — the first **non-empty** textarea found wins; (2) if none found, fall back to the global `document.querySelector(ANY_TEXTAREA_SELECTOR)` (`'textarea'`, matching every textarea including the edit box) — if it is **non-empty**, it takes priority; both the upward traversal and the global fallback use `ANY_TEXTAREA_SELECTOR`; the edit-window send button first takes `document.activeElement` (when it is a textarea), otherwise follows the upward traversal and global fallback above; the main-input send button (composer path) always resolves to `textarea[name="search"]` (`INPUT_TEXTAREA_SELECTOR`); (3) only when no non-empty textarea exists site-wide does the system select an empty textarea — the nearest one found by upward traversal takes priority, otherwise the global fallback result is used. This is the tier actually hit in the attachment/image-only submission scenario.
 
-## 3. 編輯訊息清理（解除包裹）
+## 3. Edit Message Cleanup (Unwrapping)
 
-- **目的**：使用者送出的訊息會被注入邏輯（§2）包裹為 `<system-reminder>...</system-reminder>` 與 `<user-input>\n...\n</user-input>` 結構。當使用者點擊 DeepSeek 的編輯按鈕重新編輯該訊息時，編輯框會載入**完整的包裹內容**。此功能負責解除包裹，使使用者僅編輯自己的原始文字。（實作於 `content/edit-message-cleanup.js`，v3.2.1）
-- **觸發**：文件層級委派的 `click` 監聽器，透過 `e.target.closest(EDIT_BUTTON_SELECTOR)` 辨識編輯按鈕（使用者訊息項目內帶 `[aria-disabled]` 的圖示按鈕）。非編輯按鈕的點擊直接忽略。
-- **非同步偵測（快照式）**：編輯框 textarea 於點擊後才渲染。點擊當下唯一的 textarea 是頁面底部主輸入框，故不可用「往上找含 textarea 的祖先」策略（會誤抓主輸入框）。改為：點擊當下先以 `new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))` 建立快照，再以 `MutationObserver` 觀察 `document.body`，挑出**不在快照內的新 textarea**即為編輯框。硬性逾時 2000ms；若新 textarea 的 value 尚未填入，另以最多 800ms 的次級觀察等待其填值。
-- **展開編輯區（max-height 調整）**：偵測到編輯框當下計算並套用一次（不隨視窗縮放重算、離開編輯後不還原）：
-  - `.cc852ac5`：移除 `max-height`（inline style 設為 `none`），所有匹配元素皆套用。
-  - `._646a522`：將 `max-height` 設為 `(window.innerHeight − CHAT_HEADER_SELECTOR 高度 − CONTENT_COLUMN_SELECTOR 高度 − 32)px`。三項高度於當下即時取得（`window.innerHeight` 與兩來源元素的 `getBoundingClientRect().height`）。**缺元素規則**：若 `CHAT_HEADER_SELECTOR` 或 `CONTENT_COLUMN_SELECTOR` 任一元素不存在，則跳過 `._646a522` 的設定（保持原狀）；`.cc852ac5` 的移除不受影響。
-- **解除包裹條件**：偵測到 textarea 後，若其內容符合 `/<user-input>\n([\s\S]*)\n<\/user-input>$/`，則僅保留 `<user-input>` 內的原文（透過 native value setter + `input`/`change` 事件寫回，與注入採用相同的 React-aware 寫入技術）。
-- **保護條件**：若編輯框內容**找不到** `<user-input>...</user-input>` 結構（例如未經注入的純文字訊息），則完全不更動編輯框內容，亦不觸發任何事件。
-- **編輯框捲入視野（v3.4.0）**：解除包裹後，在 `requestAnimationFrame` 中執行 `applyEditScrollPosition()`，將編輯框捲動至固定 header（`CHAT_HEADER_SELECTOR`）下方 16px 處。透過調整捲動容器的 `scrollTop` 達成（`computeScrollDelta()` + `findScrollableAncestor()`）。若編輯框、header 或捲動容器任一不存在，則為 no-op。
-- **再次送出**：清理後僅保留原文；使用者修改後點擊編輯送出按鈕時，注入邏輯（§2）會依當前設定重新包裹，行為與一般送出一致。
+- **Purpose**: Messages submitted by the user are wrapped by the injection logic (§2) into `<system-reminder>...</system-reminder>` and `<user-input>\n...\n</user-input>` structures. When the user clicks DeepSeek's edit button to re-edit a message, the edit box loads the **full wrapped content**. This feature unwraps it so the user only edits their original text. (Implemented in `content/edit-message-cleanup.js`, v3.2.1)
+- **Trigger**: A document-level delegated `click` listener identifies the edit button via `e.target.closest(EDIT_BUTTON_SELECTOR)` (the icon button with `[aria-disabled]` inside a user-message item). Non-edit-button clicks are ignored.
+- **Asynchronous detection (snapshot-based)**: The edit textarea is rendered after the click. At click time, the only textarea is the main input box at the bottom of the page, so a "find textarea ancestor" strategy cannot be used (it would catch the main input box). Instead: at click time, a snapshot is taken with `new Set(document.querySelectorAll(ANY_TEXTAREA_SELECTOR))`, then a `MutationObserver` on `document.body` identifies **new textareas not in the snapshot** as the edit box. Hard timeout is 2000ms; if the new textarea's value is not yet populated, a secondary observation of up to 800ms waits for it to be filled.
+- **Edit area expansion (max-height adjustment)**: Detected and applied once when the edit box is found (no recalculation on window resize, no restoration on leaving edit mode):
+  - `.cc852ac5`: removes `max-height` (inline style set to `none`), applied to all matching elements.
+  - `._646a522`: sets `max-height` to `(window.innerHeight − CHAT_HEADER_SELECTOR height − CONTENT_COLUMN_SELECTOR height − 32)px`. The three height values are obtained at that moment (`window.innerHeight` and `getBoundingClientRect().height` of the two source elements). **Missing element rule**: if either the `CHAT_HEADER_SELECTOR` or the `CONTENT_COLUMN_SELECTOR` element does not exist, the `._646a522` setting is skipped (keeping the original); `.cc852ac5` removal is unaffected.
+- **Unwrap condition**: After detecting the textarea, if its content matches `/<user-input>\n([\s\S]*)\n<\/user-input>$/`, only the original text within `<user-input>` is retained (written back via native value setter + `input`/`change` events, using the same React-aware write technique as injection).
+- **Protection condition**: If the edit box content **does not contain** a `<user-input>...</user-input>` structure (e.g., a plain text message that was not injected), the edit box content is not modified and no events are triggered.
+- **Edit box scroll into view (v3.4.0)**: After unwrapping, `applyEditScrollPosition()` is executed in a `requestAnimationFrame`, scrolling the edit box to 16px below the fixed header (`CHAT_HEADER_SELECTOR`). This is achieved by adjusting the scroll container's `scrollTop` (`computeScrollDelta()` + `findScrollableAncestor()`). If the edit box, header, or scroll container does not exist, this is a no-op.
+- **Resubmission**: After cleanup, only the original text remains; when the user modifies and clicks the edit submit button, the injection logic (§2) re-wraps according to current settings, behaving identically to a regular submission.
 
-## 4. UUID 對話綁定提示詞組
+## 4. UUID Conversation-Bound Prompt Groups
 
-- **UUID 提取**：Content Script 從 URL 路徑（`/a/chat/s/{uuid}`）透過 `extractUuidFromUrl()` 提取對話 UUID。新對話（無 UUID）的 UUID 為 `null`。
-- **首次訊息自動綁定**：當新對話（無 UUID）發送第一則訊息，且 SPA 導航至帶有 UUID 的 URL 時，系統會自動將新 UUID 綁定至各分頁的 `pendingPresetId`（若非空值），透過 `chatPresetMap` 記錄。自動綁定受到 `awaitingNewChatUuid` 旗標保護——該旗標僅在使用者實際在無 UUID 頁面上觸發發送動作（Enter 鍵或點擊發送按鈕）時才會設定。單純從新對話頁面導航至其他未綁定的現有對話**不會**觸發自動綁定——每個對話維持獨立的綁定關係，絕不繼承其他對話的狀態。該旗標在 5 秒後自動清除，避免發送失敗後的殘留旗標污染。
-- **新分頁隔離**：在新分頁中開啟新對話頁面絕不會繼承其他分頁的 `activePresetId`。Content Script 在無 UUID 頁面上的 `handleChatChange()` 中會清除 `promptPrefix`（v4.18.0 唯一例外：若 `pinnedPresetId` 指向一個仍存在的提示詞組，則改以該預設組的內容作為 `promptPrefix`。這仍不是繼承其他分頁的狀態，而是各分頁各自讀取同一份使用者明示的預設）。
-- **對話記憶**：每個對話 UUID 可獨立綁定至不同的提示詞組，透過 `chatPresetMap[uuid] = presetId` 記錄。切換對話時會自動恢復正確的提示詞組綁定。
-- **彈出選單同步**：當彈出選單在已綁定的對話上開啟時，下拉選單會自動選取已綁定的提示詞組。在未綁定的對話上時，下拉選單會透過 `GET_PENDING_PRESET` 訊息查詢 Content Script 的記憶體中 `pendingPresetId`，若無待選選取則顯示空白選項。
-- **解除綁定**：在有 UUID 的對話上選取下拉選單的空白選項，會從 `chatPresetMap` 中移除綁定。
-- **新建提示詞組綁定**：在已綁定的對話上建立新提示詞組時，會更新綁定至新提示詞組。
-- **分頁獨立性**：提示詞組選取為各分頁獨立。當彈出選單在一個分頁上選取提示詞組時，會透過 `broadcastActivePreset()` 將 `ACTIVE_PRESET_CHANGED` 訊息併發廣播至所有已開啟的 `chat.deepseek.com` 分頁的 Content Script（個別分頁送出失敗各自吞掉）。其他分頁的 Content Script 透過各自的 `chatPresetMap` 綁定保留自己的提示詞組選取，避免跨分頁污染。
+- **UUID extraction**: The Content Script extracts the conversation UUID from the URL path (`/a/chat/s/{uuid}`) via `extractUuidFromUrl()`. New conversations (no UUID) have a UUID of `null`.
+- **Auto-binding on first message**: When a new conversation (no UUID) sends its first message and the SPA navigates to a URL with a UUID, the system automatically binds the new UUID to each tab's `pendingPresetId` (if non-empty) via `chatPresetMap`. Auto-binding is guarded by the `awaitingNewChatUuid` flag — this flag is set only when the user actually triggers a send action (Enter key or click send button) on a page without a UUID. Simply navigating from a new conversation page to another unbound existing conversation **does not** trigger auto-binding — each conversation maintains independent bindings and never inherits state from other conversations. The flag auto-clears after 5 seconds to prevent stale flags from a failed send from polluting state.
+- **New tab isolation**: Opening a new conversation page in a new tab never inherits another tab's `activePresetId`. The Content Script's `handleChatChange()` clears `promptPrefix` on pages without a UUID (v4.18.0 sole exception: if `pinnedPresetId` points to a still-existing prompt group, that group's content is used as `promptPrefix` instead. This is not inheriting another tab's state but rather each tab independently reading the same user-designated default).
+- **Conversation memory**: Each conversation UUID can be independently bound to a different prompt group via `chatPresetMap[uuid] = presetId`. Switching conversations automatically restores the correct prompt group binding.
+- **Popup sync**: When the popup opens on a bound conversation, the dropdown auto-selects the bound prompt group. On an unbound conversation, the dropdown queries the Content Script's in-memory `pendingPresetId` via a `GET_PENDING_PRESET` message; if there is no pending selection, the blank option is shown.
+- **Unbinding**: Selecting the blank option in the dropdown on a conversation with a UUID removes the binding from `chatPresetMap`.
+- **New prompt group binding**: Creating a new prompt group on a bound conversation updates the binding to the new prompt group.
+- **Tab independence**: Prompt group selection is independent per tab. When the popup selects a prompt group on one tab, it concurrently broadcasts an `ACTIVE_PRESET_CHANGED` message to all open `chat.deepseek.com` tabs' Content Scripts via `broadcastActivePreset()` (individual tab send failures are silently swallowed). Other tabs' Content Scripts retain their own prompt group selection via their respective `chatPresetMap` bindings, preventing cross-tab contamination.
 
-## 5. 全域提示詞
+## 5. Global Prompt
 
-- **範圍**：透過獨立編輯視窗（鉛筆按鈕 → `editor.html?target=global`）編輯的多行文字。若非空值且全域提示詞開關開啟，該文字會在所有對話中預先附加至各提示詞組之前。
-- **編輯入口**（v3.0.0）：彈出選單 Global Prompt 卡片中「全域提示詞」文字右側的鉛筆按鈕（`#editGlobalPromptBtn`，樣式與新增提示詞組的 `+` 按鈕一致），點擊開啟 1280×720 獨立編輯視窗，維持自動儲存。
-- **專屬注入開關**（v3.0.0；逐提示詞組獨立 v4.20.0）：卡片右緣的 `#globalPromptToggle` 開關（外觀與主開關相同，與上方主開關垂直對齊）。開啟時注入全域提示詞；關閉時不注入。此開關為**每個提示詞組各自獨立**的屬性，儲存於該組的 `globalPromptEnabled` 欄位，隨提示詞組一同跨裝置同步；切換提示詞組時開關會重新反映該組自己的設定。
-- **生效值解析**（v4.20.0；依顯示中的提示詞組 v4.34.3）：開關生效值以頁面浮動選單**顯示中的提示詞組**為準，確保顯示與實際注入結果一致。`ChatBinding.resolveDisplayedGlobalPromptEnabled(settings)` 以 `resolveActivePresetIdFrom()` 解析顯示中的提示詞組（對話綁定表 `chatPresetMap` → `pendingPresetId` → `pinnedPresetId`），再交由 `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)` 決定 —— 有顯示中的提示詞組時取該組的 `globalPromptEnabled`，欄位缺漏（既有資料升級）時視為 `true`；無顯示中的提示詞組（空白選項模式、對話未綁定）時由保留的裝置層級 `globalPromptEnabled` 鍵決定。導覽、提示詞組內容、`activePresetId`、綁定表 chunk 金鑰或 legacy 鍵變動，以及收到 `ACTIVE_PRESET_CHANGED` 時皆重新計算。新建提示詞組一律明確帶入 `globalPromptEnabled: true`。
-- **導覽時重新解析**（v4.20.0）：SPA 導覽不觸發 `chrome.storage.onChanged`，故 `handleChatChange()` 在每一條分支（已綁定、綁定失效、自動綁定、未綁定的既有對話、全新對話）都會重新解析生效值，避免沿用上一個對話殘留的開關狀態。生效提示詞組 id 由 `resolveOverlayPresetId()` 統一解析，與浮動選單共用同一份優先序規則。
-- **刪除連動**（v4.20.0）：刪除單一提示詞組或一鍵刪除全部時，若 `activePresetId` 因此清空，開關會立即重新渲染為裝置層級回退值，不會停留在被刪除那一組的狀態。
-- **優先權**：主開關（`isEnabled`）優先權最高 — 主開關關閉時，無論 `globalPromptEnabled` 狀態為何，全域提示詞一律不注入（由 `injectPrefix()` 的 early return 保證）。
-- **儲存**：全域提示詞的**內容**獨立儲存在 `globalDefaultPrompt` 鍵下，透過 `chrome.storage.sync` 同步，且維持單一份共用字串 —— 逐組獨立的只有開關，不是內容。
-- **與各提示詞組的互動**：在 `buildInjectionPrefix()` 中，全域提示詞（開關開啟時）與各提示詞組的 `promptPrefix` 以 `\n\n` 連接。合併結果在注入前以 `<system-reminder>` 標籤包裹。
-- **提示詞組獨立性**：變更全域提示詞不會影響任何提示詞組的內容，反之亦然。`globalPromptEnabled` 開關也不影響提示詞組內容的注入。
-- **裝置層級 legacy 鍵（v4.7.3；回退語意 v4.20.0）**：裝置層級的 `globalPromptEnabled` 本機鍵僅在無顯示中的提示詞組時作為回退值使用；`isEnabled` 仍為裝置層級的本地專屬設定，不參與雲端同步與衝突解決。
+- **Scope**: Multi-line text edited via the standalone editor window (pencil button → `editor.html?target=global`). If non-empty and the global prompt toggle is on, this text is prepended before all prompt groups in every conversation.
+- **Edit entry** (v3.0.0): The pencil button (`#editGlobalPromptBtn`, styled identically to the `+` button for adding prompt groups) to the right of the "Global Prompt" label in the popup's Global Prompt card. Clicking opens a 1280×720 standalone editor window with auto-save.
+- **Dedicated injection toggle** (v3.0.0; per-prompt-group independent v4.20.0): The `#globalPromptToggle` toggle at the right edge of the card (same appearance as the master toggle, vertically aligned with the master toggle above). When on, the global prompt is injected; when off, it is not. This toggle is a **per-prompt-group independent** property stored in each group's `globalPromptEnabled` field, synced across devices with the prompt group; the toggle re-reflects the current group's setting when switching prompt groups.
+- **Effective value resolution** (v4.20.0; displayed prompt group v4.34.3): The effective value follows the prompt group the page's floating overlay **displays**, so the display matches the result that will be injected. `ChatBinding.resolveDisplayedGlobalPromptEnabled(settings)` resolves the displayed group with `resolveActivePresetIdFrom()` (chat binding in `chatPresetMap` → `pendingPresetId` → `pinnedPresetId`), then `StorageManager.resolveGlobalPromptEnabled(activePreset, legacyGlobalFlag)` decides — when a displayed prompt group exists, it reads that group's `globalPromptEnabled`; if the field is missing (existing data upgrade), it is treated as `true`; when no prompt group is displayed (blank option mode, unbound conversation), the retained device-level `globalPromptEnabled` key decides. It is recomputed on navigation, on prompt group content, `activePresetId`, chat-map chunk key, or legacy key changes, and on `ACTIVE_PRESET_CHANGED`. Newly created prompt groups always explicitly include `globalPromptEnabled: true`.
+- **Re-resolution on navigation** (v4.20.0): SPA navigation does not trigger `chrome.storage.onChanged`, so `handleChatChange()` re-resolves the effective value in every branch (bound, binding invalidated, auto-bound, unbound existing conversation, brand new conversation) to avoid carrying over the toggle state from the previous conversation. The effective prompt group id is resolved uniformly by `resolveOverlayPresetId()`, sharing the same priority rules as the floating menu.
+- **Deletion linkage** (v4.20.0): When deleting a single prompt group or all at once, if `activePresetId` is cleared as a result, the toggle immediately re-renders to the device-level fallback value instead of remaining on the deleted group's state.
+- **Priority**: The master toggle (`isEnabled`) has the highest priority — when the master toggle is off, the global prompt is never injected regardless of `globalPromptEnabled` state (guaranteed by `injectPrefix()`'s early return).
+- **Storage**: The global prompt **content** is stored independently under the `globalDefaultPrompt` key, synced via `chrome.storage.sync`, maintaining a single shared string — only the toggle is per-group, not the content.
+- **Interaction with prompt groups**: In `buildInjectionPrefix()`, the global prompt (when its toggle is on) and each prompt group's `promptPrefix` are joined with `\n\n`. The combined result is wrapped in `<system-reminder>` tags before injection.
+- **Prompt group independence**: Changing the global prompt does not affect any prompt group's content, and vice versa. The `globalPromptEnabled` toggle also does not affect prompt group content injection.
+- **Device-level legacy key (v4.7.3; fallback semantics v4.20.0)**: The device-level `globalPromptEnabled` local key is used only as a fallback when no prompt group is displayed; `isEnabled` remains a device-level local-only setting that does not participate in cloud sync or conflict resolution.
 
-## 6. 空白選項模式（無操作模式）
+## 6. Blank Option Mode (No-Op Mode)
 
-- **永遠可見**：在所有 DeepSeek 頁面上，下拉選單頂端永遠有一個空白選項（`value = ''`），不受綁定狀態影響。
-- **選取時的行為**：
-  - 不注入各提示詞組的內容——僅包含全域提示詞（若有設定且其開關開啟）。
-  - 提示詞組的鉛筆編輯按鈕（`#editPresetBtn`）為停用狀態，無法開啟編輯視窗。
-  - 列內刪除（`✕`）按鈕為停用狀態。
-- **新對話時的選取**：當彈出選單在新對話頁面（無 UUID）上開啟時，使用者明確選取或新增提示詞組的動作會透過查詢 Content Script 記憶體中的 `pendingPresetId` 在重新開啟時保留。此待選狀態在每次聊天狀態轉換時清除。若無待選選取存在，行為依 `pinnedPresetId`（v4.18.0）而定：有已釘選且仍存在的預設組時，`handleChatChange()` 會以它填入 `pendingPresetId`、寫入 `activePresetId` 並更新 overlay，因此新對話一開啟就預選該組；無預設（`''`）或釘選的 id 已失效（該組被刪除、或儲存中留有過期 id）時，維持原行為 —— `activePresetId` 清除為 `''`，預設選取空白選項。釘選是在「開啟新對話」的那一刻讀取的，不會回溯套用到使用者已經停留其上的新對話頁面。在新分頁開啟新對話頁面時，Content Script 的 `promptPrefix` 一律由當前 URL 的 UUID 綁定決定，不會繼承其他分頁的全域 `activePresetId`。
-- **刪除後的選取**：當啟用中的提示詞組被刪除時，系統會重設為空狀態，而非自動選取其他提示詞組。若被刪除的組同時是釘選的預設，`pinnedPresetId` 亦一併清為 `''`（v4.18.0）。
+- **Always visible**: On all DeepSeek pages, a blank option (`value = ''`) is always present at the top of the dropdown, unaffected by binding state.
+- **Behavior when selected**:
+  - Prompt group content is not injected — only the global prompt is included (if configured and its toggle is on).
+  - The prompt group pencil edit button (`#editPresetBtn`) is disabled and cannot open the editor window.
+  - The in-row delete (`✕`) button is disabled.
+- **Selection on new conversations**: When the popup opens on a new conversation page (no UUID), explicit user selection or creation of a prompt group is preserved via the Content Script's in-memory `pendingPresetId` when reopened. This pending state is cleared on each chat state transition. If no pending selection exists, behavior depends on `pinnedPresetId` (v4.18.0): when a pinned default exists and the group still exists, `handleChatChange()` fills `pendingPresetId` with it, writes to `activePresetId`, and updates the overlay, so the new conversation pre-selects that group upon opening; when there is no default (`''`) or the pinned id is stale (the group was deleted, or storage contains a stale id), the original behavior is maintained — `activePresetId` is cleared to `''`, defaulting to the blank option. Pinning is read at the moment of "opening a new conversation" and is not retroactively applied to a new conversation page the user is already on. When opening a new conversation page in a new tab, the Content Script's `promptPrefix` is always determined by the current URL's UUID binding and never inherits another tab's global `activePresetId`.
+- **Selection after deletion**: When the active prompt group is deleted, the system resets to an empty state rather than auto-selecting another prompt group. If the deleted group is also the pinned default, `pinnedPresetId` is also cleared to `''` (v4.18.0).

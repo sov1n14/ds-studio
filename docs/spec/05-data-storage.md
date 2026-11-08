@@ -1,141 +1,141 @@
-# 資料儲存、同步與備份規格
+# Data Storage, Sync, and Backup Specifications
 
-> 📂 [DS studio 文件](../) › [功能規格](../SPEC.md) › 資料儲存與同步
+> 📂 [DS studio Documentation](../) › [Feature Specifications](../SPEC.md) › Data Storage and Sync
 >
-> **相關架構**：[儲存架構](../architecture/STORAGE.md)
+> **Related Architecture**: [Storage Architecture](../architecture/STORAGE.md)
 
-## 8. 資料遷移
+## 8. Data Migration
 
-- 從 v1.2.x 升級後首次執行時，若 `promptPrefix`（舊鍵）包含內容但 `promptPresets`（新鍵）不存在，則將舊內容遷移至名為「我的提示詞」的提示詞組中，並設為啟用。
-- 若 `promptPrefix` 為空或不存在，則 `promptPresets` 以空陣列啟動，`activePresetId` 設為空字串。
+- On first run after upgrading from v1.2.x, if `promptPrefix` (old key) contains content but `promptPresets` (new key) does not exist, the old content is migrated into a prompt group named "My Prompts" and set as active.
+- If `promptPrefix` is empty or does not exist, `promptPresets` starts with an empty array and `activePresetId` is set to an empty string.
 
-## 12. Toast 通知系統與儲存狀態
+## 12. Toast Notification System and Storage State
 
-- **儲存狀態指示器**：彈出選單標題旁的 `<span id="saveStatus">`。`showSaveStatus()` 使綠色「已儲存」文字顯示 1 秒。用於所有自動儲存確認（開關、提示詞組、滑桿）。
-- **Toast 通知**：彈出選單底部的 `<div id="toast" class="toast" hidden>`。`Toast.show(message, durationMs?)` 取消隱藏、顯示文字設定 `opacity: 1`，然後在 `durationMs`（預設 2000ms）後淡出（400ms CSS 轉場）。用於：
-  - 匯出失敗：「匯出失敗，請重整頁面後再試」（2 秒）
-  - JSON 匯出成功：「設定已成功匯出」（2 秒）
-  - JSON 匯入成功：「設定已成功還原，請重新整理頁面。」（2 秒，頁面在 3 秒後重新載入）
-  - 同步衝突解決成功：「資料已成功合併同步」（約 1 秒，頁面在 1 秒後重新載入）
+- **Storage State Indicator**: The `<span id="saveStatus">` next to the popup menu title. `showSaveStatus()` displays green "Saved" text for 1 second. Used for all auto-save confirmations (toggles, prompt groups, sliders).
+- **Toast Notifications**: The `<div id="toast" class="toast" hidden>` at the bottom of the popup menu. `Toast.show(message, durationMs?)` unhides, sets the text with `opacity: 1`, then fades out (400ms CSS transition) after `durationMs` (default 2000ms). Used for:
+  - Export failure: "Export failed, please refresh the page and try again" (2 seconds)
+  - JSON export success: "Settings exported successfully" (2 seconds)
+  - JSON import success: "Settings restored successfully. Please refresh the page." (2 seconds, page reloads after 3 seconds)
+  - Sync conflict resolution success: "Data has been merged and synced successfully" (~1 second, page reloads after 1 second)
 
-## 13. JSON 備份與還原
+## 13. JSON Backup and Restore
 
-- **匯出**：「備份設定（匯出 JSON）」按鈕透過 `StorageManager.getSettings()` 讀取所有設定，序列化為 JSON，以下載方式觸發，檔名為 `ds-studio-backup-YYYYMMDD.json`。
-- **匯入**：「還原設定（匯入 JSON）」按鈕開啟檔案選取器。在選取檔案並經使用者確認後：
-  - 提示詞組使用 `mergePresets()` **合併** — 相同 ID 保留較新的 `updatedAt`，新 ID 附加於後。
-  - `chatPresetMap` 以 `mergeChatPresetBindings()` 交由 service worker 展開合併（現有綁定為基底，同 uuid 以匯入值為準）。
-  - UI 設定（globalDefaultPrompt、includeThinking、includeReferences、側邊欄自動隱藏、寬度）由匯入值**覆寫**。
-  - 成功後顯示 Toast，3 秒後重新載入彈出選單。
-  - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。（v4.20.0）此處指的是裝置層級的 `globalPromptEnabled` 鍵；各提示詞組自身的 `globalPromptEnabled` 欄位屬於提示詞組資料，隨 `mergePresets()` 一同匯出與匯入。（v4.38.0）`isReplyNotificationEnabled`（設定欄位 `replyNotification`）同為本機專用開關，匯入備份不還原。
-  - （v4.10.1）匯入完成後會呼叫 `clearPresetTombstones()`，精準清除 `importedSettings.promptPresets` 中每個提示詞組 ID 對應的 `dsPresetTombstones` 記錄（不存在則略過）。修復先前刪除全部提示詞組後再匯入備份，於下次跨裝置同步時因舊墓碑尚未過期而被再次刪除的缺陷。
-- 此外，備份與還原卡片還包含「匯出復原備份」、「匯入復原備份」、「清除所有已還原紀錄」三個按鈕，專門用於管理 `restored_messages`（審查回覆還原記錄），獨立於一般設定備份。
+- **Export**: The "Backup Settings (Export JSON)" button reads all settings via `StorageManager.getSettings()`, serializes to JSON, and triggers a download with the filename `ds-studio-backup-YYYYMMDD.json`.
+- **Import**: The "Restore Settings (Import JSON)" button opens a file picker. After file selection and user confirmation:
+  - Prompt groups use `mergePresets()` to **merge** — same ID retains the newer `updatedAt`, new IDs are appended.
+  - `chatPresetMap` is merged by the service worker via `mergeChatPresetBindings()` (existing bindings as the base; the imported value wins per uuid).
+  - UI settings (globalDefaultPrompt, includeThinking, includeReferences, sidebar auto-hide, widths) are **overwritten** by the import values.
+  - On success, a toast is shown and the popup menu reloads after 3 seconds.
+  - (v4.7.3) `isEnabled` / `globalPromptEnabled` are device-level local-only toggles; importing a backup **must not overwrite** the current device's toggle state, preventing a disabled extension from being accidentally enabled by an import. (v4.20.0) This refers to the device-level `globalPromptEnabled` key; each prompt group's own `globalPromptEnabled` field belongs to the prompt group data and is exported/imported along with `mergePresets()`. (v4.38.0) `isReplyNotificationEnabled` (settings field `replyNotification`) is likewise a local-only toggle and is not restored by an import.
+  - (v4.10.1) After import, `clearPresetTombstones()` is called to precisely clear `dsPresetTombstones` records corresponding to each prompt group ID in `importedSettings.promptPresets` (skipped if nonexistent). This fixes the defect where deleting all prompt groups then importing a backup caused them to be re-deleted on the next cross-device sync because old tombstones had not yet expired.
+- Additionally, the Backup & Restore card contains three buttons — "Export Restore Records", "Import Restore Records", and "Clear All Restored Records" — dedicated to managing `restored_messages` (censor reply restore records), independent of general settings backup.
 
-## 14. 雲端同步與衝突處理
+## 14. Cloud Sync and Conflict Handling
 
-- **同步目標**：使用 `chrome.storage.sync` 作為跨裝置同步的主要儲存目標。若同步配額超出，自動備援至 `chrome.storage.local`。
-- **自動同步**：所有寫入操作（`_set()`）為安全起見同時寫入同步與本地端儲存空間。
-- **衝突偵測**：首次執行（或升級）時，比較本地端與同步的 `promptPresets`。若兩者不同且同步有資料，則設定 `syncConflictPending = true`，並阻止讀取使用同步資料（僅回傳本地端資料）。
-- **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
-- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／裝置層級 globalPromptEnabled／isReplyNotificationEnabled 除外——三者為裝置層級本機開關，不參與同步衝突解決；各提示詞組自身的 `globalPromptEnabled` 欄位則隨提示詞組正常合併，v4.20.0），清除衝突旗標。chat-map 金鑰（`chatPresetMap`、`chatPresetMapMeta`、`chatPresetMap_*`）不在寫回範圍內，只由 service worker 寫入。
-- **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
-- **排序仲裁（v4.11.19）**：`mergePresets()` 除了合併內容，也決定回傳陣列的**順序**，依據是雙方的 `dsPresetOrderMeta`。僅當本機 `orderUpdatedAt` **嚴格大於**雲端時採用本機順序；其餘情況（**含時間戳完全相等**）一律採用雲端的 `order` 陣列。此規則與讀取路徑的 `_pickPresetOrderByRecency()` 是兩套獨立機制，`mergePresets()` 不呼叫後者。
-  - 時間戳相等是**常態而非邊界狀況**：單次 `_set()` 先寫 `chrome.storage.sync`，再把同一個物件鏡射到 `chrome.storage.local`，因此任何一次成功儲存後兩側 `orderUpdatedAt` 必然逐位元相同。
-  - 平手時選雲端而非本機，是因為只有雲端勝出會**收斂** —— 讀取路徑從不把合併決定寫回雲端（`_get()` 只寫回 local），選本機會讓兩台裝置各自永久保留不同順序。保護「本機確實較新」的職責屬於 `dsLocalAuth` 重推佇列。
-  - 平手必須落在已儲存的 `order` 陣列，而非合併 Map 的插入順序（本機已快取的組在前、其餘依雲端順序在後）：插入順序取決於「**哪些提示詞組物件剛好快取在 `chrome.storage.local`**」而非已儲存的順序陣列，會使拖曳排序在下次合併時被靜默丟棄。
-- **重推守衛（v4.11.18）**：`retrySync()` 推送 `dsLocalAuth` 佇列中的金鑰時，`dsPresetOrderMeta` 先經新舊比較、`dsPresetTombstones` 先經逐 id 聯集合併才推送，避免陳舊的本機值蓋掉雲端較新值，詳見上方 `dsLocalAuth` 說明。
-- **刪除墓碑（v4.8.3）**：刪除提示詞組時會記錄一筆帶刪除時間戳的墓碑於 `dsPresetTombstones`（本地與同步兩端）。`resolveSyncConflict()` 合併時會先合併雙邊墓碑（保留 `ts` 較新的一筆）並清理超過 30 天保留期的舊墓碑，再交給 `mergePresets()` 判斷：任一側資料的 `updatedAt` 不晚於其墓碑時間即會被排除，防止某裝置刪除的提示詞組被另一裝置（或同步備份中）仍保留的舊資料復活。
-- **墓碑合併演算法修正（v4.10.2）**：修復「清除墓碑」（JSON 匯入還原時呼叫的 `clearPresetTombstones()`）直接刪除墓碑鍵，導致無時間戳可供合併時仲裁勝負、任一側仍持有舊墓碑即會復活已清除紀錄的缺陷。墓碑條目形狀改為 `{ ts, deleted }`：實際刪除寫入 `{ ts, deleted: true }`，清除（還原）改為寫入 `{ ts, deleted: false }` 而非刪鍵；合併時取 `ts` 較新的一側整組勝出，「清除」與「刪除」成為同一時間軸上的兩次普通寫入，較新者必定勝出。舊版裸數字墓碑會自動正規化為 `{ ts: <該數字>, deleted: true }` 以維持相容。
+- **Sync Target**: Uses `chrome.storage.sync` as the primary cross-device sync storage target. If the sync quota is exceeded, automatically falls back to `chrome.storage.local`.
+- **Auto Sync**: All write operations (`_set()`) write to both sync and local storage as a safety measure.
+- **Conflict Detection**: On first run (or upgrade), the local and sync `promptPresets` are compared. If they differ and sync has data, `syncConflictPending = true` is set and reading from sync data is blocked (only local data is returned).
+- **Conflict Resolution UI**: When `syncConflictPending` is true, opening the popup menu displays a "Cloud Sync Conflict" dialog with a "Merge Sync" button.
+- **Resolution Logic**: `StorageManager.resolveSyncConflict()` reads from both storage areas, merges prompt groups via `mergePresets()`, overwrites UI settings with the cloud version (except `isEnabled` / device-level `globalPromptEnabled` / `isReplyNotificationEnabled` — all three are device-level local toggles and do not participate in sync conflict resolution; each prompt group's own `globalPromptEnabled` field merges normally with the prompt group, v4.20.0), and clears the conflict flag. Chat-map keys (`chatPresetMap`, `chatPresetMapMeta`, `chatPresetMap_*`) are outside the write-back set; only the service worker writes them.
+- **Smart Merge**: `mergePresets()` uses a Map keyed by prompt group `id`. For each ID, the prompt group with the newer `updatedAt` is retained. New IDs are appended. This prevents data loss when both sides independently modify prompt groups.
+- **Sort Arbitration (v4.11.19)**: `mergePresets()` also determines the **order** of the returned array, based on both sides' `dsPresetOrderMeta`. The local order is adopted only when the local `orderUpdatedAt` is **strictly greater than** the cloud's; in all other cases (**including exactly equal timestamps**), the cloud's `order` array is used. This rule and the read path's `_pickPresetOrderByRecency()` are two independent mechanisms; `mergePresets()` does not call the latter.
+  - Equal timestamps are **the norm, not an edge case**: a single `_set()` writes to `chrome.storage.sync` first, then mirrors the same object to `chrome.storage.local`, so after any successful save, both sides' `orderUpdatedAt` are necessarily bit-identical.
+  - Choosing cloud on a tie instead of local is because only cloud winning **converges** — the read path never writes merge decisions back to cloud (`_get()` only writes back to local), so choosing local would leave two devices permanently retaining different orders. The responsibility for protecting "local is genuinely newer" belongs to the `dsLocalAuth` retry queue.
+  - A tie must resolve to a saved `order` array rather than the merged Map's insertion order (locally cached groups first, then remaining ones in cloud order): insertion order depends on "**which prompt group objects happen to be cached in `chrome.storage.local`**" rather than the saved order array, so drag-to-reorder would be silently discarded on the next merge.
+- **Retry Guard (v4.11.18)**: When `retrySync()` pushes keys from the `dsLocalAuth` queue, `dsPresetOrderMeta` goes through a recency comparison and `dsPresetTombstones` through a per-id union merge before pushing, so stale local values never overwrite newer cloud values; see the `dsLocalAuth` description above for details.
+- **Deletion Tombstones (v4.8.3)**: Deleting a prompt group records a tombstone with a deletion timestamp in `dsPresetTombstones` (both local and sync). `resolveSyncConflict()` first merges tombstones from both sides (retaining the entry with the newer `ts`) and cleans up tombstones older than the 30-day retention period, then hands off to `mergePresets()` for judgment: any side's data whose `updatedAt` is not later than its tombstone time is excluded, preventing a deleted prompt group from being resurrected by stale data on another device (or in a sync backup).
+- **Tombstone Merge Algorithm Fix (v4.10.2)**: Fixes the defect where "clearing tombstones" (`clearPresetTombstones()` called during JSON import restore) deleted the tombstone key outright, leaving no timestamp for merge arbitration; if either side still held the old tombstone, already-cleared records would be resurrected. The tombstone entry shape is now `{ ts, deleted }`: actual deletion writes `{ ts, deleted: true }`, clearing (restoring) writes `{ ts, deleted: false }` instead of deleting the key; on merge, the side with the newer `ts` wins entirely, making "clear" and "delete" two ordinary writes on the same timeline where the newer one always prevails. Legacy bare-number tombstones are automatically normalized to `{ ts: <that number>, deleted: true }` for compatibility.
 
-## 技術規格
+## Technical Specifications
 
-### 目標環境
+### Target Environment
 
-- **網域**：`chat.deepseek.com`
-- **平台**：Chrome 擴充功能 Manifest V3
-- **權限**：`storage`、`activeTab`、`alarms`（用於 background service worker 的排程重試與同步）；選用權限 `notifications`（v4.38.0，`optional_permissions`，僅在使用者開啟「回覆完成通知」時請求，行為見 [功能規格 §27](04-features.md#27-回覆完成通知-reply-notification-v4380) ）；選用權限 `clipboardWrite` 與 `offscreen`（v4.39.0，`optional_permissions`，僅在使用者勾選任一自動複製核取方塊時一併請求，行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) ）
+- **Domain**: `chat.deepseek.com`
+- **Platform**: Chrome Extension Manifest V3
+- **Permissions**: `storage`, `activeTab`, `alarms` (for background service worker scheduled retries and sync); optional permission `notifications` (v4.38.0, `optional_permissions`, requested only when the user turns on "Reply-complete notification"; for the behavior see [Feature Spec §27](04-features.md#27-reply-complete-notification-reply-notification-v4380)); optional permissions `clipboardWrite` and `offscreen` (v4.39.0, `optional_permissions`, requested together only when the user checks either auto copy checkbox; for the behavior see [Feature Spec §26](04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370))
 
-### DOM 選取
+### DOM Selectors
 
-- **輸入區域**：DeepSeek 聊天介面中的 `textarea` 元素。
-- **發送按鈕**：CSS 類別為 `div.ds-button[role="button"]` 的 `div` 元素。兩層識別策略：(1) 主輸入框送出按鈕以 SVG path 前綴 `M8.3125` 識別；(2) 編輯視窗送出按鈕由 `isEditWindowSendButton` 識別（`ds-button--primary` + `ds-button--filled` 變體 class 且含 `span.ds-button__content` 文字標籤）。「停止生成」按鈕與送出按鈕 class 相同，僅以 SVG path 區分（停止圖示 path 以 `M2 4.88` 開頭）。
-- **訊息容器**：`.ds-virtual-list-visible-items .ds-message`，用於列舉對話輪次。
-- **Markdown 內容**：`.ds-markdown`，用於 AI 回應內容。
-- **思考過程**：`.ds-think-content`，用於 AI 推理內容。
-- **側邊欄容器**：`SIDEBAR_WRAPPER_SELECTOR`（`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）— 自動隱藏模組目標的側邊欄容器。
-- **側邊欄內部內容**：`SIDEBAR_INNER_SELECTOR`（`div:has(> .ds-scroll-area > .ds-scroll-area)`）— 收合時透過負值 `margin-left` 位移的內部內容。
-- **訊息清單區域**：`VIRTUAL_LIST_SELECTOR`（`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`）— 對話區域寬度 CSS 注入的目標。
-- **輸入/容器區域**：`CONTENT_COLUMN_SELECTOR`（`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`）— 同時為對話區域寬度（置中）與輸入框寬度（max-width）CSS 注入的目標。
-- **主要應用區域**：`._765a5cd` — MutationObserver 監控的目標，用於 UI 調整的 SPA 重新套用。
-- **對話標題列**：`CHAT_HEADER_SELECTOR`（`div:has(> .the-header)`）— Overlay 提示詞組選單的定位錨點。
-- **Go Down 原生按鈕**：`._0706cde`（含 `ds-button--floating ds-button--circle` 等 class）— GoToTop 的偵測目標與定位基準。
-- **浮動按鈕包裝容器**：`FLOATING_BUTTON_BAR_SELECTOR`（`div:has(> div > div > div > textarea[name="search"])`，主輸入框上四層的 `div`，`position: relative`）— GoToTop 按鈕的注入目標容器；外層 sticky 容器為 `CONTENT_COLUMN_SELECTOR`。
-- **對話起始錨點**：`GO_TOP_ANCHOR_SELECTOR`（`._9663006._2c189bc`）/ `[data-virtual-list-item-key="1"]` — GoToTop 隱藏條件與「已達頂部」判定錨點；`GO_TOP_ANCHOR_SELECTOR` 的後備為使用者訊息項目或編輯模式中的項目（`:has(.ds-collapsible-text)` / `:has(.ds-textarea)`）。
+- **Input Area**: The `textarea` element in the DeepSeek chat interface.
+- **Send Button**: A `div` element with CSS class `div.ds-button[role="button"]`. Two-tier identification: (1) the main composer send button via SVG path prefix `M8.3125`; (2) the edit-window send button via `isEditWindowSendButton` (`ds-button--primary` + `ds-button--filled` variant classes plus a `span.ds-button__content` text label). The "Stop Generating" button shares the send button's classes and is distinguished only by its SVG path (the stop icon path starts with `M2 4.88`).
+- **Message Container**: `.ds-virtual-list-visible-items .ds-message`, for enumerating conversation turns.
+- **Markdown Content**: `.ds-markdown`, for AI response content.
+- **Thinking Process**: `.ds-think-content`, for AI reasoning content.
+- **Sidebar Container**: `SIDEBAR_WRAPPER_SELECTOR` (`div:has(> div > .ds-scroll-area > .ds-scroll-area)`) — the sidebar container targeted by the auto-hide module.
+- **Sidebar Inner Content**: `SIDEBAR_INNER_SELECTOR` (`div:has(> .ds-scroll-area > .ds-scroll-area)`) — inner content offset via negative `margin-left` when collapsed.
+- **Message List Area**: `VIRTUAL_LIST_SELECTOR` (`.ds-virtual-list.ds-scroll-area > .ds-virtual-list-items`) — target for conversation area width CSS injection.
+- **Input/Container Area**: `CONTENT_COLUMN_SELECTOR` (`.ds-virtual-list.ds-scroll-area > div:has(textarea[name="search"])`) — target for both conversation area width (centering) and input box width (max-width) CSS injection.
+- **Main Application Area**: `._765a5cd` — MutationObserver monitoring target for SPA reapplication of UI adjustments.
+- **Conversation Title Bar**: `CHAT_HEADER_SELECTOR` (`div:has(> .the-header)`) — positioning anchor for the overlay prompt group menu.
+- **Go Down Native Button**: `._0706cde` (with `ds-button--floating ds-button--circle` and other classes) — GoToTop's detection target and positioning reference.
+- **Floating Button Wrapper Container**: `FLOATING_BUTTON_BAR_SELECTOR` (`div:has(> div > div > div > textarea[name="search"])`, the `div` four levels above the main textarea, `position: relative`) — GoToTop button's injection target container; outer sticky container is `CONTENT_COLUMN_SELECTOR`.
+- **Conversation Start Anchor**: `GO_TOP_ANCHOR_SELECTOR` (`._9663006._2c189bc`) / `[data-virtual-list-item-key="1"]` — GoToTop hide condition and "reached top" determination anchor; the fallback of `GO_TOP_ANCHOR_SELECTOR` is a user-message item or an item in edit mode (`:has(.ds-collapsible-text)` / `:has(.ds-textarea)`).
 
-### 儲存結構
+### Storage Structure
 
-| 鍵 | 型別 | 預設值 | 說明 |
+| Key | Type | Default | Description |
 |-|-|-|-|
-| `dsPresetIndex` | `string[]` | `[]` | 提示詞組 ID 的有序陣列（v1.7.0 新格式）。 |
-| `dsPreset_<id>` | `PromptPreset` | — | 各提示詞組獨立儲存於此鍵，繞過 sync 每項 8KB 限制。每組：`{ id, name, content, createdAt, updatedAt, globalPromptEnabled }`。`globalPromptEnabled`（v4.20.0）為該組專屬的全域提示詞注入開關，新建時明確帶入 `true`，既有資料無此欄位時視為 `true`；隨提示詞組一同跨裝置同步。 |
-| `activePresetId` | string | `""` | 當前啟用提示詞組的 ID。 |
-| `pinnedPresetId` | string | `""` | 釘選為「預設」的提示詞組 ID，空字串代表無預設（v4.18.0）。單一純量值，故同時只可能有一組被釘選。僅在開啟新對話（URL 無 chat id）時被讀取用來預選；既有對話不受影響。與 `activePresetId` 走相同寫入路徑（sync 為主、local 備援），並同樣納入設定備份的匯出與匯入。 |
-| `isEnabled` | boolean | `false` | 提示詞注入是否啟用（主開關）。 |
-| `includeThinking` | boolean | `true` | 匯出的 MD 是否包含 AI 思考過程。 |
-| `includeReferences` | boolean | `true` | 匯出的 MD 是否包含引用參考連結。 |
-| `globalDefaultPrompt` | string | `''` | 在所有對話中預先附加至各提示詞組前的全域提示詞。 |
-| `globalPromptEnabled` | boolean | `true` | 全域提示詞是否注入（v3.0.0）。主開關優先權更高。此鍵為 **legacy 回退鍵**（v4.20.0）—— 僅在無作用中提示詞組時採用，有作用中提示詞組時改以該組自身的 `globalPromptEnabled` 欄位為準（解析邏輯見 `StorageManager.resolveGlobalPromptEnabled()`）。 |
-| `chatPresetMap` | object | `{}` | *已於 v2.4.0 遷移為分塊儲存*：舊版扁平鍵，僅於遷移時讀取，遷移後清理。 |
-| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | （v2.4.0+）分塊索引：版本號（每次提交遞增 1，無變更時不寫入）、分塊數量、各塊位元組大小。僅由 service worker 寫入。 |
-| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | （v2.4.0+）實際資料分塊，每塊 ≤ 7168 bytes，合併後即完整的 chatPresetMap。僅由 service worker 寫入。 |
-| `dsSidebarAutoHide` | boolean | `false` | 側邊欄自動隱藏功能是否啟用。 |
-| `dsChatWidth` | number | `70` | 對話區域寬度百分比（30–100）。 |
-| `dsChatWidthEnabled` | boolean | `false` | 對話區域寬度調整是否啟用。 |
-| `dsInputWidth` | number | `70` | 輸入框寬度百分比（30–100）。 |
-| `dsInputWidthEnabled` | boolean | `false` | 輸入框寬度調整是否啟用。 |
-| `dsHideThinking` | boolean | `false` | 隱藏思考過程功能是否啟用。 |
-| `dsAutoExpandMessages` | boolean | `false` | （v4.32.0）自動展開訊息是否啟用。開啟時以 MutationObserver 自動點擊收合狀態的展開按鈕，使所有訊息預設展開。受主開關連動。 |
-| `isAutoRetryEnabled` | boolean | `false` | （v4.35.0）自動重試是否啟用。開啟時，共用輪次迴圈在每輪 0–3 秒隨機延遲後點擊頁面上的重試按鈕。受主開關連動。 |
-| `isAutoContinueEnabled` | boolean | `false` | （v4.35.0）自動繼續生成是否啟用。開啟時，同一輪次迴圈在每輪 0–3 秒隨機延遲後點擊頁面上的「繼續生成」按鈕。受主開關連動。 |
-| `isAutoOpenSidebarEnabled` | boolean | `false` | （v4.36.0）自動開啟側欄是否啟用。開啟時以 MutationObserver 偵測收合側欄的展開按鈕，每次出現即點擊，讓側欄保持開啟。受主開關連動。 |
-| `isAutoCopyReplyEnabled` | boolean | `false` | （v4.37.0）自動複製回覆內容是否啟用。開啟時，回覆完成後自動按下該回覆工具列的複製按鈕。受主開關連動。行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370)。 |
-| `isAutoCopyCodeEnabled` | boolean | `false` | （v4.37.0）自動複製程式碼區塊內容是否啟用。開啟時，回覆完成後依序按下該回覆每個程式碼區塊的複製按鈕。受主開關連動。行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370)。 |
-| `isReplyNotificationEnabled` | boolean | `false` | （v4.38.0）回覆完成通知是否啟用。開啟時，新回覆完成且 DeepSeek 分頁不在前景，會顯示桌面通知。**本地專用**、以裝置為範圍：只寫入 `chrome.storage.local`，不同步、不被雲端衝突解決覆寫、匯入備份不還原。受主開關連動。行為見 [功能規格 §27](04-features.md#27-回覆完成通知-reply-notification-v4380) 。 |
-| `dsPreventAutoScroll` | boolean | `false` | （v4.12.0）防止自動回滾是否常駐啟用。開啟時 `PreventAutoScroll` 全時抑制向下自動捲動，而非僅在「回到頂部」與 Markdown 匯出期間生效。 |
-| `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
-| `dsWebSearchToggle` | string | `'on'` | （v4.13.0，v4.17.0 改為二態）連網搜索按鈕的**預設值**：`'on'` 使頁面智能搜索按鈕為 `aria-pressed="true"`、`'off'` 為 `"false"`。每個啟動事件只套用一次 —— 進場、本鍵變更、主開關由關轉開（v4.17.1）—— 之後使用者手動切換的結果會保留到下一個啟動事件；只在狀態不符時點擊。讀取到舊版殘留的 `'default'` 值一律當作 `'on'`（不寫回）。受主開關連動。 |
-| `dsLocalAuth` | `string[]` | `[]` | 待重推佇列（僅本地端）。記錄上次 sync 寫入失敗、改為寫入 local 的金鑰名稱，供 `retrySync()` 後續重新推送至雲端。**此鍵純粹是重試佇列，不影響讀取優先序** —— `_get()` 讀取路徑的取值與此清單無關（v4.7.2）。（v4.11.18）`retrySync()` 推送時對各金鑰施加不同守衛，並非一律無條件重推，詳見架構文件的 *Sync Write Quota Strategy*。 |
-| `syncInitialized` | boolean | `false` | 初始同步是否已完成（僅本地端）。 |
-| `syncConflictPending` | boolean | `false` | 是否有同步衝突待使用者解決（僅本地端）。 |
-| `dsPresetTombstones` | `Object<id, { ts: number, deleted: boolean }>` | `{}` | （v4.8.3）提示詞組刪除墓碑，同步於本地與雲端。合併時用於判斷某 id 是否已被刪除，避免舊資料復活。（v4.10.1）JSON 匯入後會呼叫 `clearPresetTombstones()` 清除匯入 ID 對應的墓碑，避免下次同步時被重新刪除。（v4.10.2）條目形狀由裸數字改為 `{ ts, deleted }`：`deleted: true` 表示刪除，`deleted: false` 表示已清除（還原）。合併時取 `ts` 較新者整組勝出。舊版裸數字條目讀取時自動正規化為 `{ ts, deleted: true }`。 |
-| `dsOversizedKeys` | `string[]` | `[]` | （v4.8.2）永久超出 8KB 同步配額的金鑰清單（僅本地端）。自癒：下次寫入尺寸低於限制時自動移除。 |
-| `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | （v4.6.2）提示詞組排序的權威時間戳，用於跨裝置合併時決定哪一端的排序較新。 |
-| `promptPresets` | `PromptPreset[]` | — | *僅供遷移偵測*：v1.6.x 的單一陣列格式；`initialize()` 讀到時會轉存為 `dsPresetIndex` + `dsPreset_<id>` 並刪除此鍵。 |
-| `restored_messages` | object | {} | 已復原的審查回覆記錄，含 message_id、fragments 等（僅本地端，最多 200 筆）。 |
-| `dss-device-id` | string | — | 本機裝置 ID（僅本地端，絕不同步；不在 `StorageManager.KEYS` 內）。service worker 首次新增臨時對話待刪項目時以 `crypto.randomUUID()` 建立一次，寫入該項目的 `ownerDeviceId`。補救掃描以此區分本機項目（`LEASE_TTL_MS`，10 分鐘）與其他裝置或無擁有者的項目（須明確釋放或等待 `FOREIGN_LEASE_TTL_MS`，24 小時）。 |
+| `dsPresetIndex` | `string[]` | `[]` | Ordered array of prompt group IDs (v1.7.0 new format). |
+| `dsPreset_<id>` | `PromptPreset` | — | Each prompt group stored independently under this key, bypassing the sync per-item 8KB limit. Each group: `{ id, name, content, createdAt, updatedAt, globalPromptEnabled }`. `globalPromptEnabled` (v4.20.0) is the per-group global prompt injection toggle; explicitly set to `true` on creation; existing data without this field is treated as `true`; synced across devices with the prompt group. |
+| `activePresetId` | string | `""` | ID of the currently active prompt group. |
+| `pinnedPresetId` | string | `""` | ID of the prompt group pinned as "default"; empty string means no default (v4.18.0). Single scalar value, so only one group can be pinned at a time. Read only when opening a new conversation (URL has no chat id) to preselect; existing conversations are unaffected. Follows the same write path as `activePresetId` (sync primary, local fallback), and is included in settings backup export and import. |
+| `isEnabled` | boolean | `false` | Whether prompt injection is enabled (master switch). |
+| `includeThinking` | boolean | `true` | Whether to include the AI thinking process in exported Markdown. |
+| `includeReferences` | boolean | `true` | Whether to include citation reference links in exported Markdown. |
+| `globalDefaultPrompt` | string | `''` | Global prompt prepended to all prompt groups across all conversations. |
+| `globalPromptEnabled` | boolean | `true` | Whether the global prompt is injected (v3.0.0). The master switch has higher priority. This key is a **legacy fallback key** (v4.20.0) — used only when no active prompt group exists; when an active prompt group exists, that group's own `globalPromptEnabled` field takes precedence (resolution logic in `StorageManager.resolveGlobalPromptEnabled()`). |
+| `chatPresetMap` | object | `{}` | *Migrated to chunked storage in v2.4.0*: old flat key, read only during migration, cleaned up after migration. |
+| `chatPresetMapMeta` | `{ version, chunkCount, chunkSizes[] }` | `{ version:0, ... }` | (v2.4.0+) Chunk index: version number (incremented by 1 on every commit; no write when nothing changes), chunk count, per-chunk byte sizes. Written only by the service worker. |
+| `chatPresetMap_0`, `chatPresetMap_1`, ... | `{ [uuid]: presetId }` | — | (v2.4.0+) Actual data chunks, each ≤ 7168 bytes; when merged, they form the complete chatPresetMap. Written only by the service worker. |
+| `dsSidebarAutoHide` | boolean | `false` | Whether the sidebar auto-hide feature is enabled. |
+| `dsChatWidth` | number | `70` | Conversation area width percentage (30–100). |
+| `dsChatWidthEnabled` | boolean | `false` | Whether conversation area width adjustment is enabled. |
+| `dsInputWidth` | number | `70` | Input box width percentage (30–100). |
+| `dsInputWidthEnabled` | boolean | `false` | Whether input box width adjustment is enabled. |
+| `dsHideThinking` | boolean | `false` | Whether the hide thinking process feature is enabled. |
+| `dsAutoExpandMessages` | boolean | `false` | (v4.32.0) Whether auto expand messages is enabled. When on, a MutationObserver automatically clicks collapsed expand buttons so all messages are expanded by default. Linked to the master switch. |
+| `isAutoRetryEnabled` | boolean | `false` | (v4.35.0) Whether auto retry is enabled. When on, the shared round loop clicks the page's retry button after each round's 0–3 s random delay. Linked to the master switch. |
+| `isAutoContinueEnabled` | boolean | `false` | (v4.35.0) Whether auto continue generating is enabled. When on, the same round loop clicks the page's continue-generating button after each round's 0–3 s random delay. Linked to the master switch. |
+| `isAutoOpenSidebarEnabled` | boolean | `false` | (v4.36.0) Whether auto open sidebar is enabled. When on, a MutationObserver detects the collapsed sidebar's open button and clicks every appearance, keeping the sidebar open. Linked to the master switch. |
+| `isAutoCopyReplyEnabled` | boolean | `false` | (v4.37.0) Whether auto copy reply content is enabled. When on, the copy button of the reply's toolbar is pressed automatically once the reply finishes. Linked to the master switch. For the behavior see [Feature Spec §26](04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370). |
+| `isAutoCopyCodeEnabled` | boolean | `false` | (v4.37.0) Whether auto copy code block content is enabled. When on, the copy button of every code block in the reply is pressed in order once the reply finishes. Linked to the master switch. For the behavior see [Feature Spec §26](04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370). |
+| `isReplyNotificationEnabled` | boolean | `false` | (v4.38.0) Whether the reply-complete notification is enabled. When on, a desktop notification is shown when a new reply completes while the DeepSeek tab is not in the foreground. **Local-only**, device-scoped: written only to `chrome.storage.local`, not synced, not overwritten by cloud conflict resolution, and not restored by a backup import. Linked to the master switch. For the behavior see [Feature Spec §27](04-features.md#27-reply-complete-notification-reply-notification-v4380). |
+| `dsPreventAutoScroll` | boolean | `false` | (v4.12.0) Whether prevent auto-scroll is persistently enabled. When on, `PreventAutoScroll` suppresses downward auto-scrolling at all times, not just during "Back to Top" and Markdown export. |
+| `dsShowSystemTime` | boolean | `false` | Whether to inject the current system time at the start of messages. |
+| `dsWebSearchToggle` | string | `'on'` | (v4.13.0, v4.17.0 changed to two-state) Web search button **default value**: `'on'` sets the page's smart search button to `aria-pressed="true"`, `'off'` to `"false"`. Applied only once per activation event — entry, this key changing, or master switch turning on (v4.17.1) — then the user's manual toggle is preserved until the next activation event; clicks only on state mismatch. A residual `'default'` value from the old format is treated as `'on'` (not written back). Linked to the master switch. |
+| `dsLocalAuth` | `string[]` | `[]` | Retry queue (local only). Records key names that failed to write to sync and were written to local instead, for `retrySync()` to later push to cloud. **This key is purely a retry queue and does not affect read priority** — the `_get()` read path resolves values independently of this list (v4.7.2). (v4.11.18) `retrySync()` applies different guards per key when pushing, not unconditionally retrying all; see the *Sync Write Quota Strategy* in the architecture documentation for details. |
+| `syncInitialized` | boolean | `false` | Whether initial sync has completed (local only). |
+| `syncConflictPending` | boolean | `false` | Whether there is a sync conflict pending user resolution (local only). |
+| `dsPresetTombstones` | `Object<id, { ts: number, deleted: boolean }>` | `{}` | (v4.8.3) Prompt group deletion tombstones, synced on both local and cloud. Used during merge to determine if an id has been deleted, preventing stale data from resurrecting it. (v4.10.1) `clearPresetTombstones()` is called after JSON import to clear tombstones for imported IDs, preventing re-deletion on the next sync. (v4.10.2) Entry shape changed from bare number to `{ ts, deleted }`: `deleted: true` means deleted, `deleted: false` means cleared (restored). On merge, the side with the newer `ts` wins entirely. Legacy bare-number entries are auto-normalized to `{ ts, deleted: true }` on read. |
+| `dsOversizedKeys` | `string[]` | `[]` | (v4.8.2) List of keys permanently exceeding the 8KB sync quota (local only). Self-healing: automatically removed when the next write's size falls below the limit. |
+| `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | (v4.6.2) Authoritative timestamp for prompt group ordering, used to determine which side's order is newer during cross-device merge. |
+| `promptPresets` | `PromptPreset[]` | — | *Migration detection only*: the v1.6.x single-array format; `initialize()` converts it to `dsPresetIndex` + `dsPreset_<id>` and deletes the key when found. |
+| `restored_messages` | object | {} | Restored censor reply records, containing message_id, fragments, etc. (local only, max 200 entries). |
+| `dss-device-id` | string | — | This device's id (local only, never synced; outside `StorageManager.KEYS`). Created once with `crypto.randomUUID()` by the service worker when the device first queues a temporary conversation for deletion, and written to that entry's `ownerDeviceId`. The remediation sweep uses it to tell own entries (`LEASE_TTL_MS`, 10 minutes) from entries owned by another device or by none (explicit release or `FOREIGN_LEASE_TTL_MS`, 24 hours). |
 
-### Chat-map 訊息（`DSS_CHAT_MAP_MSG`）
+### Chat-Map Messages (`DSS_CHAT_MAP_MSG`)
 
-`chatPresetMapMeta`、`chatPresetMap_<n>` 與舊版 `chatPresetMap` 只由 service worker 寫入。content script、popup 與編輯器呼叫 `bindChatToPreset`／`unbindChat`／`unbindChatsForPresets`／`mergeChatPresetBindings`／`pruneOrphanChatBindings`／`migrateLegacyChatPresetMap`，各自送出一個 `utils/message-constants.js` 定義的 `DSS_CHAT_MAP_MSG` 操作；`background/chat-map-routes.js` 以 `DSSChatMapOps.validate` 驗證後，於單一 FIFO 佇列依序套用，回覆 `{ ok: true, map }` 或 `{ ok: false, error }`。讀取（`getChatPresetMap`）在各 context 直接讀取 storage。
+`chatPresetMapMeta`, `chatPresetMap_<n>`, and the legacy `chatPresetMap` are written only by the service worker. The content script, popup, and editor call `bindChatToPreset`/`unbindChat`/`unbindChatsForPresets`/`mergeChatPresetBindings`/`pruneOrphanChatBindings`/`migrateLegacyChatPresetMap`, each of which sends one `DSS_CHAT_MAP_MSG` op defined in `utils/message-constants.js`; `background/chat-map-routes.js` validates it with `DSSChatMapOps.validate`, applies ops in order in one FIFO queue, and replies `{ ok: true, map }` or `{ ok: false, error }`. Reads (`getChatPresetMap`) read storage directly in each context.
 
-| 訊息型別 | 酬載 | service worker 的處理 |
+| Message type | Payload | Effect in the service worker |
 |-|-|-|
-| `DSS_CHAT_MAP_BIND` | `{ uuid, presetId }`（非空字串） | 設定 `uuid → presetId` |
-| `DSS_CHAT_MAP_UNBIND` | `{ uuid }` | 刪除該 uuid 的綁定 |
-| `DSS_CHAT_MAP_UNBIND_PRESETS` | `{ presetIds: string[] }` | 刪除所有指向 `presetIds` 之一的綁定 |
-| `DSS_CHAT_MAP_PRUNE_ORPHANS` | 無 | 刪除 preset id 不在 `dsPresetIndex`（於佇列內讀取最新值）中的綁定；索引為空或不存在時不修剪 |
-| `DSS_CHAT_MAP_MERGE` | `{ entries }`（值皆為字串的純物件） | 將 `entries` 展開覆蓋至 map，同 uuid 以 `entries` 為準 |
-| `DSS_CHAT_MAP_MIGRATE_LEGACY` | 無 | 無 meta 且舊版 `chatPresetMap` 有綁定時寫入分塊與 meta，再自 sync 與 local 移除舊版金鑰；可重複執行 |
-| `DSS_CHAT_MAP_REPUBLISH_PARKED` | `{ keys: string[] }` | 對每個 chat-map 金鑰，將其目前的 local 值推送至 sync（local 無值則自 sync 移除），再自 `dsLocalAuth` 解除擱置；其他金鑰忽略 |
+| `DSS_CHAT_MAP_BIND` | `{ uuid, presetId }` (non-empty strings) | Set `uuid → presetId` |
+| `DSS_CHAT_MAP_UNBIND` | `{ uuid }` | Delete the uuid's binding |
+| `DSS_CHAT_MAP_UNBIND_PRESETS` | `{ presetIds: string[] }` | Delete every binding that points to one of `presetIds` |
+| `DSS_CHAT_MAP_PRUNE_ORPHANS` | none | Delete bindings whose preset id is absent from `dsPresetIndex` (latest value, read inside the queue); an empty or missing index prunes nothing |
+| `DSS_CHAT_MAP_MERGE` | `{ entries }` (plain object, string values) | Spread `entries` over the map; `entries` wins per uuid |
+| `DSS_CHAT_MAP_MIGRATE_LEGACY` | none | When no meta exists and the legacy `chatPresetMap` has bindings, write chunks and meta, then delete the legacy key from sync and local; safe to re-run |
+| `DSS_CHAT_MAP_REPUBLISH_PARKED` | `{ keys: string[] }` | For each chat-map key, push its current local value to sync (or delete it from sync when local has none), then unpark it from `dsLocalAuth`; other keys are ignored |
 
-### 實作細節
+### Implementation Details
 
-- **Content Script**：從對話的 UUID 綁定透過 `updatePromptPrefixFromBinding()` 推導注入前綴。儲存變更由 service worker 轉送：`background/settings-routes.js` 監聽 `chrome.storage.onChanged`，受監看鍵變更時（`dsPreset_*` 與 `chatPresetMap_*` 前綴鍵涵蓋 local 與 sync 兩區；`dsPresetIndex`、`chatPresetMapMeta` 等 `StorageManager.KEYS` 完整鍵僅涵蓋 local 區），以 `DSS_SETTINGS_CHANGED` 訊息（`utils/message-constants.js` 的 `DSS_SETTINGS_MSG.SETTINGS_CHANGED`）將 `{ area, changes }` 廣播至所有 `chat.deepseek.com` 分頁。content script 由 `handleSettingsChangedMessage()` 接收：`chatPresetMapMeta` 或 `chatPresetMap_*` 變更時以 `StorageManager.getChatPresetMap()` 重讀綁定表；綁定表、`dsPresetIndex` 或 `dsPreset_*` 變更時重新推導注入前綴，並以 `StorageManager.getSettings()` 重讀提示詞組清單、重繪 overlay。`handleChatChange()` 中驗證 binding 的有效性時使用 `StorageManager.getSettings()` 而非直接讀取原始儲存鍵，確保正確透過新 schema 解析提示詞組資料。同時監聽來自彈出選單的 `ACTIVE_PRESET_CHANGED` 訊息，實現各分頁提示詞組追蹤。每個分頁獨立追蹤 `pendingPresetId`，避免跨分頁污染。`awaitingNewChatUuid` 旗標與 5 秒逾時控制自動綁定機制。內建 `PresetOverlay` 模組，在對話頁面標題列呈現浮動提示詞組選單，支援雙向同步與 SPA 導航自動重新掛載。
-- **儲存 API**：以 `chrome.storage.sync` 為主要儲存，在配額錯誤時自動備援至 `chrome.storage.local`。讀取時合併同步與本地端資料（衝突期間除外，僅回傳本地端）。
-- **待重推佇列（`dsLocalAuth`）**：當 sync 寫入失敗時，受影響的金鑰會被加入 `dsLocalAuth` 清單，值仍寫入 local 以防資料遺失，並由 `retrySync()` 於後續嘗試重新推送至雲端。成功寫入 sync 後，對應金鑰自 `dsLocalAuth` 移除。**此清單不影響讀取優先序** —— `_get()` 讀取路徑的取值與此清單無關（v4.7.2）。（v4.11.18）重推時各金鑰有各自的守衛：`dsPresetIndex` 與 `dsPresetOrderMeta` 僅在本機時間戳不舊於雲端時才推送；`dsPreset_<id>` 僅在本機副本較新時才推送；`dsPresetTombstones` 一律以逐 id 聯集合併後才推送，絕不整份覆蓋雲端。
-- **事件處理**：在捕獲階段攔截輸入事件，確保注入在原始發送邏輯執行前完成。使用原生 HTMLTextAreaElement 值設定器繞過 React 的合成值追蹤。透過 `requestAnimationFrame` 重新發送被抑制的事件。
-- **對話框系統**：`Modal` 控制器物件以 `position: fixed` 覆蓋層呈現內嵌對話框。`Modal.prompt()` 強制執行必填輸入驗證。`Modal.confirm()` 支援危險變體與單按鈕（警示）模式。
-- **側邊欄自動隱藏模組**：`content/sidebar-auto-hide.js` 中的 `SidebarAutoHide` 物件。透過 CSS 類別、內聯樣式與 CSS 轉場管理側邊欄收合/展開。使用兩個 `MutationObserver` 實例（一個用於 SPA DOM 取代，一個用於原生收合/展開循環）。透過 `document` 上的捕獲階段 `mouseover` 包含下拉選單懸停偵測。
-- **對話區域寬度模組**：`content/chat-width.js` 中的 `ChatWidth` 物件。注入帶有基於 `vw` 的 `!important` 覆寫的動態 `<style>` 元素。透過 SPA DOM 變更上的 `MutationObserver` 重新套用。
-- **輸入框寬度模組**：`content/input-width.js` 中的 `InputWidth` 物件。與 `ChatWidth` 相同的架構，但針對輸入專用選取器，使用獨立的儲存鍵與 `getEffectivePercent()` 實現對話區域寬度限制。
-- **儲存狀態與 Toast**：`showSaveStatus()` 切換 `#saveStatus` 標題跨度。`popup.js` 中的 `Toast` 物件以透明度轉場管理 `#toast` div。
-- **自動啟動模式**：每個內容模組（`SidebarAutoHide`、`ChatWidth`、`InputWidth`）遵循相同的啟動模式：`start()` 以 `DSS_GET_SETTINGS` 訊息向 service worker 索取初始值 → 若條件符合則啟用 → 透過 `chrome.runtime.onMessage` 接收 `background/settings-routes.js` 廣播的 `DSS_SETTINGS_CHANGED`（僅處理 `area === 'local'`）實現即時切換。總開關（`isEnabled`）與自身開關的閘控集中於 `content/feature-toggle.js` 的 `registerFeatureToggle`（全體功能共用單一監聽器）；`ChatWidth`／`InputWidth` 由 `content/width-feature.js` 工廠建立，另掛一個監聽器處理寬度數值變更。
+- **Content Script**: Derives the injection prefix from the conversation's UUID binding via `updatePromptPrefixFromBinding()`. Storage changes reach it through the service worker: `background/settings-routes.js` listens to `chrome.storage.onChanged` and, when a watched key changes (the `dsPreset_*` and `chatPresetMap_*` prefix keys in both the local and sync areas; full `StorageManager.KEYS` keys such as `dsPresetIndex` and `chatPresetMapMeta` in the local area only), broadcasts `{ area, changes }` to every `chat.deepseek.com` tab as a `DSS_SETTINGS_CHANGED` message (`DSS_SETTINGS_MSG.SETTINGS_CHANGED` in `utils/message-constants.js`). The content script receives it in `handleSettingsChangedMessage()`: a change to `chatPresetMapMeta` or `chatPresetMap_*` re-reads the binding map via `StorageManager.getChatPresetMap()`; a change to the binding map, `dsPresetIndex`, or `dsPreset_*` re-derives the injection prefix and re-reads the preset list via `StorageManager.getSettings()` to re-render the overlay. `handleChatChange()` validates binding validity using `StorageManager.getSettings()` rather than reading raw storage keys directly, ensuring correct parsing through the new schema. Also listens for `ACTIVE_PRESET_CHANGED` messages from the popup for per-tab prompt group tracking. Each tab independently tracks `pendingPresetId` to avoid cross-tab contamination. The `awaitingNewChatUuid` flag with a 5-second timeout controls the auto-binding mechanism. Includes a built-in `PresetOverlay` module that presents a floating prompt group menu on the conversation page title bar, supporting bidirectional sync and automatic remounting on SPA navigation.
+- **Storage API**: Uses `chrome.storage.sync` as primary storage, with automatic fallback to `chrome.storage.local` on quota errors. Reads merge sync and local data (except during conflicts, when only local is returned).
+- **Retry Queue (`dsLocalAuth`)**: When sync writes fail, affected key names are added to the `dsLocalAuth` list; values are still written to local to prevent data loss, and `retrySync()` later attempts to push them to cloud. Keys are removed from `dsLocalAuth` after a successful sync write. **This list does not affect read priority** — the `_get()` read path resolves values independently of it (v4.7.2). (v4.11.18) Each key has its own guard during retry: `dsPresetIndex` and `dsPresetOrderMeta` are only pushed when the local timestamp is not older than the cloud's; `dsPreset_<id>` is only pushed when the local copy is newer; `dsPresetTombstones` is always pushed as a per-id union merge, never overwriting cloud wholesale.
+- **Event Handling**: Intercepts input events at the capture phase to ensure injection completes before the original send logic executes. Uses the native HTMLTextAreaElement value setter to bypass React's synthetic value tracking. Re-dispatches suppressed events via `requestAnimationFrame`.
+- **Dialog System**: The `Modal` controller object presents inline dialogs as `position: fixed` overlays. `Modal.prompt()` enforces required input validation. `Modal.confirm()` supports dangerous variants and single-button (alert) mode.
+- **Sidebar Auto-Hide Module**: The `SidebarAutoHide` object in `content/sidebar-auto-hide.js`. Manages sidebar collapse/expand through CSS classes, inline styles, and CSS transitions. Uses two `MutationObserver` instances (one for SPA DOM replacement, one for native collapse/expand cycles). Includes dropdown hover detection via capture-phase `mouseover` on `document`.
+- **Conversation Area Width Module**: The `ChatWidth` object in `content/chat-width.js`. Injects dynamic `<style>` elements with `vw`-based `!important` overrides. Reapplies via `MutationObserver` on SPA DOM changes.
+- **Input Box Width Module**: The `InputWidth` object in `content/input-width.js`. Same architecture as `ChatWidth` but with input-specific selectors, using independent storage keys and `getEffectivePercent()` for conversation area width clamping.
+- **Storage State and Toast**: `showSaveStatus()` toggles the `#saveStatus` header span. The `Toast` object in `popup.js` manages the `#toast` div with opacity transitions.
+- **Auto-Start Pattern**: Each content module (`SidebarAutoHide`, `ChatWidth`, `InputWidth`) follows the same startup pattern: `start()` requests initial values from the service worker with a `DSS_GET_SETTINGS` message → enables if conditions are met → receives the `DSS_SETTINGS_CHANGED` broadcast from `background/settings-routes.js` via `chrome.runtime.onMessage` (handling only `area === 'local'`) for instant toggling. Master switch (`isEnabled`) and per-feature switch gating is centralized in `registerFeatureToggle` in `content/feature-toggle.js` (one shared listener for all features); `ChatWidth`/`InputWidth` are built by the `content/width-feature.js` factory, which adds its own listener for width value changes.

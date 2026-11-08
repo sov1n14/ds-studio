@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * GoToTop — wrapper MutationObserver behavior (re-injection, visibility preservation, solo/stacked transitions, debounce).
- * Requirements: docs/en/architecture/content-ui.md GoTop section ("A MutationObserver ... watches the outer wrapper"), docs/spec/03-ui-adjustments.md section 18.
+ * Requirements: docs/architecture/content-ui.md GoTop section ("A MutationObserver ... watches the outer wrapper"), docs/spec/03-ui-adjustments.md section 18.
  * Shared fixtures: test/helpers/go-top-fixtures.js
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

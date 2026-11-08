@@ -50,4 +50,4 @@ Scenario rules:
 
 - Behavior-affecting changes **MUST** bump the `manifest.json` version per the `version-bump` skill.
 - Commits follow the `commit-standards` skill.
-- `docs/` **MUST** stay synchronized with every code or feature change.
+- `docs/` **MUST** stay synchronized with every code or feature change. Write all documentation in English, one copy per document; the sole exception is README, where root `README.md` (English) and `docs/README.md` (Chinese) both stay.

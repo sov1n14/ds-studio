@@ -105,12 +105,13 @@ A multi-part module extends its entry file's name with a dot segment: `storage-m
 
 ## 4. Documentation & Assets
 
+The documentation language rule and its README exception live in the project `CLAUDE.md` (`## Versioning, Commits, and Docs`). Layout:
+
 | File | Language | Purpose |
 |-|-|-|
-| `SPEC.md` | 繁體中文 | Product specification: features, acceptance criteria, roadmap |
-| `README.md` | 繁體中文 | User manual: install, configure, operate |
-| `ARCHITECTURE.md` | English | Developer guide: code structure, design decisions, onboarding |
-| `docs/CHANGELOG.md` | English | Version-summary table linking into `docs/changelog/v<major>.md`, which holds the per-line entries |
+| `README.md` | English | Project front page on GitHub |
+| `docs/README.md` | 繁體中文 | Chinese version of the front page |
+| `docs/` (every other file) | English | Spec, architecture, features, and changelog; `docs/CHANGELOG.md` links into `docs/changelog/v<major>.md` |
 
 Plans, task breakdowns, and directives to subagents MUST be written in English. UI copy is localized through `_locales/` and `utils/i18n.js`, never hardcoded in a view file.
 

@@ -3,7 +3,7 @@ import { composer, guardAgainstSending, pressEnterWith } from './helpers/compose
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { createTestPreset, pickPreset, pickPresetOption, presetOverlay, seedOnlyPreset } from './helpers/presets.js';
 
-// The in-page preset overlay picks the prompt group for the current tab. Picking does not write the composer: the extension prepends the picked group's content when the message is sent (docs/FEATURES.md, 使用提示詞注入 step 2, and 頁面內快速切換 Overlay).
+// The in-page preset overlay picks the prompt group for the current tab. Picking does not write the composer: the extension prepends the picked group's content when the message is sent (docs/FEATURES.md, Using Prompt Injection step 2, and In-Page Quick Switch Overlay).
 // The observable effect without sending: press Enter with the send guard on, then read the composer, which the extension has rewritten for sending; DeepSeek never receives the Enter and the send endpoints are aborted.
 
 const PRESET = createTestPreset('overlay');

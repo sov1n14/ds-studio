@@ -2,7 +2,7 @@ import { test, expect } from './fixtures.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { TEMP_CHAT_ROW_SELECTOR } from './helpers/extension-ui.js';
 
-// The home-page temporary-chat row (switch plus the label 臨時對話) follows the master switch live: removed when it turns off, injected again when it turns on (docs/FEATURES.md, 臨時對話, 與主開關的關係).
+// The home-page temporary-chat row (switch plus the label 臨時對話) follows the master switch live: removed when it turns off, injected again when it turns on (docs/FEATURES.md, Temporary Conversation, Relation to the master switch).
 // Only presence and visibility are asserted; the row's own on/off value is never touched.
 
 const ROW_LABEL = '臨時對話';

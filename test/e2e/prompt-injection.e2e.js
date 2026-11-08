@@ -3,7 +3,7 @@ import { blockSendRequests, composer } from './helpers/composer.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { createTestPreset, pickPreset, presetOverlay, seedOnlyPreset } from './helpers/presets.js';
 
-// Prompt injection prepends the picked preset's content to the message when it is sent; with the empty option picked no preset content is sent (docs/FEATURES.md, 使用提示詞注入 and 不使用任何提示詞組).
+// Prompt injection prepends the picked preset's content to the message when it is sent; with the empty option picked no preset content is sent (docs/FEATURES.md, Using Prompt Injection and Using No Prompt Group).
 // The spec drives DeepSeek's real send path (Enter in the composer) and reads the prompt DeepSeek would have posted: every send request is aborted in the browser, so nothing reaches DeepSeek.
 
 const PRESET = createTestPreset('inject');

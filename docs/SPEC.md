@@ -1,20 +1,20 @@
-# DS studio 需求規格書
+# DS studio Requirements Specification
 
-## 專案概述
+## Project Overview
 
-DS studio 是一個 Chrome 擴充功能，旨在優化 `chat.deepseek.com` 的使用體驗。使用者可以建立與管理**多組提示詞組**，針對不同場景自動將選取的提示詞注入訊息中，並提供一鍵將對話匯出為 Markdown 檔案的功能。此外還包含 UI 調整（側邊欄自動隱藏、對話與輸入框寬度調整、隱藏思考過程、自動展開訊息、防止自動捲動、聯網搜尋開關、回到頂部按鈕、行動裝置側欄滑動手勢）、JSON 備份還原，以及跨裝置雲端同步與衝突解決機制。
+DS studio is a Chrome extension designed to optimize the user experience of `chat.deepseek.com`. Users can create and manage **multiple prompt groups**, automatically inject selected prompts into messages for different scenarios, and export conversations to Markdown files with one click. Additional features include UI adjustments (sidebar auto-hide, conversation and input box width adjustment, collapse thinking process, auto-expand messages, prevent auto-scroll, web search toggle, back to top button, mobile sidebar swipe gesture), JSON backup and restore, and cross-device cloud sync with conflict resolution.
 
-## 功能模組索引
+## Feature Module Index
 
-| 模組 | 涵蓋功能 | 規格文件 |
+| Module | Covered Features | Specification |
 |-|-|-|
-| **提示詞系統** | 提示詞組管理、注入邏輯、UUID 對話綁定、全域提示詞、空白選項模式 | [→ spec/01-prompt-system.md](spec/01-prompt-system.md) |
-| **Popup UI 與 Overlay** | 擴充功能彈出選單版面、頁面內提示詞組切換選單 | [→ spec/02-popup-ui.md](spec/02-popup-ui.md) |
-| **UI 調整** | 側邊欄自動隱藏、對話與輸入框寬度調整、隱藏思考過程、自動展開訊息、連網搜索、防止自動回滾、回到頂部按鈕、行動裝置側欄滑動手勢 | [→ spec/03-ui-adjustments.md](spec/03-ui-adjustments.md) |
-| **匯出與互動功能** | Markdown 匯出、引用回覆、系統時間注入、恢復被審查的回覆、自動重試與自動繼續生成、自動開啟側欄、自動複製回覆與程式碼區塊、回覆完成通知 | [→ spec/04-features.md](spec/04-features.md) |
-| **資料儲存與同步** | 資料遷移、Toast 通知、JSON 備份與還原、雲端同步與衝突處理、技術規格 | [→ spec/05-data-storage.md](spec/05-data-storage.md) |
+| **Prompt System** | Prompt group management, injection logic, UUID conversation binding, global prompt, blank option mode | [→ spec/01-prompt-system.md](spec/01-prompt-system.md) |
+| **Popup UI & Overlay** | Extension popup layout, in-page prompt group switching menu | [→ spec/02-popup-ui.md](spec/02-popup-ui.md) |
+| **UI Adjustments** | Sidebar auto-hide, conversation and input box width adjustment, collapse thinking process, auto-expand messages, web search, prevent auto-scroll, back to top button, mobile sidebar swipe gesture | [→ spec/03-ui-adjustments.md](spec/03-ui-adjustments.md) |
+| **Export & Interaction Features** | Markdown export, quote reply, system time injection, censored reply restore, auto retry and auto continue, auto open sidebar, auto copy reply and code blocks, reply-complete notification | [→ spec/04-features.md](spec/04-features.md) |
+| **Data Storage & Sync** | Data migration, toast notifications, JSON backup and restore, cloud sync and conflict handling, technical specifications | [→ spec/05-data-storage.md](spec/05-data-storage.md) |
 
-## 相關文件
+## Related Documents
 
-- 📐 技術架構：[ARCHITECTURE.md](ARCHITECTURE.md)
-- 📝 版本記錄：[CHANGELOG.md](CHANGELOG.md)
+- Technical Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)

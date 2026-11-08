@@ -5,7 +5,7 @@ import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
 import { expectNeverWithin } from './helpers/observation.js';
 import { asBlockquote, dragSelectTwoReplyParagraphs } from './helpers/quote.js';
 
-// Quote reply follows the master switch only: selecting reply text shows a floating quote button; clicking it appends the selection to the composer as a Markdown blockquote, every selected line prefixed with "> " (docs/FEATURES.md, 引用回覆). Nothing is sent.
+// Quote reply follows the master switch only: selecting reply text shows a floating quote button; clicking it appends the selection to the composer as a Markdown blockquote, every selected line prefixed with "> " (docs/FEATURES.md, Quote Reply). Nothing is sent.
 
 // The quote button appears 250 ms after the selection settles; 1.5 s is six times that.
 const NO_BUTTON_WINDOW_MS = 1_500;
