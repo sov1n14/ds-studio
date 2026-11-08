@@ -3,12 +3,16 @@
 
 const EXTENSION_SCHEME = 'chrome-extension://';
 const WAKE_TIMEOUT_MS = 15_000;
+const CLOSED_TARGET = /Target closed|has been closed|destroyed/i;
 
 // Extension ids seen per context, so an idle (stopped) worker can be woken through its own page.
 const knownIds = new WeakMap();
 
+// 已被 reloadExtension 淘汰的舊 worker 物件；Playwright 可能在新 worker 出現後仍短暫列出舊物件，因此明確排除。
+const retiredWorkers = new WeakSet();
+
 function findLiveWorker(context) {
-    return context.serviceWorkers().find((worker) => worker.url().startsWith(EXTENSION_SCHEME)) ?? null;
+    return context.serviceWorkers().find((worker) => worker.url().startsWith(EXTENSION_SCHEME) && !retiredWorkers.has(worker)) ?? null;
 }
 
 function remember(context, worker) {
@@ -49,6 +53,33 @@ export async function getExtensionWorker(context) {
 }
 
 /**
+ * 從目前的 service worker 呼叫 `chrome.runtime.reload()` 重新載入擴充功能，等待並回傳重新載入後的新 worker。
+ * 持久設定檔可能沿用快取的舊版 service worker 腳本；重新載入讓 Chrome 從磁碟讀取目前的擴充功能檔案，storage 不受影響。
+ * 須在開啟任何 DeepSeek 分頁前呼叫：重新載入會使既有分頁的 content script 失去與擴充功能的連線。
+ * @param {import('@playwright/test').BrowserContext} context
+ */
+export async function reloadExtension(context) {
+    const old = await getExtensionWorker(context);
+    const extensionId = new URL(old.url()).host;
+    // 先註冊等待，再觸發重新載入，避免新 worker 在註冊前就已出現而錯過事件。
+    const pending = context.waitForEvent('serviceworker', {
+        predicate: (worker) => worker !== old && worker.url().startsWith(`${EXTENSION_SCHEME}${extensionId}/`),
+        timeout: WAKE_TIMEOUT_MS,
+    });
+    retiredWorkers.add(old);
+    try {
+        // 以 setTimeout 延後觸發，讓 evaluate 先回傳；舊 worker 隨即關閉，回傳前關閉的錯誤可忽略。
+        await old.evaluate(() => { setTimeout(() => chrome.runtime.reload(), 0); });
+    } catch (error) {
+        if (!CLOSED_TARGET.test(String(error?.message))) {
+            pending.catch(() => {});
+            throw error;
+        }
+    }
+    return remember(context, await pending);
+}
+
+/**
  * Evaluates `fn(arg)` inside the extension service worker, re-resolving the worker once
  * when the first attempt hits a worker that stopped between resolution and evaluation.
  */
@@ -56,7 +87,7 @@ export async function evaluateInWorker(context, fn, arg) {
     try {
         return await (await getExtensionWorker(context)).evaluate(fn, arg);
     } catch (error) {
-        if (!/Target closed|has been closed|destroyed/i.test(String(error?.message))) throw error;
+        if (!CLOSED_TARGET.test(String(error?.message))) throw error;
         return (await getExtensionWorker(context)).evaluate(fn, arg);
     }
 }

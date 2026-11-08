@@ -1,13 +1,18 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, test as base, expect } from '@playwright/test';
 import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
-import { getExtensionWorker } from './helpers/extension.js';
+import { getExtensionWorker, reloadExtension } from './helpers/extension.js';
 import { createSettingsSession } from './helpers/settings.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROFILE_DIR = path.join(REPO_ROOT, '.browser-profile');
+
+/** 讀取磁碟上 `manifest.json` 的版本號，作為執行中擴充功能應有的版本。 */
+export function readDiskManifestVersion() {
+    return JSON.parse(readFileSync(path.join(REPO_ROOT, 'manifest.json'), 'utf8')).version;
+}
 
 export const test = base.extend({
     // One logged-in Chrome (with the unpacked extension) shared by the whole worker.
@@ -20,6 +25,18 @@ export const test = base.extend({
             headless: false,
             ignoreDefaultArgs: ['--disable-extensions'],
         });
+        try {
+            // 持久設定檔可能沿用快取的舊版 service worker；在開啟任何 DeepSeek 分頁前重新載入一次，並確認執行中的版本與磁碟一致。
+            const worker = await reloadExtension(context);
+            const runningVersion = await worker.evaluate(() => chrome.runtime.getManifest().version);
+            const diskVersion = readDiskManifestVersion();
+            if (runningVersion !== diskVersion) {
+                throw new Error(`Extension version mismatch: service worker reports ${runningVersion}, manifest.json on disk is ${diskVersion}. Reload the unpacked extension from this repo in .browser-profile, then rerun.`);
+            }
+        } catch (error) {
+            await context.close();
+            throw error;
+        }
         await use(context);
         await context.close();
     }, { scope: 'worker' }],
