@@ -49,6 +49,10 @@ function makeWebsearchRadios(checkedValue = 'on') {
     return ['on', 'off'].map((value) => makeRadio(value, value === checkedValue));
 }
 
+function makeReplyNotificationRadios(checkedValue = 'off') {
+    return ['on', 'off'].map((value) => makeRadio(value, value === checkedValue));
+}
+
 function makeSlider(value = '70') {
     const el = document.createElement('input');
     el.type = 'range';
@@ -91,6 +95,7 @@ function makeDom(overrides = {}) {
         autoCopyReplyToggle: makeCheckbox(false),
         autoCopyCodeToggle: makeCheckbox(false),
         websearchRadios: makeWebsearchRadios(),
+        replyNotificationRadios: makeReplyNotificationRadios(),
         ...overrides,
     };
 }
@@ -723,6 +728,7 @@ describe('popup.js — Live Sync wiring block', () => {
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
             'preventAutoScrollToggle', 'autoExpandMessagesToggle', 'websearchRadios',
             'autoOpenSidebarToggle', 'autoCopyReplyToggle', 'autoCopyCodeToggle',
+            'replyNotificationRadios',
         ];
         for (const field of expectedDomFields) {
             expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));

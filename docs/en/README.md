@@ -20,6 +20,7 @@ DS studio is a Chrome extension designed to optimize the user experience of `cha
 | **Auto Retry and Auto Continue** | Two independent toggles (off by default): automatically click retry when DeepSeek returns a server error, and click continue when a reply stops |
 | **Auto Open Sidebar** | Toggle (off by default) that clicks DeepSeek's collapsed-sidebar button whenever it appears, keeping the sidebar open |
 | **Auto Copy Reply and Code Blocks** | Two independent toggles (off by default): press DeepSeek's copy buttons automatically when a reply finishes, copying the reply or its code blocks; takes effect only while the DeepSeek tab is focused |
+| **Reply-Complete Notification** | Toggle (off by default): shows a browser notification when a DeepSeek reply finishes while the tab is not in the foreground; the notification permission is optional and requested only when you turn the toggle on; stored on this device only and never synced |
 | **Mobile** | Sidebar swipe gesture, solving the lack of quick sidebar switching on mobile |
 
 See [FEATURES.md](FEATURES.md) for detailed feature descriptions.

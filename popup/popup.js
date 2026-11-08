@@ -1,4 +1,4 @@
-// 354 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
+// 359 lines: single popup interaction entry — orchestrates DOMContentLoaded init, wires sub-managers, and binds UI events; splitting would add inter-module communication overhead for tightly coupled DOM refs and shared closure state
 /**
  * DS studio — Popup Controller（入口）
  * 依賴：popup.modal.js（Modal, Toast）、popup.preset-manager.js（createPresetManager）、
@@ -6,7 +6,7 @@
  *       popup.editor-window.js（createEditorWindowManager）、popup.width-sliders.js（createWidthSliderManager）、
  *       popup.markdown-export.js（createMarkdownExportManager）、popup.toggles.js（createToggleManager）、
  *       popup.preset-domain.js（DSSPresetDomain）、popup.locale.js（bindLocaleSwitcher）、
- *       popup.settings-view.js（applySettingsToDom）
+ *       popup.settings-view.js（applySettingsToDom）、utils/notification-permission.js（DSSNotificationPermission）
  * 需在本檔案之前以 <script> 載入上述模組。
  */
 
@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const autoCopyReplyToggle       = document.getElementById('autoCopyReplyToggle');
     const autoCopyCodeToggle        = document.getElementById('autoCopyCodeToggle');
     const websearchRadios           = Array.from(document.querySelectorAll('input[name="websearchToggle"]'));
+    const replyNotificationRadios   = Array.from(document.querySelectorAll('input[name="replyNotificationToggle"]'));
 
     let saveTimeout;
     let customSelect;
@@ -79,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoOpenSidebarToggle,
             autoCopyReplyToggle, autoCopyCodeToggle,
             ...websearchRadios,
+            ...replyNotificationRadios,
         ];
         subControls.forEach(el => {
             if (el) el.disabled = !isEnabled;
@@ -192,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         sidebarAutoHideToggle, hideThinkingToggle, showSystemTimeToggle,
         preventAutoScrollToggle, autoExpandMessagesToggle, websearchRadios,
         autoRetryToggle, autoContinueToggle, autoOpenSidebarToggle,
-        autoCopyReplyToggle, autoCopyCodeToggle,
+        autoCopyReplyToggle, autoCopyCodeToggle, replyNotificationRadios,
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
     }, settings);
@@ -258,6 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoOpenSidebarToggle,
             autoCopyReplyToggle, autoCopyCodeToggle,
             websearchRadios,
+            replyNotificationRadios,
         },
         applyMasterSwitchUI,
         updateEditPresetBtnState,
@@ -288,6 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 功能開關（委派至 popup.toggles.js） ---
     toggleManager = window.__DS_PopupToggles.createToggleManager({
         StorageManager,
+        DSSNotificationPermission: window.DSSNotificationPermission,
         refreshSyncStatus,
         showSaveStatus,
         applyMasterSwitchUI,
@@ -311,6 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         autoOpenSidebarToggle,
         autoCopyReplyToggle, autoCopyCodeToggle,
         websearchRadios,
+        replyNotificationRadios,
     });
     // 全域提示詞開關初始值：依目前活躍 preset（或裝置本機舊鍵）決定
     await toggleManager.renderGlobalPromptToggle(globalPromptToggle);

@@ -96,8 +96,9 @@ ds-studio/
 │   ├── auto-click.delay.js    ─  0–3 s random delay for auto-click rounds, in 0.1 s steps (v4.35.0)
 │   ├── auto-retry.js          ─  Shared round loop for auto retry / auto continue: each gated by its own toggle, dispatches a dss:react-click event on the retry and continue buttons after a random delay per round (v4.11.0, reworked in v4.35.0, event-triggered since v4.35.4)
 │   ├── react-click-bridge.main.js ‡ ─  MAIN-world bridge: on dss:react-click, calls the button's React onClick with a synthetic nativeEvent that passes the isTrusted check, falling back to click() when there is no onClick (v4.35.4)
-│   ├── reply-completion.js    ─  Pure decisions: finds newly appeared message toolbars from MutationRecords and tells whether a reply was stopped, for auto copy (v4.37.0)
+│   ├── reply-completion.js    ─  Pure decisions: finds newly appeared message toolbars from MutationRecords and tells whether a reply was stopped, for auto copy and the reply-complete notification (v4.37.0)
 │   ├── auto-copy.js           ─  When a reply finishes, dispatches dss:react-click on the copy buttons of that reply and its code blocks, per the two toggles (v4.37.0)
+│   ├── reply-notification.js  ─  When a new reply finishes and the tab is not in the foreground, sends a DSS_SHOW_NOTIFICATION message asking background to show a desktop notification (v4.38.0)
 │   ├── editor-window-autoclose.js ─  window focus → DSS_CLOSE_EDITOR_WINDOWS message, closing any open editor window (v4.29.0)
 │   ├── go-top.css           ─  GoToTop & export-toast styles
 │   ├── prevent-auto-scroll-bridge.js  ─  Isolated-world bridge for auto-scroll suppression (+ persistent mode, v4.12.0)
@@ -111,6 +112,7 @@ ds-studio/
 │   ├── pending-store.js        ─  Pending-delete queue storage layer (importScripts only, not a content script)
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS routes + DSS_SETTINGS_CHANGED broadcast to DeepSeek tabs
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN routes
+│   ├── notification-routes.js  ─  DSS_SHOW_NOTIFICATION route: validates title/body and shows a basic notification with chrome.notifications.create (v4.38.0)
 │   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG routes: puts the service worker's StorageManager in chat-map writer mode, validates each op, applies it in one FIFO queue
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── popup/                   ─  Extension action UI
@@ -168,7 +170,7 @@ ds-studio/
 │   ├── storage-manager.chatmap.ops.js   ─  DSSChatMapOps: pure validate / apply for DSS_CHAT_MAP_MSG ops
 │   ├── storage-manager.chatmap.js       ─  Single-writer engine (service worker only): applyChatMapOp, mutateChatPresetMap, chunked commit; getChatPresetMap for every context
 │   ├── storage-manager.chatmap.client.js ─  Public binding API + dispatch: direct engine call in the service worker, chrome.runtime.sendMessage to it elsewhere
-│   ├── storage-manager.local.js         ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, restored_messages (v4.7.3 split)
+│   ├── storage-manager.local.js         ─  Local-only device settings bundle: isEnabled, legacy globalPromptEnabled fallback, isReplyNotificationEnabled (v4.38.0), restored_messages (v4.7.3 split)
 │   ├── storage-manager.init.js          ─  initialize(): defaults, migrations, first-sync conflict detection; dispatches legacy chat-map migration + orphan prune
 │   ├── storage-manager.setters.js       ─  Single-key save<X> writer bundle: the 15 one-line setters split out of the entry file
 │   ├── storage-manager.settings-read.js ─  Settings read bundle: allowlist-driven getSettings() + getActivePromptContent()
@@ -178,6 +180,7 @@ ds-studio/
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
 │   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
+│   ├── notification-permission.js ─  DSSNotificationPermission: wraps the chrome.permissions check and request for the optional notifications permission into a non-throwing popup interface (v4.38.0)
 │   ├── chat-session-id.js      ─  Conversation session ID extraction shared utility
 │   ├── i18n.js                 ─  Internationalization engine: setLocale / t / onLocaleChanged, DOM-free (v4.3.3)
 │   ├── i18n.locales.zhTW.js    ─  zh_TW string dictionary, pure data
@@ -357,6 +360,18 @@ The standalone prompt editor opens as its own OS window, so it can end up buried
 - **`content/editor-window-autoclose.js`** is the sender: a `focus` listener on `window` posts `{ type: CLOSE_MESSAGE_TYPE }` and swallows the rejection, since a sleeping service worker with no receiver is expected rather than exceptional. It forwards the event and nothing more — window removal and session-storage access both belong to the background layer.
 - **`background/editor-window-routes.js`** owns that side. `DSSEditorWindowRoutes.install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener; unknown types return `false` without responding, leaving the worker's other listeners free to handle them. Each id is handled independently: a `chrome.windows.remove()` rejection (the user already closed that window) is logged via `console.error` and the storage key is removed in a `finally` regardless, so one stale id cannot leave the other tracked window open or its key behind.
 - **No data loss**: the editor's own auto-save pipeline — 500 ms debounced on `input`, immediate flush on `blur` / `visibilitychange` / `pagehide` — writes dirty content before the window goes away, the same guarantee that already covered the `Esc` shortcut.
+
+### Reply Notification Message Route (Reply Notification, v4.38.0)
+
+The background layer is the only place that calls `chrome.notifications`; the content script only sends a message. For the behavior specification see [Feature Spec §27](spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+
+| Message type | Payload | Effect in the service worker |
+|-|-|-|
+| `DSS_SHOW_NOTIFICATION` | `{ title, body }` (both strings) | Verifies `chrome.notifications` is available and that `title` / `body` are strings, then shows a basic notification with `chrome.notifications.create`; replies `{ ok: true }` on success, and on failure logs and replies `{ ok: false, error }` |
+
+- **`utils/message-constants.js`** publishes `globalThis.DSS_SHOW_NOTIFICATION` (`'DSS_SHOW_NOTIFICATION'`) as a plain `globalThis` assignment, shared by the sender `content/reply-notification.js` and the receiver `background/notification-routes.js`; when the constants file is absent, the receiver throws a named load-order error.
+- **`background/notification-routes.js`**: `DSSNotificationRoutes.install()` is called at service-worker top level so it survives worker restarts; it registers one `chrome.runtime.onMessage` listener, and an unknown type returns `false` without replying, leaving it to the other listeners.
+- **Optional `notifications` permission**: while it is not granted, `chrome.notifications` does not exist and the route replies `{ ok: false, error }`. Only the popup requests the permission, through `utils/notification-permission.js`; background and the content script never request it.
 
 ### Data Flow
 

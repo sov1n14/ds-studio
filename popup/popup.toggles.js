@@ -1,6 +1,6 @@
 /**
  * DS studio — Popup Feature Toggles 模組
- * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、聯網搜尋單選）的 change 事件綁定。
+ * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
  * 使用 factory 模式接收 ctx 上下文物件。
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -16,12 +16,21 @@
  * @param {Function} ctx.setPresets - 設定 presets 陣列
  * @param {Function} ctx.getActivePresetId - 取得目前活躍 preset id
  * @param {Function} ctx.setActivePresetId - 設定目前活躍 preset id
+ * @param {Object} [ctx.DSSNotificationPermission] - 通知權限包裝模組；未提供時使用 popup.html 載入的全域實例
  */
 function createToggleManager(ctx) {
     const {
         StorageManager, refreshSyncStatus, showSaveStatus, applyMasterSwitchUI,
         getPresets, setPresets, getActivePresetId, setActivePresetId,
     } = ctx;
+    const notificationPermission = ctx.DSSNotificationPermission ?? globalThis.DSSNotificationPermission;
+
+    /** 確認已取得通知權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false（決策 D-08）。 */
+    async function ensureNotificationPermission() {
+        if (!notificationPermission) return false;
+        if (await notificationPermission.hasNotificationPermission()) return true;
+        return (await notificationPermission.requestNotificationPermission()) === true;
+    }
 
     /** 取得目前活躍的 preset 物件；無活躍 preset（含已刪除／已清空）時回傳 null。 */
     function resolveActivePreset() {
@@ -61,6 +70,7 @@ function createToggleManager(ctx) {
      * @param {HTMLElement} elements.autoCopyReplyToggle
      * @param {HTMLElement} elements.autoCopyCodeToggle
      * @param {HTMLElement[]} elements.websearchRadios
+     * @param {HTMLElement[]} [elements.replyNotificationRadios]
      */
     function bindToggles(elements) {
         const {
@@ -79,6 +89,7 @@ function createToggleManager(ctx) {
             autoCopyReplyToggle,
             autoCopyCodeToggle,
             websearchRadios,
+            replyNotificationRadios = [],
         } = elements;
 
         // --- 全域提示詞開關（依目前活躍 preset 決定寫入目的地） ---
@@ -206,6 +217,21 @@ function createToggleManager(ctx) {
             r.addEventListener('change', async () => {
                 if (!r.checked) return;
                 await StorageManager.saveWebsearchToggle(r.value);
+                await refreshSyncStatus();
+                showSaveStatus();
+            });
+        });
+
+        // --- 回覆完成通知單選：開啟前須取得通知權限，遭拒或失敗時退回關閉且不寫入 ---
+        replyNotificationRadios.forEach(r => {
+            r.addEventListener('change', async () => {
+                if (!r.checked) return;
+                const isTurningOn = r.value === 'on';
+                if (isTurningOn && !(await ensureNotificationPermission())) {
+                    replyNotificationRadios.forEach(radio => { radio.checked = (radio.value === 'off'); });
+                    return;
+                }
+                await StorageManager.saveReplyNotification(isTurningOn);
                 await refreshSyncStatus();
                 showSaveStatus();
             });

@@ -42,6 +42,7 @@
     const LOCAL_ONLY_SETTINGS_KEYS = {
         isEnabled: 'IS_ENABLED',
         globalPromptEnabled: 'GLOBAL_PROMPT_ENABLED',
+        replyNotification: 'REPLY_NOTIFICATION',
     };
 
     const bundle = {

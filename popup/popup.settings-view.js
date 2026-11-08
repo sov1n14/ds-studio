@@ -1,7 +1,7 @@
 /**
  * DS studio — Popup Settings View 模組
  * 將一份完整的設定物件套用到 popup 的控制項上（單向：settings → DOM）。
- * 初次載入與其他需要整批還原 UI 的流程共用此對應表，避免十二個設定鍵的對應邏輯重複實作。
+ * 初次載入與其他需要整批還原 UI 的流程共用此對應表，避免各設定鍵的對應邏輯重複實作。
  *
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -30,6 +30,7 @@ function applySettingsToDom(dom, settings) {
         autoCopyReplyToggle,
         autoCopyCodeToggle,
         websearchRadios = [],
+        replyNotificationRadios = [],
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
     } = dom;
@@ -52,6 +53,10 @@ function applySettingsToDom(dom, settings) {
     if (websearchRadios.length) {
         websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle ?? 'on')); });
     }
+
+    // 回覆完成通知為布林設定，以 on / off 單選鈕呈現；僅 true 視為開啟
+    const replyNotificationValue = settings.replyNotification === true ? 'on' : 'off';
+    replyNotificationRadios.forEach(r => { r.checked = (r.value === replyNotificationValue); });
 
     if (chatWidthToggle && chatWidthSlider && chatWidthValue) {
         chatWidthToggle.checked = settings.chatWidthEnabled;

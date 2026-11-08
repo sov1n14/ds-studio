@@ -1,4 +1,4 @@
-<!-- 369 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
+<!-- 385 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -198,6 +198,21 @@
                         <label for="autoCopyCodeToggle" data-i18n="autoCopyCodeLabel">自動複製程式碼區塊內容</label>
                     </div>
                 </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <label data-i18n="replyNotificationLabel">回覆完成通知</label>
+                    </div>
+                    <div class="websearch-options">
+                        <label class="segmented-option">
+                            <input type="radio" name="replyNotificationToggle" value="on">
+                            <span data-i18n="websearchOnLabel">開啟</span>
+                        </label>
+                        <label class="segmented-option">
+                            <input type="radio" name="replyNotificationToggle" value="off" checked>
+                            <span data-i18n="websearchOffLabel">關閉</span>
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -324,6 +339,7 @@
     <script src="../utils/message-constants.js"></script>
     <script src="../utils/tab-control.js"></script>
     <script src="../utils/window-control.js"></script>
+    <script src="../utils/notification-permission.js"></script>
     <script src="../utils/storage-manager.keys.js"></script>
     <script src="../utils/storage-manager.rw.js"></script>
     <script src="../utils/storage-manager.sync.js"></script>

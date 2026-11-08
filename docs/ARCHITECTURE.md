@@ -96,8 +96,9 @@ ds-studio/
 │   ├── auto-click.delay.js    ─  自動點擊輪次的 0–3 秒隨機延遲（0.1 秒級距，v4.35.0）
 │   ├── auto-retry.js          ─  自動重試／自動繼續生成的共用輪次迴圈：各自受開關閘控，每輪隨機延遲後在重試與繼續生成按鈕上派送 dss:react-click 事件（v4.11.0，v4.35.0 改版，v4.35.4 改為事件觸發）
 │   ├── react-click-bridge.main.js ‡ ─  MAIN-world 橋接：收到 dss:react-click 時以能通過 isTrusted 檢查的合成 nativeEvent 呼叫按鈕的 React onClick，無 onClick 時退回 click()（v4.35.4）
-│   ├── reply-completion.js    ─  純判斷：從 MutationRecord 找出新出現的訊息工具列、判斷回覆是否被停止，供自動複製使用（v4.37.0）
+│   ├── reply-completion.js    ─  純判斷：從 MutationRecord 找出新出現的訊息工具列、判斷回覆是否被停止，供自動複製與回覆完成通知使用（v4.37.0）
 │   ├── auto-copy.js           ─  回覆完成時依兩個開關對該回覆與其程式碼區塊的複製按鈕派送 dss:react-click 事件（v4.37.0）
+│   ├── reply-notification.js  ─  新回覆完成且分頁不在前景時送出 DSS_SHOW_NOTIFICATION 訊息，請 background 顯示桌面通知（v4.38.0）
 │   ├── editor-window-autoclose.js ─  window focus → 送出 DSS_CLOSE_EDITOR_WINDOWS 訊息，關閉所有開啟中的編輯視窗（v4.29.0）
 │   ├── go-top.css           ─  GoToTop 與匯出 toast 樣式
 │   ├── prevent-auto-scroll-bridge.js  ─  抑制自動捲動的 isolated-world 橋接（含持續模式，v4.12.0）
@@ -111,6 +112,7 @@ ds-studio/
 │   ├── pending-store.js        ─  待刪佇列儲存層（僅由 importScripts 載入，不屬於內容腳本）
 │   ├── settings-routes.js      ─  DSS_GET_SETTINGS / DSS_SET_SETTINGS 路由＋向 DeepSeek 分頁廣播 DSS_SETTINGS_CHANGED
 │   ├── pending-store-routes.js ─  DSS_TRACK_FOR_DELETION / DSS_REMOVE_PENDING_DELETE / DSS_REMOVE_OPEN_UUID / DSS_SET_LAST_AUTH_TOKEN 路由
+│   ├── notification-routes.js  ─  DSS_SHOW_NOTIFICATION 路由：驗證 title／body 後以 chrome.notifications.create 顯示 basic 通知（v4.38.0）
 │   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG 路由：將 service worker 的 StorageManager 切換為 chat-map 寫入者模式，逐一驗證 op 並於單一 FIFO 佇列中套用
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS 路由：關閉追蹤中的編輯視窗並清除其 session 鍵（v4.29.0）
 ├── popup/                   ─  擴充功能 action UI
@@ -168,7 +170,7 @@ ds-studio/
 │   ├── storage-manager.chatmap.ops.js   ─  DSSChatMapOps：DSS_CHAT_MAP_MSG op 的純驗證／套用
 │   ├── storage-manager.chatmap.js       ─  單一寫入者引擎（僅限 service worker）：applyChatMapOp、mutateChatPresetMap、分塊提交；getChatPresetMap 供所有 context 使用
 │   ├── storage-manager.chatmap.client.js ─  公開綁定 API＋分派：service worker 內直接呼叫引擎，其他 context 以 chrome.runtime.sendMessage 送往 service worker
-│   ├── storage-manager.local.js         ─  僅存本機的裝置設定方法包：isEnabled、舊版 globalPromptEnabled 備援、restored_messages（v4.7.3 拆分）
+│   ├── storage-manager.local.js         ─  僅存本機的裝置設定方法包：isEnabled、舊版 globalPromptEnabled 備援、isReplyNotificationEnabled（v4.38.0）、restored_messages（v4.7.3 拆分）
 │   ├── storage-manager.init.js          ─  initialize()：預設值、遷移、首次同步衝突偵測；分派舊版 chat-map 遷移＋孤兒清理
 │   ├── storage-manager.setters.js       ─  單鍵 save<X> 寫入方法包：自入口檔拆出的 15 個單行 setter
 │   ├── storage-manager.settings-read.js ─  設定讀取方法包：以允許清單驅動的 getSettings()＋getActivePromptContent()
@@ -178,6 +180,7 @@ ds-studio/
 │   ├── debounce.js             ─  唯一的 trailing-edge 防抖實作（globalThis.DSSDebounce）
 │   ├── tab-control.js          ─  DeepSeek 分頁查詢／傳送輔助函式，含 ACTIVE_PRESET_CHANGED 廣播（DSSTabControl）
 │   ├── window-control.js       ─  openSingletonWindow：以 chrome.storage.session 保證單一視窗（DSSWindowControl）
+│   ├── notification-permission.js ─  DSSNotificationPermission：把 chrome.permissions 對選用權限 notifications 的查詢與請求包成不拋錯的 popup 介面（v4.38.0）
 │   ├── chat-session-id.js      ─  對話 session ID 擷取共用工具
 │   ├── i18n.js                 ─  國際化引擎：setLocale / t / onLocaleChanged，不含 DOM（v4.3.3）
 │   ├── i18n.locales.zhTW.js    ─  zh_TW 字串字典，純資料
@@ -357,6 +360,18 @@ per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) �
 - **`content/editor-window-autoclose.js`** 是發送端：`window` 上的 `focus` 監聽器送出 `{ type: CLOSE_MESSAGE_TYPE }` 並吞掉 rejection，因為休眠中且沒有接收端的 service worker 屬於預期情況而非例外。它只轉送事件 — 移除視窗與存取 session storage 都屬於 background 層。
 - **`background/editor-window-routes.js`** 負責接收端。`DSSEditorWindowRoutes.install()` — 於 service worker 頂層呼叫，因此 worker 重啟後仍存在 — 註冊一個 `chrome.runtime.onMessage` 監聽器；未知類型回傳 `false` 且不回應，交由 worker 的其他監聽器處理。每個 id 各自獨立處理：`chrome.windows.remove()` 被拒絕（使用者已自行關閉該視窗）時以 `console.error` 記錄，儲存鍵則一律在 `finally` 中移除，因此單一過時的 id 不會讓另一個追蹤中的視窗維持開啟或遺留其鍵。
 - **資料零遺失**：編輯視窗自身的自動儲存管線 — `input` 時 500 ms debounce、`blur` / `visibilitychange` / `pagehide` 時立即寫入 — 會在視窗關閉前寫入未儲存的內容，與 `Esc` 快捷鍵既有的保證相同。
+
+### 回覆完成通知訊息路由 (Reply Notification, v4.38.0)
+
+Background 層是唯一呼叫 `chrome.notifications` 的位置；內容腳本只送出訊息。行為規格見 [功能規格 §27](spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+
+| 訊息類型 | Payload | 在 service worker 中的效果 |
+|-|-|-|
+| `DSS_SHOW_NOTIFICATION` | `{ title, body }`（皆為字串） | 確認 `chrome.notifications` 可用並驗證 `title`／`body` 為字串，再以 `chrome.notifications.create` 顯示 basic 通知；成功回覆 `{ ok: true }`，失敗記錄並回覆 `{ ok: false, error }` |
+
+- **`utils/message-constants.js`** 以單純的 `globalThis` 指派公開 `globalThis.DSS_SHOW_NOTIFICATION`（`'DSS_SHOW_NOTIFICATION'`），發送端 `content/reply-notification.js` 與接收端 `background/notification-routes.js` 共用；常數檔缺席時接收端拋出具名的載入順序錯誤。
+- **`background/notification-routes.js`** 的 `DSSNotificationRoutes.install()` 於 service worker 頂層呼叫，因此 worker 重啟後仍存在；它註冊一個 `chrome.runtime.onMessage` 監聽器，未知類型回傳 `false` 且不回應，交由其他監聽器處理。
+- **選用權限 `notifications`**：未授予時 `chrome.notifications` 不存在，路由回覆 `{ ok: false, error }`。權限只由 popup 經 `utils/notification-permission.js` 請求，background 與內容腳本不請求權限。
 
 ### 資料流
 

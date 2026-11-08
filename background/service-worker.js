@@ -30,6 +30,7 @@ importScripts(
     'settings-routes.js',
     'pending-store-routes.js',
     'editor-window-routes.js',
+    'notification-routes.js',
     'chat-map-routes.js'
 );
 
@@ -41,6 +42,9 @@ DSSPendingStoreRoutes.install();
 
 // 註冊編輯器視窗關閉訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
 DSSEditorWindowRoutes.install();
+
+// 註冊桌面通知訊息路由（頂層呼叫，確保 worker 重啟後仍存活）
+DSSNotificationRoutes.install();
 
 // 註冊 chat→preset 綁定表路由，並使本 worker 的 StorageManager 成為唯一寫入者（頂層呼叫，確保 worker 重啟後仍存活）
 DSSChatMapRoutes.install({ storageManager: StorageManager });

@@ -107,6 +107,13 @@ function createLiveSyncListener(ctx) {
             });
         }
 
+        if (changes[KEYS.REPLY_NOTIFICATION]) {
+            const val = changes[KEYS.REPLY_NOTIFICATION].newValue === true ? 'on' : 'off';
+            (dom.replyNotificationRadios || []).forEach(r => {
+                if (r.checked !== (r.value === val)) r.checked = (r.value === val);
+            });
+        }
+
         if (changes[KEYS.SHOW_SYSTEM_TIME]) {
             applyToggle(dom.showSystemTimeToggle, changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false);
         }

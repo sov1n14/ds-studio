@@ -44,6 +44,9 @@
         EXPORT_MARKDOWN: 'EXPORT_MARKDOWN',
     };
 
+    // 內容腳本請 background 顯示桌面通知的訊息型別
+    globalThis.DSS_SHOW_NOTIFICATION = 'DSS_SHOW_NOTIFICATION';
+
     // === 測試匯出（瀏覽器情境為 no-op） ===
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
@@ -52,6 +55,7 @@
             DSS_SETTINGS_MSG: globalThis.DSS_SETTINGS_MSG,
             DSS_CHAT_MAP_MSG: globalThis.DSS_CHAT_MAP_MSG,
             DSS_CONTENT_MSG: globalThis.DSS_CONTENT_MSG,
+            DSS_SHOW_NOTIFICATION: globalThis.DSS_SHOW_NOTIFICATION,
         };
     }
 })();

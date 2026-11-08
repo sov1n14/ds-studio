@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 2026-06-22
+**Last updated:** 2026-11-08
 
 > **[📖 繁體中文版隱私權政策](docs/PRIVACY.md)** — 閱讀隱私權政策的繁體中文版本
 
@@ -28,6 +28,15 @@ Used when you click the Extension icon to open the popup menu. This permission a
 ### `alarms`
 
 Used to schedule background tasks, such as retrying failed temporary chat deletions. No data is collected as part of this process.
+
+### `notifications` (optional)
+
+An optional permission that is not requested at install. The browser asks for it only when you switch the "Reply-complete notification" toggle in the popup menu to "On"; if you refuse, the toggle stays off and the Extension does not get this permission. It is used to show a browser notification when a DeepSeek reply finishes while the tab is not in the foreground.
+
+- The notification title and body are generated locally by the Extension in the interface language as fixed prompt text and do not contain your conversation content.
+- Nothing is transmitted; the notification is shown only on your device.
+- The state of the "Reply-complete notification" toggle is stored only in local `chrome.storage.local` and is never synced.
+- Switching the toggle back to "Off" only stops notifications and does not remove the granted permission.
 
 ### Content Scripts
 

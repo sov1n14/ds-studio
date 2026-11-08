@@ -68,11 +68,12 @@
             }
 
             // 4. Fill other defaults
-            // isEnabled / globalPromptEnabled 為 local-only 金鑰，需另外以本機資料補齊預設值，
+            // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 為 local-only 金鑰，需另外以本機資料補齊預設值，
             // 不可併入 updates（updates 會經 _set 推送至 sync）。
             const localOnlyUpdates = {};
-            const localOnlyData = await this._safeGet('local', [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED]);
-            for (const key of [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED]) {
+            const localOnlyKeys = [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED, this.KEYS.REPLY_NOTIFICATION];
+            const localOnlyData = await this._safeGet('local', localOnlyKeys);
+            for (const key of localOnlyKeys) {
                 if (localOnlyData[key] === undefined && this.DEFAULTS[key] !== undefined) {
                     localOnlyUpdates[key] = this.DEFAULTS[key];
                 }
@@ -84,7 +85,7 @@
             for (const key of keysToFetch) {
                 if (key === this.KEYS.PROMPT_PRESETS) continue; // 跳過已退役的金鑰
                 if (key === this.KEYS.CHAT_PRESET_MAP) continue; // 跳過已分塊處理的金鑰
-                if (key === this.KEYS.IS_ENABLED || key === this.KEYS.GLOBAL_PROMPT_ENABLED) continue; // local-only，已於上方處理
+                if (localOnlyKeys.includes(key)) continue; // local-only，已於上方處理
                 if (data[key] === undefined && this.DEFAULTS[key] !== undefined) {
                     updates[key] = this.DEFAULTS[key];
                 }
@@ -100,8 +101,7 @@
                     if (this._isChatMapKey(key)) continue; // chat-map 金鑰僅由 service worker 單一寫入者寫入
                     if (key === this.KEYS.PROMPT_PRESETS
                      || key === this.KEYS.RESTORED_MESSAGES
-                     || key === this.KEYS.IS_ENABLED
-                     || key === this.KEYS.GLOBAL_PROMPT_ENABLED) continue; // local-only，不推送至 sync
+                     || localOnlyKeys.includes(key)) continue; // local-only，不推送至 sync
                     if (syncData[key] === undefined && data[key] !== undefined) {
                         missingInSync[key] = data[key];
                     }

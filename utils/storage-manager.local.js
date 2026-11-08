@@ -1,7 +1,7 @@
 /**
  * DS Studio — StorageManager 本機專屬（local-only）設定方法群組
  * 負責僅存於裝置本機、不參與 chrome.storage.sync 同步／備份還原的設定：
- * 主功能開關、全域預設提示詞啟用狀態、已還原訊息快取。
+ * 主功能開關、全域預設提示詞啟用狀態、回覆完成通知開關、已還原訊息快取。
  * 這些設定屬於裝置層級的操作狀態，不應隨帳號跨裝置同步。
  */
 (function (root) {
@@ -25,6 +25,15 @@
          */
         async saveGlobalPromptEnabled(enabled) {
             return this._safeSet('local', { [this.KEYS.GLOBAL_PROMPT_ENABLED]: enabled });
+        },
+
+        /**
+         * 儲存回覆完成通知開關
+         * 僅存本機（local-only），不參與同步／備份還原，理由同上。
+         * @param {boolean} isReplyNotificationEnabled
+         */
+        async saveReplyNotification(isReplyNotificationEnabled) {
+            return this._safeSet('local', { [this.KEYS.REPLY_NOTIFICATION]: isReplyNotificationEnabled });
         },
 
         /**

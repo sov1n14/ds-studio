@@ -113,4 +113,7 @@
 - [E2E batch 3 live facts](e2e-batch3-live-facts.md) — edit box key pinning, real-send capture, auto-click synthetic buttons, heredoc backslash trap
 - [Scratch oracle self-check](feedback_scratch-and-oracle-check.md) — run red specs against a reference oracle and wrong oracles before reporting red
 - [Auto-copy harness](project_auto_copy_harness.md) — jsdom chat pane, every button guarded, label log for order; two-batch new toolbar; assumed setter/field names
-- [Mutation proof without prod edits](reference_mutation_proof_without_prod_edits.md) — vite transform + fs patch scratch config; new Function load envs; DEFAULTS survivors cause
+- [Mutation proof without prod edits](reference_mutation_proof_without_prod_edits.md) — vite transform + fs patch scratch config; unique scratch names; strict eval artifact; radio-group equivalents
+- [Red-phase loader pattern](red_phase_loader.md) — existsSync + import.meta.glob for not-yet-existing modules, prove with sibling file
+- [Popup permission toggle red](project_popup_permission_toggle_red.md) — markup-gated reds need injected-markup oracle; onChanged write recorder catches transient saves
+- [Reply-notification harness](project_reply_notification_harness.md) — routed sendMessage failure modes, foreground getters, Object.create(globalThis) load env; once-per-batch open question

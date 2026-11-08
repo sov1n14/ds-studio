@@ -143,10 +143,11 @@
             // restored_messages 僅存本機且可能超過 8KB 同步配額，排除以避免失敗
             delete updates[this.KEYS.RESTORED_MESSAGES];
 
-            // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
+            // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 為裝置層級的本機開關（local-only），
             // 不應被雲端版本覆寫，故排除於合併結果之外。
             delete updates[this.KEYS.IS_ENABLED];
             delete updates[this.KEYS.GLOBAL_PROMPT_ENABLED];
+            delete updates[this.KEYS.REPLY_NOTIFICATION];
 
             updates[this.KEYS.SYNC_INITIALIZED] = true;
             updates[this.KEYS.SYNC_CONFLICT_PENDING] = false;

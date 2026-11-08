@@ -1,7 +1,7 @@
 /**
  * Shared bootstrap for background/service-worker.js sweep specs.
  *
- * Loads the REAL background/pending-store.js and the real service worker against the in-memory chrome.storage fixture (deep-copy get/set, like real chrome.storage). Mocked trust boundaries only: chrome.storage.onChanged registration (the SW listener is captured instead of wired to the fixture, so seeding the queue never starts a sweep; drive it with fireSyncChange), chrome.tabs, chrome.alarms (backed by the exported `alarms` Map so the scheduled alarm set is observable), fetch. StorageManager and the four route installers are stubbed because they are off the sweep path.
+ * Loads the REAL background/pending-store.js and the real service worker against the in-memory chrome.storage fixture (deep-copy get/set, like real chrome.storage). Mocked trust boundaries only: chrome.storage.onChanged registration (the SW listener is captured instead of wired to the fixture, so seeding the queue never starts a sweep; drive it with fireSyncChange), chrome.tabs, chrome.alarms (backed by the exported `alarms` Map so the scheduled alarm set is observable), fetch. StorageManager and the route installers are stubbed because they are off the sweep path.
  *
  * Call installServiceWorkerHarness() once at spec top level; it registers the beforeAll/beforeEach/afterEach hooks. Date.now reads `clock`, reset to NOW before each test; move it with setClock.
  */
@@ -60,6 +60,7 @@ export function installServiceWorkerHarness() {
         globalThis.DSSPendingStoreRoutes = { install: vi.fn() };
         globalThis.DSSEditorWindowRoutes = { install: vi.fn() };
         globalThis.DSSChatMapRoutes = { install: vi.fn() };
+        globalThis.DSSNotificationRoutes = { install: vi.fn() };
         globalThis.fetch = vi.fn();
         const addListener = chrome.storage.onChanged.addListener;
         chrome.storage.onChanged.addListener = (listener) => { swOnChanged = listener; };

@@ -8,10 +8,11 @@ const K = StorageManager.KEYS;
  * default-fill step in initialize() sees nothing to do and falls through
  * to the migration push branch.
  *
- * RESTORED_MESSAGES, IS_ENABLED, and GLOBAL_PROMPT_ENABLED are only written
- * to local — they are local-only keys (report.md §4.3 Step 3 made the latter
- * two local-only, joining the pre-existing RESTORED_MESSAGES pattern) and
- * should never be in sync.
+ * RESTORED_MESSAGES, IS_ENABLED, GLOBAL_PROMPT_ENABLED, and
+ * isReplyNotificationEnabled are only written to local — they are local-only
+ * keys (report.md §4.3 Step 3 made IS_ENABLED and GLOBAL_PROMPT_ENABLED
+ * local-only, joining the pre-existing RESTORED_MESSAGES pattern; DECISIONS
+ * U6-10 added the reply-notification toggle) and should never be in sync.
  *
  * IMPORTANT: this list must stay in sync with StorageManager.DEFAULTS
  * (utils/storage-manager.js). Any key present in DEFAULTS but missing here
@@ -39,6 +40,8 @@ async function populateDefaults() {
         // Literal keys: the KEYS constants for the auto-copy toggles may not exist yet (red phase).
         isAutoCopyReplyEnabled: false,
         isAutoCopyCodeEnabled: false,
+        // Literal key: KEYS.REPLY_NOTIFICATION may not exist yet (red phase).
+        isReplyNotificationEnabled: false,
         [K.PREVENT_AUTO_SCROLL]: false,
         [K.WEBSEARCH_TOGGLE]: 'default',
         [K.CHAT_WIDTH]: 70,
@@ -58,6 +61,7 @@ async function populateDefaults() {
     delete syncDefaults[K.RESTORED_MESSAGES];
     delete syncDefaults[K.IS_ENABLED];
     delete syncDefaults[K.GLOBAL_PROMPT_ENABLED];
+    delete syncDefaults.isReplyNotificationEnabled;
 
     await chrome.storage.local.set(localDefaults);
     await chrome.storage.sync.set(syncDefaults);
@@ -258,6 +262,38 @@ describe('StorageManager migration push regression', () => {
             const syncAfter = await chrome.storage.sync.get(null);
             expect(syncAfter).not.toHaveProperty(K.IS_ENABLED);
             expect(syncAfter).not.toHaveProperty(K.GLOBAL_PROMPT_ENABLED);
+        });
+
+        it('regression guard (DECISIONS U6-10): never pushes isReplyNotificationEnabled to sync, even when missing from sync and present in local', async () => {
+            await populateDefaults();
+
+            await chrome.storage.local.set({ isReplyNotificationEnabled: true });
+
+            await expect(StorageManager.initialize()).resolves.toBeUndefined();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            const localAfter = await chrome.storage.local.get(null);
+            expect(syncAfter).not.toHaveProperty('isReplyNotificationEnabled');
+            expect(localAfter[K.LOCAL_AUTHORITATIVE] || []).not.toContain('isReplyNotificationEnabled');
+            expect(localAfter.isReplyNotificationEnabled, 'local isReplyNotificationEnabled after initialize()').toBe(true);
+            expect((await StorageManager.getSettings()).replyNotification, 'getSettings().replyNotification after initialize()').toBe(true);
+        });
+
+        it('regression guard (DECISIONS U6-10): never marks isReplyNotificationEnabled LOCAL_AUTHORITATIVE when the migration push hits a sync quota error', async () => {
+            await populateDefaults();
+
+            // INCLUDE_THINKING missing from sync forces a migration push that fails on quota.
+            await chrome.storage.local.set({ isReplyNotificationEnabled: true, [K.INCLUDE_THINKING]: false });
+            await chrome.storage.sync.remove(K.INCLUDE_THINKING);
+            chrome.storage.sync.setQuotaError(true);
+
+            await expect(StorageManager.initialize()).resolves.toBeUndefined();
+
+            const localAfter = await chrome.storage.local.get(null);
+            const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
+            expect(authList, 'probe key must reach the quota fallback').toContain(K.INCLUDE_THINKING);
+            expect(authList).not.toContain('isReplyNotificationEnabled');
+            expect((await StorageManager.getSettings()).replyNotification, 'getSettings().replyNotification after initialize()').toBe(true);
         });
     });
 });

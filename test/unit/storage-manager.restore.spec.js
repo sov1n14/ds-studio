@@ -356,3 +356,34 @@ describe('restoreSettings - autoOpenSidebar end-state', () => {
         expect((await StorageManager.getSettings()).autoOpenSidebar).toBe(false);
     });
 });
+
+/**
+ * Reply-notification toggle is device-local (DECISIONS U6-10): a backup carrying it never changes this device's value. The backup carries both the storage key and the getSettings() field name so neither spelling can slip through; chatWidth proves the restore itself ran.
+ */
+describe('restoreSettings - reply notification is not restored (device-local)', () => {
+    const KEY = 'isReplyNotificationEnabled';
+    const readLocal = async () => (await chrome.storage.local.get(KEY))[KEY];
+
+    beforeEach(() => {
+        chrome.storage.local.store = {};
+        chrome.storage.sync.store = {};
+        vi.restoreAllMocks();
+    });
+
+    it('a backup holding true leaves a local false unchanged and writes nothing to sync', async () => {
+        await chrome.storage.local.set({ [KEY]: false });
+        await StorageManager.restoreSettings({ [KEY]: true, replyNotification: true, chatWidth: 50 }, false);
+        expect(await readLocal()).toBe(false);
+        expect(await chrome.storage.sync.get(null)).not.toHaveProperty(KEY);
+        const settings = await StorageManager.getSettings();
+        expect(settings.chatWidth, 'restore must have applied chatWidth').toBe(50);
+        expect(settings.replyNotification).toBe(false);
+    });
+
+    it('a backup holding false leaves a local true unchanged', async () => {
+        await chrome.storage.local.set({ [KEY]: true });
+        await StorageManager.restoreSettings({ [KEY]: false, replyNotification: false, chatWidth: 50 }, false);
+        expect(await readLocal()).toBe(true);
+        expect((await StorageManager.getSettings()).replyNotification).toBe(true);
+    });
+});

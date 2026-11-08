@@ -408,4 +408,55 @@ describe('StorageManager.resolveSyncConflict() — restored_messages exclusion',
         });
     });
 
+    // ----------------------------------------------------------------
+    // Device-local reply-notification toggle (DECISIONS U6-10): the
+    // reconciliation never writes isReplyNotificationEnabled to sync and
+    // never lets a sync value replace the local one.
+    // ----------------------------------------------------------------
+    describe('Reply notification — device-local key never reconciled into sync', () => {
+        const KEY = 'isReplyNotificationEnabled';
+
+        it('does not write the key to sync when local holds true, and keeps local true', async () => {
+            await populateDefaults();
+            await chrome.storage.local.set({ [K.SYNC_CONFLICT_PENDING]: true, [KEY]: true });
+
+            await StorageManager.resolveSyncConflict();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            const localAfter = await chrome.storage.local.get(null);
+            expect(syncAfter).not.toHaveProperty(KEY);
+            expect(localAfter[KEY]).toBe(true);
+            expect((await StorageManager.getSettings()).replyNotification, 'getSettings().replyNotification after resolve').toBe(true);
+        });
+
+        it('keeps local true when sync holds a stale false, and never writes true to sync', async () => {
+            await populateDefaults();
+            await chrome.storage.local.set({ [K.SYNC_CONFLICT_PENDING]: true, [KEY]: true });
+            await chrome.storage.sync.set({ [KEY]: false });
+
+            await StorageManager.resolveSyncConflict();
+
+            const syncAfter = await chrome.storage.sync.get(null);
+            const localAfter = await chrome.storage.local.get(null);
+            expect(localAfter[KEY]).toBe(true);
+            expect(syncAfter[KEY]).not.toBe(true);
+            expect((await StorageManager.getSettings()).replyNotification, 'getSettings().replyNotification after resolve').toBe(true);
+        });
+
+        it('never marks the key LOCAL_AUTHORITATIVE when sync quota is exceeded', async () => {
+            await populateDefaults();
+            await chrome.storage.local.set({ [K.SYNC_CONFLICT_PENDING]: true, [KEY]: true, [K.INCLUDE_THINKING]: true });
+            await chrome.storage.sync.set({ [K.INCLUDE_THINKING]: true });
+            chrome.storage.sync.setQuotaError(true);
+
+            await StorageManager.resolveSyncConflict();
+
+            const localAfter = await chrome.storage.local.get(null);
+            const authList = localAfter[K.LOCAL_AUTHORITATIVE] || [];
+            expect(authList, 'probe key must reach the quota fallback').toContain(K.INCLUDE_THINKING);
+            expect(authList).not.toContain(KEY);
+            expect((await StorageManager.getSettings()).replyNotification, 'getSettings().replyNotification after resolve').toBe(true);
+        });
+    });
+
 });

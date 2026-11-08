@@ -72,7 +72,7 @@ popup 的「Backup & Restore」卡片有四顆按鈕：
 **JSON 匯入**：開啟檔案選擇器（`<input type="file" accept=".json">`）。解析 JSON 後呼叫 `StorageManager.restoreSettings(importedSettings)`，其行為為：
 - 以 `mergePresets()` 合併 `promptPresets`（依 `updatedAt` 保留較新者，新 ID 附加於後）。
 - 合併 `chatPresetMap`（展開合併：以本機為基底，加入匯入的項目）。
-- 覆寫其餘 UI 設定（全域提示詞內容、includeThinking/References、側邊欄自動隱藏、對話寬度、輸入框寬度、系統時間開關、activePresetId、pinnedPresetId、chatWidthEnabled、inputWidthEnabled）。**isEnabled** 與裝置層級的 **globalPromptEnabled** 鍵屬於裝置本機開關（v4.7.3），匯入時**不會**被覆寫 —— 每台裝置保有各自的啟用狀態。（v4.20.0）逐提示詞組的 `globalPromptEnabled` 欄位是另一回事：它位於每個 `PromptPreset` 內，因此會像 `name`、`content` 一樣隨提示詞組經 `mergePresets()` 合併，並**會**隨匯出／匯入一起帶走。
+- 覆寫其餘 UI 設定（全域提示詞內容、includeThinking/References、側邊欄自動隱藏、對話寬度、輸入框寬度、系統時間開關、activePresetId、pinnedPresetId、chatWidthEnabled、inputWidthEnabled）。**isEnabled**、裝置層級的 **globalPromptEnabled** 鍵與 **isReplyNotificationEnabled**（v4.38.0）屬於裝置本機開關（v4.7.3），匯入時**不會**被覆寫 —— 每台裝置保有各自的啟用狀態。（v4.20.0）逐提示詞組的 `globalPromptEnabled` 欄位是另一回事：它位於每個 `PromptPreset` 內，因此會像 `name`、`content` 一樣隨提示詞組經 `mergePresets()` 合併，並**會**隨匯出／匯入一起帶走。
 - `pinnedPresetId`（v4.18.0）與 `activePresetId` 一同隨備份檔攜帶：匯出端自動涵蓋，因為 `getSettings()` 以反射方式從 `StorageManager.KEYS` 推導鍵集合；匯入端則需在 `restoreSettings()` 的逐鍵白名單中明列。`!== undefined` 防護讓尚未包含此鍵的舊備份檔不會動到目前裝置的預設釘選，而 `mergePresetsOnly` 模式會像其他 UI 設定一樣略過它。
 - 還原成功後顯示提示，並於 3 秒後重新載入 popup。
 

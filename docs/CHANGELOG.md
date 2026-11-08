@@ -10,6 +10,7 @@
 
 | 版本 | 摘要 |
 |-|-|
+| [4.38.0](changelog/v4.md#4380---2026-11-08) | 「Features」卡片新增「回覆完成通知」開啟／關閉單選（`isReplyNotificationEnabled`，預設關閉，受主開關連動，僅存本機、不同步、不納入備份還原）；新回覆完成（工具列被加入已顯示的訊息，非捲動重新掛載、非被停止的回覆）而 DeepSeek 分頁不在前景（`document.visibilityState !== 'visible' \|\| !document.hasFocus()`）時，`content/reply-notification.js` 送出 `DSS_SHOW_NOTIFICATION`，由 `background/notification-routes.js` 以 `chrome.notifications.create` 顯示「回覆已生成完畢」通知；通知權限 `notifications` 為 `optional_permissions`，僅在使用者把開關切到「開啟」時由 popup 經 `utils/notification-permission.js` 檢查並請求，取得後才儲存，遭拒則退回關閉；新增 `content/reply-notification.js`、`background/notification-routes.js` 與 `utils/notification-permission.js` |
 | [4.37.0](changelog/v4.md#4370---2026-11-08) | 「Features」卡片新增「自動複製回覆內容」與「自動複製程式碼區塊內容」兩個開關（`isAutoCopyReplyEnabled`、`isAutoCopyCodeEnabled`，預設關閉，受主開關連動、同步並納入備份還原）；回覆完成（工具列被加入已顯示的訊息）時，`content/auto-copy.js` 經 `dss:react-click` 按下回覆的複製按鈕與各程式碼區塊的複製按鈕（兩者皆開時先回覆再程式碼區塊），頁面既有訊息、捲動重新掛載的舊訊息與被停止的回覆不複製；新增 `content/reply-completion.js` 與 `content/auto-copy.js`；已知限制：DeepSeek 分頁沒有焦點時瀏覽器拒絕剪貼簿寫入，自動複製只在分頁取得焦點時生效 |
 | [4.36.8](changelog/v4.md#4368---2026-11-08) | 修正開啟訊息編輯視窗時，提示詞前綴（主輸入框送出按鈕）與引用回覆被送進編輯框而非主輸入框：主輸入框選擇器 `INPUT_TEXTAREA_SELECTOR` 改為只匹配 `textarea[name="search"]`，新增 `ANY_TEXTAREA_SELECTOR` 供編輯視窗路徑使用（`DSSelectors` 匯出 96 → 97）；更正 `SCROLL_ROOT_SELECTOR` 的 JSDoc 與過時的「遮罩」註解（匯出進度 UI 為不阻擋操作的 toast） |
 | [4.36.7](changelog/v4.md#4367---2026-11-08) | 修正「匯出包含思考過程」搭配「隱藏思考過程」時匯出缺少思考區塊：匯出含思考時，擷取每則訊息前暫時展開已收合的思考區塊（無論由「隱藏思考過程」或使用者手動收合），複製後還原原本的收合狀態，匯出內容不再受顯示層影響；新增 `content/harvest.think.js` |

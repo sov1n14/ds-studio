@@ -14,6 +14,7 @@
 - [Auto Retry and Auto Continue](#auto-retry-and-auto-continue)
 - [Auto Open Sidebar](#auto-open-sidebar)
 - [Auto Copy Reply and Code Blocks](#auto-copy-reply-and-code-blocks)
+- [Reply-Complete Notification](#reply-complete-notification)
 - [Exporting Conversations](#exporting-conversations)
 - [Quote Reply](#quote-reply)
 - [Edit Message Cleanup](#edit-message-cleanup)
@@ -231,6 +232,17 @@ Two checkboxes in the popup menu's **Features** card (both off by default) press
 - **Master Switch Linkage**: Both toggles are controlled by the master switch; when the master switch is off, they are disabled and nothing is copied.
 - **Sync and Backup**: Like the other feature toggles, the states sync to the cloud, are included in backup and restore, and reflect changes from other devices or tabs live while the popup is open.
 
+## Reply-Complete Notification
+
+The on/off radio **Reply-complete notification** in the popup menu's **Features** card (storage key `isReplyNotificationEnabled`, off by default) shows a browser notification when a DeepSeek reply finishes while the tab is not in the foreground, so you do not have to keep checking back while you wait in another tab or window:
+
+- **When It Triggers**: At the moment a new reply finishes (its message toolbar appears inside an already-shown message), the DeepSeek tab is hidden or its window has no focus; nothing is shown while the tab is in the foreground. Each finished reply notifies once.
+- **Never Notified**: Messages already on the page at load, old messages scrolled back into view, and stopped or aborted replies (the "Continue generating" button is present).
+- **Notification Content**: The title and body follow the interface language; in English they read "DeepSeek reply complete" and "The reply has finished generating". The text is generated locally, contains no conversation content, and is not sent to any server.
+- **Notification Permission**: The notification permission is optional and is not requested at install. The first time you switch the toggle to "On", the browser asks whether to allow notifications; the toggle is saved as on only after you allow it, and a refusal reverts it to "Off". Switching back to "Off" only stops notifications and does not remove the granted permission.
+- **Master Switch Linkage**: This toggle is controlled by the master switch; when the master switch is off, it is disabled and nothing is shown.
+- **Local Only**: The state lives only on the current device, is not synced to the cloud, is not included in backup and restore, and is not overwritten by cloud conflict resolution; while the popup is open it still reflects changes from other local tabs live. For the behavior specification see [Feature Spec §27](spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+
 ## Exporting Conversations
 
 You can export the conversation history from the current DeepSeek chat room as a Markdown (`.md`) file.
@@ -313,7 +325,7 @@ If multiple devices edit prompt groups simultaneously:
 
 1. The next time you open the popup menu, a **Cloud Sync Conflict** dialog will appear.
 2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp).
-3. Interface settings are overwritten by the cloud version (except device-local toggles like `isEnabled` and the legacy device-level `globalPromptEnabled` fallback, which are excluded from sync conflict resolution). Each prompt group's own `globalPromptEnabled` field (v4.20.0) lives on the prompt group data itself and therefore syncs and merges along with it.
+3. Interface settings are overwritten by the cloud version (except device-local toggles like `isEnabled`, the legacy device-level `globalPromptEnabled` fallback, and `isReplyNotificationEnabled`, which are excluded from sync conflict resolution). Each prompt group's own `globalPromptEnabled` field (v4.20.0) lives on the prompt group data itself and therefore syncs and merges along with it.
 4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only** when total prompt group data exceeds the `chrome.storage.sync` capacity limit, in which case data is kept locally only and cloud sync is skipped).
 
 ## Master Switch Linkage
@@ -326,6 +338,7 @@ When the master switch (top-right) is turned off, all sub-features are disabled 
 - Auto retry and auto continue generating
 - Auto open sidebar
 - Auto copy reply and code blocks
+- Reply-complete notification
 - Prevent auto-scroll
 - Web search toggle
 - System time injection

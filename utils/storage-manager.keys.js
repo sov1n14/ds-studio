@@ -55,6 +55,7 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         AUTO_OPEN_SIDEBAR: 'isAutoOpenSidebarEnabled',
         AUTO_COPY_REPLY: 'isAutoCopyReplyEnabled',
         AUTO_COPY_CODE: 'isAutoCopyCodeEnabled',
+        REPLY_NOTIFICATION: 'isReplyNotificationEnabled', // local-only：回覆完成通知開關（裝置層級）
         PREVENT_AUTO_SCROLL: 'dsPreventAutoScroll',
         WEBSEARCH_TOGGLE: 'dsWebSearchToggle',
         SHOW_SYSTEM_TIME: 'dsShowSystemTime',
@@ -90,6 +91,7 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         isAutoOpenSidebarEnabled: false,
         isAutoCopyReplyEnabled: false,
         isAutoCopyCodeEnabled: false,
+        isReplyNotificationEnabled: false,
         dsPreventAutoScroll: false,
         dsWebSearchToggle: 'on',
         dsShowSystemTime: false,

@@ -26,7 +26,7 @@
   - `chatPresetMap` 以 `mergeChatPresetBindings()` 交由 service worker 展開合併（現有綁定為基底，同 uuid 以匯入值為準）。
   - UI 設定（globalDefaultPrompt、includeThinking、includeReferences、側邊欄自動隱藏、寬度）由匯入值**覆寫**。
   - 成功後顯示 Toast，3 秒後重新載入彈出選單。
-  - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。（v4.20.0）此處指的是裝置層級的 `globalPromptEnabled` 鍵；各提示詞組自身的 `globalPromptEnabled` 欄位屬於提示詞組資料，隨 `mergePresets()` 一同匯出與匯入。
+  - （v4.7.3）+ isEnabled／globalPromptEnabled 為裝置層級的本機開關（local-only），匯入備份**不應覆寫**當前裝置的開關狀態，以避免關閉中的擴充功能因匯入而意外啟用。（v4.20.0）此處指的是裝置層級的 `globalPromptEnabled` 鍵；各提示詞組自身的 `globalPromptEnabled` 欄位屬於提示詞組資料，隨 `mergePresets()` 一同匯出與匯入。（v4.38.0）`isReplyNotificationEnabled`（設定欄位 `replyNotification`）同為本機專用開關，匯入備份不還原。
   - （v4.10.1）匯入完成後會呼叫 `clearPresetTombstones()`，精準清除 `importedSettings.promptPresets` 中每個提示詞組 ID 對應的 `dsPresetTombstones` 記錄（不存在則略過）。修復先前刪除全部提示詞組後再匯入備份，於下次跨裝置同步時因舊墓碑尚未過期而被再次刪除的缺陷。
 - 此外，備份與還原卡片還包含「匯出復原備份」、「匯入復原備份」、「清除所有已還原紀錄」三個按鈕，專門用於管理 `restored_messages`（審查回覆還原記錄），獨立於一般設定備份。
 
@@ -36,7 +36,7 @@
 - **自動同步**：所有寫入操作（`_set()`）為安全起見同時寫入同步與本地端儲存空間。
 - **衝突偵測**：首次執行（或升級）時，比較本地端與同步的 `promptPresets`。若兩者不同且同步有資料，則設定 `syncConflictPending = true`，並阻止讀取使用同步資料（僅回傳本地端資料）。
 - **衝突解決 UI**：當 `syncConflictPending` 為 true 時，彈出選單開啟時會顯示「雲端同步衝突」對話框，附有「合併同步」按鈕。
-- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／裝置層級 globalPromptEnabled 除外——兩者為裝置層級本機開關，不參與同步衝突解決；各提示詞組自身的 `globalPromptEnabled` 欄位則隨提示詞組正常合併，v4.20.0），清除衝突旗標。chat-map 金鑰（`chatPresetMap`、`chatPresetMapMeta`、`chatPresetMap_*`）不在寫回範圍內，只由 service worker 寫入。
+- **解決邏輯**：`StorageManager.resolveSyncConflict()` 讀取兩個儲存空間，透過 `mergePresets()` 合併提示詞組，以雲端版本覆寫 UI 設定（isEnabled／裝置層級 globalPromptEnabled／isReplyNotificationEnabled 除外——三者為裝置層級本機開關，不參與同步衝突解決；各提示詞組自身的 `globalPromptEnabled` 欄位則隨提示詞組正常合併，v4.20.0），清除衝突旗標。chat-map 金鑰（`chatPresetMap`、`chatPresetMapMeta`、`chatPresetMap_*`）不在寫回範圍內，只由 service worker 寫入。
 - **智慧合併**：`mergePresets()` 使用以提示詞組 `id` 為鍵的 Map。對每個 ID，保留 `updatedAt` 較新的提示詞組。新 ID 附加於後。這可防止雙方各自獨立修改提示詞組時的資料遺失。
 - **排序仲裁（v4.11.19）**：`mergePresets()` 除了合併內容，也決定回傳陣列的**順序**，依據是雙方的 `dsPresetOrderMeta`。僅當本機 `orderUpdatedAt` **嚴格大於**雲端時採用本機順序；其餘情況（**含時間戳完全相等**）一律採用雲端的 `order` 陣列。此規則與讀取路徑的 `_pickPresetOrderByRecency()` 是兩套獨立機制，`mergePresets()` 不呼叫後者。
   - 時間戳相等是**常態而非邊界狀況**：單次 `_set()` 先寫 `chrome.storage.sync`，再把同一個物件鏡射到 `chrome.storage.local`，因此任何一次成功儲存後兩側 `orderUpdatedAt` 必然逐位元相同。
@@ -52,7 +52,7 @@
 
 - **網域**：`chat.deepseek.com`
 - **平台**：Chrome 擴充功能 Manifest V3
-- **權限**：`storage`、`activeTab`、`alarms`（用於 background service worker 的排程重試與同步）
+- **權限**：`storage`、`activeTab`、`alarms`（用於 background service worker 的排程重試與同步）；選用權限 `notifications`（v4.38.0，`optional_permissions`，僅在使用者開啟「回覆完成通知」時請求，行為見 [功能規格 §27](04-features.md#27-回覆完成通知-reply-notification-v4380) ）
 
 ### DOM 選取
 
@@ -99,6 +99,7 @@
 | `isAutoOpenSidebarEnabled` | boolean | `false` | （v4.36.0）自動開啟側欄是否啟用。開啟時以 MutationObserver 偵測收合側欄的展開按鈕，每次出現即點擊，讓側欄保持開啟。受主開關連動。 |
 | `isAutoCopyReplyEnabled` | boolean | `false` | （v4.37.0）自動複製回覆內容是否啟用。開啟時，回覆完成後自動按下該回覆工具列的複製按鈕。受主開關連動。行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370)。 |
 | `isAutoCopyCodeEnabled` | boolean | `false` | （v4.37.0）自動複製程式碼區塊內容是否啟用。開啟時，回覆完成後依序按下該回覆每個程式碼區塊的複製按鈕。受主開關連動。行為見 [功能規格 §26](04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370)。 |
+| `isReplyNotificationEnabled` | boolean | `false` | （v4.38.0）回覆完成通知是否啟用。開啟時，新回覆完成且 DeepSeek 分頁不在前景，會顯示桌面通知。**本地專用**、以裝置為範圍：只寫入 `chrome.storage.local`，不同步、不被雲端衝突解決覆寫、匯入備份不還原。受主開關連動。行為見 [功能規格 §27](04-features.md#27-回覆完成通知-reply-notification-v4380) 。 |
 | `dsPreventAutoScroll` | boolean | `false` | （v4.12.0）防止自動回滾是否常駐啟用。開啟時 `PreventAutoScroll` 全時抑制向下自動捲動，而非僅在「回到頂部」與 Markdown 匯出期間生效。 |
 | `dsShowSystemTime` | boolean | `false` | 是否在訊息開頭注入目前系統時間。 |
 | `dsWebSearchToggle` | string | `'on'` | （v4.13.0，v4.17.0 改為二態）連網搜索按鈕的**預設值**：`'on'` 使頁面智能搜索按鈕為 `aria-pressed="true"`、`'off'` 為 `"false"`。每個啟動事件只套用一次 —— 進場、本鍵變更、主開關由關轉開（v4.17.1）—— 之後使用者手動切換的結果會保留到下一個啟動事件；只在狀態不符時點擊。讀取到舊版殘留的 `'default'` 值一律當作 `'on'`（不寫回）。受主開關連動。 |

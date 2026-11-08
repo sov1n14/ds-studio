@@ -278,3 +278,27 @@ The behavior rules for auto copy are in [Feature Spec §26](../spec/04-features.
 ### Load Order
 
 `start()` throws a named load-order error when `DSSFeatureToggle`, `DSstudio.ReplyCompletion`, or `KEYS` is absent; the manifest position is in [Feature Spec §26](../spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+## Reply-Complete Notification (ReplyNotification)
+
+The behavior rules for the reply-complete notification are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380), and the storage keys are in [STORAGE.md](STORAGE.md); this section covers the split between the content script, the background route, and the popup permission wrapper, and their implementation details.
+
+### Module Split
+
+- **`content/reply-notification.js`** (`DSstudio.ReplyNotification`): holds the gate `_isOn` and the observer, borrows `DSstudio.ReplyCompletion` (see [Auto Copy](#auto-copy-autocopy)) to decide which toolbars are newly completed replies, and sends a message when the tab is not in the foreground; it never calls `chrome.notifications` directly.
+- **`background/notification-routes.js`** (`DSSNotificationRoutes`): receives `DSS_SHOW_NOTIFICATION` and shows the notification; the message route is described in [ARCHITECTURE.md](../ARCHITECTURE.md#reply-notification-message-route-reply-notification-v4380).
+- **`utils/notification-permission.js`** (`DSSNotificationPermission`): the popup-side permission check and request wrapper; the toggle flow is in [POPUP.md](POPUP.md) and [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+
+### Gating (registerFeatureToggle)
+
+`start()` registers a single gate, and `onEnable` / `onDisable` set `_isOn` and sync the observer. The activation conditions are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380), and the key name is defined in `utils/storage-manager.keys.js`.
+
+### Observing and Notifying
+
+- **Observer**: `content/reply-notification.js` roots the observer at `body` for the same reason as the observer in [Auto Copy](#auto-copy-autocopy). Attach and detach conditions are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **Batch Handling**: Each batch goes to `newToolbarsFromRecords` first, then toolbars for which `isStoppedReply` is true are skipped, and the remaining count is the number of newly completed replies in the batch; the foreground check runs while the batch is handled. The notification rule is in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **Message Content**: `title` and `body` are read at send time, so they follow the current locale; the i18n keys and copy are in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+- **Error Handling**: On failure, `chrome.runtime.sendMessage` logs `console.error('[DSS] reply-notification:送出通知訊息失敗:', error)`; the handling path is in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380). The `MutationObserver` callback is wrapped in try/catch, and an error thrown while handling is logged as `console.error('[DSS] reply-notification:處理新工具列失敗:', error)` and observation continues.
+
+### Load Order
+
+`start()` throws a named load-order error when `DSSFeatureToggle`, `DSstudio.ReplyCompletion`, or `KEYS` is absent; the manifest position is in [Feature Spec §27](../spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).

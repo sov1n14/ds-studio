@@ -278,3 +278,27 @@ manifest 中 `content/auto-open-sidebar.js` 緊接 `content/auto-expand-messages
 ### 載入順序
 
 `start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §26](../spec/04-features.md#26-自動複製回覆與程式碼區塊-auto-copy-v4370) 。
+## 回覆完成通知 (ReplyNotification)
+
+回覆完成通知的行為規則見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) ，儲存鍵見 [STORAGE.md](STORAGE.md) ；本節說明內容腳本、background 路由與 popup 權限包裝的分工與實作細節。
+
+### 模組分工
+
+- **`content/reply-notification.js`**（`DSstudio.ReplyNotification`）：持有閘門 `_isOn` 與觀察器，借用 `DSstudio.ReplyCompletion`（見 [自動複製](#自動複製-autocopy) ）判斷哪些工具列是新完成的回覆，並在分頁不在前景時送出訊息；它不直接呼叫 `chrome.notifications`。
+- **`background/notification-routes.js`**（`DSSNotificationRoutes`）：接收 `DSS_SHOW_NOTIFICATION` 並顯示通知，訊息路由見 [ARCHITECTURE.md](../ARCHITECTURE.md#回覆完成通知訊息路由-reply-notification-v4380) 。
+- **`utils/notification-permission.js`**（`DSSNotificationPermission`）：popup 端的權限查詢與請求包裝，開關流程見 [POPUP.md](POPUP.md) 與 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+
+### 閘控 (registerFeatureToggle)
+
+`start()` 註冊單一閘門，`onEnable` / `onDisable` 設定 `_isOn` 並同步觀察器。生效條件見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) ，鍵名定義於 `utils/storage-manager.keys.js`。
+
+### 觀察與通知
+
+- **觀察器**：`content/reply-notification.js` 以 `body` 為根節點，理由同 [自動複製](#自動複製-autocopy) 的觀察器。掛載與中斷條件見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+- **批次處理**：每批 `MutationRecord` 先交給 `newToolbarsFromRecords`，再略過 `isStoppedReply` 為真的工具列，剩餘數量即本批新完成的回覆數；前景判斷於批次處理當下進行。通知條件見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+- **訊息內容**：`title` 與 `body` 於送出時取得，隨目前語系變化；i18n 鍵與文案見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
+- **錯誤處理**：`chrome.runtime.sendMessage` 失敗時記錄 `console.error('[DSS] reply-notification:送出通知訊息失敗:', error)`，處理路徑見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。`MutationObserver` 回呼以 try/catch 包覆，處理拋出的錯誤以 `console.error('[DSS] reply-notification:處理新工具列失敗:', error)` 記錄並維持觀察。
+
+### 載入順序
+
+`start()` 在 `DSSFeatureToggle`、`DSstudio.ReplyCompletion` 或 `KEYS` 缺席時拋出具名的載入順序錯誤；manifest 中的載入位置見 [功能規格 §27](../spec/04-features.md#27-回覆完成通知-reply-notification-v4380) 。
