@@ -3,7 +3,7 @@
  *
  * Requirement (user request + decisions): two Features toggles, "auto-copy reply content" and "auto-copy code block content". D-05 they are checkboxes; U6-05 both default off. Decided design:
  *   1. Storage keys "isAutoCopyReplyEnabled" / "isAutoCopyCodeEnabled" are StorageManager.KEYS values, default false in DEFAULTS, synced settings (written to chrome.storage.sync as well as local), with setters following saveAutoOpenSidebar, exposed by getSettings() and restorable from a backup like the other synced toggles.
- *   2. popup.html Features card holds checkboxes #autoCopyReplyToggle / #autoCopyCodeToggle after the 連網搜索 (websearch) group, labelled data-i18n="autoCopyReplyLabel" / "autoCopyCodeLabel", both keys defined in zh-TW and en.
+ *   2. popup.html Features card holds checkboxes #autoCopyReplyToggle / #autoCopyCodeToggle, labelled data-i18n="autoCopyReplyLabel" / "autoCopyCodeLabel", both keys defined in zh-TW and en; their position in the card (D-27) is asserted by popup-card-order.spec.js.
  *   3. Changing a checkbox saves its key; applyMasterSwitchUI(false) disables both; a storage change of a key updates its checkbox (live sync).
  *   4. U6-14: clipboardWrite and offscreen are both optional permissions, requested together when either checkbox turns on; refusal reverts the checkbox (same flow as the reply-notification toggle). Checking asks contains first and requests only when absent; granted -> the key is saved true; refused or failed -> the box is unchecked and true is never stored. Unchecking saves false without touching chrome.permissions.
  *
@@ -152,15 +152,6 @@ describe('popup.html - Features card checkboxes (D-05)', () => {
         expect(label.getAttribute('data-i18n')).toBe(i18nKey);
     });
 
-    it.each(TOGGLES)('key %s (setter %s, field %s): #%s sits after the websearch (連網搜索) group, outside it', (_key, _setter, _field, id) => {
-        const card = findFeaturesCard(parsePopupHtml());
-        const websearchGroup = card.querySelector('input[name="websearchToggle"]')?.closest('.input-group');
-        expect(websearchGroup, 'precondition: the websearch group is in the Features card').toBeTruthy();
-        const input = card.querySelector(`#${id}`);
-        expect(input, `#${id} missing from the Features card`).not.toBeNull();
-        expect(websearchGroup.contains(input), `#${id} must not be inside the websearch group`).toBe(false);
-        expect(Boolean(websearchGroup.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING), `#${id} must follow the websearch group`).toBe(true);
-    });
 });
 
 describe('i18n - label keys', () => {

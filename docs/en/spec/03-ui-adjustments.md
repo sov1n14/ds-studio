@@ -47,7 +47,7 @@
 
 ## 16. Auto Expand Messages — v4.32.0
 
-- **Toggle Location**: The `#autoExpandMessagesToggle` checkbox in the popup menu's "Features" card.
+- **Toggle Location**: The `#autoExpandMessagesToggle` checkbox in the popup menu's "UI Adjustments" card.
 - **Storage Key**: `dsAutoExpandMessages` (boolean, default `false`).
 - **Behavior**: When enabled, automatically clicks collapsed "expand" buttons on the page so all messages are expanded by default. Collapsed state is determined by whether the expand button icon has a `transform` style containing `rotate(180deg)`.
 - **Duplicate Click Prevention**: Processed buttons are marked with `data-dss-auto-expanded="1"` to prevent repeated clicks.
@@ -61,7 +61,7 @@
 
 ## 17. Hide Thinking Process
 
-- **Toggle Location**: The `#hideThinkingToggle` checkbox in the popup menu's "Features" card, used to enable/disable this feature (moved from the "UI Adjustments" card in v4.32.0).
+- **Toggle Location**: The `#hideThinkingToggle` checkbox in the popup menu's "UI Adjustments" card, used to enable/disable this feature.
 - **Storage Key**: `dsHideThinking` (boolean, default `false`).
 - **Observer Configuration**: A `MutationObserver` set with `{ childList: true, subtree: true }` attached to `document.body`, observing only DOM node additions. Does not observe `attributes`, so when a user manually expands a thinking block (modifying its CSS class), the callback is not triggered, ensuring expanded blocks remain unaffected.
 - **Two-Layer Search**: The callback first runs `closest(CONTAINER_SELECTOR)` (`THINK_BLOCK_SELECTOR`) on each added node, covering the node itself and its ancestors (when the header arrives later, `:has()` makes an existing ancestor container start matching); it collapses only if the added node contains the header, so content nodes remounted when the user expands a block never re-collapse it. It then searches each added node's descendants — handling both cases where the container is a direct added node or deeply nested.

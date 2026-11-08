@@ -1,4 +1,4 @@
-<!-- 385 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
+<!-- 386 lines: single popup entry-point HTML — all markup, SVG symbol definitions, script load-order declarations, and structural layout live in one file; splitting would require inter-document coordination for shared SVG symbols and strict script ordering -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -137,14 +137,14 @@
                 </div>
                 <div class="input-group">
                     <div class="checkbox-group">
-                        <input type="checkbox" id="hideThinkingToggle">
-                        <label for="hideThinkingToggle" data-i18n="hideThinkingLabel">隱藏思考過程</label>
+                        <input type="checkbox" id="autoCopyReplyToggle">
+                        <label for="autoCopyReplyToggle" data-i18n="autoCopyReplyLabel">自動複製回覆內容</label>
                     </div>
                 </div>
                 <div class="input-group">
                     <div class="checkbox-group">
-                        <input type="checkbox" id="autoExpandMessagesToggle">
-                        <label for="autoExpandMessagesToggle" data-i18n="autoExpandMessagesLabel">自動展開訊息</label>
+                        <input type="checkbox" id="autoCopyCodeToggle">
+                        <label for="autoCopyCodeToggle" data-i18n="autoCopyCodeLabel">自動複製程式碼區塊內容</label>
                     </div>
                 </div>
                 <div class="input-group">
@@ -167,12 +167,6 @@
                 </div>
                 <div class="input-group">
                     <div class="checkbox-group">
-                        <input type="checkbox" id="autoOpenSidebarToggle">
-                        <label for="autoOpenSidebarToggle" data-i18n="autoOpenSidebarLabel">自動開啟側欄</label>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <div class="checkbox-group">
                         <label data-i18n="websearchToggleLabel">連網搜索</label>
                     </div>
                     <div class="websearch-options">
@@ -184,18 +178,6 @@
                             <input type="radio" name="websearchToggle" value="off">
                             <span data-i18n="websearchOffLabel">關閉</span>
                         </label>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="autoCopyReplyToggle">
-                        <label for="autoCopyReplyToggle" data-i18n="autoCopyReplyLabel">自動複製回覆內容</label>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="autoCopyCodeToggle">
-                        <label for="autoCopyCodeToggle" data-i18n="autoCopyCodeLabel">自動複製程式碼區塊內容</label>
                     </div>
                 </div>
                 <div class="input-group">
@@ -280,6 +262,24 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="sidebarAutoHideToggle">
                         <label for="sidebarAutoHideToggle" data-i18n="sidebarAutoHideLabel">側邊欄自動隱藏（保留 60px hover 展開）</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hideThinkingToggle">
+                        <label for="hideThinkingToggle" data-i18n="hideThinkingLabel">隱藏思考過程</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoExpandMessagesToggle">
+                        <label for="autoExpandMessagesToggle" data-i18n="autoExpandMessagesLabel">自動展開訊息</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoOpenSidebarToggle">
+                        <label for="autoOpenSidebarToggle" data-i18n="autoOpenSidebarLabel">自動開啟側欄</label>
                     </div>
                 </div>
                 <div class="input-group input-group--no-gap">

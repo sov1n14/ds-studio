@@ -47,7 +47,7 @@
 
 ## 16. 自動展開訊息 (Auto Expand Messages) — v4.32.0
 
-- **開關位置**：彈出選單「Features」卡片中的 `#autoExpandMessagesToggle` 核取方塊。
+- **開關位置**：彈出選單「UI 調整」卡片中的 `#autoExpandMessagesToggle` 核取方塊。
 - **儲存鍵**：`dsAutoExpandMessages`（布林值，預設 `false`）。
 - **行為**：啟用時，自動點擊頁面上處於收合狀態的「展開」按鈕，使所有訊息預設展開。收合狀態的判斷依據為展開按鈕圖示帶有 `rotate(180deg)` 的 `transform` 樣式。
 - **防止重複點擊**：已處理過的按鈕以 `data-dss-auto-expanded="1"` 標記，避免重複點擊。
@@ -61,7 +61,7 @@
 
 ## 17. 隱藏思考過程 (Hide Thinking Process)
 
-- **開關位置**：彈出選單「Features」卡片中的 `#hideThinkingToggle` 核取方塊，用於啟用/停用此功能（v4.32.0 自「UI 調整」卡片移至此處）。
+- **開關位置**：彈出選單「UI 調整」卡片中的 `#hideThinkingToggle` 核取方塊，用於啟用/停用此功能。
 - **儲存鍵**：`dsHideThinking`（布林值，預設 `false`）。
 - **觀察器設定**：`MutationObserver` 以 `{ childList: true, subtree: true }` 設定掛載於 `document.body`，僅監聽 DOM 節點新增事件。不監聽 `attributes`，因此使用者手動展開思考區塊（修改 CSS class）不會觸發回調，確保展開的區塊不受影響。
 - **兩層搜尋**：回調先以 `closest(CONTAINER_SELECTOR)`（`THINK_BLOCK_SELECTOR`）在新增節點自身與其祖先中尋找思考區塊容器——標頭晚到時，`:has()` 使既有祖先容器才開始符合；僅當新增節點包含標頭時才收合，因此使用者展開區塊時重新掛載的內容節點不會再次收合。接著以 `querySelectorAll` 搜尋每個新增節點的子孫節點——處理容器為直接新增節點或深層嵌套兩種情況。

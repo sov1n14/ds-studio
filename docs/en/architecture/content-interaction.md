@@ -226,7 +226,7 @@ In the manifest, `content/auto-click.delay.js` loads before `content/auto-retry.
 
 ### Popup Toggle
 
-The `#autoOpenSidebarToggle` checkbox in the Features card (label `autoOpenSidebarLabel`) sits after `#autoContinueToggle` and before the web search radio group, and writes through `StorageManager.saveAutoOpenSidebar()`. It is a master-switch-aware sub-control, and `popup/popup.live-sync.js` reflects storage changes to it live.
+The `#autoOpenSidebarToggle` checkbox in the UI Adjustments card (label `autoOpenSidebarLabel`) sits after `#autoExpandMessagesToggle` and before `#chatWidthToggle`, and writes through `StorageManager.saveAutoOpenSidebar()`. It is a master-switch-aware sub-control, and `popup/popup.live-sync.js` reflects storage changes to it live.
 
 ### Gating (registerFeatureToggle)
 

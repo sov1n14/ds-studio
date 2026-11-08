@@ -196,7 +196,7 @@
 
 ## 25. 自動開啟側欄 (Auto Open Sidebar) — v4.36.0
 
-- **開關位置**：彈出選單「Features」卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 i18n 鍵 `autoOpenSidebarLabel`），位於自動繼續生成之後、連網搜索單選群組之前；屬感知總開關的子控制項，總開關關閉時停用。
+- **開關位置**：彈出選單「UI Adjustments」卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 i18n 鍵 `autoOpenSidebarLabel`），位於自動展開訊息之後、對話區域寬度之前；屬感知總開關的子控制項，總開關關閉時停用。
 - **儲存鍵**：`isAutoOpenSidebarEnabled`（`StorageManager.KEYS.AUTO_OPEN_SIDEBAR`，布林值，預設 `false`）。經 `StorageManager.saveAutoOpenSidebar(enabled)` 寫入 sync 與 local，`getSettings()` 以設定欄位 `autoOpenSidebar` 公開，與 `autoContinue` 同樣納入 JSON 備份與還原，popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
 - **閘控**：`content/auto-open-sidebar.js` 以自身鍵 `isAutoOpenSidebarEnabled` 呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。
 - **偵測**：生效時先掃描一次，再於 `document.body` 掛載 `MutationObserver`（`childList`、`subtree`、`attributes`，`attributeFilter: ['class']`），每批變更皆整頁重掃——按鈕的圖示 path 可能晚於按鈕節點插入，而 DeepSeek 依寬度斷點再收合時可能只改寫側欄 wrapper 的 `class`，因此不只檢查新增節點。收合狀態以側欄 wrapper（`SIDEBAR_WRAPPER_SELECTOR`，`div:has(> div > .ds-scroll-area > .ds-scroll-area)`）是否符合 `SIDEBAR_WRAPPER_COLLAPSED_SELECTOR` 判定：wrapper 加上 `:has(> div:nth-child(2))`，即收合軌道作為第二個直接子節點存在。停用時中斷並釋放觀察器與 `window` `resize` 監聽。
@@ -208,7 +208,7 @@
 
 ## 26. 自動複製回覆與程式碼區塊 (Auto Copy) — v4.37.0
 
-- **開關位置**：彈出選單「Features」卡片中的 `#autoCopyReplyToggle`（標籤 i18n 鍵 `autoCopyReplyLabel`）與 `#autoCopyCodeToggle`（`autoCopyCodeLabel`）核取方塊，位於連網搜索單選群組之後、卡片末端；兩者皆屬感知總開關的子控制項，總開關關閉時停用。
+- **開關位置**：彈出選單「Features」卡片中的 `#autoCopyReplyToggle`（標籤 i18n 鍵 `autoCopyReplyLabel`）與 `#autoCopyCodeToggle`（`autoCopyCodeLabel`）核取方塊，位於 `#showSystemTimeToggle` 之後、`#preventAutoScrollToggle` 之前；兩者皆屬感知總開關的子控制項，總開關關閉時停用。
 - **儲存鍵**：`isAutoCopyReplyEnabled`（`KEYS.AUTO_COPY_REPLY`）與 `isAutoCopyCodeEnabled`（`KEYS.AUTO_COPY_CODE`），布林值，預設 `false`。經 `StorageManager.saveAutoCopyReply(enabled)` / `saveAutoCopyCode(enabled)` 寫入 sync 與 local，`getSettings()` 以設定欄位 `autoCopyReply` / `autoCopyCode` 公開，納入 JSON 備份與還原（「僅合併提示詞組」模式不還原），popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
 - **閘控**：`content/auto-copy.js` 對兩個自身鍵各呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，各鍵僅在「總開關開啟且自身鍵開啟」時生效；不直接讀取 `chrome.storage`。任一閘門開啟時才在 `document.body` 掛載單一 `MutationObserver`（`childList`、`subtree`），兩個閘門皆關閉時中斷。
 - **完成判定**：`content/reply-completion.js` 的 `DSstudio.ReplyCompletion.newToolbarsFromRecords(records)` 從每批變更找出新出現的訊息工具列（`MESSAGE_TOOLBAR_SELECTOR`）。新回覆或重新生成時，DeepSeek 先掛載不含工具列的虛擬列表項目，之後才把工具列加入該已掛載項目，因此「工具列被加入已存在的虛擬列表項目」視為回覆完成；與項目同批加入的工具列（頁面載入、捲動使舊訊息重新掛載）不計。`isStoppedReply(toolbar)` 在工具列外層包裝內含「繼續生成」按鈕（`CONTINUE_BUTTON_SELECTOR` 或 `CONTINUE_BUTTON_FALLBACK_SELECTOR`）時為真，被停止或中斷的回覆整個略過。僅以選擇器判定，不比對按鈕文字。
@@ -225,7 +225,7 @@
 
 ## 27. 回覆完成通知 (Reply Notification) — v4.38.0
 
-- **開關位置**：彈出選單「Features」卡片中的 `replyNotificationToggle` 開啟／關閉單選群組（標籤 i18n 鍵 `replyNotificationLabel`；選項沿用 `websearchOnLabel`／`websearchOffLabel`，樣式同連網搜索），位於自動複製程式碼區塊之後、卡片末端；屬感知總開關的子控制項，總開關關閉時停用。
+- **開關位置**：彈出選單「Features」卡片中的 `replyNotificationToggle` 開啟／關閉單選群組（標籤 i18n 鍵 `replyNotificationLabel`；選項沿用 `websearchOnLabel`／`websearchOffLabel`，樣式同連網搜索），位於連網搜索單選群組之後、卡片末端；屬感知總開關的子控制項，總開關關閉時停用。
 - **儲存鍵**：`isReplyNotificationEnabled`（`KEYS.REPLY_NOTIFICATION`），布林值，預設 `false`。**僅存本機（local-only）**：經 `StorageManager.saveReplyNotification(enabled)` 只寫入 `chrome.storage.local`，不寫入 sync、不經雲端衝突解決覆寫，`restoreSettings()` 亦不還原；`initialize()` 以本機資料補齊預設值。`getSettings()` 以設定欄位 `replyNotification` 公開，popup 開啟期間由 `popup/popup.live-sync.js` 即時反映變更。
 - **權限**：通知權限 `notifications` 為選用權限（`manifest.json` 的 `optional_permissions`），安裝時不要求。使用者把單選切到「開啟」時，popup 經 `utils/notification-permission.js`（`DSSNotificationPermission`）先以 `chrome.permissions.contains` 檢查，未取得才以 `chrome.permissions.request` 請求；取得後才寫入 `true`。使用者拒絕、API 不存在或呼叫失敗時單選退回「關閉」且不寫入。切到「關閉」只寫入 `false`，不移除已授予的權限。
 - **閘控**：`content/reply-notification.js` 以自身鍵 `isReplyNotificationEnabled` 呼叫一次 `registerFeatureToggle({ ownKey, onEnable, onDisable })`，僅在「總開關開啟且自身鍵開啟」時於 `document.body` 掛載 `MutationObserver`（`childList`、`subtree`），關閉時中斷；不直接讀取 `chrome.storage`。

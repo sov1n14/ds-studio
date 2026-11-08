@@ -33,11 +33,14 @@ beforeAll(() => {
     }
 });
 
-function findFeaturesCard(doc) {
-    const title = [...doc.querySelectorAll('.card-title')].find((el) => el.textContent.trim() === 'Features');
-    if (!title) throw new Error('could not locate the Features card in popup.html');
+/** The .card whose .card-title heading reads `heading` exactly. */
+function findCard(doc, heading) {
+    const title = [...doc.querySelectorAll('.card-title')].find((el) => el.textContent.trim() === heading);
+    if (!title) throw new Error(`could not locate the ${heading} card in popup.html`);
     return title.closest('.card');
 }
+
+const findFeaturesCard = (doc) => findCard(doc, 'Features');
 
 /** Real popup DOM: every element with an id from popup.html, keyed by id, plus the websearch radio group. */
 function buildPopupDom() {
@@ -215,7 +218,7 @@ describe('i18n - label keys', () => {
 });
 
 // ── 7. "Auto open sidebar" (#autoOpenSidebarToggle, KEYS.AUTO_OPEN_SIDEBAR) ──
-// Same contract as autoRetry / autoContinue: own storage key "isAutoOpenSidebarEnabled" (default false), saveAutoOpenSidebar(bool) writes it to both storage areas, getSettings().autoOpenSidebar mirrors it, and the Features-card checkbox is a master-switch sub-control.
+// Same contract as autoRetry / autoContinue: own storage key "isAutoOpenSidebarEnabled" (default false), saveAutoOpenSidebar(bool) writes it to both storage areas, getSettings().autoOpenSidebar mirrors it, and the checkbox sits in the UI Adjustments card (D-27) as a master-switch sub-control.
 
 const AUTO_OPEN_SIDEBAR_KEY = 'isAutoOpenSidebarEnabled';
 
@@ -253,14 +256,16 @@ describe('auto open sidebar - storage schema and setter', () => {
 });
 
 describe('auto open sidebar - popup', () => {
-    it('Features card holds checkbox #autoOpenSidebarToggle with label data-i18n="autoOpenSidebarLabel"', () => {
-        const card = findFeaturesCard(parsePopupHtml());
+    it('UI Adjustments card (not Features) holds checkbox #autoOpenSidebarToggle with label data-i18n="autoOpenSidebarLabel" (D-27)', () => {
+        const doc = parsePopupHtml();
+        const card = findCard(doc, 'UI Adjustments');
         const input = card.querySelector('#autoOpenSidebarToggle');
-        expect(input, '#autoOpenSidebarToggle missing from the Features card').not.toBeNull();
+        expect(input, '#autoOpenSidebarToggle missing from the UI Adjustments card').not.toBeNull();
         expect(input.type).toBe('checkbox');
         const label = card.querySelector('label[for="autoOpenSidebarToggle"]');
-        expect(label, 'label[for=autoOpenSidebarToggle] missing from the Features card').not.toBeNull();
+        expect(label, 'label[for=autoOpenSidebarToggle] missing from the UI Adjustments card').not.toBeNull();
         expect(label.getAttribute('data-i18n')).toBe('autoOpenSidebarLabel');
+        expect(findFeaturesCard(doc).querySelector('#autoOpenSidebarToggle'), '#autoOpenSidebarToggle must no longer be in the Features card').toBeNull();
     });
 
     it.each([true, false])('applySettingsToDom sets the checkbox to %s from settings.autoOpenSidebar', async (value) => {

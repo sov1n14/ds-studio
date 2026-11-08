@@ -226,7 +226,7 @@ manifest 中 `content/auto-click.delay.js` 先於 `content/auto-retry.js` 載入
 
 ### Popup 開關
 
-Features 卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 `autoOpenSidebarLabel`）位於 `#autoContinueToggle` 之後、連網搜索單選群組之前，經 `StorageManager.saveAutoOpenSidebar()` 寫入；屬感知總開關的子控制項，並由 `popup/popup.live-sync.js` 即時反映 storage 變更。
+UI Adjustments 卡片中的 `#autoOpenSidebarToggle` 核取方塊（標籤 `autoOpenSidebarLabel`）位於 `#autoExpandMessagesToggle` 之後、`#chatWidthToggle` 之前，經 `StorageManager.saveAutoOpenSidebar()` 寫入；屬感知總開關的子控制項，並由 `popup/popup.live-sync.js` 即時反映 storage 變更。
 
 ### 閘控 (registerFeatureToggle)
 
