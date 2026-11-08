@@ -1,4 +1,4 @@
-// 268 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 269 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -236,7 +236,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ received: true });
     } else if (request.action === DSS_CONTENT_MSG.ACTIVE_PRESET_CHANGED) {
         bindingState.pendingPresetId = request.presetId ?? null;
-        ChatBinding.updatePromptPrefixFromBinding();
+        ChatBinding.updatePromptPrefixFromBinding()
+            .catch(err => console.error('[DSS] content-script ACTIVE_PRESET_CHANGED 前綴重算失敗:', err));
         PresetOverlay.updateActiveId(request.presetId || '');
         // pending 變更後重新解析開關，避免先到的 activePresetId 廣播以舊 pending 解析
         ChatBinding.refreshGlobalPromptEnabled()

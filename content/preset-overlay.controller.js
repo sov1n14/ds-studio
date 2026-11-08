@@ -1,4 +1,4 @@
-// 340 lines: single preset overlay controller — lifecycle (mount/unmount), positioning, resize observation, and select-change handling share tightly coupled DOM refs and overlay instance state; splitting would require passing the same mutable instance across files
+// 341 lines: single preset overlay controller — lifecycle (mount/unmount), positioning, resize observation, and select-change handling share tightly coupled DOM refs and overlay instance state; splitting would require passing the same mutable instance across files
 /**
  * DS Studio — PresetOverlay Controller
  * 取代 content-script.overlay.js，整合自訂 dropdown 元件、定位計算、ResizeObserver。
@@ -244,7 +244,8 @@
 
                 Promise.resolve(storage.saveActivePresetId(newId))
                     .catch(err => console.error('[DSS] preset-overlay onSelectChange: saveActivePresetId 失敗:', err));
-                ctx.updatePromptPrefixFromBinding();
+                Promise.resolve(ctx.updatePromptPrefixFromBinding())
+                    .catch(err => console.error('[DSS] preset-overlay onSelectChange: 前綴重算失敗:', err));
                 if (!currentChatUuid) this._refreshGlobalPromptEnabled();
                 this.reposition();
             },
