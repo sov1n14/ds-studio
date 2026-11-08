@@ -13,6 +13,9 @@
  *   R3  — guard: scrollTop 200 (< clientHeight), first message bottom >= 0, previously hidden → stays hidden.
  *   R3b — guard: same band, previously visible → stays visible (keep-current in the other direction, no flicker).
  *   R4  — guard: scrollTop 400 (< clientHeight), first message bottom < 0 → visible (existing show rule alone).
+ *   B1  — boundary: scrollTop exactly equal to clientHeight (740) is one viewport away → visible, with the first message still on screen.
+ *   B2  — boundary: a scroller with clientHeight 0 never counts as one viewport away (documented: "with clientHeight > 0") → a hidden button stays hidden.
+ *   B3  — boundary: first message bottom exactly 0 is "at or below the viewport top" (keep-current band), not "above the viewport" → a hidden button stays hidden.
  *
  * Trust boundaries modelled here: browser layout on the scroller (scrollTop / scrollHeight / clientHeight) and on the mounted .ds-message elements (getBoundingClientRect), which happy-dom cannot compute; values come from the live capture above. _findScrollContainer is pinned to the fixture scroller as go-top.enable.spec.js does, because happy-dom cannot resolve overflow. Every other part runs through the real module: enable() injects the button, the real scroll listener (100 ms leading-edge throttle) drives the real visibility evaluation, and the real first-message and at-top lookups read the captured DOM.
  */
@@ -147,5 +150,24 @@ describe('GoToTop — visibility after Go bottom in a long conversation', () => 
         expect(liveButton().style.display).toBe('none');
         await scrollTo(page.listRoot, page.setState, { top: 400, firstTop: -400, heights: [380, 600] });
         expect(liveButton().style.display, 'first message bottom -20 (scrolled past) must show the button').not.toBe('none');
+    });
+
+    it('B1: scrollTop exactly equal to clientHeight (740 = 740) counts as one viewport away from the top, so the button shows while the first message (bottom 45) is still on screen', async () => {
+        expect(liveButton().style.display, 'precondition: at the top the button starts hidden').toBe('none');
+        await scrollTo(page.listRoot, page.setState, { top: CLIENT_HEIGHT, firstTop: -700, heights: [745, 600] });
+        expect(liveButton().style.display, 'documented show rule scrollTop >= clientHeight: at scrollTop 740 with clientHeight 740 the button must be visible').not.toBe('none');
+    });
+
+    it('B2: a scroller whose clientHeight is 0 never counts as one viewport away, so a hidden button stays hidden at scrollTop 500 with the first message on screen', async () => {
+        expect(liveButton().style.display, 'precondition: at the top the button starts hidden').toBe('none');
+        Object.defineProperty(page.listRoot, 'clientHeight', { configurable: true, get: () => 0 });
+        await scrollTo(page.listRoot, page.setState, { top: 500, firstTop: -100, heights: [400, 600] });
+        expect(liveButton().style.display, 'documented show rule requires clientHeight > 0: a 0-height scroller must not show the button through the viewport-away rule').toBe('none');
+    });
+
+    it('B3: a first message whose bottom is exactly 0 is not above the viewport, so within the first viewport (scrollTop 300) a hidden button stays hidden', async () => {
+        expect(liveButton().style.display, 'precondition: at the top the button starts hidden').toBe('none');
+        await scrollTo(page.listRoot, page.setState, { top: 300, firstTop: -300, heights: [300, 600] });
+        expect(liveButton().style.display, 'documented show rule is bottom < 0; bottom 0 sits in the keep-current band, so the hidden button must stay hidden').toBe('none');
     });
 });

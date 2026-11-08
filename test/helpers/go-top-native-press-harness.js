@@ -5,7 +5,7 @@ import { createFullWrapperWithNativeButton } from './go-top-fixtures.js';
 /**
  * Harness for "a press on DeepSeek's native go-bottom button while Go Top is running": the real GoToTop module (enabled, its clone injected into the captured live floating bar) and a replay of the host page's go-bottom click handler share one happy-dom document.
  *
- * Trust boundaries modelled here (and only here): the browser's scroll engine on the message-list scroller (scrollTop / scrollTo / scrollBy clamp to [0, scrollHeight - clientHeight]), the browser's isTrusted flag (reused from prevent-auto-scroll-harness.js), and DeepSeek's own click handler on the native control. The two GoToTop DOM locators (_findScrollContainer, _getAnchor) are pinned to the fixture's scroller, as go-top.enable.spec.js and go-top.scroll-engine.spec.js do, because happy-dom has no layout to resolve overflow or anchor geometry.
+ * Trust boundaries modelled here (and only here): the browser's scroll engine on the message-list scroller (scrollTop / scrollTo / scrollBy clamp to [0, scrollHeight - clientHeight]), the browser's isTrusted flag (reused from prevent-auto-scroll-harness.js), the browser's listener matching on `document` (installSpecListenerMatching), and DeepSeek's own click handler on the native control. The two GoToTop DOM locators (_findScrollContainer, _getAnchor) are pinned to the fixture's scroller, as go-top.enable.spec.js and go-top.scroll-engine.spec.js do, because happy-dom has no layout to resolve overflow or anchor geometry.
  */
 
 /** A long conversation: 50 viewports tall, so the bottom sits at 49000. */
@@ -63,11 +63,12 @@ function installHostGoBottomHandler(nativeControl, list) {
 }
 
 /**
- * Mounts the captured live message list (native go-bottom button rendered, conversation scrolled to the bottom), installs MutationObserver delivery, enables the real GoToTop so its clone is injected, and installs the host go-bottom handler. Call with fake timers already active; call restoreMutationDelivery() in afterEach.
+ * Mounts the captured live message list (native go-bottom button rendered, conversation scrolled to the bottom), installs DOM-spec listener matching on `document` and MutationObserver delivery, enables the real GoToTop so its clone is injected, and installs the host go-bottom handler. Call with fake timers already active; in afterEach call restoreSpecListenerMatching() after resetGoToTopState(), then restoreMutationDelivery().
  * Option `cloneInsideNativeWrapper`: moves the injected clone into the native positioning wrapper (._0706cde), a host layout where the clone sits under the same wrapper as the native control, so only the clone's own .dsw-gotop class tells the two presses apart.
  * Returns handles found by real nesting plus `goTopCalls()`, the promises every scrollToTopAndWait call returned (a pass-through spy, so the real engine runs).
  */
 export function mountGoTopConversation({ cloneInsideNativeWrapper = false } = {}) {
+    installSpecListenerMatching();
     installMutationDelivery();
     const { nativeBtn } = createFullWrapperWithNativeButton();
     const list = document.body.firstElementChild;
@@ -179,6 +180,66 @@ export function startContainerMutations(list, intervalMs = 50) {
         deliverChildListRecord(list, node);
     }, intervalMs);
     return () => clearInterval(id);
+}
+
+/**
+ * Browser listener matching on `document`. The DOM spec identifies an event listener by type, callback and capture flag: addEventListener ignores an exact duplicate, and removeEventListener removes only the entry whose capture flag matches, so a listener added with capture true survives a remove with capture false (and the reverse). A probe in real Chrome confirmed it: with mismatched flags the listener still fired after the remove. happy-dom 16.8.1 removes by type and callback regardless of the capture flag, which hides a listener that leaks past its owner's cleanup. installSpecListenerMatching() replaces document.addEventListener / removeEventListener with a registry keyed on all three, relaying each registration through its own real listener so dispatch, phase and order stay happy-dom's own.
+ */
+let listenerMatching = null;
+
+function captureFlagOf(options) {
+    return typeof options === 'boolean' ? options : Boolean(options && options.capture);
+}
+
+/** Installs DOM-spec listener matching on `document` for the current test; idempotent. */
+export function installSpecListenerMatching() {
+    if (listenerMatching) return;
+    const ownBefore = ['addEventListener', 'removeEventListener'].map((name) => [name, Object.getOwnPropertyDescriptor(document, name)]);
+    const realAdd = document.addEventListener;
+    const realRemove = document.removeEventListener;
+    const entries = [];
+    const indexOf = (type, callback, capture) => entries.findIndex((e) => e.type === type && e.callback === callback && e.capture === capture);
+    const forget = (entry) => {
+        const i = entries.indexOf(entry);
+        if (i !== -1) entries.splice(i, 1);
+    };
+    function addEventListener(type, callback, options) {
+        if (callback === null || callback === undefined) return;
+        const capture = captureFlagOf(options);
+        if (indexOf(type, callback, capture) !== -1) return;
+        const isOnce = Boolean(options && typeof options === 'object' && options.once);
+        const entry = { type, callback, capture };
+        entry.relay = function relay(event) {
+            if (isOnce) forget(entry);
+            return typeof callback === 'function' ? callback.call(this, event) : callback.handleEvent(event);
+        };
+        entries.push(entry);
+        const signal = options && typeof options === 'object' ? options.signal : undefined;
+        if (signal) signal.addEventListener('abort', () => forget(entry));
+        realAdd.call(document, type, entry.relay, typeof options === 'object' && options !== null ? { ...options, capture } : capture);
+    }
+    function removeEventListener(type, callback, options) {
+        const i = indexOf(type, callback, captureFlagOf(options));
+        // Not registered through this layer: it predates install, so happy-dom's own remove handles it. That remove cannot reach a layer entry, whose real listener is its relay, not the callback.
+        if (i === -1) return realRemove.call(document, type, callback, options);
+        const [entry] = entries.splice(i, 1);
+        realRemove.call(document, type, entry.relay, entry.capture);
+    }
+    Object.defineProperty(document, 'addEventListener', { configurable: true, writable: true, value: addEventListener });
+    Object.defineProperty(document, 'removeEventListener', { configurable: true, writable: true, value: removeEventListener });
+    listenerMatching = { realRemove, entries, ownBefore };
+}
+
+/** Detaches every listener still registered through the matching layer, then restores happy-dom's own add/removeEventListener on `document`. Call after resetGoToTopState(), so the module's own cleanup still runs through the matching layer. */
+export function restoreSpecListenerMatching() {
+    if (!listenerMatching) return;
+    const { realRemove, entries, ownBefore } = listenerMatching;
+    for (const entry of entries.splice(0)) realRemove.call(document, entry.type, entry.relay, entry.capture);
+    for (const [name, descriptor] of ownBefore) {
+        if (descriptor) Object.defineProperty(document, name, descriptor);
+        else delete document[name];
+    }
+    listenerMatching = null;
 }
 
 export { dispatchWithTrust, userClick, scriptedClickSequence } from './prevent-auto-scroll-harness.js';

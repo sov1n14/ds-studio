@@ -10,6 +10,7 @@
  *   C3 — guard: a press on the extension's own clone (.dsw-gotop) is not a native press, both with the clone beside the native wrapper and with the clone inside the native ._0706cde wrapper (where only .dsw-gotop tells the two apart).
  *   C4 — after a native-press cancel, Go Top is idle: the next Go Top click starts a fresh scroll that reaches the top.
  *   C5 — guard: with no Go Top running, a trusted native press leaves Go Top unaffected.
+ *   C6 — guard: a trusted press elsewhere on the page (a mounted message, the floating bar outside the native ._0706cde wrapper) is not a native press and does not cancel Go Top.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
@@ -22,6 +23,7 @@ import {
     trackSettle,
     startContainerMutations,
     restoreMutationDelivery,
+    restoreSpecListenerMatching,
     dispatchWithTrust,
     userClick,
     scriptedClickSequence,
@@ -39,6 +41,7 @@ describe('GoToTop — native go-bottom press during Go Top', () => {
     });
     afterEach(() => {
         resetGoToTopState();
+        restoreSpecListenerMatching();
         restoreMutationDelivery();
         vi.useRealTimers();
     });
@@ -185,6 +188,26 @@ describe('GoToTop — native go-bottom press during Go Top', () => {
 
             expect(goTop.value, 'Go Top must run normally after a native press made while idle').toEqual({ success: true });
             expect(h.list.scrollTop).toBe(0);
+        });
+    });
+
+    describe('C6 — guard: a trusted press outside the native wrapper does not cancel Go Top', () => {
+        it.each([
+            ['a mounted message in the list', (h) => h.list.querySelector('.ds-message')],
+            ['the floating bar around the native wrapper', (h) => h.nativeWrapper.parentElement],
+        ])('a trusted click on %s leaves Go Top running to the top', async (_where, pickTarget) => {
+            const h = mountGoTopConversation();
+            const target = pickTarget(h);
+            expect(target, 'precondition: the press target must exist in the captured page').not.toBeNull();
+            expect(target.closest('._0706cde'), 'precondition: the press target must be outside the native wrapper').toBeNull();
+            expect(target.closest('.dsw-gotop'), 'precondition: the press target must not be the Go Top clone').toBeNull();
+            const goTop = await startGoTop(h);
+
+            userClick(target);
+            await vi.advanceTimersByTimeAsync(LONG_WAIT);
+
+            expect.soft(goTop.value, 'a press that is not on the native go-bottom control must not stop Go Top').toEqual({ success: true });
+            expect.soft(h.list.scrollTop, 'Go Top must still bring the list to the top').toBe(0);
         });
     });
 });
