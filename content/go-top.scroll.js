@@ -6,7 +6,30 @@
 (function (root) {
     'use strict';
 
+    // 合併共用選擇器常數（瀏覽器：由 content/ds-selectors.js 於前載入設定 window.DSstudio；Node.js 測試：直接 require）
+    const __DSSelectors = (globalThis).DSstudio?.Selectors ||
+        (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+    const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
+    // 本擴充功能自行注入的 GoTop 按鈕識別 class（非 DeepSeek 原生標記）
+    const GO_TOP_CLONE_SELECTOR = '.dsw-gotop';
+    // 使用者按下原生「到底部」按鈕的事件：pointerdown 為主，click 為備援（例如未產生 pointer 事件的輸入方式）
+    const NATIVE_PRESS_EVENT_TYPES = ['pointerdown', 'click'];
+
     const bundle = {
+        /**
+         * 判斷事件是否為使用者真實按下 DeepSeek 原生「到底部」按鈕。
+         * 僅接受瀏覽器產生的事件（isTrusted），並排除本擴充功能的 GoTop 按鈕（.dsw-gotop）。
+         * @param {Event} event
+         * @returns {boolean}
+         */
+        _isNativeGoBottomPress(event) {
+            if (!event || event.isTrusted !== true) return false;
+            const target = event.target;
+            if (!target || typeof target.closest !== 'function') return false;
+            if (target.closest(GO_TOP_CLONE_SELECTOR)) return false;
+            return Boolean(target.closest('.' + GO_TOP_NATIVE_BUTTON_CLASS));
+        },
+
         // ─────────────────────────────
         //  Public: Scroll to top with animation
         // ─────────────────────────────
@@ -20,6 +43,7 @@
          *
          * @param {Object} [options]
          * @param {number} [options.timeout] - Max scroll duration in ms (default TIMEOUT)
+         * @param {boolean} [options.cancelOnNativePress] - Stop when the user presses DeepSeek's native go-bottom button (Go Top button only; default false)
          * @returns {Promise<{success: boolean, reason?: string}>}
          */
         scrollToTopAndWait(options = {}) {
@@ -84,7 +108,22 @@
                 const wasAlreadyEnabled = preventAutoScroll?.isEnabled() ?? false;
                 if (preventAutoScroll && !wasAlreadyEnabled) preventAutoScroll.enable();
 
+                // Go Top 進行中使用者按下原生「到底部」：立即中止 Go Top，讓頁面停在底部（以使用者最後一次點擊為準）。
+                // 僅限由 GoTop 按鈕啟動者（cancelOnNativePress）；匯出流程呼叫時不受影響，避免中斷匯出。
+                // 不呼叫 preventDefault / stopPropagation，原生點擊須照常傳遞給 React 執行捲到底部。
+                const isCancelOnNativePress = options.cancelOnNativePress === true;
+                const onNativePress = (event) => {
+                    if (!this._isNativeGoBottomPress(event)) return;
+                    if (this._scrollReject) this._scrollReject({ success: false, reason: 'stopped-by-user' });
+                };
+                if (isCancelOnNativePress) {
+                    NATIVE_PRESS_EVENT_TYPES.forEach((type) => document.addEventListener(type, onNativePress, true));
+                }
+
                 const cleanup = () => {
+                    if (isCancelOnNativePress) {
+                        NATIVE_PRESS_EVENT_TYPES.forEach((type) => document.removeEventListener(type, onNativePress, true));
+                    }
                     tempObserver.disconnect();
                     if (mutationTimer !== null) {
                         clearTimeout(mutationTimer);

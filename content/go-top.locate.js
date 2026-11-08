@@ -1,6 +1,6 @@
 /**
  * DS studio — Go To Top Locate Bundle
- * DOM 查詢輔助、錨點偵測、原生按鈕定位、捲動容器定位與可見性評估。
+ * DOM 查詢輔助、錨點偵測、原生按鈕定位、捲動容器定位與可見性評估。超過 250 行的理由：五者同屬 GoTop 定位單一關注點，且已是 go-top 多檔 bundle 的一部分，再拆僅產生人為邊界。
  */
 (function (root) {
     'use strict';
@@ -121,13 +121,17 @@
             }
 
             const firstMsg = this._getFirstMessage();
-            const isShowCondition = firstMsg && firstMsg.getBoundingClientRect().bottom < 0;
+            const container = this._scrollContainer;
+            // 距頂部至少一個視窗高度即顯示：長對話底部首則已掛載訊息可能極高而仍跨入視窗；容器缺失或高度為 0 視為未達
+            const isViewportAwayFromTop = !!container && container.clientHeight > 0 && container.scrollTop >= container.clientHeight;
+            const isShowCondition = (firstMsg && firstMsg.getBoundingClientRect().bottom < 0) || isViewportAwayFromTop;
             const isHideCondition = this._isAtTop();
 
-            if (isShowCondition) {
-                this._button.style.display = '';
-            } else if (isHideCondition) {
+            // 已在頂部時隱藏優先，其次顯示，兩者皆否則維持現狀
+            if (isHideCondition) {
                 this._button.style.display = 'none';
+            } else if (isShowCondition) {
+                this._button.style.display = '';
             }
         },
 

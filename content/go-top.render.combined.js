@@ -1,4 +1,4 @@
-// 364 lines: three render concerns (button, inject, observer) for go-top unified per CA7
+// 378 lines: three render concerns (button, inject, observer) for go-top unified per CA7
 /**
  * DS studio — Go To Top Render Combined
  * 按鈕建構、注入策略、包裝容器 Observer 三合一。
@@ -99,18 +99,32 @@
 
             // 點擊：滾動到頂部（scrollToTopAndWait 由 go-top.scroll.js 合併進來）
             btn.addEventListener('click', () => {
-                this.scrollToTopAndWait();
+                this._startGoTopFromButton();
             });
 
             // 鍵盤支援：Enter / Space
             btn.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this.scrollToTopAndWait();
+                    this._startGoTopFromButton();
                 }
             });
 
             return btn;
+        },
+
+        /**
+         * 由 GoTop 按鈕啟動（或切換中止）Go Top，並處理回傳的 promise。
+         * 使用者中止（再次點擊或按下原生「到底部」）屬預期結果，靜默處理；其他中止原因以 [DSS] 前綴警告。
+         */
+        _startGoTopFromButton() {
+            const goTop = this.scrollToTopAndWait({ cancelOnNativePress: true });
+            // 切換中止時 scrollToTopAndWait 不回傳 promise
+            if (!goTop || typeof goTop.then !== 'function') return;
+            goTop.catch((result) => {
+                if (result?.reason === 'stopped-by-user') return;
+                console.warn('[DSS] Go Top stopped:', result);
+            });
         },
 
         // ── Inject ──────────────────────────────────────────────

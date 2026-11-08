@@ -172,9 +172,9 @@ UI adjustment features are controlled by the master switch (top-right) — when 
 The **Back to Top** button is fully automatic and requires no configuration:
 
 - **Appearance**: Visually identical to DeepSeek's native **Back to Bottom** button (circular, same color and border), with the arrow pointing upward.
-- **Trigger**: When you scroll down past the first message, the button appears above the native button in the bottom-right corner.
+- **Trigger**: When you scroll down past the first message, or at least one screen away from the top, the button appears above the native button in the bottom-right corner. It also appears after you jump to the bottom of a very long conversation.
 - **Usage**: Click the button to automatically scroll to the top of the conversation; keyboard (Enter or Space) also works.
-- **Stop Mechanism**: The button remains clickable during scrolling — clicking it again stops scrolling at the current position (without restarting).
+- **Stop Mechanism**: The button remains clickable during scrolling — clicking it again stops scrolling at the current position (without restarting). Clicking DeepSeek's native **Back to Bottom** button while a scroll started from this button is running also stops it, and the conversation stays at the bottom. Stopping this way produces no console error. The scroll to the top that Markdown export performs is not stopped by that click.
 - **Auto-Hide**: When you are already at the top of the conversation, the button automatically hides and does not take up screen space.
 - **No Configuration Needed**: This feature is automatically enabled/disabled with the extension's master switch.
 - **Export Integration**: Automatically integrated into the Markdown export flow to ensure full conversation capture.

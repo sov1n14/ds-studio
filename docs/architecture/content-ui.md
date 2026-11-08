@@ -110,7 +110,7 @@ Two injection modes (stacked / solo) are selected by anchor availability. Inject
 
 When neither the native button nor the wrapper can be located, `_injectButton()` no-ops and returns `false` — no button is created.
 
-The button stays `display: none` by default in every mode and is shown only when the conversation has scrolled down (first message is above the viewport).
+The button stays `display: none` by default in every mode and is shown only when the conversation has scrolled down: the first mounted message is above the viewport, or the list is at least one viewport away from the top (see Visibility Logic).
 
 ### SPA Resilience
 
@@ -120,9 +120,9 @@ A route observer monitors `window.location.pathname` via a body `MutationObserve
 
 ### Visibility Logic
 
-- **Show condition**: The first visible message's `getBoundingClientRect().bottom < 0` (scrolled above the viewport).
+- **Show condition**: either the first mounted message's `getBoundingClientRect().bottom < 0` (scrolled above the viewport), or the scroll container is at least one viewport away from the top (`scrollTop >= clientHeight`, with `clientHeight > 0`; a missing container counts as not away). The second rule covers a long conversation after the native go-bottom jump: the list is at the bottom, the true first message is unmounted, and the first mounted message can be one very tall message whose bottom still reaches into the viewport (live capture: `scrollTop` 62438, `clientHeight` 740, first mounted message bottom +45), so the first rule alone left the button hidden.
 - **Hide condition**: `_isAtTop()` — true only on verifiable evidence: `scrollContainer.scrollTop <= 1`, or the **verifiable first-message anchor** (`[data-virtual-list-item-key="1"]`) is fully within the viewport. Loose "first mounted message" selectors are deliberately NOT trusted for the at-top verdict: with DeepSeek's virtual list the true first message is often unmounted, and any mounted message near the viewport top would otherwise yield a false "at top" (which would make `scrollToTopAndWait()` stop after ~one viewport).
-- Hysteresis prevents flickering: if neither condition is true, the current display state is preserved.
+- `_evaluateVisibility()` checks the hide condition first, then the show condition. When both hold the button hides, and when neither holds the current display state is preserved (hysteresis prevents flickering). The keep-current band is therefore `scrollTop < clientHeight` with the first mounted message's bottom still at or below the viewport top.
 - A DOM observer (`_startObserver()`) with 50ms debounce on body mutations triggers re-evaluation. A scroll listener on the container (throttled at 100ms) also triggers re-evaluation.
 
 ### `scrollToTopAndWait()`
@@ -134,7 +134,9 @@ This is the programmatic scroll-to-top API, returning a `Promise<{success, reaso
 3. After each poll, waits for DOM stability via a `MutationObserver` on the scroll container. If the container's `scrollHeight` changes (lazy load), the stability counter resets and the next poll jumps to the top again.
 4. Top detection requires 3 consecutive stable ticks with `scrollTop <= 0` and matching `scrollHeight`.
 5. Timeout after 30s (configurable). Aborted with reason `'aborted'` on route change during scroll, and likewise when `disable()` runs mid-scroll. Invoking `_scrollReject` is the ONLY external cancellation surface: it runs the scroll closure's `cleanup()`, which clears the closure-local anchor-poll timer. Merely dropping the `_scrollReject` reference does not stop the loop — it would keep writing `scrollTop = 0` until its own timeout or `MAX_ANCHOR_RETRIES` ceiling.
-6. Calls `_evaluateVisibility()` on cleanup to restore the button display state.
+6. Native go-bottom press (button-started Go Top only): the Go Top button (clone click and Enter/Space, through `_startGoTopFromButton()` in `go-top.render.combined.js`) calls `scrollToTopAndWait({ cancelOnNativePress: true })`; the option defaults to `false`. Only when it is `true` does the call register capture-phase `pointerdown` and `click` listeners on `document`. A press with `isTrusted === true` inside the native scroll-to-bottom control (`GO_TOP_NATIVE_BUTTON_CLASS`, i.e. `._0706cde`; the extension's `.dsw-gotop` clone is excluded) invokes `_scrollReject({ success: false, reason: 'stopped-by-user' })`, the same abort as the click-to-stop toggle, and the page stays where the native button took it. The listeners never call `preventDefault` or `stopPropagation`, so the site's own click handler still runs and the list lands at the bottom; without the abort, the loop kept writing `scrollTop = 0` until three stable polls and pulled the page back to the top. Scripted `click()` or `dispatchEvent` presses are not trusted and leave Go Top running. `cleanup()` removes the listeners, so they exist only while a button-started scroll is in progress. The Markdown export scroll-to-top (`harvest.js`, plain `scrollToTopAndWait({ timeout })`) does not pass the option, registers no listener, and is not cancelled by a native press: the export keeps running and completes.
+7. Stop outcomes at the button: `_startGoTopFromButton()` attaches a `catch` to the returned promise. A user stop (native press or a second Go Top click, both `reason: 'stopped-by-user'`) is an expected outcome and writes nothing to the console. Any other rejection, such as `'aborted'` on route change or `disable()`, logs `console.warn('[DSS] Go Top stopped:', result)`. A second click while a scroll runs rejects the running promise and returns no new promise, so the catch is skipped for that call.
+8. Calls `_evaluateVisibility()` on cleanup to restore the button display state.
 
 **Why up jumps but down steps.** `harvest.js`'s downward capture loop deliberately advances only `0.9 * viewportHeight` per step, because it must render and capture every message on the way past — anything the virtualized list skips is content the export loses. `scrollToTopAndWait()` has no such obligation: it only needs to arrive, and discards everything it passes. The asymmetry is therefore intentional, not an inconsistency to be unified away. Do not "harmonise" the two loops.
 
