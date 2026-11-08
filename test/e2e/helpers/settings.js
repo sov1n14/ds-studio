@@ -17,8 +17,8 @@ async function setBothAreas(context, values) {
     }, values);
 }
 
-/** Reads `keys` from both storage areas; absent keys are absent from each returned object. */
-async function readBothAreas(context, keys) {
+/** Reads `keys` from both storage areas without snapshotting them; absent keys are absent from each returned object. */
+export async function readBothAreas(context, keys) {
     return evaluateInWorker(context, async (list) => ({
         local: await chrome.storage.local.get(list),
         sync: await chrome.storage.sync.get(list),

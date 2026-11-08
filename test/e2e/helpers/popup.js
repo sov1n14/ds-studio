@@ -110,3 +110,21 @@ export async function closeEditorWithEscape(editor) {
 export async function clickPopupSwitch(popup, checkboxId) {
     await popup.locator('label.switch', { has: popup.locator('#' + checkboxId) }).click();
 }
+
+/**
+ * Resolves once the popup has bound its width sliders, the last controls it binds; every other control is bound by then too.
+ * `openPopup` returns before that (the popup awaits a storage read between binding the toggles and binding the sliders), so a spec that changes a width control waits for this first.
+ * The probe clears the input-width label and fires `input` on its slider: a bound slider writes its value back into the label, an unbound one leaves it blank and the probe puts the old text back.
+ */
+export async function waitForPopupFullyBound(popup) {
+    await popup.waitForFunction(() => {
+        const slider = document.getElementById('inputWidthSlider');
+        const label = document.getElementById('inputWidthValue');
+        const shownText = label.textContent;
+        label.textContent = '';
+        slider.dispatchEvent(new Event('input'));
+        const isBound = label.textContent !== '';
+        if (!isBound) label.textContent = shownText;
+        return isBound;
+    }, null, { timeout: 15_000 });
+}
