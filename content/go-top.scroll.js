@@ -94,6 +94,9 @@
                 }
 
                 if (!scrollContainer) {
+                    // 找不到容器即未啟動任何滾動：釋放鎖定與中止接口，避免下一次點擊誤走中止分支而永遠無法捲動
+                    this._isLocked = false;
+                    this._scrollReject = null;
                     resolve({ success: false, reason: 'no_container' });
                     return;
                 }

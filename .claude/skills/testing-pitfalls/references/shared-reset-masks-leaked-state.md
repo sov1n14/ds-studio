@@ -1,0 +1,9 @@
+# Shared Reset Helpers: Test a Second Call Without Resetting
+
+**Cause**: through v4.39.12, fixed in v4.39.13 — `scrollToTopAndWait()` in `content/go-top.scroll.js` set `_isLocked` at the start of a Go Top and returned `{ success: false, reason: 'no_container' }` early without releasing it, so every later click took the stop branch of a Go Top that was not running and the page never scrolled again until a route change. The shared helper `resetGoToTopState()` in `test/helpers/go-top-fixtures.js` clears `_isLocked` before and after every test, and the `no_container` specs made exactly one click, so state leaking from that call into the next one was never observed. The reset helper models a fresh page for each test, while the bug exists only across two calls on one page.
+
+**Solution**: the early return releases `_isLocked` and `_scrollReject`. `test/unit/go-top.no-container-lock.scenario.spec.js` clicks while the container lookup returns nothing, lets the chat render, clicks again in the same test without resetting, and asserts the list's `scrollTop` moves from the bottom to 0, plus a control that the same click on a rendered page scrolls. Observed red on pre-fix code: the second-click case failed with `expected 49000 to be +0` and the control passed.
+
+**Prevention**: for any lock, flag, or pending handle that an operation sets at its start, a test MUST run each early-return and failure path and then a second operation in the same test, asserting the second operation's observable effect. A per-test reset helper MUST NOT stand in for the page session: it hides state that one call leaves for the next, so a path whose bug is a leak needs two calls between resets.
+
+**Check**: For each early return of the function under test, list the state the function wrote before that return and confirm a test calls the function again afterwards, with no reset in between. Then delete the cleanup the early return needs and confirm that test goes red.
