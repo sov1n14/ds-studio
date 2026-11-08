@@ -3,6 +3,7 @@
 import { expect } from '@playwright/test';
 import { evaluateInWorker } from './extension.js';
 import { PRESET_OVERLAY_SELECTOR } from './extension-ui.js';
+import { expectNeverWithin } from './observation.js';
 
 // Keys the extension writes while a preset is picked, restored by the settings session.
 const KEYS_WRITTEN_BY_PICKING = ['activePresetId', 'pinnedPresetId', 'dsPresetTombstones', 'dsLocalAuth', 'chatPresetMapMeta', 'syncConflictPending'];
@@ -10,6 +11,9 @@ const KEYS_WRITTEN_BY_PICKING = ['activePresetId', 'pinnedPresetId', 'dsPresetTo
 // Picking a preset in a conversation (or sending from a new chat) binds the chat; the binding map is stored in numbered chunks.
 const CHAT_MAP_META_KEY = 'chatPresetMapMeta';
 const CHAT_MAP_CHUNK_PREFIX = 'chatPresetMap_';
+
+// How long the overlay is watched to prove a preset name never appears in it.
+const OVERLAY_NEGATIVE_WINDOW_MS = 2_000;
 
 /** Builds a preset whose content is a unique marker, so a spec can tell exactly where the preset content landed. */
 export function createTestPreset(label) {
@@ -36,19 +40,35 @@ async function trackChatBindings(settings, context) {
 
 /** Makes `preset` the only preset (in both storage areas, as synced presets are read sync-first) with nothing picked or pinned; every touched key is restored after the test. */
 export async function seedOnlyPreset(settings, context, preset) {
+    await seedOnlyPresets(settings, context, [preset]);
+}
+
+/** Makes `presets` the only presets, in this order, with nothing picked or pinned; same storage handling as `seedOnlyPreset`. */
+export async function seedOnlyPresets(settings, context, presets) {
+    const ids = presets.map((preset) => preset.id);
     await trackChatBindings(settings, context);
     await settings.setInBothAreas({
-        dsPresetIndex: [preset.id],
-        dsPresetOrderMeta: { order: [preset.id], orderUpdatedAt: preset.updatedAt },
-        ['dsPreset_' + preset.id]: preset,
+        dsPresetIndex: ids,
+        dsPresetOrderMeta: { order: ids, orderUpdatedAt: Math.max(...presets.map((preset) => preset.updatedAt)) },
+        ...Object.fromEntries(presets.map((preset) => ['dsPreset_' + preset.id, preset])),
         activePresetId: '',
         pinnedPresetId: '',
     });
 }
 
+/** Additionally removes, after the test, every prompt group the extension creates during it (one added through the popup gets an id the test cannot know in advance). */
+export async function trackPresetsCreatedDuringTest(settings) {
+    await settings.trackNewKeys('dsPreset_');
+}
+
 /** The in-page preset overlay. */
 export function presetOverlay(page) {
     return page.locator(PRESET_OVERLAY_SELECTOR);
+}
+
+/** Fails when the overlay of `page` shows `name` within the observation window. */
+export async function expectOverlayNeverShows(page, name, message) {
+    await expectNeverWithin(page, ({ selector, text }) => document.querySelector(selector)?.textContent.includes(text) ?? false, { selector: PRESET_OVERLAY_SELECTOR, text: name }, OVERLAY_NEGATIVE_WINDOW_MS, message);
 }
 
 /** Opens the overlay's preset list and clicks the option that `chooseOption(options)` narrows to. */

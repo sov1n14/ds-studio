@@ -6,7 +6,7 @@ export const DEEPSEEK_ORIGIN = 'https://chat.deepseek.com';
 
 export const CONVERSATIONS = Object.freeze({
     /** One reply with a thinking block and web-search references. */
-    thinkingWithSearch: '7606c947-b0b1-4f8d-b517-4f3b10e303ed',
+    thinkingWithSearch: 'f14d2d7b-f860-4175-a989-f1990a296561',
     /** Five replies, each with a thinking block. */
     fiveThinkingReplies: '8176d3c0-ab31-451d-b913-1599192b6b0c',
     /** Long conversation with code blocks (too slow to export). */

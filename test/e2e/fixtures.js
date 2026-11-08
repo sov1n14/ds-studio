@@ -53,7 +53,8 @@ export const test = base.extend({
         await use((uuid) => openConversation(page, uuid));
     },
 
-    page: async ({ context }, use) => {
+    // Depends on `settings` so Playwright closes the page before `settings` restores storage: its content script can no longer rewrite restored keys.
+    page: async ({ context, settings }, use) => {
         const page = await context.newPage();
         await page.goto(`${DEEPSEEK_ORIGIN}/`);
         await use(page);

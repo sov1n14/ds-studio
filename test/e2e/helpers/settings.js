@@ -49,15 +49,39 @@ async function restoreBothAreas(context, keys, snapshots) {
     }, { list: keys, saved: snapshots });
 }
 
+/** Names of the keys in each area that start with `prefix`. */
+async function listKeysWithPrefix(context, prefix) {
+    return evaluateInWorker(context, async (start) => {
+        const names = {};
+        for (const areaName of ['sync', 'local']) {
+            names[areaName] = Object.keys(await chrome.storage[areaName].get(null)).filter((key) => key.startsWith(start));
+        }
+        return names;
+    }, prefix);
+}
+
+/** Removes, in each area, the keys that start with `prefix` and are absent from `existing[area]`. */
+async function removeKeysCreatedSince(context, prefix, existing) {
+    await evaluateInWorker(context, async ({ start, before }) => {
+        for (const areaName of ['sync', 'local']) {
+            const known = new Set(before[areaName]);
+            const created = Object.keys(await chrome.storage[areaName].get(null)).filter((key) => key.startsWith(start) && !known.has(key));
+            if (created.length > 0) await chrome.storage[areaName].remove(created);
+        }
+    }, { start: prefix, before: existing });
+}
+
 /**
  * Creates a settings session: `set()` snapshots every key on its first touch, then writes local;
  * `setInBothAreas()` snapshots the same way but writes sync and local, for synced data (presets) that readers take from sync first;
  * `track()` snapshots keys the extension itself writes during a test, without writing them;
- * `restore()` puts every touched key back in both areas. `isEnabled` is always snapshotted.
+ * `trackNewKeys(prefix)` records which keys starting with `prefix` exist now, for keys the extension creates under a name the test cannot know in advance (a prompt group added through the popup);
+ * `restore()` puts every touched key back in both areas, then removes every key created under a tracked prefix. `isEnabled` is always snapshotted.
  */
 export function createSettingsSession(context) {
     const snapshots = { local: {}, sync: {} };
     const touched = new Set();
+    const keysBeforeByPrefix = new Map();
 
     async function captureUntouched(keys) {
         const fresh = keys.filter((key) => !touched.has(key));
@@ -82,10 +106,15 @@ export function createSettingsSession(context) {
         async track(keys) {
             await captureUntouched(keys);
         },
+        async trackNewKeys(prefix) {
+            if (keysBeforeByPrefix.has(prefix)) return;
+            keysBeforeByPrefix.set(prefix, await listKeysWithPrefix(context, prefix));
+        },
         async restore() {
-            if (touched.size === 0) return;
-            const keys = [...touched];
-            await restoreBothAreas(context, keys, snapshots);
+            if (touched.size > 0) await restoreBothAreas(context, [...touched], snapshots);
+            for (const [prefix, existing] of keysBeforeByPrefix) {
+                await removeKeysCreatedSince(context, prefix, existing);
+            }
         },
     };
 }

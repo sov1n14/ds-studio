@@ -212,11 +212,13 @@ ds-studio/
 
 ### E2E Specs
 
-The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `test/e2e/helpers/`; settings are written through the extension service worker and restored after each test; send requests are always aborted so no message reaches DeepSeek; only one browser may hold `.browser-profile/` at a time.
+The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `test/e2e/helpers/`; `helpers/popup.js` opens and drives the extension popup, and `helpers/prompt-capture.js` captures the outgoing prompt by aborting the send in the browser; settings are written through the extension service worker and restored after each test, and keys a test cannot name in advance are tracked with `trackNewKeys` and removed afterwards; send requests are always aborted so no message reaches DeepSeek; only one browser may hold `.browser-profile/` at a time.
 
 - `auto-click.e2e.js`: with each auto-click switch off its button is never clicked and switching it on gets it clicked; with the master switch off auto retry never clicks.
+- `chat-binding.e2e.js`: a group picked in the overlay of a conversation is bound to that conversation and comes back when it is reopened, stays out of other conversations, and the blank option unbinds it; a popup opened on a bound conversation shows its group, and picking the blank option there unbinds the conversation.
 - `edit-message.e2e.js`: with the edit box open, the quote reply and preset prefix land in the main composer and the edit box keeps only the original text (v4.36.8 regression).
 - `export.e2e.js`: Markdown export file name timestamp, thinking sections, cite links and collapsed-thinking parity.
+- `global-prompt.e2e.js`: the global prompt written in the popup editor window is sent before the picked group content and the typed text; each group keeps its own global-prompt switch, off sending only the group content and on adding the global prompt; with no group picked the device-level switch in the popup decides whether the global prompt is sent; one `test.fixme` case expects that picking the last-picked group again on a new conversation still sends the global prompt when that group's switch is on.
 - `go-top.e2e.js`: clicking, or pressing Enter on, the button scrolls the message list to the very top.
 - `go-top-native.e2e.js`: on the very long thread `CONVERSATIONS.veryLongThread`, a trusted native scroll-to-bottom click during Go Top leaves the list at the bottom; a native scroll-to-bottom click from the top shows the Go Top button at the bottom; a native click during the export's scroll-to-top does not stop the export, and its output equals an undisturbed export.
 - `hide-thinking.e2e.js`: "Hide Thinking Process" on collapses every thinking block and off expands them.
@@ -224,10 +226,12 @@ The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `tes
 - `popup-order.e2e.js`: opens `popup/popup.html` and checks that the Features and UI Adjustments cards render their controls in the order set by `test/unit/popup-card-order.spec.js`, both in DOM order and top to bottom on screen, and attaches a screenshot.
 - `preset-overlay.e2e.js`: a picked preset makes the composer carry its content at send time; the empty option drops it.
 - `prevent-auto-scroll.e2e.js`: on, page scripts cannot scroll the list down while the wheel and upward scrolls still work; off restores it.
+- `prompt-groups.e2e.js`: a group added with + in the popup and edited in its editor window appears in the in-page overlay and its content is sent; pinning preselects a group on new conversations only, one at a time, and unpinning restores the blank option; dragging a group by its handle reorders the popup list, and the order survives reopening the popup; one `test.fixme` case expects Esc pressed right after typing to save the typed name and content before the editor window closes.
 - `prompt-injection.e2e.js`: the sent prompt carries only the typed text with no preset, and the preset content before the typed text once picked.
 - `quote-reply.e2e.js`: a reply selection quoted into the composer becomes a blockquote; with the master switch off no quote button shows.
 - `sidebar.e2e.js`: auto-hide shrinks the sidebar to 60px and widens it on hover; auto-open shows a collapsed sidebar again.
 - `smoke.e2e.js`: the page stays on the chat app with the chat input shown and the extension service worker is running.
+- `system-time.e2e.js`: with the system-time toggle on, the outgoing prompt opens with `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` ahead of the system-reminder block of a picked group or of the user-input block; switching the toggle off in the popup sends the prompt with no time line.
 - `temp-chat-toggle.e2e.js`: the temporary-chat row shows on the home page while the master switch is on and is removed when it turns off.
 - `websearch-toggle.e2e.js`: web-search start state off releases DeepSeek's Search toggle and on presses it; it applies once, so a manual flip is not undone.
 - `width.e2e.js`: chat width and input width apply and restore; input width is clamped to an enabled chat width.
