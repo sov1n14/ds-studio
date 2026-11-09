@@ -48,3 +48,11 @@ export function documentedPrompt({ reminder = '', text }) {
     const userInput = `<user-input>\n${text}\n</user-input>`;
     return reminder ? `<system-reminder>\n${reminder}\n</system-reminder>\n\n${userInput}` : userInput;
 }
+
+/** 攔截 `page` 的所有送出請求，再載入 `url`（預設為首頁）並等待輸入框出現；不等待預設浮層，因為總開關關閉時浮層不會出現。 */
+export async function openBlockingSendsWithoutOverlay(page, url = DEEPSEEK_ORIGIN + '/') {
+    const blocked = await blockSendRequests(page);
+    await page.goto(url);
+    await expect(composer(page), 'the composer is shown (precondition)').toBeVisible();
+    return blocked;
+}
