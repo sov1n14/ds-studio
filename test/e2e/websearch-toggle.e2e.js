@@ -36,7 +36,9 @@ async function clickSearchButtonPressedAs(page, value) {
 
 test.describe('web-search start state', () => {
     test('mode off releases DeepSeek\'s Search toggle and mode on presses it again', async ({ page, settings }) => {
-        await settings.set({ isEnabled: true, dsWebSearchToggle: 'on' });
+        // 產品每次只寫一個鍵；先寫模式再開總開關，不把兩個鍵併成一次寫入，也不依賴設定檔殘留的值。
+        await settings.set({ dsWebSearchToggle: 'on' });
+        await settings.set({ isEnabled: true });
         await expect.poll(() => isSearchPressedAs(page, 'true'), { message: 'mode on leaves Search pressed (precondition for the off transition)' }).toBe(true);
 
         await settings.set({ dsWebSearchToggle: 'off' });
@@ -47,7 +49,9 @@ test.describe('web-search start state', () => {
     });
 
     test('mode off is applied once: a manual flip back on is not undone', async ({ page, settings }) => {
-        await settings.set({ isEnabled: true, dsWebSearchToggle: 'on' });
+        // 產品每次只寫一個鍵；先寫模式再開總開關，不把兩個鍵併成一次寫入，也不依賴設定檔殘留的值。
+        await settings.set({ dsWebSearchToggle: 'on' });
+        await settings.set({ isEnabled: true });
         await expect.poll(() => isSearchPressedAs(page, 'true'), { message: 'Search starts pressed (precondition)' }).toBe(true);
         await settings.set({ dsWebSearchToggle: 'off' });
         await expect.poll(() => isSearchPressedAs(page, 'false'), { message: 'mode off releases Search' }).toBe(true);

@@ -34,6 +34,7 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 | Documented Behavior: Test the Input That Triggers It | tests a behavior that `docs/`, a spec, or a comment states as a rule (deduplicate, skip, replace, never twice), or tests a regex that strips, splits, or matches user text and needs boundary cases such as a missing separator, repeated or whitespace-only lines, or a match away from the anchor | [documented-behavior-needs-trigger-input.md](references/documented-behavior-needs-trigger-input.md) |
 | Shared Reset Helpers: Test a Second Call Without Resetting | tests a function that sets a lock, flag, or pending handle at its start and has early-return or failure paths, or relies on a shared per-test reset helper (`resetGoToTopState()`) to model the page between calls | [shared-reset-masks-leaked-state.md](references/shared-reset-masks-leaked-state.md) |
 | E2E Must Run the Extension on Disk | is an E2E spec or fixture that launches the unpacked extension in a persistent browser profile, or looks up, caches, or wakes the extension service worker from a test helper | [e2e-runs-on-disk-extension.md](references/e2e-runs-on-disk-extension.md) |
+| E2E Specs Share One Real Storage | is an E2E spec or helper that writes `chrome.storage` in the shared persistent profile, writes several settings keys in one call, or has a precondition that a value stored by an earlier run could change | [e2e-shared-real-storage.md](references/e2e-shared-real-storage.md) |
 
 ## Adding a New Lesson
 

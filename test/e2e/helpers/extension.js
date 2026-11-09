@@ -4,6 +4,10 @@
 const EXTENSION_SCHEME = 'chrome-extension://';
 const WAKE_TIMEOUT_MS = 15_000;
 const CLOSED_TARGET = /Target closed|has been closed|destroyed/i;
+// chrome.storage.sync 每分鐘寫入配額用盡時的錯誤字串；只比對每分鐘配額，每小時配額等不回來，照常拋出。
+const WRITE_QUOTA_PER_MINUTE = 'MAX_WRITE_OPERATIONS_PER_MINUTE';
+const QUOTA_RETRY_INTERVAL_MS = 1_000;
+const QUOTA_RETRY_BUDGET_MS = 50_000;
 
 // Extension ids seen per context, so an idle (stopped) worker can be woken through its own page.
 const knownIds = new WeakMap();
@@ -79,16 +83,30 @@ export async function reloadExtension(context) {
     return remember(context, await pending);
 }
 
-/**
- * Evaluates `fn(arg)` inside the extension service worker, re-resolving the worker once
- * when the first attempt hits a worker that stopped between resolution and evaluation.
- */
-export async function evaluateInWorker(context, fn, arg) {
+/** Evaluates `fn(arg)` once, re-resolving the worker once when the first attempt hits a worker that stopped between resolution and evaluation. */
+async function evaluateOnce(context, fn, arg) {
     try {
         return await (await getExtensionWorker(context)).evaluate(fn, arg);
     } catch (error) {
         if (!CLOSED_TARGET.test(String(error?.message))) throw error;
         return (await getExtensionWorker(context)).evaluate(fn, arg);
+    }
+}
+
+/**
+ * 在擴充功能 service worker 內執行 `fn(arg)`；worker 在解析與執行之間停止時重新解析一次。
+ * 測試端所有 chrome.storage.sync 寫入都經過這裡，而整套 E2E 共用同一個真實的 sync 配額：前面的規格寫得多時，後面的寫入會撞上每分鐘配額。
+ * 因此遇到每分鐘配額錯誤時，每隔 `QUOTA_RETRY_INTERVAL_MS` 重試整個 `fn`，直到 `QUOTA_RETRY_BUDGET_MS` 用完（滑動視窗會在此期間釋出額度）才拋出原錯誤；`fn` 須可重複執行。
+ */
+export async function evaluateInWorker(context, fn, arg) {
+    const deadline = Date.now() + QUOTA_RETRY_BUDGET_MS;
+    for (;;) {
+        try {
+            return await evaluateOnce(context, fn, arg);
+        } catch (error) {
+            if (!String(error?.message).includes(WRITE_QUOTA_PER_MINUTE) || Date.now() + QUOTA_RETRY_INTERVAL_MS > deadline) throw error;
+            await new Promise((resolve) => setTimeout(resolve, QUOTA_RETRY_INTERVAL_MS));
+        }
     }
 }
 
