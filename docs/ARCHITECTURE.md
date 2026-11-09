@@ -229,6 +229,7 @@ The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `tes
 - `go-top.e2e.js`: clicking, or pressing Enter on, the button scrolls the message list to the very top.
 - `go-top-native.e2e.js`: on the very long thread `CONVERSATIONS.veryLongThread`, a trusted native scroll-to-bottom click during Go Top leaves the list at the bottom; a native scroll-to-bottom click from the top shows the Go Top button at the bottom; a native click during the export's scroll-to-top does not stop the export, and its output equals an undisturbed export.
 - `hide-thinking.e2e.js`: "Hide Thinking Process" on collapses every thinking block and off expands them.
+- `master-off-injection.e2e.js`: with the master switch off the sent prompt is exactly the typed text although a group is picked and the global prompt and system time are on; switching it back on restores injection.
 - `master-switch.e2e.js`: master switch off removes go-top and hides the preset overlay; on brings both back.
 - `popup-export-button.e2e.js`: the popup Export button over a DeepSeek chat downloads `deepseek-chat-YYYYMMDD-HHmmss.md` with five User/DeepSeek turns and each thinking blockquote before its answer; with Include Thinking Process off the file has no thinking section; with no DeepSeek tab open the popup shows the notice to use the feature on chat.deepseek.com and downloads nothing.
 - `popup-live-sync.e2e.js`: writing the auto-retry, web-search or reply-notification setting to storage while the popup is open flips the matching control without reloading the popup.
