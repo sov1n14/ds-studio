@@ -120,7 +120,8 @@
 
     // ---- Backup Manager: Restored Messages Backup ----
     restoredBackupExportedToast: 'Restored Messages backup exported successfully',
-    invalidRestoredBackupFormatError: 'Invalid backup format: missing restored_messages',
+    invalidRestoredBackupFormatError: 'Invalid backup format: restored_messages is missing or not an object',
+    tooManyRestoredRecordsError: 'Too many restore records: {count} (maximum 200)',
     restoredBackupImportedToast: 'Restored Messages backup imported successfully',
     importFailedTitle: 'Import Failed',
     importFailedMessage: 'Error reading backup file: {message}',

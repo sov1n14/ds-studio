@@ -120,7 +120,8 @@
 
     // ---- Backup Manager: Restored Messages Backup ----
     restoredBackupExportedToast: '復原備份已成功匯出',
-    invalidRestoredBackupFormatError: '無效的備份檔案格式：缺少 restored_messages',
+    invalidRestoredBackupFormatError: '備份格式無效：restored_messages 缺少或不是物件',
+    tooManyRestoredRecordsError: '還原記錄過多：{count} 筆（上限 200 筆）',
     restoredBackupImportedToast: '復原備份已成功匯入',
     importFailedTitle: '匯入失敗',
     importFailedMessage: '讀取備份檔案時發生錯誤：{message}',

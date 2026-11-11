@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.16](changelog/v4.md#43916---2026-11-12) | Fixes Import Restore Records accepting an array as `restored_messages` and a file of any size: the import now rejects an array and a file with more than 200 records with an error dialog and leaves storage unchanged; a merged total above 200 is still accepted and trimmed by the content script at its next save |
 | [4.39.15](changelog/v4.md#43915---2026-11-12) | Fixes the sync-retry queue `dsLocalAuth`, the oversized-key list `dsOversizedKeys` and `restored_messages` being written to the cloud although they are local-only: the popup-open migration push, the conflict-resolution write-back and the default fill now skip them through `StorageManager.SYNC_EXCLUDED_KEYS` |
 | [4.39.14](changelog/v4.md#43914---2026-11-12) | Fixes every popup open writing every local prompt group to the cloud, and an older local copy overwriting a newer cloud copy: the migration push of `StorageManager.initialize()` read sync without the `dsPreset_<id>` keys, so every prompt group looked missing; it now reads those keys in the same single read and pushes a prompt group only when sync lacks it or the local copy is newer, leaving an identical or newer cloud copy alone |
 | [4.39.13](changelog/v4.md#43913---2026-11-09) | Go Top no longer stays locked after a click that found no scroll container |

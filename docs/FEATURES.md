@@ -322,7 +322,7 @@ In the popup menu's **Backup & Restore** section:
 | **Backup Settings (Export JSON)** | Download a JSON file containing all prompt groups and settings |
 | **Restore Settings (Import JSON)** | Select a JSON backup file. UI settings are overwritten; prompt groups are merged by ID, keeping the newer version for the same ID; conversation bindings (chatPresetMap) are also merged |
 | **Export Restore Records** | Independently backup the restoration records of censored replies |
-| **Import Restore Records** | Independently restore restoration records of censored replies |
+| **Import Restore Records** | Independently restore restoration records of censored replies; a file that is not a valid record object or holds more than 200 records is rejected with an error dialog and changes nothing |
 | **Clear All Restored Records** | Delete all restoration records of censored replies after you confirm in a dialog; the action cannot be undone |
 
 ## Language Switcher

@@ -76,7 +76,7 @@ The popup includes a Backup & Restore card with four buttons:
 - `pinnedPresetId` (v4.18.0) travels with the backup alongside `activePresetId`: export picks it up automatically because `getSettings()` derives its key set reflectively from `StorageManager.KEYS`, while import needed an explicit entry in `restoreSettings()`'s per-key whitelist. The `!== undefined` guard means an older backup file that predates the key leaves the current device's pinned default untouched, and `mergePresetsOnly` mode skips it like every other UI setting.
 - After successful restore, shows a toast and reloads the popup after 3 seconds.
 
-**Censor-Restored Messages Backup/Restore/Clear**: The `restored_messages` dataset (stored in `chrome.storage.local` only) has dedicated buttons in the Backup & Restore card for exporting, importing, and clearing censored-message restoration data independently of general settings.
+**Censor-Restored Messages Backup/Restore/Clear**: The `restored_messages` dataset (stored in `chrome.storage.local` only) has dedicated buttons in the Backup & Restore card for exporting, importing, and clearing censored-message restoration data independently of general settings. The import validation rule lives in [JSON Backup and Restore](../spec/05-data-storage.md#13-json-backup-and-restore).
 
 ## Harvest Module
 
