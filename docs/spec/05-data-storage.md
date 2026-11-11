@@ -40,6 +40,7 @@
 
 - **Sync Target**: Uses `chrome.storage.sync` as the primary cross-device sync storage target. If the sync quota is exceeded, automatically falls back to `chrome.storage.local`.
 - **Auto Sync**: All write operations (`_set()`) write to both sync and local storage as a safety measure.
+- **Local-Only Keys (v4.39.15)**: `dsLocalAuth`, `dsOversizedKeys` and `restored_messages` never go to sync on any write path; see [Storage Architecture](../architecture/STORAGE.md#dual-storage-architecture).
 - **Conflict Detection**: On first run (or upgrade), the local and sync `promptPresets` are compared. If they differ and sync has data, `syncConflictPending = true` is set and reading from sync data is blocked (only local data is returned).
 - **Conflict Resolution UI**: When `syncConflictPending` is true, opening the popup menu displays a "Cloud Sync Conflict" dialog with a "Merge Sync" button.
 - **Resolution Logic**: `StorageManager.resolveSyncConflict()` reads from both storage areas, merges prompt groups via `mergePresets()`, overwrites UI settings with the cloud version (except `isEnabled` / device-level `globalPromptEnabled` / `isReplyNotificationEnabled` — all three are device-level local toggles and do not participate in sync conflict resolution; each prompt group's own `globalPromptEnabled` field merges normally with the prompt group, v4.20.0), and clears the conflict flag. Chat-map keys (`chatPresetMap`, `chatPresetMapMeta`, `chatPresetMap_*`) are outside the write-back set; only the service worker writes them.

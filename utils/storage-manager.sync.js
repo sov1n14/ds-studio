@@ -140,8 +140,8 @@
                 if (k.startsWith(this.PRESET_KEY_PREFIX)) delete updates[k];
             });
 
-            // restored_messages 僅存本機且可能超過 8KB 同步配額，排除以避免失敗
-            delete updates[this.KEYS.RESTORED_MESSAGES];
+            // 同步簿記（dsLocalAuth、dsOversizedKeys）與 restored_messages 僅存本機，不寫回 sync
+            this.SYNC_EXCLUDED_KEYS.forEach(key => delete updates[key]);
 
             // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 為裝置層級的本機開關（local-only），
             // 不應被雲端版本覆寫，故排除於合併結果之外。

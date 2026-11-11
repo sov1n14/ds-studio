@@ -68,10 +68,10 @@
             }
 
             // 4. Fill other defaults
-            // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 為 local-only 金鑰，需另外以本機資料補齊預設值，
+            // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 與 SYNC_EXCLUDED_KEYS 為 local-only 金鑰，需另外以本機資料補齊預設值，
             // 不可併入 updates（updates 會經 _set 推送至 sync）。
             const localOnlyUpdates = {};
-            const localOnlyKeys = [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED, this.KEYS.REPLY_NOTIFICATION];
+            const localOnlyKeys = [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED, this.KEYS.REPLY_NOTIFICATION, ...this.SYNC_EXCLUDED_KEYS];
             const localOnlyData = await this._safeGet('local', localOnlyKeys);
             for (const key of localOnlyKeys) {
                 if (localOnlyData[key] === undefined && this.DEFAULTS[key] !== undefined) {
@@ -104,7 +104,6 @@
                 for (const key of keysToFetch) {
                     if (this._isChatMapKey(key)) continue; // chat-map 金鑰僅由 service worker 單一寫入者寫入
                     if (key === this.KEYS.PROMPT_PRESETS
-                     || key === this.KEYS.RESTORED_MESSAGES
                      || localOnlyKeys.includes(key)) continue; // local-only，不推送至 sync
                     if (syncData[key] === undefined && data[key] !== undefined) {
                         missingInSync[key] = data[key];

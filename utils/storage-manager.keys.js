@@ -161,6 +161,16 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
     },
     };
 
+    /**
+     * 永不寫入 chrome.storage.sync 的金鑰：裝置層級的同步簿記（dsLocalAuth 重試佇列、dsOversizedKeys 超量清單）與僅存本機的還原訊息。
+     * 所有把本機金鑰複製到 sync 的寫入路徑（initialize() 預設值補齊與遷移推送、resolveSyncConflict() 回寫）皆以此清單排除。
+     */
+    bundle.SYNC_EXCLUDED_KEYS = Object.freeze([
+        bundle.KEYS.LOCAL_AUTHORITATIVE,
+        bundle.KEYS.OVERSIZED_KEYS,
+        bundle.KEYS.RESTORED_MESSAGES,
+    ]);
+
     root.__DS_StorageManager_keys = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;
 })(globalThis);

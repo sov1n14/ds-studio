@@ -137,6 +137,29 @@ describe('restored_messages', () => {
     });
 });
 
+// Expected names come from docs/architecture/STORAGE.md ("Keys that never go to sync"), which lists them in the frozen StorageManager.SYNC_EXCLUDED_KEYS; they are not read from the implementation.
+describe('SYNC_EXCLUDED_KEYS: local-only keys never go to sync', () => {
+    const DOCUMENTED_LOCAL_ONLY = ['dsLocalAuth', 'dsOversizedKeys', 'restored_messages'];
+
+    it('the freshly loaded StorageManager exposes a frozen list of exactly the three documented local-only keys', async () => {
+        const { StorageManager } = await loadFreshStorageManager();
+        const excluded = StorageManager.SYNC_EXCLUDED_KEYS;
+
+        expect(Array.isArray(excluded), 'SYNC_EXCLUDED_KEYS must be an array').toBe(true);
+        expect([...excluded].sort(), 'SYNC_EXCLUDED_KEYS names').toEqual([...DOCUMENTED_LOCAL_ONLY].sort());
+        expect(Object.isFrozen(excluded), 'SYNC_EXCLUDED_KEYS must be frozen').toBe(true);
+    });
+
+    it('initialize() on empty storage fills restored_messages in local only, never in sync', async () => {
+        const { StorageManager } = await loadFreshStorageManager();
+
+        await StorageManager.initialize();
+
+        expect((await rawLocal()).restored_messages, 'local restored_messages after initialize on empty storage').toEqual({});
+        expect(await rawSync(), 'sync area after initialize on empty storage').not.toHaveProperty('restored_messages');
+    });
+});
+
 describe('dsPermissionIntent_<name>', () => {
     it.each(INTENT_NAMES)('savePermissionIntent(%s) stores true under local dsPermissionIntent_<name> only', async (name) => {
         const { StorageManager } = await loadFreshStorageManager();
