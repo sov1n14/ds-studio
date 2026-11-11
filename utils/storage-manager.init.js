@@ -95,7 +95,11 @@
                 await this._set(updates);
             } else if (syncInitialized) {
                 // Ensure sync has what local has (migration push)
-                const syncData = await this._safeGet('sync', keysToFetch);
+                // 一併讀取各 preset 的雲端版本，供下方推送守衛比對新舊（同 savePromptPresets 的單次目標讀取）
+                // Stryker disable next-line ArrayDeclaration: 等價變異 — 索引為 undefined 時已由步驟 3 走 _set 分支，此 fallback 僅於索引為 null 等假值時觸發；替換成非空陣列只多讀一個本機不存在的 preset 金鑰，localPreset 為 undefined 而不推送，儲存結果相同
+                const localIds = data[this.KEYS.PRESET_INDEX] || [];
+                const presetKeys = localIds.map(id => this._presetKey(id));
+                const syncData = await this._safeGet('sync', [...keysToFetch, ...presetKeys]);
                 const missingInSync = {};
                 for (const key of keysToFetch) {
                     if (this._isChatMapKey(key)) continue; // chat-map 金鑰僅由 service worker 單一寫入者寫入
@@ -107,13 +111,12 @@
                     }
                 }
 
-                // Also check individual presets
-                const localIds = data[this.KEYS.PRESET_INDEX] || [];
-                for (const id of localIds) {
-                    const pKey = this._presetKey(id);
-                    if (syncData[pKey] === undefined) {
-                        const pData = await this._safeGet('local', pKey);
-                        if (pData[pKey]) missingInSync[pKey] = pData[pKey];
+                // Also check individual presets：僅在雲端缺少或本機較新時推送，不覆蓋較新的雲端版本
+                for (const pKey of presetKeys) {
+                    const pData = await this._safeGet('local', pKey);
+                    const localPreset = pData[pKey];
+                    if (localPreset && this._shouldPushPreset(localPreset, syncData[pKey])) {
+                        missingInSync[pKey] = localPreset;
                     }
                 }
 

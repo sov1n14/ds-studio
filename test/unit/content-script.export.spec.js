@@ -290,6 +290,8 @@ describe('exportConversationToMarkdown', () => {
     let toastSpy;
 
     beforeEach(() => {
+        // The download helper removes its anchor and revokes the object URL on a 100 ms timer; faking it lets afterEach flush that cleanup while the URL stub and jsdom are still alive.
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         document.body.innerHTML = '';
         Object.assign(contentScript.state, { isEnabled: false, promptPrefix: '', globalDefaultPrompt: '', isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         vi.stubGlobal('URL', {
@@ -314,6 +316,8 @@ describe('exportConversationToMarkdown', () => {
     });
 
     afterEach(() => {
+        vi.runOnlyPendingTimers();
+        vi.useRealTimers();
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
         removeHarvestMock();
@@ -555,6 +559,23 @@ describe('exportConversationToMarkdown', () => {
 
             expect(blobContent).toContain('⚠️ Export may be incomplete');
             expect(createObjectURL).toHaveBeenCalledOnce();
+        });
+
+        it('removes the download anchor and revokes its object URL after the click', async () => {
+            const revokeObjectURL = vi.fn();
+            vi.stubGlobal('URL', { createObjectURL: vi.fn().mockReturnValue('blob:cleanup'), revokeObjectURL });
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({ items: [makeUserMessage('hi')], isComplete: true }),
+            });
+
+            await exportConversationToMarkdown(true, true);
+            expect(revokeObjectURL, 'object URL revoked before the click could start the download').not.toHaveBeenCalled();
+
+            vi.advanceTimersByTime(100);
+
+            expect(document.body.querySelector('a[download]'), 'download anchor left in the page').toBeNull();
+            expect(revokeObjectURL).toHaveBeenCalledOnce();
+            expect(revokeObjectURL).toHaveBeenCalledWith('blob:cleanup');
         });
 
         it('alerts and does NOT call Blob when harvest returns empty items', async () => {
