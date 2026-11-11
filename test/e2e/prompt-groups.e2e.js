@@ -29,6 +29,8 @@ test.describe('managing prompt groups in the popup', () => {
         const renamed = addedName + ' renamed';
         const addedContent = 'E2E-ADDED-GROUP-CONTENT-' + stamp;
         await seedOnlyPreset(settings, context, existing);
+        // 以 + 新增的群組自帶的全域提示詞開關為開啟，因此將全域提示詞內容固定為空字串
+        await settings.setInBothAreas({ globalDefaultPrompt: '' });
         await trackPresetsCreatedDuringTest(settings);
         const blocked = await openBlockingSends(page);
 
