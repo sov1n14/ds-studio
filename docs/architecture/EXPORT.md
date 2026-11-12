@@ -55,13 +55,13 @@ A Blob download is triggered via a dynamically created `<a>` element. The filena
 When `harvestAllMessages()` returns `isComplete: false`, the export is never suppressed — the user keeps the partial file. Two signals are emitted instead:
 
 1. A footer line appended to the Markdown body: `> ⚠️ Export may be incomplete (<N> messages captured): <clause>.` — where `<N>` is the actual harvested item count and `<clause>` comes from `HarvestPolicy.describeIncompleteReason(reason)`.
-2. An on-page warning toast via `showHarvestToastIncomplete(capturedCount, clause)`, styled distinctly from the neutral progress toast and auto-dismissing after `HARVEST_INCOMPLETE_TOAST_AUTO_DISMISS_MS` (10000 ms).
+2. An on-page warning toast via `showHarvestToastIncomplete(capturedCount, clause)`, resolved from `globalThis.__DS_Harvest_toast` (published by `harvest.toast.js`) at call time rather than at load time and styled distinctly from the neutral progress toast and auto-dismissing after `HARVEST_INCOMPLETE_TOAST_AUTO_DISMISS_MS` (10000 ms).
 
 The clause is derived from the actual reason, so a stalled, cancelled, or scroll-interrupted export each reports its own cause, and an unrecognized reason embeds the raw string verbatim so it stays diagnosable.
 
 The on-page toast exists because the footer alone proved invisible in practice: in the reported truncation case it was line 12209 of a 12209-line file, and the user experienced the truncated export as no error at all.
 
-Note the deliberate asymmetry in how the two layers treat a missing `HarvestPolicy`: `harvest.js` throws, because it cannot make loop decisions without it; `content-script.export.js` degrades to a generic clause and still downloads, because it can still deliver the user's data. Do not harmonize these.
+Note the deliberate asymmetry in how the two layers treat a missing `HarvestPolicy`: `harvest.js` throws, because it cannot make loop decisions without it; `content-script.export.js` degrades to a generic clause and still downloads, because it can still deliver the user's data; likewise, when `globalThis.__DS_Harvest_toast` or its `showHarvestToastIncomplete` is missing, it logs a `[DSS]` console warning and skips only the toast, so the file with the footer still downloads. Do not harmonize these.
 
 ## JSON Backup & Restore
 

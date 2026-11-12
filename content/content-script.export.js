@@ -134,6 +134,22 @@
     }
 
     /**
+     * 顯示「匯出不完整」頁內警示 toast。於呼叫當下才自 harvest.toast.js 發布的 globalThis.__DS_Harvest_toast 取得函式：content scripts 為各自獨立的 classic script，showHarvestToastIncomplete 從未成為頂層全域名稱，且單元測試會在 harvest.toast.js 之前預載本檔，故不可於載入時擷取。
+     * toast 僅為附帶效果：bundle 或成員缺席時記錄警告並略過，不拋出例外，讓呼叫端照常下載含警告頁尾的檔案（與 Harvest、HarvestPolicy 缺席時的回退方式一致）。
+     * @param {number} capturedCount - 已擷取的訊息數
+     * @param {string} clause - 不完整原因子句
+     */
+    function showIncompleteToastSafely(capturedCount, clause) {
+        var showHarvestToastIncomplete = root.__DS_Harvest_toast && root.__DS_Harvest_toast.showHarvestToastIncomplete;
+        // Guard: toast bundle 缺席時僅警告，不中斷匯出下載
+        if (typeof showHarvestToastIncomplete !== 'function') {
+            console.warn('[DSS] Incomplete-export warning toast skipped: globalThis.__DS_Harvest_toast.showHarvestToastIncomplete is unavailable; load content/harvest.toast.js before content/content-script.export.js.');
+            return;
+        }
+        showHarvestToastIncomplete(capturedCount, clause);
+    }
+
+    /**
      * 利用 Harvest 模組擷取完整對話，並匯出為 Markdown 檔案。
      * 若擷取未完整（超時），仍匯出已取得部分，並附加警告頁尾。
      * @param {boolean} includeThinking - 是否包含思考過程
@@ -182,7 +198,7 @@
             var capturedCount = harvestResult.items.length;
             var clause = describeIncompleteReasonSafely(harvestResult.reason);
             markdownContent += '\n> ⚠️ Export may be incomplete (' + capturedCount + ' messages captured): ' + clause + '.\n';
-            showHarvestToastIncomplete(capturedCount, clause);
+            showIncompleteToastSafely(capturedCount, clause);
         }
 
         downloadMarkdown(markdownContent);

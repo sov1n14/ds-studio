@@ -19,18 +19,22 @@
  *                                       with Harvest: footer carries correct reason clause per reason code
  *                                       with Harvest: footer does NOT say "timed out" for reason=stalled (Defect 1 regression)
  *                                       with Harvest: footer captured-count matches actual item count
- *                                       with Harvest: footer ABSENT and toast NOT called on isComplete:true
- *                                       with Harvest: toast called exactly once with (count, clause) on isComplete:false
+ *                                       with Harvest: footer ABSENT and no warning toast shown on isComplete:true
+ *                                       with Harvest: warning toast shown with count and clause on isComplete:false
  *                                       with Harvest: download still happens when isComplete:false (partial file kept)
  *                                       with Harvest: does not throw when HarvestPolicy is unavailable (Defect fallback)
+ *                                       with Harvest: toast bundle or its incomplete member missing - still downloads with footer, no toast, [DSS] warning
  *                                       with Harvest: calls downloadMarkdown (no alert) when items present
  *                                       with Harvest: alerts and returns early when items is empty
  *                                       fallback (no Harvest): uses visible-DOM query
  *                                       fallback (no Harvest): alerts when no DOM messages
+ *
+ * 警示 toast 由真實的 content/harvest.toast.js 繪出，測試讀頁面上的 .dss-harvest-toast--incomplete；不以 vi.stubGlobal 補上 showHarvestToastIncomplete，因為 content scripts 從未定義這個全域，補上它會蓋掉瀏覽器中的 ReferenceError。
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import '../../content/harvest.toast.js';
 import contentScript from '../../content/content-script.js';
 import { loadThinkMessage, loadMessagesWithoutThinkBlock, thinkParts, stripHashedClasses } from '../helpers/think-block-fixtures.js';
 
@@ -121,6 +125,13 @@ function installHarvestPolicyMock() {
         }),
     };
     return window.DSstudio.HarvestPolicy;
+}
+
+/** 頁面上可見的不完整警示 toast；不存在或被隱藏時回傳 null。 */
+function visibleIncompleteToast() {
+    const toast = document.querySelector('.dss-harvest-toast--incomplete');
+    if (!toast || !toast.isConnected) return null;
+    return getComputedStyle(toast).display === 'none' ? null : toast;
 }
 
 function removeHarvestPolicyMock() {
@@ -287,7 +298,6 @@ describe('convertMessageNodeToMarkdown', () => {
 describe('exportConversationToMarkdown', () => {
     let downloadSpy;
     let alertSpy;
-    let toastSpy;
 
     beforeEach(() => {
         // The download helper removes its anchor and revokes the object URL on a 100 ms timer; faking it lets afterEach flush that cleanup while the URL stub and jsdom are still alive.
@@ -307,9 +317,6 @@ describe('exportConversationToMarkdown', () => {
         downloadSpy.mockRestore();
 
         alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-
-        toastSpy = vi.fn();
-        vi.stubGlobal('showHarvestToastIncomplete', toastSpy);
 
         removeHarvestMock();
         removeHarvestPolicyMock();
@@ -457,7 +464,7 @@ describe('exportConversationToMarkdown', () => {
             expect(blobContent).toContain('(7 messages captured)');
         });
 
-        it('footer is ABSENT and toast is NOT called when isComplete=true', async () => {
+        it('footer is ABSENT and no warning toast is shown when isComplete=true', async () => {
             installHarvestPolicyMock();
             const OrigBlob = global.Blob;
             let blobContent = '';
@@ -478,10 +485,10 @@ describe('exportConversationToMarkdown', () => {
 
             expect(blobContent).not.toContain('⚠️ Export may be incomplete');
             expect(blobContent).toContain('full msg');
-            expect(toastSpy).not.toHaveBeenCalled();
+            expect(visibleIncompleteToast(), 'a complete export showed the incomplete warning toast').toBeNull();
         });
 
-        it('REGRESSION Defect2: calls showHarvestToastIncomplete exactly once with count and clause when isComplete=false', async () => {
+        it('REGRESSION Defect2: shows the incomplete warning toast with the captured count and the footer clause when isComplete=false', async () => {
             installHarvestPolicyMock();
             const OrigBlob = global.Blob;
             global.Blob = class MockBlob {
@@ -500,11 +507,10 @@ describe('exportConversationToMarkdown', () => {
 
             global.Blob = OrigBlob;
 
-            expect(toastSpy).toHaveBeenCalledOnce();
-            expect(toastSpy).toHaveBeenCalledWith(
-                2,
-                'the conversation stopped loading new messages before the end was reached'
-            );
+            const toast = visibleIncompleteToast();
+            expect(toast, 'no incomplete warning toast is shown after an incomplete export').not.toBeNull();
+            expect(toast.textContent).toContain('the conversation stopped loading new messages before the end was reached');
+            expect(toast.textContent, 'the toast does not name the captured count').toMatch(/(^|\D)2(\D|$)/);
         });
 
         it('still downloads (does not suppress) the partial file when isComplete=false', async () => {
@@ -600,6 +606,92 @@ describe('exportConversationToMarkdown', () => {
 
             expect(alertSpy).toHaveBeenCalledOnce();
             expect(blobCalled).toBe(false);
+        });
+    });
+
+    describe('toast bundle missing (partial export never blocks)', () => {
+        // 需求：docs/spec/04-features.md 第 3 節第 9 點「Partial Export Never Blocks」——提前停止的匯出一定交出檔案；toast bundle（globalThis.__DS_Harvest_toast）或其 showHarvestToastIncomplete 成員缺席時屬於可復原的降級，依 chrome-extension-coding-guidelines 的錯誤回報表記一筆 [DSS] 前綴的警告，匯出照常完成。
+        // 只替換 production 發佈的全域物件 __DS_Harvest_toast（testing-pitfalls「Cross-Script Globals」允許的作法），不補任何 production 未定義的全域。
+        const CANCELLED_FOOTER = '> ⚠️ Export may be incomplete (2 messages captured): the export was cancelled.';
+        let originalToastBundle;
+        let hadToastBundle;
+        let downloads;
+        let onDownloadClick;
+
+        beforeEach(() => {
+            hadToastBundle = Object.prototype.hasOwnProperty.call(globalThis, '__DS_Harvest_toast');
+            originalToastBundle = globalThis.__DS_Harvest_toast;
+            downloads = [];
+            onDownloadClick = (event) => {
+                const anchor = event.target && event.target.closest && event.target.closest('a[download]');
+                if (!anchor) return;
+                downloads.push(anchor.download);
+                event.preventDefault();
+            };
+            document.addEventListener('click', onDownloadClick, true);
+        });
+
+        afterEach(() => {
+            document.removeEventListener('click', onDownloadClick, true);
+            if (hadToastBundle) globalThis.__DS_Harvest_toast = originalToastBundle;
+            else delete globalThis.__DS_Harvest_toast;
+        });
+
+        /** 以兩則訊息、reason=cancelled 的不完整結果跑一次匯出；回傳 Blob 內容、reject 的錯誤（resolve 時為 null）與 console.warn 的每次呼叫。 */
+        async function runCancelledExport() {
+            installHarvestPolicyMock();
+            installHarvestMock({
+                harvestAllMessages: vi.fn().mockResolvedValue({
+                    items: [makeUserMessage('kept prompt'), makeAiMessage('<p>kept answer</p>')],
+                    isComplete: false,
+                    reason: 'cancelled',
+                }),
+            });
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const OrigBlob = global.Blob;
+            let blobContent = null;
+            global.Blob = class MockBlob {
+                constructor(parts) { blobContent = parts.join(''); }
+            };
+            let error = null;
+            try {
+                await exportConversationToMarkdown(true, true);
+            } catch (err) {
+                error = err;
+            } finally {
+                global.Blob = OrigBlob;
+            }
+            return { blobContent, error, warnCalls: warnSpy.mock.calls };
+        }
+
+        /** 斷言降級後的可觀察結果：未 reject、下載一個以取消檔尾結尾的檔案、頁面無警示 toast、記下一筆指名 toast 的 [DSS] 警告。 */
+        function expectDegradedExport({ blobContent, error, warnCalls }) {
+            expect(error, 'the incomplete export rejected while the toast was missing: ' + error).toBeNull();
+            expect(blobContent, 'the incomplete export built no Markdown file while the toast was missing').not.toBeNull();
+            expect(blobContent).toContain('kept prompt');
+            expect(blobContent).toContain('kept answer');
+            expect(blobContent.trimEnd().split('\n').pop(), 'the partial file does not end with the cancelled footer').toBe(CANCELLED_FOOTER);
+            expect(downloads, 'the incomplete export clicked no download link while the toast was missing').toHaveLength(1);
+            expect(alertSpy).not.toHaveBeenCalled();
+            expect(visibleIncompleteToast(), 'an incomplete toast appeared although the toast bundle is missing').toBeNull();
+            const warnings = warnCalls.map((args) => args.map(String).join(' '));
+            const toastWarnings = warnings.filter((text) => text.startsWith('[DSS]') && /toast/i.test(text));
+            expect(toastWarnings, 'no [DSS] warning names the missing toast; console.warn calls: ' + JSON.stringify(warnings)).toHaveLength(1);
+        }
+
+        it('downloads the partial file with the cancelled footer, shows no toast and logs a [DSS] warning when globalThis.__DS_Harvest_toast is absent', async () => {
+            delete globalThis.__DS_Harvest_toast;
+
+            expectDegradedExport(await runCancelledExport());
+        });
+
+        it('downloads the partial file with the cancelled footer, shows no toast and logs a [DSS] warning when the toast bundle lacks showHarvestToastIncomplete', async () => {
+            const bundleWithoutIncomplete = Object.assign({}, originalToastBundle);
+            delete bundleWithoutIncomplete.showHarvestToastIncomplete;
+            expect(Object.keys(bundleWithoutIncomplete).length, 'fixture: the remaining bundle keeps its other toast functions').toBeGreaterThan(0);
+            globalThis.__DS_Harvest_toast = bundleWithoutIncomplete;
+
+            expectDegradedExport(await runCancelledExport());
         });
     });
 

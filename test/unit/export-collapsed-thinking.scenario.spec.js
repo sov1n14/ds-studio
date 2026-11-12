@@ -4,7 +4,7 @@
  *
  * Requirement (user report): with "export includes thinking" on, the exported Markdown contains the thinking process even when the think block is collapsed, whether the user collapsed it or "hide thinking" did. Collapsing is a display-layer choice and MUST NOT change the export, and the export MUST NOT change the display: a collapsed block is collapsed again afterwards, an expanded one stays expanded. With "export includes thinking" off, the export never expands a collapsed block.
  *
- * Why the scenario form: DeepSeek's native collapse unmounts the think body (the captured think-closed snapshot holds no .ds-think-content), so the thinking only exists on the page while the block is expanded. The defect lives between real modules sharing the page DOM (content-script export, the scroll harvest, hide-thinking's observer), so none of them is mocked. Only trust boundaries are stubbed: chrome.runtime (settings for hide-thinking), Blob / URL (the download), and the incomplete-export toast global.
+ * Why the scenario form: DeepSeek's native collapse unmounts the think body (the captured think-closed snapshot holds no .ds-think-content), so the thinking only exists on the page while the block is expanded. The defect lives between real modules sharing the page DOM (content-script export, the scroll harvest, hide-thinking's observer), so none of them is mocked. Only trust boundaries are stubbed: chrome.runtime (settings for hide-thinking) and Blob / URL (the download). Every export here completes (runExport asserts it), so the incomplete-export toast is never reached and is not stubbed: a stub of a global the content scripts never define would hide a missing global.
  *
  * Runs under jsdom: the think-block selectors are structural (multi-level :has()), which happy-dom mis-evaluates. jsdom has no innerText, so the spec installs a textContent-backed getter for its own run.
  *
@@ -89,7 +89,6 @@ beforeEach(() => {
     document.body.innerHTML = '';
     vi.useRealTimers();
     vi.stubGlobal('URL', { createObjectURL: vi.fn().mockReturnValue('blob:fake'), revokeObjectURL: vi.fn() });
-    vi.stubGlobal('showHarvestToastIncomplete', vi.fn());
     alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     window.DSstudio = window.DSstudio || {};
     delete window.DSstudio.GoToTop;
