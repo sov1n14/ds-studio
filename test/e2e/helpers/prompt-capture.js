@@ -43,6 +43,17 @@ export async function sendAndCapturePrompt(page, blocked, text) {
     return completion.body.prompt;
 }
 
+/** 執行 `send`，並解析它所產生（已中止）的 completion 請求內文；`how` 是失敗訊息中對該送出動作的稱呼。 */
+export async function captureSentCompletion(blocked, send, how) {
+    const before = blocked.requests().length;
+    await send();
+    const isCompletion = ({ url }) => new URL(url).pathname === COMPLETION_PATH;
+    await expect.poll(() => blocked.requests().slice(before).some(isCompletion), { message: `${how} posts a completion request (aborted)` }).toBe(true);
+    const completion = blocked.requests().slice(before).find(isCompletion);
+    expect(typeof completion.body?.prompt, 'the completion request carries a prompt field').toBe('string');
+    return completion.body;
+}
+
 /** The prompt layout of docs/spec/01-prompt-system.md §2: the system-reminder block (omitted when `reminder` is empty), then the user-input block. */
 export function documentedPrompt({ reminder = '', text }) {
     const userInput = `<user-input>\n${text}\n</user-input>`;

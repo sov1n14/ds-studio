@@ -14,8 +14,13 @@ export function composer(page) {
 }
 
 /** The composer's icon-only Send button (the one holding the send arrow icon). */
-function composerSendButton(page) {
+export function composerSendButton(page) {
     return page.locator(DSSelectors.SEND_BUTTON_ROLE_SELECTOR).filter({ has: page.locator(DSSelectors.SEND_BUTTON_ICON_SELECTOR) });
+}
+
+/** 送出按鈕是否處於 DeepSeek 自身的停用狀態：具有 `ds-button--disabled` class、`aria-disabled="true"` 或 `disabled` 屬性（docs/spec/01-prompt-system.md 第 2 節）。 */
+export function isComposerSendButtonDisabled(page) {
+    return composerSendButton(page).evaluate((button) => button.classList.contains('ds-button--disabled') || button.getAttribute('aria-disabled') === 'true' || button.hasAttribute('disabled'));
 }
 
 /**
