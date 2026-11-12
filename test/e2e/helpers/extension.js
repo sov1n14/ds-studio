@@ -150,6 +150,11 @@ export async function evaluateInWorker(context, fn, arg) {
     }
 }
 
+/** 擴充功能是否已取得 `permissions` 中的每一項選用權限。 */
+export function hasPermissions(context, permissions) {
+    return evaluateInWorker(context, (list) => chrome.permissions.contains({ permissions: list }), permissions);
+}
+
 /**
  * Returns the id of the single tab whose URL contains `urlPart`.
  * Throws when none or several match, so a message never reaches the wrong tab.

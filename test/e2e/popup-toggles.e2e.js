@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { evaluateInWorker } from './helpers/extension.js';
+import { hasPermissions } from './helpers/extension.js';
 import { clickPopupSwitch, closeExtensionPages, openPopup, waitForPopupFullyBound } from './helpers/popup.js';
 import { readBothAreas } from './helpers/settings.js';
 
@@ -59,11 +59,6 @@ function radio(popup, name, value) {
 /** The value of the checked radio in group `name`. */
 function checkedRadioValue(popup, name) {
     return popup.locator(`input[name="${name}"]:checked`).getAttribute('value');
-}
-
-/** Whether every permission in `permissions` is granted to the extension. */
-function hasPermissions(context, permissions) {
-    return evaluateInWorker(context, (list) => chrome.permissions.contains({ permissions: list }), permissions);
 }
 
 /**
