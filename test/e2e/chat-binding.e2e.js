@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { composer } from './helpers/composer.js';
 import { CONVERSATIONS, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
-import { closeExtensionPages, openPopup, openPopupGroupList, popupPickedGroup } from './helpers/popup.js';
+import { closeExtensionPages, openPopup, openPopupGroupList, pickGroupInPopup, popupBlankLabel, popupPickedGroup } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, pickPresetOption, presetOverlay, seedOnlyPreset, seedOnlyPresets } from './helpers/presets.js';
 import { documentedPrompt, gotoWithOverlay, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
 
@@ -16,6 +16,9 @@ const OTHER_URL = `${DEEPSEEK_ORIGIN}/a/chat/s/${CONVERSATIONS.fiveThinkingRepli
 const REAL_SEND_TEXT = 'e2e chat binding first-send probe: reply with the single word OK';
 const COMPLETION_PATH = '/api/v0/chat/completion';
 const CHAT_URL_PATTERN = /\/a\/chat\/s\/([0-9a-f-]{36})(?:[/?#]|$)/;
+// 兩個新對話分頁的網址標記，讓彈出視窗能指定位於哪個分頁之上。
+const TAB_A_MARKER = 'dss-e2e-tab=a';
+const TAB_B_MARKER = 'dss-e2e-tab=b';
 
 test.describe('conversation-bound prompt groups', () => {
     test.beforeEach(async ({ settings }) => {
@@ -98,6 +101,36 @@ test.describe('conversation-bound prompt groups', () => {
             expect(await sendAndCapturePrompt(page, blockedFirst, USER_TEXT), 'the first tab sends the content of the group picked in it').toBe(documentedPrompt({ reminder: first.content, text: USER_TEXT }));
             await otherTab.bringToFront();
             expect(await sendAndCapturePrompt(otherTab, blockedOther, USER_TEXT), 'the other tab sends the content of the group picked in it').toBe(documentedPrompt({ reminder: second.content, text: USER_TEXT }));
+        } finally {
+            await otherTab.close();
+        }
+    });
+
+    test('popup pick scope: a group picked in the popup over one new-conversation tab is shown and sent there, while another open new-conversation tab keeps showing and sending the group picked in its own overlay', async ({ page, context, settings, extensionId }) => {
+        const popupGroup = createTestPreset('popup-tab');
+        const ownGroup = createTestPreset('own-tab');
+        await seedOnlyPresets(settings, context, [popupGroup, ownGroup]);
+
+        const blockedUnder = await openBlockingSends(page, `${HOME}?${TAB_A_MARKER}`);
+        const otherTab = await context.newPage();
+        try {
+            const blockedOther = await openBlockingSends(otherTab, `${HOME}?${TAB_B_MARKER}`);
+            await expect(page, 'the tab under the popup keeps its marker (precondition)').toHaveURL(`${HOME}?${TAB_A_MARKER}`);
+            await expect(otherTab, 'the other tab keeps its marker (precondition)').toHaveURL(`${HOME}?${TAB_B_MARKER}`);
+            await pickPreset(otherTab, ownGroup);
+
+            const popup = await openPopup(context, extensionId, { activeTabUrlPart: TAB_A_MARKER });
+            await expect(popupPickedGroup(popup), 'the popup over the new-conversation tab with no pick starts on the blank option (precondition)').toHaveText(await popupBlankLabel(popup));
+            await pickGroupInPopup(popup, popupGroup.name);
+            await expect(presetOverlay(page), 'the tab under the popup shows the group picked in the popup').toContainText(popupGroup.name);
+            await expectOverlayNeverShows(otherTab, popupGroup.name, 'the other new-conversation tab does not show the group picked in the popup');
+            await expect(presetOverlay(otherTab), 'the other new-conversation tab still shows the group picked in its own overlay').toContainText(ownGroup.name);
+            await popup.close();
+
+            await page.bringToFront();
+            expect(await sendAndCapturePrompt(page, blockedUnder, USER_TEXT), 'the tab under the popup sends the content of the group picked in the popup').toBe(documentedPrompt({ reminder: popupGroup.content, text: USER_TEXT }));
+            await otherTab.bringToFront();
+            expect(await sendAndCapturePrompt(otherTab, blockedOther, USER_TEXT), 'the other new-conversation tab sends the content of the group picked in its own overlay').toBe(documentedPrompt({ reminder: ownGroup.content, text: USER_TEXT }));
         } finally {
             await otherTab.close();
         }
