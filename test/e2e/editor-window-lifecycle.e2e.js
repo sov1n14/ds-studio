@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { evaluateInWorker, listWindows } from './helpers/extension.js';
+import { humanPause, humanTypeAtFocus, runUnpaced } from './helpers/human.js';
 import { expectNoPageWithin, expectPageStaysOpenWithin } from './helpers/observation.js';
 import {
     closeExtensionPages, listEditorWindows, openEditorWith, openPopup, openPopupGroupList, pickGroupInPopup, popupGroupRow,
@@ -70,7 +71,7 @@ test.describe('prompt group editor window lifecycle', () => {
         expect(focus.selectionEnd, 'the caret sits at the end of the existing name').toBe(group.name.length);
 
         // 以鍵盤在游標處輸入：若名稱被全選，輸入會取代整個名稱而不是接在後面。
-        await editor.keyboard.type(suffix);
+        await humanTypeAtFocus(editor.keyboard, suffix);
         await expect(nameInput, 'typing right after opening appends to the existing name').toHaveValue(group.name + suffix);
         // 等自動存檔把新名稱寫入並經 live-sync 反映到彈出視窗，避免存檔在測試結束、儲存還原之後才落地。
         await openPopupGroupList(popup);
@@ -100,15 +101,18 @@ test.describe('prompt group editor window lifecycle', () => {
         await evaluateInWorker(context, (id) => chrome.windows.update(id, { focused: true }), popupWindow.id);
         await expect.poll(async () => (await listEditorWindows(context))[0]?.focused, { message: 'the editor window has lost focus before the second click (precondition)' }).toBe(false);
 
+        // The person's pause comes before each observation window opens, so the click lands at its start and the whole window watches for a second editor.
+        await humanPause();
         const noSecondWindow = expectNoPageWithin(context, EDITOR_PATH, NO_SECOND_WINDOW_MS, 'clicking the pencil for the same group opens no second editor window');
-        await pencil.click();
+        await runUnpaced(() => pencil.click());
         await noSecondWindow;
         await expect.poll(() => listEditorWindows(context), { message: 'the same single editor window is focused again' }).toEqual([expect.objectContaining({ id: editorWindowId, focused: true })]);
         expect(await editor.evaluate(() => window.__dssE2eSameDocument === true), 'refocusing the same group does not reload the editor').toBe(true);
 
         await pickGroupAndCloseList(popup, second.name);
+        await humanPause();
         const noWindowForSecond = expectNoPageWithin(context, EDITOR_PATH, NO_SECOND_WINDOW_MS, 'clicking the pencil for another group opens no second editor window');
-        await pencil.click();
+        await runUnpaced(() => pencil.click());
         await noWindowForSecond;
         await expect(editor.locator('#editorNameInput'), 'the same editor window now shows the newly picked group').toHaveValue(second.name);
         await expect.poll(() => listEditorWindows(context), { message: 'the navigated editor is still the one and only editor window' }).toEqual([expect.objectContaining({ id: editorWindowId })]);
@@ -129,8 +133,11 @@ test.describe('prompt group editor window lifecycle', () => {
             await expect(editor.locator('#editorNameInput'), 'the editor shows the picked group name (precondition)').toHaveValue(group.name);
 
             // 名稱最後輸入且不讓輸入框失焦，觸發 focus 時它仍在 500 ms 防抖內、尚未存檔。
-            await editor.locator('#editorTextarea').fill(content);
-            await editor.locator('#editorNameInput').fill(renamed);
+            // Both entries are pasted with no pause between them (D-105 exemption): a pause would let the content save on its own once its debounce ends.
+            await runUnpaced(async () => {
+                await editor.locator('#editorTextarea').fill(content);
+                await editor.locator('#editorNameInput').fill(renamed);
+            });
             const closed = editor.waitForEvent('close');
             await focusDeepSeekPage(home);
             await closed;
@@ -163,6 +170,7 @@ test.describe('prompt group editor window lifecycle', () => {
             await expect(nameInput, 'the editor shows the picked group name (precondition)').toHaveValue(edited.name);
             const [editorWindow] = await listEditorWindows(context);
 
+            // Pasted in one step, not typed (D-105 exemption): typed key by key, a partial name would auto-save during a pause and replace the original name this test asserts unchanged.
             await nameInput.fill(other.name);
             await focusDeepSeekPage(home);
             await expectPageStaysOpenWithin(editor, STAYS_OPEN_MS, 'a duplicate name keeps the editor window open after the DeepSeek tab gets focus');

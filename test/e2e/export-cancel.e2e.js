@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from './fixtures.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
 import { startMarkdownExport } from './helpers/export.js';
+import { runUnpaced } from './helpers/human.js';
 import {
     HARVEST_TOAST_CANCEL_SELECTOR,
     HARVEST_TOAST_DISMISS_SELECTOR,
@@ -158,7 +159,8 @@ test.describe('export progress toast and cancel', () => {
         const { download } = await startMarkdownExport(page, EXPORT_OPTIONS);
         await waitForFirstCount(page, capturingTemplate);
         await recordCancelClick(page);
-        await page.locator(HARVEST_TOAST_CANCEL_SELECTOR).click();
+        // The export finishes within seconds, so Cancel is clicked without a pause to land while it still runs.
+        await runUnpaced(() => page.locator(HARVEST_TOAST_CANCEL_SELECTOR).click());
         const { fileName, filePath, content } = await within(download, CANCELLED_DOWNLOAD_TIMEOUT_MS, 'a cancelled export still downloads the messages captured so far (docs/FEATURES.md:262, docs/spec/04-features.md:36)');
 
         expectOutsideRepo(filePath);

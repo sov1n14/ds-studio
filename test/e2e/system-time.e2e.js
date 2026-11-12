@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { pacedTimeout } from './helpers/human.js';
 import { closeExtensionPages, openPopup } from './helpers/popup.js';
 import { createTestPreset, pickPreset, seedOnlyPreset } from './helpers/presets.js';
 import { documentedPrompt, gotoWithOverlay, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
@@ -58,6 +59,6 @@ test.describe('system time injection', () => {
             await gotoWithOverlay(page, HOME);
             const prompt = await sendAndCapturePrompt(page, blocked, USER_TEXT);
             expect(prompt, 'with the toggle off the prompt starts with the user-input block, no time line').toBe(documentedPrompt({ text: USER_TEXT }));
-        }).toPass({ timeout: 30_000 });
+        }).toPass({ timeout: pacedTimeout(30_000) });
     });
 });

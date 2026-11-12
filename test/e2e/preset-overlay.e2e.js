@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { composer, guardAgainstSending, pressEnterWith } from './helpers/composer.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { pacedTimeout } from './helpers/human.js';
 import { createTestPreset, pickPreset, pickPresetOption, presetOverlay, seedOnlyPreset } from './helpers/presets.js';
 
 // The in-page preset overlay picks the prompt group for the current tab. Picking does not write the composer: the extension prepends the picked group's content when the message is sent (docs/FEATURES.md, Using Prompt Injection step 2, and In-Page Quick Switch Overlay).
@@ -29,7 +30,7 @@ test.describe('preset overlay', () => {
                 const value = await pressEnterWith(page, USER_TEXT);
                 expect(value, 'the composer carries the picked preset content at send time').toContain(PRESET.content);
                 expect(value, 'the typed text is kept beside the preset content').toContain(USER_TEXT);
-            }).toPass({ timeout: 15_000 });
+            }).toPass({ timeout: pacedTimeout(15_000) });
 
             await pickPresetOption(page, (options) => options.filter({ hasNotText: PRESET.name }));
             await expect(overlay, 'the overlay no longer shows the preset').not.toContainText(PRESET.name);
@@ -37,7 +38,7 @@ test.describe('preset overlay', () => {
                 const value = await pressEnterWith(page, USER_TEXT);
                 expect(value, 'after picking the empty option the composer carries no preset content').not.toContain(PRESET.content);
                 expect(value, 'the typed text is still kept').toContain(USER_TEXT);
-            }).toPass({ timeout: 15_000 });
+            }).toPass({ timeout: pacedTimeout(15_000) });
 
             expect(guard.sendRequests(), 'no send request left the page').toBe(0);
         } finally {

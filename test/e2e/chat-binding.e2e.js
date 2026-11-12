@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { composer } from './helpers/composer.js';
 import { CONVERSATIONS, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { humanType } from './helpers/human.js';
 import { closeExtensionPages, openPopup, openPopupGroupList, pickGroupInPopup, popupBlankLabel, popupPickedGroup } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, pickPresetOption, presetOverlay, seedOnlyPreset, seedOnlyPresets } from './helpers/presets.js';
 import { documentedPrompt, gotoWithOverlay, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
@@ -147,7 +148,7 @@ test.describe('conversation-bound prompt groups', () => {
         await gotoWithOverlay(page, HOME);
         await pickPreset(page, group);
         const sent = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === COMPLETION_PATH);
-        await composer(page).fill(REAL_SEND_TEXT);
+        await humanType(composer(page), REAL_SEND_TEXT);
         await composer(page).press('Enter');
         const request = await sent;
         expect(request.postDataJSON()?.prompt, 'the first message carries the picked group content (precondition)').toBe(documentedPrompt({ reminder: group.content, text: REAL_SEND_TEXT }));

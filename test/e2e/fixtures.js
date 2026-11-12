@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, test as base, expect } from '@playwright/test';
 import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
 import { getExtensionWorker, reloadExtension } from './helpers/extension.js';
+import { installHumanPacing, pauseBetweenTests } from './helpers/human.js';
 import { createSettingsSession } from './helpers/settings.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -15,6 +16,12 @@ export function readDiskManifestVersion() {
 }
 
 export const test = base.extend({
+    // Human-like pause before each test (D-105; the first test of the worker starts at once). Auto with no dependencies, so it runs before `settings` and `page`; its own timeout is off, and the pause extends the test budget.
+    humanPacing: [async ({}, use) => {
+        await pauseBetweenTests();
+        await use();
+    }, { auto: true, timeout: 0 }],
+
     // One logged-in Chrome (with the unpacked extension) shared by the whole worker.
     profileContext: [async ({}, use) => {
         if (!existsSync(PROFILE_DIR)) {
@@ -33,6 +40,8 @@ export const test = base.extend({
             if (runningVersion !== diskVersion) {
                 throw new Error(`Extension version mismatch: service worker reports ${runningVersion}, manifest.json on disk is ${diskVersion}. Reload the unpacked extension from this repo in .browser-profile, then rerun.`);
             }
+            // Every Page and Locator action of this worker now pauses like a person first (D-105).
+            await installHumanPacing(context);
         } catch (error) {
             await context.close();
             throw error;

@@ -3,6 +3,7 @@
 import { expect } from '@playwright/test';
 import { blockSendRequests, composer } from './composer.js';
 import { DEEPSEEK_ORIGIN } from './conversations.js';
+import { humanType } from './human.js';
 import { presetOverlay } from './presets.js';
 
 const COMPLETION_PATH = '/api/v0/chat/completion';
@@ -31,10 +32,10 @@ export async function openBlockingSends(page, url = DEEPSEEK_ORIGIN + '/') {
     return blocked;
 }
 
-/** Presses Enter on `text` in the composer and resolves the prompt of the (aborted) completion request it produced. */
+/** Types `text` into the composer, presses Enter and resolves the prompt of the (aborted) completion request it produced. */
 export async function sendAndCapturePrompt(page, blocked, text) {
     const before = blocked.requests().length;
-    await composer(page).fill(text);
+    await humanType(composer(page), text);
     await composer(page).press('Enter');
     const isCompletion = ({ url }) => new URL(url).pathname === COMPLETION_PATH;
     await expect.poll(() => blocked.requests().slice(before).some(isCompletion), { message: 'pressing Enter posts a completion request (aborted)' }).toBe(true);

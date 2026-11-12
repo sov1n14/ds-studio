@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { clickSendWith, composer, guardAgainstSending } from './helpers/composer.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
+import { pacedTimeout } from './helpers/human.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
 import { createTestPreset, pickPreset, seedOnlyPreset } from './helpers/presets.js';
 import { asBlockquote, dragSelectTwoReplyParagraphs } from './helpers/quote.js';
@@ -63,7 +64,7 @@ test.describe('edit message (v4.36.8 regression)', () => {
                 const value = await clickSendWith(page, USER_TEXT);
                 expect(value, 'clicking the composer Send writes the preset prefix into the main composer (prefix is active)').toContain(PRESET.content);
                 expect(value, 'the typed text is kept beside the prefix').toContain(USER_TEXT);
-            }).toPass({ timeout: 15_000 });
+            }).toPass({ timeout: pacedTimeout(15_000) });
             await expect(editBox, 'the preset prefix does not land in the edit box, which still holds only the original text').toHaveValue(original);
 
             expect(guard.sendRequests(), 'no send request left the page').toBe(0);

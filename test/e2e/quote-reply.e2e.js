@@ -1,7 +1,8 @@
 import { test, expect } from './fixtures.js';
-import { composer } from './helpers/composer.js';
+import { blockSendRequests, composer } from './helpers/composer.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
+import { humanType } from './helpers/human.js';
 import { expectNeverWithin } from './helpers/observation.js';
 import { asBlockquote, dragSelectTwoReplyParagraphs, dragSelectWithinReplyLine } from './helpers/quote.js';
 import { readListScroll, waitForListScrollToSettle, wheelOverList } from './helpers/scroll.js';
@@ -86,10 +87,12 @@ test.describe('quote reply: appending and single-line format', () => {
         test(`quoting into a non-empty composer appends the blockquote after the draft: ${name}`, async ({ page, settings, openConversation }) => {
             await settings.set({ isEnabled: true });
             await openConversation(CONVERSATIONS.fiveThinkingReplies);
+            // The draft is typed key by key, its trailing line break as Shift+Enter, which inserts a line break and does not send; aborting every send request guards the account should a key ever send.
+            await blockSendRequests(page);
             const input = composer(page);
             const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
             try {
-                await input.fill(draft);
+                await humanType(input, draft);
                 await expect(input, 'the composer holds the draft first (precondition)').toHaveValue(draft);
 
                 const selected = await dragSelectTwoReplyParagraphs(page);

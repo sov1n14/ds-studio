@@ -2,6 +2,7 @@
 
 import { expect } from '@playwright/test';
 import { evaluateInWorker, findTabId, listWindows } from './extension.js';
+import { humanType } from './human.js';
 
 const EXTENSION_SCHEME = 'chrome-extension://';
 const POPUP_PATH = 'popup/popup.html';
@@ -109,7 +110,7 @@ export async function addGroupInPopup(popup, name) {
     await popup.locator('#addPresetBtn').click();
     const input = popup.locator('#modalInput');
     await expect(input, 'the naming dialog opens').toBeVisible();
-    await input.fill(name);
+    await humanType(input, name);
     await popup.locator('#modalActions .modal-btn--primary').click();
     await expect(popup.locator('#modalOverlay'), 'the naming dialog closes').toBeHidden();
 }
@@ -128,6 +129,7 @@ export async function openEditorWith(context, button) {
  * Types `text` into the editor textarea and resolves once the editor reports the auto-save finished (its status turns to the localized "saved" text).
  * The status shows "saved" for only one second, so a MutationObserver installed before typing records it instead of polling for it.
  * Esc right after typing loses the typed text (reported deviation), so a spec waits for this before closing the window.
+ * The text is pasted in one step, not typed: think pauses longer than the 500 ms auto-save debounce would save a partial text first, and the first "saved" status recorded here would then not cover the whole text.
  */
 export async function fillEditorAndWaitForSave(editor, text) {
     await editor.evaluate(() => {

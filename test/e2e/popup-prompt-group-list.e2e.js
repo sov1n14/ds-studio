@@ -3,6 +3,7 @@ import {
     answerPopupConfirmation, closeExtensionPages, openPopup, openPopupGroupList, pickGroupInPopup, popupBlankLabel, popupBlankRow,
     popupDeleteAllButton, popupDeleteButton, popupGroupNames, popupGroupRow, popupPickedGroup, popupPinButton, popupVisibleGroupNames,
 } from './helpers/popup.js';
+import { humanPause, humanType, runUnpaced } from './helpers/human.js';
 import { createTestPreset, expectOverlayNeverShows, presetOverlay, seedOnlyPresets } from './helpers/presets.js';
 import { inNewHomeTab } from './helpers/prompt-capture.js';
 import { expectNoPageWithin } from './helpers/observation.js';
@@ -47,18 +48,18 @@ test.describe('popup prompt group list', () => {
         expect(await popupVisibleGroupNames(popup), 'every seeded group is listed before any search (precondition)').toEqual(allNames);
 
         // docs/FEATURES.md:38 and docs/spec/02-popup-ui.md:10: typing filters the group names in real time.
-        await search.fill('banana');
+        await humanType(search, 'banana');
         await expect.poll(() => popupVisibleGroupNames(popup), { message: 'a keyword lists only the group whose name contains it' }).toEqual([banana.name]);
         await expect(emptyHint, 'the no-match hint stays hidden while a group matches').toBeHidden();
 
-        await search.fill('search-');
+        await humanType(search, 'search-');
         await expect.poll(() => popupVisibleGroupNames(popup), { message: 'a keyword shared by every name lists every group' }).toEqual(allNames);
 
-        await search.fill('zzqx-nomatch');
+        await humanType(search, 'zzqx-nomatch');
         await expect.poll(() => popupVisibleGroupNames(popup), { message: 'a keyword no name contains lists no group' }).toEqual([]);
         await expect(emptyHint, 'a keyword no name contains shows the no-match hint').toBeVisible();
 
-        await search.fill('cherry');
+        await humanType(search, 'cherry');
         await expect.poll(() => popupVisibleGroupNames(popup), { message: 'a new keyword after a no-match lists its group again' }).toEqual([cherry.name]);
         await expect(emptyHint, 'the no-match hint hides again once a group matches').toBeHidden();
 
@@ -208,8 +209,10 @@ test.describe('popup prompt group list', () => {
 
         // docs/FEATURES.md:42 and line 75, docs/spec/02-popup-ui.md:11: the pencil is disabled while the blank option is selected.
         await expect(pencil, 'the pencil is disabled with the blank option').toBeDisabled();
+        // The person's pause comes before the window opens, so the click lands at its start and the whole window watches for an editor.
+        await humanPause();
         const watching = expectNoPageWithin(context, EDITOR_PATH, NO_EDITOR_WINDOW_MS, 'clicking the disabled pencil opens no editor window');
-        await pencil.click({ force: true });
+        await runUnpaced(() => pencil.click({ force: true }));
         await watching;
 
         await pickGroupInPopup(popup, groups[1].name);

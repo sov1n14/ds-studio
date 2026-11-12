@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { CONVERSATIONS, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { pacedTimeout } from './helpers/human.js';
 import { clickPopupSwitch, closeEditorWithEscape, closeExtensionPages, fillEditorAndWaitForSave, openEditorWith, openPopup } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, seedOnlyPreset, seedOnlyPresets } from './helpers/presets.js';
 import { documentedPrompt, gotoWithOverlay, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
@@ -78,7 +79,7 @@ test.describe('global prompt', () => {
             await pickPreset(page, switchedOff);
             const onPrompt = await sendAndCapturePrompt(page, reblocked, USER_TEXT);
             expect(onPrompt, 'after switching it on the global prompt comes before the group content').toBe(documentedPrompt({ reminder: `${globalPrompt}\n\n${switchedOff.content}`, text: USER_TEXT }));
-        }).toPass({ timeout: 30_000 });
+        }).toPass({ timeout: pacedTimeout(30_000) });
     });
 
     test('with no group picked the device-level switch in the popup decides whether the global prompt is sent', async ({ page, context, settings, extensionId }) => {
@@ -99,7 +100,7 @@ test.describe('global prompt', () => {
             await gotoWithOverlay(page, HOME);
             const onPrompt = await sendAndCapturePrompt(page, blocked, USER_TEXT);
             expect(onPrompt, 'with the device-level switch on the global prompt alone fills the system-reminder').toBe(documentedPrompt({ reminder: globalPrompt, text: USER_TEXT }));
-        }).toPass({ timeout: 30_000 });
+        }).toPass({ timeout: pacedTimeout(30_000) });
     });
 
     test('picking the last-picked group again on a new conversation still sends the global prompt when that group switch is on', async ({ page, context, settings }) => {

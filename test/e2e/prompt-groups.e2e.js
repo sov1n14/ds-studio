@@ -5,6 +5,7 @@ import {
     popupGroupNames, popupGroupRow, popupPickedGroup, popupPinButton,
 } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, presetOverlay, seedOnlyPreset, seedOnlyPresets, trackPresetsCreatedDuringTest } from './helpers/presets.js';
+import { humanType } from './helpers/human.js';
 import { documentedPrompt, gotoWithOverlay, inNewHomeTab, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
 
 // Managing Prompt Groups in the popup (docs/FEATURES.md, Managing Prompt Groups; docs/spec/01-prompt-system.md sections 1 and 6; docs/spec/02-popup-ui.md sections 7 and 15).
@@ -41,8 +42,8 @@ test.describe('managing prompt groups in the popup', () => {
 
         const editor = await openEditorWith(context, popup.locator('#editPresetBtn'));
         await expect(editor.locator('#editorNameInput'), 'the editor shows the added group name').toHaveValue(addedName);
-        await editor.locator('#editorTextarea').fill(addedContent);
-        await editor.locator('#editorNameInput').fill(renamed);
+        await humanType(editor.locator('#editorTextarea'), addedContent);
+        await humanType(editor.locator('#editorNameInput'), renamed);
         await openPopupGroupList(popup);
         await expect(popupGroupRow(popup, renamed), 'the editor auto-saves the new name and the open popup list shows it').toHaveCount(1);
         await closeEditorWithEscape(editor);
@@ -129,8 +130,8 @@ test.describe('prompt group editor window', () => {
         await addGroupInPopup(popup, addedName);
         const editor = await openEditorWith(context, popup.locator('#editPresetBtn'));
         await expect(editor.locator('#editorNameInput'), 'the editor shows the added group name (precondition)').toHaveValue(addedName);
-        await editor.locator('#editorTextarea').fill('E2E-ESC-CONTENT-' + stamp);
-        await editor.locator('#editorNameInput').fill(renamed);
+        await humanType(editor.locator('#editorTextarea'), 'E2E-ESC-CONTENT-' + stamp);
+        await humanType(editor.locator('#editorNameInput'), renamed);
         await closeEditorWithEscape(editor);
 
         await openPopupGroupList(popup);

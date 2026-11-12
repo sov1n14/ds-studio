@@ -2,6 +2,7 @@ import { test, expect } from './fixtures.js';
 import { blockSendRequests, clickSendWith, composer } from './helpers/composer.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { createTestPreset, pickPreset, presetOverlay, seedOnlyPreset } from './helpers/presets.js';
+import { humanType } from './helpers/human.js';
 import { documentedPrompt } from './helpers/prompt-capture.js';
 
 // Prompt injection prepends the picked preset's content to the message when it is sent; with the empty option picked no preset content is sent (docs/FEATURES.md, Using Prompt Injection and Using No Prompt Group).
@@ -25,10 +26,10 @@ async function captureSentPrompt(blocked, send, how) {
     return completion.body.prompt;
 }
 
-/** Presses Enter on `text` in the composer and resolves the prompt of the (aborted) completion request it produced. */
+/** Types `text` into the composer, presses Enter and resolves the prompt of the (aborted) completion request it produced. */
 async function sendAndCapturePrompt(page, blocked, text) {
     return captureSentPrompt(blocked, async () => {
-        await composer(page).fill(text);
+        await humanType(composer(page), text);
         await composer(page).press('Enter');
     }, 'pressing Enter');
 }
@@ -99,12 +100,12 @@ test.describe('prompt injection triggers', () => {
         await pickPreset(page, group);
 
         const input = composer(page);
-        await input.fill(firstLine);
+        await humanType(input, firstLine);
         const sendsBeforeShiftEnter = blocked.requests().length;
         await input.press('Shift+Enter');
         await expect(input, 'Shift+Enter inserts a line break at the caret and injects nothing into the composer').toHaveValue(`${firstLine}\n`);
         await expectNoSendWithin(blocked, sendsBeforeShiftEnter, NO_SEND_WINDOW_MS, 'Shift+Enter does not send');
-        await input.pressSequentially(secondLine);
+        await humanType(input, secondLine, { isAppending: true });
         await expect(input, 'the second line follows the line break (precondition)').toHaveValue(`${firstLine}\n${secondLine}`);
 
         const prompt = await captureSentPrompt(blocked, () => input.press('Enter'), 'pressing Enter');

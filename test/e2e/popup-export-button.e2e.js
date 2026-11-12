@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
 import { evaluateInWorker } from './helpers/extension.js';
+import { humanPause, runUnpaced } from './helpers/human.js';
 import { expectNoDownloadWithin } from './helpers/observation.js';
 import { closeExtensionPages, openPopup, waitForPopupFullyBound } from './helpers/popup.js';
 
@@ -125,8 +126,10 @@ test.describe('popup export button', () => {
         // The notice wording lives only in the locale tables (docs/ does not state it), so the expected text is the popup's own localized copy.
         const expectedNotice = await popup.evaluate(() => ({ title: dsI18n.t('notOnDeepseekTitle'), message: dsI18n.t('notOnDeepseekMessage') }));
 
+        // The person's pause comes before the window opens, so the Export click lands at its start and the whole window watches for a download.
+        await humanPause();
         const noDownload = expectNoDownloadWithin(context, NO_DOWNLOAD_WINDOW_MS, 'Export without a DeepSeek tab');
-        await popup.locator('#exportMdBtn').click();
+        await runUnpaced(() => popup.locator('#exportMdBtn').click());
 
         await expect(popup.locator('#modalOverlay'), 'the notice dialog is shown').toBeVisible();
         await expect(popup.locator('#modalTitle'), 'the notice carries its localized title').toHaveText(expectedNotice.title);

@@ -2,6 +2,7 @@ import { test as base, expect } from './fixtures.js';
 import { blockSendRequests, composer } from './helpers/composer.js';
 import { CONVERSATIONS, DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
 import { evaluateInWorker } from './helpers/extension.js';
+import { runUnpaced } from './helpers/human.js';
 import { TEMP_CHAT_ROW_SELECTOR } from './helpers/extension-ui.js';
 import { armReplyStub, openHome, sendStubbedPrompt } from './helpers/reply-stub.js';
 import { readBothAreas } from './helpers/settings.js';
@@ -360,8 +361,11 @@ test.describe('temporary conversation', () => {
 
         // docs/FEATURES.md:100：歷史對話即使開關開啟、開啟後立刻送出訊息，也不會被標記或刪除。
         await openConversation(page, kept);
-        await composer(page).fill(PROMPT);
-        await composer(page).press('Enter');
+        // The send must follow the load at once (that race is under test), so it is neither typed key by key nor paused.
+        await runUnpaced(async () => {
+            await composer(page).fill(PROMPT);
+            await composer(page).press('Enter');
+        });
         await expect.poll(() => blocked.requests().length, { message: 'the send went out as a completion request and was aborted (precondition)' }).toBeGreaterThan(0);
         expect(blocked.requests()[0].body?.chat_session_id, 'the send went into the history conversation (precondition)').toBe(kept);
         await openKeptFromSidebar(page, CONVERSATIONS.fiveThinkingReplies);

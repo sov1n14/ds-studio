@@ -1,5 +1,6 @@
 // The main chat composer: reading it, clearing it, and pressing Enter or clicking Send in it without ever sending a message.
 
+import { humanType } from './human.js';
 import { DSSelectors } from './selectors.js';
 
 /**
@@ -69,18 +70,18 @@ export async function guardAgainstSending(page) {
     return { sendRequests: () => blocked.requests().length };
 }
 
-/** Types `text` into an empty composer and presses Enter (which the send guard keeps from sending); resolves the composer value. */
+/** Types `text` into the composer, replacing its value, and presses Enter (which the send guard keeps from sending); resolves the composer value. */
 export async function pressEnterWith(page, text) {
     const input = composer(page);
-    await input.fill(text);
+    await humanType(input, text);
     await input.press('Enter');
     return input.inputValue();
 }
 
-/** Types `text` into an empty composer and clicks the composer Send button (which the send guard keeps from sending); resolves the composer value. */
+/** Types `text` into the composer, replacing its value, and clicks the composer Send button (which the send guard keeps from sending); resolves the composer value. */
 export async function clickSendWith(page, text) {
     const input = composer(page);
-    await input.fill(text);
+    await humanType(input, text);
     await composerSendButton(page).click();
     return input.inputValue();
 }

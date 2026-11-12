@@ -6,6 +6,7 @@
 import { expect } from '@playwright/test';
 import { composer } from './composer.js';
 import { DEEPSEEK_ORIGIN } from './conversations.js';
+import { humanType } from './human.js';
 import { DSSelectors } from './selectors.js';
 
 const HOME = DEEPSEEK_ORIGIN + '/';
@@ -173,7 +174,7 @@ export async function openHome(page) {
 
 /** 在首頁輸入框輸入 `text` 並按 Enter；completion 由替身回覆。 */
 export async function sendStubbedPrompt(page, text) {
-    await composer(page).fill(text);
+    await humanType(composer(page), text);
     await composer(page).press('Enter');
 }
 

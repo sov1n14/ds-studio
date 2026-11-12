@@ -2,6 +2,7 @@ import { test, expect } from './fixtures.js';
 import { attachTextFile, stubFileUploads } from './helpers/attachment.js';
 import { composer, composerSendButton, isComposerSendButtonDisabled } from './helpers/composer.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { humanType } from './helpers/human.js';
 import { createTestPreset, pickPreset, seedOnlyPreset } from './helpers/presets.js';
 import { captureSentCompletion, openBlockingSends } from './helpers/prompt-capture.js';
 import { expectTimeLine, timedSend } from './helpers/system-time.js';
@@ -99,7 +100,7 @@ test.describe('prompt injection on an attachment-only send', () => {
         const group = createTestPreset('attach-stale-time');
         const { upload, blocked } = await openHomeWithGroupPicked(page, context, settings, group, true);
         await attachAndWaitUntilReady(page, upload, uniqueFileName('stale-time'));
-        await composer(page).fill(STALE_TIME_LINE);
+        await humanType(composer(page), STALE_TIME_LINE);
         await expect.poll(() => isComposerSendButtonDisabled(page), { message: 'the send button is enabled (precondition)' }).toBe(false);
 
         const { completion, timed } = await sendTimedCompletion(page, blocked, () => composer(page).press('Enter'), 'pressing Enter on the old time line');
@@ -111,7 +112,7 @@ test.describe('prompt injection on an attachment-only send', () => {
     test('a composer holding only an old time line with no attachment sends nothing on Enter or a click, and the composer keeps the old line', async ({ page, context, settings }) => {
         const group = createTestPreset('attach-none-stale-time');
         const { upload, blocked } = await openHomeWithGroupPicked(page, context, settings, group, true);
-        await composer(page).fill(STALE_TIME_LINE);
+        await humanType(composer(page), STALE_TIME_LINE);
         await expect(composer(page), 'the composer holds only the old time line (precondition)').toHaveValue(STALE_TIME_LINE);
         expect(upload.uploads(), 'no file is attached (precondition)').toEqual([]);
 
