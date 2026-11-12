@@ -86,7 +86,7 @@ ds-studio/
 │   ├── go-top.scroll.js     ─  scrollToTopAndWait animation engine bundle
 │   ├── go-top.observers.js  ─  GoToTop observer setup bundle
 │   ├── go-top.lifecycle.js  ─  GoToTop enable/disable lifecycle bundle
-│   ├── mobile-sidebar-swipe.js ─  Entry: mobile right-swipe gesture for sidebar toggle
+│   ├── mobile-sidebar-swipe.js ─  Entry: mobile swipe gesture that opens and closes the sidebar
 │   ├── mobile-sidebar-swipe.button.js    ─  Swipe-trigger button rendering
 │   ├── mobile-sidebar-swipe.gesture.js   ─  Touch gesture recognition
 │   ├── mobile-sidebar-swipe.bind.js      ─  Event binding for swipe gesture
@@ -236,6 +236,7 @@ The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `tes
 - `hide-thinking.e2e.js`: "Hide Thinking Process" on collapses every thinking block and off expands them.
 - `master-off-injection.e2e.js`: with the master switch off the sent prompt is exactly the typed text although a group is picked and the global prompt and system time are on; switching it back on restores injection.
 - `master-switch.e2e.js`: master switch off removes go-top and hides the preset overlay; on brings both back.
+- `mobile-sidebar-swipe.e2e.js`: on an emulated phone, a right swipe in the central area opens the sidebar and a left swipe closes it; short, slow, mostly vertical or edge swipes, a left swipe on a closed sidebar, a desktop browser and the master switch off change nothing.
 - `popup-export-button.e2e.js`: the popup Export button over a DeepSeek chat downloads `deepseek-chat-YYYYMMDD-HHmmss.md` with five User/DeepSeek turns and each thinking blockquote before its answer; with Include Thinking Process off the file has no thinking section; with no DeepSeek tab open the popup shows the notice to use the feature on chat.deepseek.com and downloads nothing.
 - `popup-live-sync.e2e.js`: writing the auto-retry, web-search or reply-notification setting to storage while the popup is open flips the matching control without reloading the popup.
 - `popup-locale.e2e.js`: picking a language in the popup language panel reloads the popup in that language and stores it in sync and the extension localStorage, and a reopened popup keeps it; switching the popup language relabels the Quote Reply button on an open DeepSeek chat without a page reload.

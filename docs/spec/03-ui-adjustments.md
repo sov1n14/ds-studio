@@ -107,7 +107,7 @@
   | c. Duration | `< 500ms` (`SWIPE_MAX_DURATION_MS`) | Excludes slow drags |
   | d. Horizontal start position | `clientX ∈ [10%, 90%] innerWidth` | Excludes screen edges |
   | e. Vertical start position | `clientY ∈ [10%, 90%] innerHeight` | Excludes top/bottom edges |
-- **Direction Detection**: After threshold check, `deltaX > 0` (right-swipe) triggers the open-sidebar button; `deltaX < 0` (left-swipe) triggers the close-sidebar button.
+- **Direction Detection**: After threshold check, `deltaX > 0` (right-swipe) triggers the open-sidebar button; `deltaX < 0` (left-swipe) triggers the close-sidebar button. It clicks that button only while the button is rendered (its bounding rect is wider and taller than 0); DeepSeek keeps its sidebar toggle mounted at 0×0 while the sidebar is closed, so a left swipe on a closed sidebar does nothing.
 - **Open Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelPrimary[role="button"]`; fallback path includes 5 alternative class combinations.
 - **Close Button Selector**: Primary selector `div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]`; fallback path includes 3 alternative class combinations.
 - **DOM Polling**: `_tryConnectDom()` polls for the target button every 500ms, up to 60 times (~30 seconds), silently giving up on timeout (no error thrown).

@@ -27,6 +27,14 @@ export function isPanelShownInPage({ inner, minWidth }) {
     return rect.width >= minWidth && rect.left >= 0;
 }
 
+/** 頁面函式：isPanelShownInPage 的反面，用來觀察已顯示的面板始終沒有被收起；頁面函式無法呼叫另一個頁面函式，所以自成一體。 */
+export function isPanelHiddenInPage({ inner, minWidth }) {
+    const panel = document.querySelector(inner);
+    if (!panel || !panel.checkVisibility()) return true;
+    const rect = panel.getBoundingClientRect();
+    return !(rect.width >= minWidth && rect.left >= 0);
+}
+
 /** Runs a page read, answering null while a navigation (reload, SPA redirect) replaces the document, so a poll retries instead of failing. */
 async function readAcrossNavigation(read) {
     try {

@@ -175,7 +175,7 @@ Five conditions must ALL be satisfied for a click to fire:
 | d | startX within center 80% horizontal | `TRIGGER_ZONE_MARGIN_RATIO = 0.10` | Reject screen-edge swipes |
 | e | startY within center 80% vertical | `TRIGGER_ZONE_MARGIN_RATIO = 0.10` | Reject top/bottom edge swipes |
 
-After passing all five conditions, `_onTouchEnd` branches on the sign of `deltaX`: positive (right-swipe) calls `_findButton()` for the open button; negative (left-swipe) calls `_findCloseButton()` for the close button.
+After passing all five conditions, `_onTouchEnd` branches on the sign of `deltaX`: positive (right-swipe) calls `_findButton()` for the open button; negative (left-swipe) calls `_findCloseButton()` for the close button. On a left swipe it clicks that button only when `getBoundingClientRect()` reports width and height above 0, so the 0×0 toggle DeepSeek keeps mounted while the sidebar is closed is never clicked.
 
 ### Mobile Guard
 

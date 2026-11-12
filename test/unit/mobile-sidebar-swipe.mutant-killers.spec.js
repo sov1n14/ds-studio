@@ -879,6 +879,10 @@ describe('button.js mutant killers', () => {
             third.className = 'ds-button--capsule ds-button--iconLabelTertiary';
             third.setAttribute('role', 'button');
             document.body.appendChild(third);
+            // 模擬側邊欄開啟：三個按鈕都以 34×34 渲染（happy-dom 預設 0×0 等於側邊欄關閉），讓長度判斷成為唯一的決定因素。
+            for (const el of [first, second, third]) {
+                el.getBoundingClientRect = () => ({ x: 8, y: 8, left: 8, top: 8, width: 34, height: 34, right: 42, bottom: 42 });
+            }
             expect(MobileSidebarSwipe._findCloseButton()).toBe(third);
         });
     });

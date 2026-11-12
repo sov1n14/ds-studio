@@ -54,9 +54,14 @@ function createOpenButton() {
     return addButton('div', 'ds-button--capsule ds-button--iconLabelPrimary', true);
 }
 
-function createCloseButton() {
+// 側邊欄開啟時關閉鈕（DeepSeek 的側邊欄切換鈕）為 34×34；側邊欄關閉時它仍掛載但為 0×0（happy-dom 的預設值）。
+const OPEN_CLOSE_BUTTON_SIZE_PX = 34;
+
+/** 建立關閉鈕；預設以側邊欄開啟時的 34×34 渲染，傳入 width 與 height 可模擬未渲染的按鈕。 */
+function createCloseButton({ width = OPEN_CLOSE_BUTTON_SIZE_PX, height = OPEN_CLOSE_BUTTON_SIZE_PX } = {}) {
     const el = addButton('div', 'ds-button--capsule ds-button--iconLabelTertiary', true);
     el.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
+    el.getBoundingClientRect = () => ({ x: 8, y: 8, left: 8, top: 8, width, height, right: 8 + width, bottom: 8 + height });
     return el;
 }
 
@@ -142,6 +147,30 @@ describe('touchend trigger-zone boundaries are inclusive', () => {
         const open = countClicks(createOpenButton());
         swipe({ x: 300, y: 720 }, { x: 400, y: 720 });
         expect(open.count).toBe(1);
+    });
+});
+
+// 規則：左滑只在關閉鈕已渲染（寬與高皆大於 0）時點擊它；只有單邊尺寸的按鈕視同側邊欄關閉。
+describe('a left swipe clicks the close button only while it is rendered (width > 0 and height > 0)', () => {
+    const LEFT_SWIPE_FROM = { x: 400, y: 400 };
+    const LEFT_SWIPE_TO = { x: 300, y: 400 };
+
+    it('clicks a 34x34 close button (sidebar open)', () => {
+        const close = countClicks(createCloseButton());
+        swipe(LEFT_SWIPE_FROM, LEFT_SWIPE_TO);
+        expect(close.count, 'a rendered 34x34 close button is clicked once by a valid left swipe').toBe(1);
+    });
+
+    it('does not click a close button with width > 0 but height 0', () => {
+        const close = countClicks(createCloseButton({ width: OPEN_CLOSE_BUTTON_SIZE_PX, height: 0 }));
+        swipe(LEFT_SWIPE_FROM, LEFT_SWIPE_TO);
+        expect(close.count, 'a 34x0 close button is not rendered, so a left swipe must not click it').toBe(0);
+    });
+
+    it('does not click a close button with height > 0 but width 0', () => {
+        const close = countClicks(createCloseButton({ width: 0, height: OPEN_CLOSE_BUTTON_SIZE_PX }));
+        swipe(LEFT_SWIPE_FROM, LEFT_SWIPE_TO);
+        expect(close.count, 'a 0x34 close button is not rendered, so a left swipe must not click it').toBe(0);
     });
 });
 

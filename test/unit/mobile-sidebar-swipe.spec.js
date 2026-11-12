@@ -467,8 +467,21 @@ describe('vertical zone rejection (_onTouchStart)', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * 側邊欄開啟時關閉鈕（DeepSeek 的側邊欄切換鈕）的尺寸：實機上此鈕在側邊欄關閉時仍掛載但為 0×0，開啟時為 34×34（sidebar-expanded.html 的 --dsl-button-height）。
+ * happy-dom 預設回報 0×0，等於模擬側邊欄已關閉；關閉狀態的行為由 mobile-sidebar-swipe.closed-sidebar.spec.js 以真實快照驗證，本檔的關閉鈕一律模擬側邊欄已開啟。
+ */
+const OPEN_CLOSE_BUTTON_SIZE_PX = 34;
+
+/** 讓元素回報指定的版面尺寸，模擬側邊欄開啟時已渲染的按鈕。 */
+function stubRenderedSize(el, width = OPEN_CLOSE_BUTTON_SIZE_PX, height = OPEN_CLOSE_BUTTON_SIZE_PX) {
+    el.getBoundingClientRect = () => ({ x: 8, y: 8, left: 8, top: 8, width, height, right: 8 + width, bottom: 8 + height });
+    return el;
+}
+
+/**
  * Create a sidebar close button matching the primary selector:
  *   div.ds-button--capsule.ds-button--iconLabelTertiary[role="button"]
+ * 以側邊欄開啟時的 34×34 尺寸渲染。
  */
 function createCloseButton() {
     const btn = document.createElement('div');
@@ -476,6 +489,7 @@ function createCloseButton() {
     btn.setAttribute('role', 'button');
     // SVG with path[fill-rule] so primary :has(path[fill-rule]) selector matches
     btn.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
+    stubRenderedSize(btn);
     document.body.appendChild(btn);
     return btn;
 }
@@ -587,11 +601,14 @@ describe('_findCloseButton() selector cascade', () => {
         const searchBtn = document.createElement('div');
         searchBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
         searchBtn.setAttribute('role', 'button');
+        // 模擬側邊欄開啟：兩個按鈕都已渲染，讓長度判斷成為唯一的決定因素。
+        stubRenderedSize(searchBtn);
         document.body.appendChild(searchBtn);
 
         const closeBtn = document.createElement('div');
         closeBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
         closeBtn.setAttribute('role', 'button');
+        stubRenderedSize(closeBtn);
         document.body.appendChild(closeBtn);
 
         const result = MobileSidebarSwipe._findCloseButton();
@@ -605,6 +622,8 @@ describe('_findCloseButton() selector cascade', () => {
         const searchBtn = document.createElement('div');
         searchBtn.className = 'ds-button--capsule ds-button--iconLabelTertiary';
         searchBtn.setAttribute('role', 'button');
+        // 已渲染的按鈕仍須回傳 null：決定因素是長度判斷，而非按鈕尺寸。
+        stubRenderedSize(searchBtn);
         document.body.appendChild(searchBtn);
 
         const result = MobileSidebarSwipe._findCloseButton();
@@ -618,6 +637,7 @@ describe('_findCloseButton() selector cascade', () => {
         const fallbackBtn = document.createElement('div');
         fallbackBtn.className = 'ds-button--iconLabelTertiary ds-button--icon';
         fallbackBtn.innerHTML = '<svg><path fill-rule="evenodd"></path></svg>';
+        stubRenderedSize(fallbackBtn);
         document.body.appendChild(fallbackBtn);
 
         const result = MobileSidebarSwipe._findCloseButton();
