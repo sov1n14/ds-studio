@@ -24,10 +24,11 @@ export const STUB_CODE = 'const stub = 1;\nconsole.log(stub);';
 export const STUB_REPLY = `${STUB_SENTENCE}\n\n\`\`\`js\n${STUB_CODE}\n\`\`\``;
 
 // 頁面以 ready 事件的 request_message_id 作為使用者訊息 id；回覆的 parent_id 必須等於它，回覆才會顯示。
-const USER_MESSAGE_ID = 1;
-const REPLY_MESSAGE_ID = 2;
+export const USER_MESSAGE_ID = 1;
+export const REPLY_MESSAGE_ID = 2;
 
-function sseEvent(data, event) {
+/** 一個 SSE 事件的文字：有 `event` 時先寫 `event:` 行，再寫 JSON 的 `data:` 行。 */
+export function sseEvent(data, event) {
     return `${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`;
 }
 
@@ -87,9 +88,11 @@ function delay(ms) {
 /**
  * 在 `page` 上裝好替身回覆與中止規則；須在載入首頁之前呼叫。
  * 每次 completion 請求開始新的一輪：續接請求先保留，等測試呼叫 `finishReply()`（且距第一次續接至少 RESUME_DELAY_MS）才把完成的串流回覆給最早仍在等待的那一個，其餘續接一律中止；保留的請求全被頁面放棄時，回覆下一次續接。
+ * 傳入 `completionBody`（完整的 SSE 本文，須以 `event: close` 結束）時，completion 改以這段本文一次回覆完畢，不開新的一輪，之後的續接請求一律中止，`finishReply()` 不起作用。
+ * @param {{ completionBody?: string }} [options]
  * @returns {Promise<{ finishReply: () => void }>}
  */
-export async function armReplyStub(page) {
+export async function armReplyStub(page, { completionBody } = {}) {
     let round = null;
 
     async function answerResume(current) {
@@ -112,6 +115,10 @@ export async function armReplyStub(page) {
         const request = route.request();
         const { pathname } = new URL(request.url());
         if (pathname === COMPLETION_PATH) {
+            if (completionBody !== undefined) {
+                round = null;
+                return route.fulfill(eventStream(completionBody));
+            }
             let release;
             const released = new Promise((resolve) => { release = resolve; });
             round = { released, release, held: [], answered: false, answering: false, firstResumeAt: 0 };
