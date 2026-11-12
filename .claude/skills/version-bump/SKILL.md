@@ -62,6 +62,10 @@ Specs on the `exclude` list of `test/stryker-vitest.config.js` are never selecte
 
 Gate: every in-range mutant is Killed or Ignored, and an in-range count of 0 fails. An Ignored mutant already has a recorded reason (a static mutant under `ignoreStatic`, or a line under a Stryker disable comment that gives its reason), so the gate passes it, and the script lists the in-range Ignored mutants separately for information. Each mutant that is neither Killed nor Ignored (Survived, NoCoverage, Timeout or other) gets a new test that kills it (test-engineer), or a written note that names it as an equivalent mutant with the reason (lead judgment).
 
+A Stryker disable comment covers every mutant of that mutator that starts on the next line; when that line holds other mutants of the same mutator, split the expression so only the equivalent mutant starts on the commented line, then confirm on the rerun that the in-range Ignored mutants the script lists are only the intended ones.
+
+A kill claim counts only after a Stryker rerun reports the mutant Killed; when checking a kill by hand first, apply the mutant's replacement to exactly its `location` span (start and end line and column) from `test/reports/mutation.scoped.json`, and confirm the claimed test id is in that mutant's `coveredBy`.
+
 The script reuses the gitignored `test/stryker-incremental.scoped.json`. After a change to fixtures, mocks, helpers or the Stryker or vitest config, recycle that file before the run so no stale result is reused.
 
 ### Selector Health Check (Capture Sweep)
