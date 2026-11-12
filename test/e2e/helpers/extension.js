@@ -24,15 +24,52 @@ function remember(context, worker) {
     return worker;
 }
 
+// 等待逾時當下的診斷文字：觸發動作的結果、從觸發到逾時的毫秒數，以及當下所有 service worker 的網址與標記（old 為這次觸發所淘汰的舊 worker，retired 為 retiredWorkers 內的 worker）。
+function describeWaitTimeout(context, { old, trigger, startedAt }) {
+    const elapsedMs = Date.now() - startedAt;
+    let workers;
+    try {
+        workers = context.serviceWorkers().map((worker) => {
+            const marks = [worker === old && 'old', retiredWorkers.has(worker) && 'retired'].filter(Boolean);
+            return `  - ${worker.url()}${marks.length ? ` [${marks.join(', ')}]` : ''}`;
+        });
+    } catch (error) {
+        workers = [`  (failed to list: ${error?.message})`];
+    }
+    return [
+        'Service worker wait diagnostics:',
+        `trigger: ${trigger}`,
+        `elapsed since trigger: ${elapsedMs} ms`,
+        `service workers at timeout (${workers.length}):${workers.length ? '' : ' none'}`,
+        ...workers,
+    ].join('\n');
+}
+
+// 等待 serviceworker 事件；逾時時沿用原 TimeoutError 物件（型別與呼叫堆疊不變），在 message 與 stack 首段附上診斷文字後拋出，其他錯誤原樣拋出。
+// 這個逾時極少發生且無法重現，附上的資訊用來分辨是觸發動作沒執行，還是觸發後新 worker 沒有出現。
+async function awaitWorkerEvent(pending, context, diagnostics) {
+    try {
+        return await pending;
+    } catch (error) {
+        if (error?.name !== 'TimeoutError') throw error;
+        error.message = `${error.message}\n${describeWaitTimeout(context, diagnostics)}`;
+        const frames = String(error.stack ?? '').split('\n').filter((line) => /^\s+at /.test(line));
+        error.stack = [`${error.name}: ${error.message}`, ...frames].join('\n');
+        throw error;
+    }
+}
+
 async function wakeWorker(context, extensionId) {
     const pending = context.waitForEvent('serviceworker', {
         predicate: (worker) => worker.url().startsWith(`${EXTENSION_SCHEME}${extensionId}/`),
         timeout: WAKE_TIMEOUT_MS,
     });
     const page = await context.newPage();
+    const diagnostics = { old: null, trigger: 'page.goto(manifest.json) pending', startedAt: Date.now() };
     try {
         await page.goto(`${EXTENSION_SCHEME}${extensionId}/manifest.json`);
-        return findLiveWorker(context) ?? await pending;
+        diagnostics.trigger = 'page.goto(manifest.json) resolved';
+        return findLiveWorker(context) ?? await awaitWorkerEvent(pending, context, diagnostics);
     } finally {
         pending.catch(() => {});
         await page.close();
@@ -71,16 +108,19 @@ export async function reloadExtension(context) {
         timeout: WAKE_TIMEOUT_MS,
     });
     retiredWorkers.add(old);
+    const diagnostics = { old, trigger: 'old.evaluate(reload) pending', startedAt: Date.now() };
     try {
         // 以 setTimeout 延後觸發，讓 evaluate 先回傳；舊 worker 隨即關閉，回傳前關閉的錯誤可忽略。
         await old.evaluate(() => { setTimeout(() => chrome.runtime.reload(), 0); });
+        diagnostics.trigger = 'old.evaluate(reload) resolved';
     } catch (error) {
         if (!CLOSED_TARGET.test(String(error?.message))) {
             pending.catch(() => {});
             throw error;
         }
+        diagnostics.trigger = `old.evaluate(reload) threw a swallowed closed-target error: ${error?.message}`;
     }
-    return remember(context, await pending);
+    return remember(context, await awaitWorkerEvent(pending, context, diagnostics));
 }
 
 /** Evaluates `fn(arg)` once, re-resolving the worker once when the first attempt hits a worker that stopped between resolution and evaluation. */
