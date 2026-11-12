@@ -321,23 +321,6 @@ describe('coordinator — handOffToServiceWorker', () => {
     });
 });
 
-describe('coordinator — deleteTrackedAndClear detach logic', () => {
-    it('detaches when flag false after keepalive', () => {
-        TemporaryChatDelete.attachListeners();
-        globalThis.TemporaryChatEnabledFlag.__setCache(false);
-        Object.assign(TemporaryChatDelete.state, { trackedTemporaryUuid: UUID_A, capturedAuthToken: 'Bearer tok' });
-        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
-        expect(TemporaryChatDelete.state.isListening).toBe(false);
-    });
-
-    it('keeps listeners when flag true after keepalive', () => {
-        TemporaryChatDelete.attachListeners();
-        globalThis.TemporaryChatEnabledFlag.__setCache(true);
-        Object.assign(TemporaryChatDelete.state, { trackedTemporaryUuid: UUID_A, capturedAuthToken: 'Bearer tok' });
-        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
-        expect(TemporaryChatDelete.state.isListening).toBe(true);
-    });
-});
 
 describe('coordinator — keepalive defaults to false', () => {
     it('no-arg call posts fiber delete', () => {
@@ -585,6 +568,9 @@ describe('handlers — handleToggleChanged strict boolean', () => {
 });
 
 describe('handlers — handleBeforeUnload guards', () => {
+    // 卸載不交接也不刪除：沒有任何 runtime 訊息帶著 UUID_A
+    const messagesAboutA = () => chrome.runtime.sendMessage.mock.calls.map(([m]) => m).filter((m) => m?.uuid === UUID_A || m?.chatUuid === UUID_A);
+
     it('does nothing when trackedTemporaryUuid is null', () => {
         setPathname('/a/chat/s/' + UUID_A);
         Object.assign(TemporaryChatDelete.state, {
@@ -593,6 +579,7 @@ describe('handlers — handleBeforeUnload guards', () => {
         });
         TemporaryChatDelete.handleBeforeUnload();
         expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        expect(messagesAboutA(), 'an untracked page hands nothing to the service worker').toEqual([]);
     });
 
     it('does nothing when not on chat page', () => {
@@ -603,6 +590,7 @@ describe('handlers — handleBeforeUnload guards', () => {
         });
         TemporaryChatDelete.handleBeforeUnload();
         expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
+        expect(messagesAboutA(), 'a page that no longer shows the tracked chat hands nothing to the service worker').toEqual([]);
     });
 });
 

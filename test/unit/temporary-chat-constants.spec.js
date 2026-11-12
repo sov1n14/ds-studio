@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 
 const CONSTANTS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../utils/temporary-chat-constants.js');
 
-/** Every exported constant and its contract value; the module exports exactly these 27 names. */
+/** Every exported constant and its contract value; the module exports exactly these 28 names. */
 const CONTRACT = {
     DSS_TEMP_CHAT_STORAGE_KEY: 'dss-temporary-chat-enabled',
     DSS_TEMP_CHAT_CHANGED_EVENT: 'dss-temporary-chat-changed',
@@ -37,6 +37,7 @@ const CONTRACT = {
     DSS_MSG_RELEASE_LEASE: 'DSS_RELEASE_LEASE',
     DSS_MSG_GET_PENDING_UUIDS: 'DSS_GET_PENDING_UUIDS',
     DSS_MSG_PENDING_UUIDS_CHANGED: 'DSS_PENDING_UUIDS_CHANGED',
+    DSS_MSG_TAB_UNLOADING: 'DSS_TAB_UNLOADING', // 分頁卸載時 content 把追蹤中的臨時對話交給 service worker 等寬限期
     DSS_LAST_SEEN_CHANGE_KEY_PREFIX: 'dss-last-seen-change:',
     LEASE_TTL_MS: 600000, // 10 minutes
     FOREIGN_LEASE_TTL_MS: 86400000, // 24 hours

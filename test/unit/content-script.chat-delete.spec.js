@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { makePendingStoreMock } from '../helpers/pending-store-mock.js';
 import { setPathname } from '../helpers/set-pathname.js';
+import { unloadHandOffs, unloadHandOff } from '../helpers/tab-unload-handoff.js';
 import '../../utils/storage-manager.js';
 
 // ── chrome mocks ───────────────────────────────────────────────────────────────
@@ -49,8 +50,8 @@ import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 // Those tests are covered in temporary-chat-delete-api.spec.js.
 
 // ── beforeunload handler ──────────────────────────────────────────────────────
-// handleBeforeUnload now routes via TemporaryChatDeleteApi.deleteChatSession(uuid, token,
-// {keepalive:true}) directly (NOT chrome.runtime.sendMessage) on the tab-close path.
+// 頁面無法分辨關閉分頁與工具列重新整理，所以 handleBeforeUnload 不自行刪除：追蹤中的 uuid 以
+// DSS_TEMP_CHAT.DSS_MSG_TAB_UNLOADING 訊息交給 service worker（有無 token 皆同），追蹤保留。
 
 describe('beforeunload handler (TemporaryChatDelete)', () => {
     beforeEach(() => {
@@ -77,10 +78,13 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         setPathname('/');
     });
 
-    it('calls TemporaryChatDeleteApi.deleteChatSession(uuid, token, {keepalive:true}) and asks background for no delete retry when conditions are met', () => {
-        const token = 'Bearer leave-token';
+    it.each([
+        ['a captured token', 'Bearer leave-token'],
+        ['no captured token', null],
+    ])('hands the tracked uuid to the service worker with one unload message, deletes nothing and keeps tracking, with %s', (_label, token) => {
         const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
         setPathname(`/a/chat/s/${uuid}`);
+        sessionStorage.setItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY, uuid);
         TemporaryChatDelete.state.capturedAuthToken = token;
         TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
         TemporaryChatDelete.state.suppressNextUnloadDelete = false;
@@ -88,8 +92,12 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
 
         TemporaryChatDelete.handleBeforeUnload();
 
-        expect(global.TemporaryChatDeleteApi.deleteChatSession).toHaveBeenCalledWith(uuid, token, { keepalive: true });
+        expect(unloadHandOffs(global.chrome.runtime.sendMessage), 'beforeunload must send exactly one unload message for the tracked uuid').toEqual([unloadHandOff(uuid)]);
+        expect(global.TemporaryChatDeleteApi.deleteChatSession, 'the page must not delete on unload').not.toHaveBeenCalled();
+        expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry, 'the page must not delete on unload').not.toHaveBeenCalled();
         expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'DSS_SCHEDULE_DELETE_RETRY' }));
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid, 'tracking must survive the unload').toBe(uuid);
+        expect(sessionStorage.getItem(globalThis.DSS_TEMP_CHAT.DSS_TEMP_CHAT_UUID_KEY), 'sessionStorage tracking must survive the unload').toBe(uuid);
     });
 
     it('does NOT call sendMessage when suppressNextUnloadDelete is true', () => {
@@ -112,20 +120,6 @@ describe('beforeunload handler (TemporaryChatDelete)', () => {
         TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
         TemporaryChatDelete.state.suppressNextUnloadDelete = false;
         TemporaryChatDelete.state.isKeyboardRefresh = true;
-
-        TemporaryChatDelete.handleBeforeUnload();
-
-        expect(global.chrome.runtime.sendMessage).not.toHaveBeenCalled();
-        expect(global.TemporaryChatDeleteApi.deleteChatSession).not.toHaveBeenCalled();
-    });
-
-    it('does NOT call sendMessage when capturedAuthToken is null', () => {
-        const uuid = 'ffffffff-0000-0000-0000-ffffffffffff';
-        setPathname(`/a/chat/s/${uuid}`);
-        TemporaryChatDelete.state.capturedAuthToken = null;
-        TemporaryChatDelete.state.trackedTemporaryUuid = uuid;
-        TemporaryChatDelete.state.suppressNextUnloadDelete = false;
-        TemporaryChatDelete.state.isKeyboardRefresh = false;
 
         TemporaryChatDelete.handleBeforeUnload();
 

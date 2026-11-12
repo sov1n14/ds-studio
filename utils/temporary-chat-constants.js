@@ -62,6 +62,8 @@ const DSS_MSG_RELEASE_LEASE = 'DSS_RELEASE_LEASE';
 const DSS_MSG_GET_PENDING_UUIDS = 'DSS_GET_PENDING_UUIDS';
 // SW->content：待刪佇列變更後推送最新 uuid 快照，payload {uuids:string[]}
 const DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED';
+// content->SW：分頁卸載（beforeunload）時把追蹤中的臨時對話交給 SW 等寬限期再決定是否刪除，payload {uuid}
+const DSS_MSG_TAB_UNLOADING = 'DSS_TAB_UNLOADING';
 
 // chrome.storage.local key 前綴：本機觀察到 lastActiveAt 最後一次變更的時間戳
 const DSS_LAST_SEEN_CHANGE_KEY_PREFIX = 'dss-last-seen-change:';
@@ -97,6 +99,7 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_MSG_RELEASE_LEASE,
     DSS_MSG_GET_PENDING_UUIDS,
     DSS_MSG_PENDING_UUIDS_CHANGED,
+    DSS_MSG_TAB_UNLOADING,
     DSS_LAST_SEEN_CHANGE_KEY_PREFIX,
     LEASE_TTL_MS,
     FOREIGN_LEASE_TTL_MS,

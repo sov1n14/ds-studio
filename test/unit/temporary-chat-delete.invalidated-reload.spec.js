@@ -7,7 +7,10 @@
  *   2. A browser reload (navigate event, navigationType 'reload', same URL) after invalidation
  *      must NOT delete the tracked temporary chat.
  *   3. Guards: after invalidation, navigating to another chat / homepage must not run the
- *      in-navigate delete; closing the tab still deletes via keepalive fetch; F5 does not delete.
+ *      in-navigate delete; F5 does not delete.
+ *   4. Closing the tab after invalidation deletes nothing from the page and keeps the tracking:
+ *      unload never deletes from the page (the service worker decides after a grace period), and
+ *      the queued conversation stays for the service worker's own sweep. No exception escapes.
  *
  * Real module instances: temporary-chat-delete family (preloaded in vitest.setup.js),
  * content/temporary-chat-delete-api.js, utils/deepseek-api.js, content/invalidation-toast.js.
@@ -155,16 +158,22 @@ describe('temporary-chat-delete — reload after extension-context invalidation'
         expect(sessionStorage.getItem(UUID_KEY())).toBeNull();
     });
 
-    it('G2: closing the tab after invalidation (beforeunload, no reload signal) still sends a keepalive delete for the tracked UUID', () => {
+    it('G2: closing the tab after invalidation (beforeunload, no reload signal) deletes nothing from the page, keeps the UUID tracked and throws nothing', () => {
         invalidateContext();
+        const listenerErrors = [];
+        const onError = (event) => { listenerErrors.push(event.error ?? event.message); };
+        window.addEventListener('error', onError);
 
-        dispatchBeforeUnload();
+        try {
+            dispatchBeforeUnload();
+        } finally {
+            window.removeEventListener('error', onError);
+        }
 
-        const calls = deleteFetchCalls();
-        expect(calls, 'tab close must still delete the temporary chat').toHaveLength(1);
-        const [, opts] = calls[0];
-        expect(opts.keepalive).toBe(true);
-        expect(JSON.parse(opts.body).chat_session_id).toBe(TEMP_UUID);
+        expect(deleteFetchCalls(), 'unload must never delete from the page, also after invalidation').toHaveLength(0);
+        expect(fiberDeleteMessages()).toHaveLength(0);
+        expect(sessionStorage.getItem(UUID_KEY()), 'the tracking must survive the unload').toBe(TEMP_UUID);
+        expect(listenerErrors, 'the invalidated runtime must not make the beforeunload listener throw').toEqual([]);
     });
 
     it('G3: F5 after invalidation (keydown F5, navigate reload, beforeunload) → no delete fetch, UUID stays tracked', () => {

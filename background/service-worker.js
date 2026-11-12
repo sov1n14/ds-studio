@@ -36,7 +36,8 @@ importScripts(
     'notification-routes.js',
     'clipboard-routes.js',
     'chat-map-routes.js',
-    'permission-intent-routes.js'
+    'permission-intent-routes.js',
+    'unload-grace.js'
 );
 
 // 依序註冊（頂層呼叫，確保 worker 重啟後仍存活）：設定訊息路由與變更廣播、待刪佇列訊息路由、編輯器視窗關閉訊息路由、桌面通知訊息路由、剪貼簿寫入路由、權限授予監聽器（完成 popup 因權限提示關閉而未完成的設定開啟）
@@ -49,6 +50,9 @@ DSSPermissionIntentRoutes.install();
 
 // 註冊 chat→preset 綁定表路由，並使本 worker 的 StorageManager 成為唯一寫入者（頂層呼叫，確保 worker 重啟後仍存活）
 DSSChatMapRoutes.install({ storageManager: StorageManager });
+
+// 註冊分頁卸載寬限路由：寬限期滿且無人認領時於補救重入防護下刪除，失敗走既有重試 alarm（頂層呼叫，確保 worker 重啟後仍存活）
+DSSUnloadGrace.install({ runGuardedQueueJob, scheduleRetryAlarm });
 
 // 指數退避上限（分鐘）
 const BACKOFF_CAP_MINUTES = 30;
@@ -155,7 +159,6 @@ async function remediatePendingDeletes() {
     }
 }
 
-
 /**
  * 嘗試將停駐於 dsLocalAuth 的預設集寫入重新推送至雲端。
  * 屬於 best-effort 操作，任何錯誤皆靜默吞掉，不影響 Service Worker 存活。
@@ -232,18 +235,16 @@ async function broadcastPendingUuids() {
     }
 }
 
-// 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救
+// 在補救重入防護下執行佇列工作後廣播給各分頁側邊欄：期間佇列寫入觸發的掃描一律略過，避免同一項目重複刪除；已有掃描進行中時直接執行，旗標與廣播交由該掃描收尾
+async function runGuardedQueueJob(job) {
+    if (isRemediationInFlight) return job();
+    isRemediationInFlight = true;
+    try { await job(); } finally { isRemediationInFlight = false; }
+    await broadcastPendingUuids();
+}
+
+// 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救（補救進行中則略過）
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync') return;
-    if (!(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
-    if (isRemediationInFlight) return;                       // 重入防護
-    (async () => {
-        isRemediationInFlight = true;
-        try {
-            await remediatePendingDeletes();
-        } finally {
-            isRemediationInFlight = false;
-        }
-        await broadcastPendingUuids(); // 佇列變更後同步通知各分頁側邊欄
-    })();
+    if (area !== 'sync' || !(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes) || isRemediationInFlight) return;
+    runGuardedQueueJob(remediatePendingDeletes);
 });

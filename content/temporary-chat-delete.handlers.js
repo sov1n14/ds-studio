@@ -14,7 +14,7 @@
      * @param {object} state - tracking 部件建立的共享狀態物件
      * @param {object} deps
      * @param {object} deps.tracking - tracking 部件的已綁定 API
-     * @param {(options?: object) => void} deps.deleteTrackedAndClear
+     * @param {() => void} deps.deleteTrackedAndClear
      * @param {(uuid: string) => void} deps.handOffToServiceWorker
      * @param {() => boolean} deps.readEnabledFlag
      * @param {(isEnabled: boolean) => void} deps.setEnabledFlagCache
@@ -152,14 +152,10 @@
             // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
             const isLeavingTracked = !isRefresh && !isSameConversation && fromUuid && fromUuid === state.trackedTemporaryUuid;
             if (isLeavingTracked) {
-                if (state.capturedAuthToken) {
-                    deleteTrackedAndClear({ keepalive: false });
-                    return;
-                } else {
-                    // 無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
-                    handOffToServiceWorker(fromUuid);
-                    return;
-                }
+                // 有 token → 頁面內刪除；無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
+                if (state.capturedAuthToken) deleteTrackedAndClear();
+                else handOffToServiceWorker(fromUuid);
+                return;
             }
 
             // 標記新建立的臨時對話：目的地必須正是已配對（本文件建立且以開啟狀態首次送出）的 UUID
@@ -190,8 +186,8 @@
         }
 
         /**
-         * beforeunload 處理器：涵蓋分頁關閉與 Navigation API 未處理的完整頁面導航。
-         * keepalive=true 確保分頁關閉後請求仍能送出。
+         * beforeunload 處理器：頁面無法分辨關閉分頁與工具列重新整理，故不自行刪除。
+         * 追蹤中的對話以 DSS_TAB_UNLOADING 交給 SW 等寬限期再決定（有無 token 皆同），sessionStorage 追蹤保留給重新整理後的頁面認領。
          */
         function handleBeforeUnload() {
             if (state.suppressNextUnloadDelete) return;
@@ -200,9 +196,15 @@
             const currentUuid = extractUuidFromUrl();
             if (!currentUuid) return;
             if (currentUuid !== state.trackedTemporaryUuid) return;
-            if (!state.capturedAuthToken) return;
+            // 擴充功能情境失效（runtime.id 消失）時靜默放棄：佇列項目留給 SW 的補救流程刪除
+            if (!chrome.runtime?.id) return;
 
-            deleteTrackedAndClear({ keepalive: true });
+            try {
+                Promise.resolve(chrome.runtime.sendMessage({ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TAB_UNLOADING, uuid: currentUuid }))
+                    .catch((err) => console.error('[DSS] temporary-chat-delete.handlers handleBeforeUnload:', err));
+            } catch (err) {
+                console.error('[DSS] temporary-chat-delete.handlers handleBeforeUnload:', err);
+            }
         }
 
         /**

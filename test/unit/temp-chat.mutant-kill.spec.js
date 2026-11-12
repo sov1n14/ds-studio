@@ -5,7 +5,7 @@
  *   - TemporaryChatPendingStore.getLocalDeviceId() returns null unless storage.local holds a non-empty string device id, and null (not undefined) when the read fails.
  *   - When persisting a newly generated device id fails, the tracked pending-delete entry is ownerless (ownerDeviceId === null).
  *   - background/service-worker.js wires the REAL chat-map routes to its StorageManager: a chat-map BIND message is answered {ok:true} and the binding is persisted.
- *   - After TemporaryChatDelete.detachListeners(), a dss-intentional-reload event has no effect: once listeners are re-attached, leaving the page still deletes the tracked chat.
+ *   - After TemporaryChatDelete.detachListeners(), a dss-intentional-reload event has no effect: once listeners are re-attached, leaving the page still hands the tracked chat to the service worker (DSS_TEMP_CHAT.DSS_MSG_TAB_UNLOADING); the page itself never deletes on unload.
  *
  * Mocked trust boundaries only: chrome.storage (shared in-memory fixture from vitest.setup.js), chrome.runtime.onMessage, fetch, window.navigation, importScripts.
  */
@@ -17,6 +17,7 @@ import TemporaryChatDeleteApi from '../../content/temporary-chat-delete-api.js';
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
 import { setPathname } from '../helpers/set-pathname.js';
 import { importFreshStorageManager, loadRoutes } from '../helpers/chat-map-writer-harness.js';
+import { unloadHandOffs, unloadHandOff } from '../helpers/tab-unload-handoff.js';
 
 const store = TemporaryChatPendingStore;
 const DEVICE_ID_KEY = () => globalThis.DSS_TEMP_CHAT.DSS_DEVICE_ID_KEY;
@@ -87,6 +88,7 @@ describe('temporary-chat-delete — dss-intentional-reload is ignored once liste
         window.navigation = new EventTarget();
         fetchMock = vi.fn().mockResolvedValue({ ok: true });
         globalThis.fetch = fetchMock;
+        chrome.runtime.sendMessage = vi.fn(async () => ({ ok: true }));
         postMessageSpy = vi.spyOn(window, 'postMessage');
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -110,17 +112,19 @@ describe('temporary-chat-delete — dss-intentional-reload is ignored once liste
         delete window.navigation;
         sessionStorage.clear();
         setPathname('/');
+        chrome.runtime.sendMessage = vi.fn();
     });
 
-    it('control: while attached, dss-intentional-reload suppresses the beforeunload delete', async () => {
+    it('control: while attached, dss-intentional-reload suppresses the beforeunload hand-off', async () => {
         TemporaryChatDelete.attachListeners();
         window.dispatchEvent(new Event('dss-intentional-reload'));
         window.dispatchEvent(new Event('beforeunload'));
         await settle();
-        expect(deleteAttempts(), 'intentional reload must suppress the unload delete').toBe(0);
+        expect(unloadHandOffs(chrome.runtime.sendMessage), 'intentional reload must suppress the unload hand-off').toEqual([]);
+        expect(deleteAttempts(), 'the page never deletes on unload').toBe(0);
     });
 
-    it('after detach, a dss-intentional-reload event does not suppress the next unload delete', async () => {
+    it('after detach, a dss-intentional-reload event does not suppress the next unload hand-off', async () => {
         TemporaryChatDelete.attachListeners();
         TemporaryChatDelete.detachListeners();
 
@@ -129,7 +133,8 @@ describe('temporary-chat-delete — dss-intentional-reload is ignored once liste
         TemporaryChatDelete.attachListeners();
         window.dispatchEvent(new Event('beforeunload'));
         await settle();
-        expect(deleteAttempts(), 'event received while detached must not arm the reload suppression; leaving the page must delete the tracked chat').toBeGreaterThan(0);
+        expect(unloadHandOffs(chrome.runtime.sendMessage), 'event received while detached must not arm the reload suppression; leaving the page must hand the tracked chat to the service worker').toEqual([unloadHandOff(TEMP_UUID)]);
+        expect(deleteAttempts(), 'the page never deletes on unload').toBe(0);
     });
 });
 
@@ -160,7 +165,7 @@ describe('service-worker — installs the real chat-map routes with its own Stor
     }
 
     beforeEach(() => {
-        for (const k of ['importScripts', 'StorageManager', 'DSSSettingsRoutes', 'DSSPendingStoreRoutes', 'DSSEditorWindowRoutes', 'DSSChatMapRoutes', 'DSSNotificationRoutes', 'DSSClipboardRoutes', 'DSSPermissionIntentRoutes', 'fetch']) saved[k] = globalThis[k];
+        for (const k of ['importScripts', 'StorageManager', 'DSSSettingsRoutes', 'DSSPendingStoreRoutes', 'DSSEditorWindowRoutes', 'DSSChatMapRoutes', 'DSSNotificationRoutes', 'DSSClipboardRoutes', 'DSSPermissionIntentRoutes', 'DSSUnloadGrace', 'fetch']) saved[k] = globalThis[k];
         saved.onMessage = chrome.runtime.onMessage;
         saved.onChangedAdd = chrome.storage.onChanged.addListener;
     });
@@ -181,6 +186,7 @@ describe('service-worker — installs the real chat-map routes with its own Stor
         globalThis.DSSNotificationRoutes = { install: vi.fn() };
         globalThis.DSSClipboardRoutes = { install: vi.fn() };
         globalThis.DSSPermissionIntentRoutes = { install: vi.fn() };
+        globalThis.DSSUnloadGrace = { install: vi.fn() };
         globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
         globalThis.StorageManager = await importFreshStorageManager();
         loadRoutes(); // real background/chat-map-routes.js, publishes globalThis.DSSChatMapRoutes

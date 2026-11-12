@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 /**
  * POST-REFACTOR contract: temporary-chat-constants publishes a single
  * namespace object `globalThis.DSS_TEMP_CHAT` instead of spreading
- * ~27 bare names onto globalThis.
+ * ~28 bare names onto globalThis.
  *
  * The module is already loaded by vitest.setup.js, so globalThis.DSS_TEMP_CHAT
  * is populated before any test runs. Dynamic re-import is a no-op (module cache).
@@ -16,9 +16,9 @@ describe('temporary-chat-constants namespace (post-refactor)', () => {
         expect(globalThis.DSS_TEMP_CHAT).not.toBeNull();
     });
 
-    it('namespace contains all 27 constant keys', () => {
+    it('namespace contains all 28 constant keys', () => {
         const keys = Object.keys(globalThis.DSS_TEMP_CHAT);
-        expect(keys).toHaveLength(27);
+        expect(keys).toHaveLength(28);
     });
 
     it('spot-check: storage and event keys have correct values', () => {

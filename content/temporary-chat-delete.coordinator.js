@@ -71,13 +71,11 @@
         }
 
         /**
-         * 刪除已追蹤的臨時對話並清除追蹤狀態。
+         * 導航離開時刪除已追蹤的臨時對話並清除追蹤狀態（分頁卸載不經此處，改由 SW 寬限期決定）。
          * Guard clause：無追蹤 UUID 或無 token 時立即返回。
-         * keepalive=true → 以 keepalive fetch 執行（分頁關閉情境）。
-         * keepalive=false → 在 content script 以重試機制執行（導航情境）。
-         * @param {{ keepalive?: boolean }} [options]
+         * 優先透過 MAIN world 的 React Fiber 刪除，失敗或逾時則以 API 重試刪除。
          */
-        function deleteTrackedAndClear({ keepalive = false } = {}) {
+        function deleteTrackedAndClear() {
             if (!state.trackedTemporaryUuid) return;
             if (!state.capturedAuthToken) return;
 
@@ -88,7 +86,7 @@
             // 追蹤結束：停止心跳（防禦性參照，缺失不拋）
             root.TemporaryChatHeartbeat?.stop?.();
 
-            // deleteTrackedAndClear 僅於離開情境呼叫（SPA 離開或分頁/瀏覽器關閉），
+            // deleteTrackedAndClear 僅於導航離開時呼叫，
             // 故此處由本機開啟集合中移除該 UUID（best-effort，不阻塞刪除流程）。
             sendPendingStoreRoute(
                 globalThis.DSS_TEMP_CHAT.DSS_MSG_REMOVE_OPEN_UUID,
@@ -96,57 +94,52 @@
                 'removeOpenUuid'
             );
 
-            if (keepalive) {
-                // 分頁/瀏覽器關閉：直接以 keepalive fetch 執行刪除，確認成功後才移除待刪佇列項目
-                TemporaryChatDeleteApi.deleteChatSession(uuidToDelete, tokenSnapshot, { keepalive: true })
-                    .then((isOk) => { if (isOk) removePendingDeleteRoute(uuidToDelete); })
-                    .catch(() => {});
-                // teardown 期間 .then 可能不執行 → 項目留在 sync 佇列，交由 onStartup 補救（confirmed-deletion invariant）
-            } else {
-                // 導航觸發：優先透過 MAIN world 的 React Fiber 刪除，失敗則 fallback 到 API 刪除
-                const FIBER_REQ = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_MESSAGE_TYPE;
-                const FIBER_RES = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_RESULT_TYPE;
+            const FIBER_REQ = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_MESSAGE_TYPE;
+            const FIBER_RES = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_RESULT_TYPE;
 
-                let hasFallbackTriggered = false;
-                let timeoutId = null;
+            let hasFallbackTriggered = false;
+            let timeoutId = null;
 
-                const fallbackToApi = async () => {
-                    if (hasFallbackTriggered) return;
-                    hasFallbackTriggered = true;
-                    window.removeEventListener('message', resultListener);
+            const fallbackToApi = async () => {
+                // Stryker disable next-line ConditionalExpression: 等效突變——兩條觸發路徑進入後都在第一個 await 前同步移除監聽器並清除計時器，第二條路徑無從再觸發，旗標防護屬多餘
+                if (hasFallbackTriggered) return;
+                // Stryker disable next-line BooleanLiteral: 等效突變——其後同步移除監聽器並清除計時器，旗標防護屬多餘
+                hasFallbackTriggered = true;
+                window.removeEventListener('message', resultListener);
+                // Stryker disable next-line ConditionalExpression,CallExpression: 等效突變——timeoutId 必於任何訊息抵達前設定；未清除的計時器稍後觸發時開頭的旗標防護立即返回，只多留一個待執行計時器
+                if (timeoutId) clearTimeout(timeoutId);
+                const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
+                if (isOk) {
+                    removePendingDeleteRoute(uuidToDelete);
+                } else {
+                    // 情境存活但重試耗盡 → 釋放 lease 並排程 SW alarm 重試（統一透過 sendPendingStoreRoute 防護）
+                    sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuidToDelete }, 'scheduleDeleteRetry');
+                    sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE, { uuid: uuidToDelete }, 'releaseLease');
+                }
+            };
+
+            const resultListener = (e) => {
+                if (e.source !== window) return;
+                if (e.data?.type !== FIBER_RES) return;
+                // Stryker disable next-line OptionalChaining: 等效突變——上一行已於 e.data 為 null/undefined 時返回
+                if (e.data?.sessionId !== uuidToDelete) return;
+
+                if (e.data.success) {
                     if (timeoutId) clearTimeout(timeoutId);
-                    const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
-                    if (isOk) {
-                        removePendingDeleteRoute(uuidToDelete);
-                    } else {
-                        // 情境存活但重試耗盡 → 釋放 lease 並排程 SW alarm 重試（統一透過 sendPendingStoreRoute 防護）
-                        sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE, { chatUuid: uuidToDelete }, 'scheduleDeleteRetry');
-                        sendPendingStoreRoute(globalThis.DSS_TEMP_CHAT.DSS_MSG_RELEASE_LEASE, { uuid: uuidToDelete }, 'releaseLease');
-                    }
-                };
+                    window.removeEventListener('message', resultListener);
+                    removePendingDeleteRoute(uuidToDelete);
+                } else {
+                    fallbackToApi();
+                }
+            };
 
-                const resultListener = (e) => {
-                    if (e.source !== window) return;
-                    if (e.data?.type !== FIBER_RES) return;
-                    if (e.data?.sessionId !== uuidToDelete) return;
+            window.addEventListener('message', resultListener);
+            timeoutId = setTimeout(fallbackToApi, FIBER_RESULT_TIMEOUT_MS);
 
-                    if (e.data.success) {
-                        if (timeoutId) clearTimeout(timeoutId);
-                        window.removeEventListener('message', resultListener);
-                        removePendingDeleteRoute(uuidToDelete);
-                    } else {
-                        fallbackToApi();
-                    }
-                };
-
-                window.addEventListener('message', resultListener);
-                timeoutId = setTimeout(fallbackToApi, FIBER_RESULT_TIMEOUT_MS);
-
-                window.postMessage({
-                    type: FIBER_REQ,
-                    sessionId: uuidToDelete
-                }, '*');
-            }
+            window.postMessage({
+                type: FIBER_REQ,
+                sessionId: uuidToDelete
+            }, '*');
 
             if (!readEnabledFlag()) {
                 detachListeners();

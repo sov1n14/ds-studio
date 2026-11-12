@@ -9,11 +9,14 @@
  *
  * User path driven: the REAL main-world hook (content/censor-xhr-hook.js) and history hook run against a fake XHR through test/helpers/deepseek-page-harness.js; their window messages reach the REAL content modules (temporary-chat-delete family, TemporaryChatEnabledFlag, TemporaryChatDeleteApi, DSSDeepSeekApi) sharing one real state object. Mocked trust boundaries only: chrome.runtime.sendMessage, fetch (the delete request), window.navigation (an EventTarget), document.visibilityState, and the outbound window.postMessage (swallowed; the harness has no MAIN-world receiver for it).
  *
- * Observable outputs: runtime messages carrying the page token (DSS_SET_LAST_AUTH_TOKEN), and delete requests for a uuid (POST /api/v0/chat_session/delete fetch, its keepalive flag and authorization header, or a DSS_FIBER_DELETE_SESSION post). Each late-toggle leave is paired with the same leave after an early toggle (switch on at load), so the late path is held to the shape the working path produces.
+ * Observable outputs: runtime messages carrying the page token (DSS_SET_LAST_AUTH_TOKEN), the unload hand-off to the service worker (DSS_TEMP_CHAT.DSS_MSG_TAB_UNLOADING), and delete requests for a uuid (POST /api/v0/chat_session/delete fetch, its keepalive flag and authorization header, or a DSS_FIBER_DELETE_SESSION post). Each late-toggle leave is paired with the same leave after an early toggle (switch on at load), so the late path is held to the shape the working path produces.
+ *
+ * 瀏覽器工具列的重新整理按鈕不觸發 navigate 事件，也沒有 keydown，頁面只看得到 beforeunload，與關閉分頁相同。所以 beforeunload 一律不從頁面刪除，而是把追蹤中的對話交給 service worker，由它在寬限期後決定（test/unit/service-worker.unload-grace.scenario.spec.js）。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setPathname } from '../helpers/set-pathname.js';
 import { bootDeepSeekPage, AUTH_TOKEN } from '../helpers/deepseek-page-harness.js';
+import { unloadHandOffs, unloadHandOff } from '../helpers/tab-unload-handoff.js';
 import '../../utils/deepseek-api.js';
 import RealDeleteApi from '../../content/temporary-chat-delete-api.js';
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
@@ -23,7 +26,6 @@ globalThis.TemporaryChatDeleteApi = RealDeleteApi;
 const U = '26c81320-1ce0-4172-bd5e-cb5b7a55f332'; // new temporary conversation, created by the page-load create
 const U2 = 'a596cafc-7297-48fb-bf19-f20747ce7d98'; // session created by the route create after pushState
 const X = 'da794fe0-243a-4ba5-817a-b88ff327e634'; // existing conversation
-const ORIGIN = 'https://chat.deepseek.com';
 const T = () => globalThis.DSS_TEMP_CHAT;
 
 let settingsStore;
@@ -113,7 +115,7 @@ async function beforeUnload() {
 const CLOSE_TAB = 'closing the tab (beforeunload, no reload signal)';
 const NAVIGATE_AWAY = 'full-page navigation away by a link (cross-document navigate push, then beforeunload)';
 
-/** Leaves that must delete U. */
+/** Leaves after which U must be deleted: in-page on a navigation away, by the service worker after a tab close. */
 const DELETING_LEAVES = {
     [CLOSE_TAB]: beforeUnload,
     [NAVIGATE_AWAY]: async () => {
@@ -132,10 +134,8 @@ const KEEPING_LEAVES = {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', ctrlKey: true, bubbles: true }));
         await beforeUnload();
     },
-    'reload button (navigate reload to the same URL, then beforeunload)': async () => {
-        dispatchNavigate(ORIGIN + '/a/chat/s/' + U, 'reload');
-        await beforeUnload();
-    },
+    // 真實的工具列重新整理：只有 beforeunload，沒有 navigate 事件，也沒有 keydown
+    'reload button (beforeunload only: the browser fires no navigate event and no keydown)': beforeUnload,
     'switching to another browser tab (visibilitychange to hidden)': async () => {
         Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
         Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
@@ -177,12 +177,13 @@ describe.each([
     ['early toggle (control: switch on at page load)', false],
     ['late toggle (switch turned on after page load)', true],
 ])('%s', (_label, isLate) => {
-    it('deletes U with a keepalive request carrying the page token when the tab is closed (beforeunload, no reload signal)', async () => {
+    it('hands U to the service worker without deleting it from the page when the tab is closed (beforeunload, no reload signal)', async () => {
         await openTemporaryConversation(isLate);
 
         await DELETING_LEAVES[CLOSE_TAB]();
 
-        expect(deleteFetchesFor(U), 'closing the tab must issue one keepalive delete for U, authorized with the token the page sent').toEqual([{ keepalive: true, authorization: AUTH_TOKEN }]);
+        expect(deleteRequestsFor(U), 'the page must not delete U on unload; the service worker decides after its grace period').toEqual([]);
+        expect(unloadHandOffs(chrome.runtime.sendMessage), 'closing the tab must send exactly one unload message, carrying U').toEqual([unloadHandOff(U)]);
     });
 
     // The early-toggle path deletes U in-page on the navigate event (a DSS_FIBER_DELETE_SESSION post); the late-toggle path must issue an in-page delete too.
@@ -269,5 +270,6 @@ describe('late toggle on an existing conversation opened before the switch', () 
         await DELETING_LEAVES[leave]();
 
         expect(deleteRequestsFor(X), 'existing conversation X must never be deleted').toEqual([]);
+        expect(unloadHandOffs(chrome.runtime.sendMessage, X), 'existing conversation X must never be handed to the service worker').toEqual([]);
     });
 });

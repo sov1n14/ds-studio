@@ -35,6 +35,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setPathname } from '../helpers/set-pathname.js';
 import { bootDeepSeekPage } from '../helpers/deepseek-page-harness.js';
+import { unloadHandOffs } from '../helpers/tab-unload-handoff.js';
 import '../../utils/deepseek-api.js';
 import RealDeleteApi from '../../content/temporary-chat-delete-api.js';
 import TemporaryChatDelete from '../../content/temporary-chat-delete.js';
@@ -235,12 +236,12 @@ describe('new conversation created from the homepage (controls, live S-B)', () =
             expect(trackedUuids(), 'the route-create session N2 was never visited and must not be tracked').not.toContain(N2);
         });
 
-        it.each(Object.keys(LEAVES))('deletes N when leaving by %s', async (leave) => {
+        it.each(Object.keys(LEAVES))('requests deletion of N, in-page or through the service worker, when leaving by %s', async (leave) => {
             await scenario();
 
             await LEAVES[leave]();
 
-            expect(deleteRequestsFor(N).length, 'leaving new temporary conversation N must delete it').toBeGreaterThan(0);
+            expect(deleteRequestsFor(N).length + unloadHandOffs(chrome.runtime.sendMessage, N).length, 'leaving new temporary conversation N must request its deletion (a tab close hands it to the service worker)').toBeGreaterThan(0);
         });
     });
 });
@@ -338,11 +339,9 @@ describe('case 7: switch turned on after the page-load create, then the first se
         expect(trackedUuids()).not.toContain(N2);
     });
 
-    // The page captured the auth token at load, while the switch was off, and the hook posts
-    // DSS_AUTH_CAPTURED only when the token changes, so this page load has no token in the content
-    // script: an SPA leave takes the no-token path and hands N to the service worker for deletion.
-    // Tab close without a token issues nothing (reported to the lead as a gap, not encoded here).
-    it.each(['SPA navigation to the homepage', 'SPA navigation to another conversation'])('requests deletion of N, in-page or through the service worker, when leaving by %s', async (leave) => {
+    // The content script holds the token the page posted at load, while the switch was off (resident capture), so an SPA leave deletes N in-page.
+    // A tab close sends the unload message (DSS_MSG_TAB_UNLOADING) and the no-token path sends DSS_SCHEDULE_DELETE_RETRY; both hand N to the service worker for deletion.
+    it.each(Object.keys(LEAVES))('requests deletion of N, in-page or through the service worker, when leaving by %s', async (leave) => {
         await switchOnAfterPageLoadCreate();
 
         await LEAVES[leave]();
@@ -350,7 +349,7 @@ describe('case 7: switch turned on after the page-load create, then the first se
         const handedToServiceWorker = chrome.runtime.sendMessage.mock.calls
             .map(([message]) => message)
             .filter((message) => message?.type === T().DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE && message.chatUuid === N);
-        expect(deleteRequestsFor(N).length + handedToServiceWorker.length, 'leaving new temporary conversation N must request its deletion').toBeGreaterThan(0);
+        expect(deleteRequestsFor(N).length + handedToServiceWorker.length + unloadHandOffs(chrome.runtime.sendMessage, N).length, 'leaving new temporary conversation N must request its deletion').toBeGreaterThan(0);
     });
 });
 

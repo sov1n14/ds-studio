@@ -1,7 +1,7 @@
 /**
  * Resident page-token capture on a freshly loaded content script (v4.39.9).
  *
- * Requirement (user ruling, quoted in test/unit/temporary-chat-delete.late-toggle.scenario.spec.js): while the temporary-conversation switch is off, the token the page posts stays in this tab's memory; turning the switch on hands it to the service worker once (DSS_SET_LAST_AUTH_TOKEN), and closing the tab afterwards deletes the temporary conversation with a keepalive request carrying that token. Only messages posted by this window are trusted: a message posted by another frame must never cause a token relay.
+ * Requirement (user ruling, quoted in test/unit/temporary-chat-delete.late-toggle.scenario.spec.js): while the temporary-conversation switch is off, the token the page posts stays in this tab's memory; turning the switch on hands it to the service worker once (DSS_SET_LAST_AUTH_TOKEN), and closing the tab afterwards hands the temporary conversation to the service worker (DSS_TEMP_CHAT.DSS_MSG_TAB_UNLOADING), which deletes it with that token after its grace period; the page itself sends no delete on unload. Only messages posted by this window are trusted: a message posted by another frame must never cause a token relay.
  *
  * Why every case loads the entry inside the test body: the main-world hook posts DSS_AUTH_CAPTURED only when the token value changes, so the capture that matters happens at page load, through listeners that the entry's load-time init() attaches. A spec that static-imports content/temporary-chat-delete.js keeps the import-time listeners of that one instance alive for the whole file, so a later init() call that fails to attach its listener is masked by the stale one. Here each case runs vi.resetModules() and imports the entry, so its auto-start init() is the only init of the instance under test, and afterEach removes every window listener attached during the case, so no listener of an earlier instance can hold a token for a later one.
  *
@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setPathname } from '../helpers/set-pathname.js';
 import { bootDeepSeekPage, AUTH_TOKEN } from '../helpers/deepseek-page-harness.js';
+import { unloadHandOffs, unloadHandOff } from '../helpers/tab-unload-handoff.js';
 import '../../utils/deepseek-api.js';
 import RealDeleteApi from '../../content/temporary-chat-delete-api.js';
 
@@ -135,7 +136,7 @@ describe('switch off at page load, turned on after the page posted its token (fr
         expect(tokenRelays(callsBeforeSwitchOn), 'turning the switch on must hand the token the page posted at load to the service worker exactly once').toEqual([{ type: 'DSS_SET_LAST_AUTH_TOKEN', token: AUTH_TOKEN }]);
     });
 
-    it('closing the tab after the late switch-on deletes U with a keepalive request carrying the page token', async () => {
+    it('closing the tab after the late switch-on hands U to the service worker, which already holds the page token, and deletes nothing from the page', async () => {
         await loadHomepageWithPageToken(false);
         flipSwitch(true);
         await at(1500);
@@ -153,7 +154,9 @@ describe('switch off at page load, turned on after the page posted its token (fr
         window.dispatchEvent(new Event('beforeunload'));
         await at(3310);
 
-        expect(deleteFetchesFor(U), 'closing the tab must issue one keepalive delete for U, authorized with the token the page posted before the switch-on').toEqual([{ keepalive: true, authorization: AUTH_TOKEN }]);
+        expect(tokenRelays(), 'the service worker received the page token once, at the switch-on, so it can delete U later').toEqual([{ type: 'DSS_SET_LAST_AUTH_TOKEN', token: AUTH_TOKEN }]);
+        expect(deleteFetchesFor(U), 'the page must not delete U on unload; the service worker decides after its grace period').toEqual([]);
+        expect(unloadHandOffs(chrome.runtime.sendMessage), 'closing the tab must send exactly one unload message, carrying U').toEqual([unloadHandOff(U)]);
     });
 });
 

@@ -37,6 +37,7 @@ Lessons from real bugs that shipped under green tests. Consulting them before ea
 | E2E Must Run the Extension on Disk | is an E2E spec or fixture that launches the unpacked extension in a persistent browser profile, or looks up, caches, or wakes the extension service worker from a test helper | [e2e-runs-on-disk-extension.md](references/e2e-runs-on-disk-extension.md) |
 | E2E Specs Share One Real Storage | is an E2E spec or helper that writes `chrome.storage` in the shared persistent profile, writes several settings keys in one call, or has a precondition that a value stored by an earlier run could change | [e2e-shared-real-storage.md](references/e2e-shared-real-storage.md) |
 | Cross-Script Globals: Load the Real Scripts | stubs or assigns a global (`vi.stubGlobal`, `globalThis.<name> =`) that one content script calls and another script is expected to provide, or tests a behavior that crosses content scripts through globals while importing each script as its own module | [stubbed-globals-must-exist.md](references/stubbed-globals-must-exist.md) |
+| Browser Lifecycle Events: Fire Only What the Browser Fires | simulates a browser action (the toolbar reload button, back or forward, a tab close, an address-bar navigation) by dispatching `navigate`, `keydown`, `beforeunload` or `pagehide`, or tests code that tells a reload from a leave inside the page | [browser-lifecycle-events.md](references/browser-lifecycle-events.md) |
 
 ## Adding a New Lesson
 

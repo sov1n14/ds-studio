@@ -117,6 +117,7 @@ ds-studio/
 │   ├── clipboard-routes.js     ─  DSS_COPY_TO_CLIPBOARD route: queues writes, makes sure the offscreen document exists, then sends DSS_OFFSCREEN_WRITE_CLIPBOARD asking it to write the clipboard (v4.39.0)
 │   ├── permission-intent-routes.js ─  chrome.permissions.onAdded listener: turns on the setting of each pending permission intent whose permissions are held, then clears the intent (v4.39.3)
 │   ├── chat-map-routes.js      ─  DSS_CHAT_MAP_MSG routes: puts the service worker's StorageManager in chat-map writer mode, validates each op, applies it in one FIFO queue
+│   ├── unload-grace.js         ─  DSS_TAB_UNLOADING route: grace period before an unloading temporary conversation is deleted (v4.39.21)
 │   └── editor-window-routes.js ─  DSS_CLOSE_EDITOR_WINDOWS route: closes the tracked editor windows and clears their session keys (v4.29.0)
 ├── offscreen/                  ─  Offscreen document (reason CLIPBOARD, v4.39.0)
 │   ├── clipboard-offscreen.html ─  Offscreen document shell that loads only clipboard-offscreen.js
@@ -254,7 +255,7 @@ The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `tes
 - `sidebar.e2e.js`: auto-hide shrinks the sidebar to 60px and widens it on hover; auto-open shows a collapsed sidebar again.
 - `smoke.e2e.js`: the page stays on the chat app with the chat input shown and the extension service worker is running.
 - `system-time.e2e.js`: with the system-time toggle on, the outgoing prompt opens with `Current Time: yyyy/mm/dd hh:mm:ss (UTC±hh:mm)` ahead of the system-reminder block of a picked group or of the user-input block; switching the toggle off in the popup sends the prompt with no time line.
-- `temp-chat.e2e.js`: with every delete request intercepted and answered only for conversations the test created, the temporary-chat switch state shows and syncs across tabs; the first send marks a new conversation as temporary and queues it with a lease; leaving it (home or another conversation) deletes exactly that conversation and dequeues it; a history conversation is never marked or deleted; F5 keeps it; the browser refresh button keeping it is asserted as documented and currently fails because the page cannot tell that reload from closing the tab.
+- `temp-chat.e2e.js`: with every delete request intercepted and answered only for conversations the test created, the temporary-chat switch state shows and syncs across tabs; the first send marks a new conversation as temporary and queues it with a lease; leaving it (home or another conversation) deletes exactly that conversation and dequeues it; a history conversation is never marked or deleted; F5 keeps it; the browser refresh button keeping it is asserted too.
 - `temp-chat-toggle.e2e.js`: the temporary-chat row shows on the home page while the master switch is on and is removed when it turns off.
 - `websearch-toggle.e2e.js`: web-search start state off releases DeepSeek's Search toggle and on presses it; it applies once, so a manual flip is not undone.
 - `width.e2e.js`: chat width and input width apply and restore; input width is clamped to an enabled chat width.
@@ -333,7 +334,7 @@ per-frame: apply(reposition) → measure(buttonRect.left) → compare(epsilon) �
 
 Temporary conversation deletion uses a two-layer architecture for reliability:
 
-- **Layer 1 (real-time, content script)**: `beforeunload` calls `fetch(..., { keepalive: true })` directly with the auth token that a resident listener in `content/temporary-chat-delete.js` captures on every page load, so turning the toggle on after the page loaded still deletes on tab close. SPA navigation uses Fiber/API deletion.
+- **Layer 1 (real-time, content script)**: SPA navigation uses Fiber/API deletion; `beforeunload` hands the conversation to the service worker (see Tab-Close Grace Period below). A resident listener in `content/temporary-chat-delete.js` captures the auth token on every page load, so turning the toggle on after the page loaded still lets the worker delete after a tab close.
 - **Layer 2 (remediation, Service Worker)**: `chrome.runtime.onStartup`, `chrome.runtime.onInstalled`, the `dss-delete-retry` alarm, and the sync-area `chrome.storage.onChanged` listener each call `remediatePendingDeletes()`, which reads the shared pending-delete queue from `chrome.storage.sync` and retries every lease-expired entry with the device's own locally-cached auth token. The function takes no argument and applies the same lease gate on all four paths.
 - **Cross-device source of truth**: The pending-delete queue (`dss-pending-deletes-sync`, containing `{ chatUuid, attemptCount, lastActiveAt, ownerDeviceId }`) lives only in `chrome.storage.sync`. Any device signed into the same Chrome account can remediate any expired queue entry.
 - **Owning device**: `ownerDeviceId` is the id stored under the `chrome.storage.local` key `dss-device-id`, never synced. `addPendingDelete()` creates it once per device with `crypto.randomUUID()` inside the store mutex; when that local write fails the entry is stored with a `null` owner, so every device treats it as foreign.
@@ -350,6 +351,7 @@ Temporary conversation deletion uses a two-layer architecture for reliability:
 | `DSS_RELEASE_LEASE` | `{ uuid }` | `releaseLease(uuid)` — zero `lastActiveAt` so any device may take the entry immediately |
 | `DSS_GET_PENDING_UUIDS` | none | Replies with the uuids currently in the sync queue, used to seed a tab's sidebar-hide set |
 | `DSS_PENDING_UUIDS_CHANGED` | `{ uuids }` | Pushed *to* tabs on every sync-queue change so their sidebar-hide set stays current |
+| `DSS_TAB_UNLOADING` | `{ uuid }` | Handled by `background/unload-grace.js`, not by the `pending-store-routes.js` table: starts the unload grace period for the uuid |
 
   `background/pending-store-routes.js` owns this side. Its `install()` — called at service-worker top level so it survives worker restarts — registers one `chrome.runtime.onMessage` listener holding a `type` → store-operation table. Unknown types return `false` without responding, leaving the worker's other `onMessage` listeners free to handle them; known types return `true` and reply `{ ok: true }` or `{ ok: false, error }` once the awaited operation settles. Senders: `temporary-chat-delete.tracking.js` (track), `temporary-chat-delete.coordinator.js` (both removals), `temporary-chat-delete.handlers.js` (token).
 
@@ -365,6 +367,12 @@ Ownership of a queued conversation is expressed as a lease that lives in the syn
 - **Persisted observation records (v4.33.2)**: `recordLeaseObservation` writes each UUID's observation as `{ lastActiveAt, observedAt }` to `chrome.storage.local` (key `dss-last-seen-change:<uuid>`); the remediation pass compares the stored `lastActiveAt` against the queue entry's current value to decide whether to reuse the stored `observedAt`, so lease expiry survives service worker cold starts. A `lastActiveAt` of 0 is immediately expired. After saving the queue, orphan `dss-last-seen-change:` keys for UUIDs outside the queue are removed.
 - **No-token hand-off (v4.33.2)**: When a Chrome-restored tab navigates away from a tracked temporary conversation and no auth token was captured in this page session, the content script calls `handOffToServiceWorker` — stops the heartbeat, sends `DSS_REMOVE_OPEN_UUID` / `DSS_SCHEDULE_DELETE_RETRY` / `DSS_RELEASE_LEASE` — and the service worker deletes the conversation on the next alarm remediation pass.
 - **Retry alarm armed whenever the queue is non-empty (v4.33.3)**: `remediatePendingDeletes()` calls `scheduleRetryAlarm(pending)` after confirming the queue is non-empty and before the auth-token gate, so the no-token path and `onInstalled` (Chrome clears all alarms on reload/update) both keep the `dss-delete-retry` alarm armed. `onInstalled` is the fourth remediation path.
+
+#### Tab-Close Grace Period (v4.39.21)
+
+The content script's `beforeunload` handler sends `DSS_TAB_UNLOADING { uuid }` to `background/unload-grace.js`, which keeps the conversation when a reloaded page or an open tab claims it and otherwise deletes it through the pending-store and remediation delete path.
+
+The grace-period rules (timer, cancel, expiry, outcome, worker restart) live in [Feature Spec §21 Unload Grace](spec/04-features.md#21-temporary-conversation).
 
 #### Sidebar Hiding of Queued Conversations (v4.31.1)
 

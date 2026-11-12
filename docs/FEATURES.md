@@ -109,10 +109,11 @@ On the `chat.deepseek.com` homepage, a "toggle + Temporary Conversation" control
 - **Scenarios that trigger deletion** (only for already-marked temporary conversations):
   - Navigating to another conversation, returning to the homepage, back/forward navigation, or any other navigation away from the temporary conversation.
   - Typing a different URL in the address bar, clicking an external link, closing the tab, or closing the browser.
+  - These full-page departures do not delete at once (v4.39.21): the page cannot tell closing the tab from a reload with the browser toolbar button, so it only notifies the background service worker. The service worker waits 10 seconds and deletes the conversation only when no reloaded page claims it and no DeepSeek tab still shows it.
 - **Scenarios that do NOT trigger deletion**:
   - Page refresh (F5, the refresh button, Ctrl+R / Cmd+R).
   - Switching to another browser tab (the conversation stays open in its own tab).
-  - After the extension is updated or reloaded, clicking the "Refresh" button on the on-page "DS Studio has been updated" toast to reload the page (v4.34.2). Closing the tab instead still deletes the temporary conversation.
+  - After the extension is updated or reloaded, clicking the "Refresh" button on the on-page "DS Studio has been updated" toast to reload the page (v4.34.2). Closing the tab after the reload does not hand the conversation to the background; the conversation is deleted later, when the pending-delete retry runs after its lease expires, not about 10 seconds after the close.
   - Navigating to the current URL (typing the current URL in the address bar and pressing Enter, which is equivalent to re-entering the page).
   - Entering or leaving a non-temporary history conversation.
 - **Relation to the master switch**: The homepage toggle row follows the master switch; it is removed when the master switch is off and re-injected when it turns on. The toggle's enabled value and the leave-then-delete logic are not controlled by the master switch and keep their last value while the master switch is off.
@@ -135,12 +136,13 @@ The Temporary Conversation feature automatically calls the deletion API to remov
 
 - **Guaranteed deletion scenarios**:
   - Normal in-page (SPA) navigation away to another page or conversation.
-  - Normally closing the browser tab or window (including closing the entire browser).
+  - Closing the browser tab or window while the browser stays open: the conversation is deleted about 10 seconds after the tab closes.
 - **Delayed deletion (on next browser launch) scenarios**:
+  - Closing the entire browser within 10 seconds of closing the tab: the 10-second wait ends with the background service worker, and the next browser launch deletes the conversation.
   - Computer is forcefully shut down (holding the power button, power outage).
   - Browser crashes or is forcefully terminated by the operating system.
 
-This extension is a browser extension only and has no system-level control outside the browser. If you require the highest level of privacy assurance, close the browser normally before shutting down your computer.
+This extension is a browser extension only and has no system-level control outside the browser. If you require the highest level of privacy assurance, close the tab, wait 10 seconds, then close the browser normally before shutting down your computer.
 
 ### Known Limitations
 
@@ -148,6 +150,7 @@ This extension is a browser extension only and has no system-level control outsi
 |-|-|
 | Forced shutdown (power button, power outage) | Conversation persists until the browser is next opened, at which point remediation deletion occurs |
 | Browser crash / forcefully terminated by OS | Same as above |
+| Entire browser closed within 10 seconds of closing the tab | The 10-second wait is lost with the service worker; the conversation persists until the browser is next opened, at which point remediation deletion occurs |
 | Long idle without opening the browser | Conversation persists until the browser is opened |
 | Auth token expires before remediation deletion | Remediation fails; conversation persists permanently |
 | Remediation device has never logged into the same DeepSeek account | That device cannot remediate; must wait for a device with a valid token to start up |
