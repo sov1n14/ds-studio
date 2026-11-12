@@ -35,3 +35,37 @@ export async function dragSelectTwoReplyParagraphs(page) {
 export function asBlockquote(text) {
     return text.split(/\r?\n/).map((line) => '> ' + line).join('\n');
 }
+
+/**
+ * 以滑鼠在回覆第一段的第一行內拖曳選取一段文字（不跨行），並回傳選取的文字。
+ * 選取範圍取自第一個非空白文字節點：從第一個非空白字元起，最多 20 個字元，且每個字元都與起點位於同一行。
+ */
+export async function dragSelectWithinReplyLine(page) {
+    const paragraph = page.locator(REPLY_WITH_TWO_PARAGRAPHS).first().locator(':scope > p').filter({ hasText: /\S/ }).first();
+    await paragraph.scrollIntoViewIfNeeded();
+    const { from, to } = await paragraph.evaluate((p) => {
+        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+        const node = walker.nextNode();
+        const charRect = (offset) => {
+            const range = document.createRange();
+            range.setStart(node, offset);
+            range.setEnd(node, offset + 1);
+            return range.getBoundingClientRect();
+        };
+        const start = node.textContent.search(/\S/);
+        const first = charRect(start);
+        let last = start;
+        for (let i = start + 1; i < Math.min(node.textContent.length, start + 20); i += 1) {
+            const rect = charRect(i);
+            if (Math.abs(rect.top - first.top) > 1) break;
+            if (node.textContent[i].trim()) last = i;
+        }
+        const end = charRect(last);
+        return { from: { x: first.left + 1, y: first.top + first.height / 2 }, to: { x: end.right - 1, y: end.top + end.height / 2 } };
+    });
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 8 });
+    await page.mouse.up();
+    return page.evaluate(() => window.getSelection().toString());
+}
