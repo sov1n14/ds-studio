@@ -186,7 +186,7 @@ ds-studio/
 │   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
 │   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
-│   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED broadcast (DSSTabControl)
+│   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED active-tab send and all-tabs broadcast (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
 │   ├── notification-permission.js ─  DSSNotificationPermission: wraps the chrome.permissions check and request for the optional notifications permission into a non-throwing interface shared by the popup and `background/permission-intent-routes.js` (v4.38.0)
 │   ├── clipboard-permission.js ─  DSSClipboardPermission: wraps the chrome.permissions check and request for the optional clipboardWrite and offscreen permissions into a non-throwing interface shared by the popup and `background/permission-intent-routes.js` (v4.39.0)
@@ -449,7 +449,7 @@ sequenceDiagram
     Note over Popup,Content: Normal Flow — Prompt Operations
     Popup->>Popup: Modal.prompt/confirm for prompt CRUD
     Popup->>Storage: Save promptPresets / activePresetId
-    Popup->>Content: broadcastActivePreset ACTIVE_PRESET_CHANGED (all chat.deepseek.com tabs)
+    Popup->>Content: sendActivePresetToActiveTab ACTIVE_PRESET_CHANGED (active chat.deepseek.com tab of the current window only)
     Content->>Content: updatePromptPrefixFromBinding()
     Storage-->>Content: onChanged (PROMPT_PRESETS / CHAT_PRESET_MAP)
 

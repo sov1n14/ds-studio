@@ -20,8 +20,10 @@
  * its own vi.fn() implementations.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { installFakeTabs } from '../helpers/fake-chrome-tabs.js';
 
-const { queryActiveDeepseekTab, sendToTab, broadcastActivePreset } = await import('../../utils/tab-control.js');
+const tabControlModule = await import('../../utils/tab-control.js');
+const { queryActiveDeepseekTab, sendToTab, broadcastActivePreset } = tabControlModule;
 
 const ACTIVE_DEEPSEEK_QUERY = {
     active: true,
@@ -229,5 +231,101 @@ describe('DSSTabControl', () => {
             await expect(broadcastActivePreset('preset-1', 'Hello')).resolves.toBeUndefined();
             expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
         });
+    });
+});
+
+// ── sendActivePresetToActiveTab：彈出視窗選取的群組只送往彈出視窗底下的分頁 ──
+// 需求：彈出視窗選取群組只影響目前視窗中作用中的 DeepSeek 分頁；同視窗的其他 DeepSeek 分頁與其他視窗的作用中分頁都不得收到。
+// 分頁表替身（test/helpers/fake-chrome-tabs.js）依 active、currentWindow 與網址樣式誠實過濾，投遞以實際收件分頁記錄。
+describe('sendActivePresetToActiveTab', () => {
+    const DEEPSEEK_TABS = [
+        { id: 11, windowId: 1, active: true, url: 'https://chat.deepseek.com/a/chat/s/aaa' },
+        { id: 12, windowId: 1, active: false, url: 'https://chat.deepseek.com/' },
+        { id: 13, windowId: 2, active: true, url: 'https://chat.deepseek.com/a/chat/s/ccc' },
+    ];
+    let fake;
+
+    /** 取得受測函式；尚未實作時以指名的訊息失敗，而非籠統的 TypeError。 */
+    function target() {
+        const fn = tabControlModule.sendActivePresetToActiveTab;
+        expect(typeof fn, 'utils/tab-control.js 必須匯出 sendActivePresetToActiveTab(presetId, presetContent)').toBe('function');
+        return fn;
+    }
+
+    /** 呼叫受測函式並把結局轉成可比對的文字：同步拋出與 rejection 都帶出錯誤訊息。 */
+    async function outcomeOf(presetId, presetContent) {
+        const fn = target();
+        try {
+            await fn(presetId, presetContent);
+            return 'resolved';
+        } catch (err) {
+            return `threw or rejected: ${err?.message ?? err}`;
+        }
+    }
+
+    beforeEach(() => {
+        fake = undefined;
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.spyOn(console, 'debug').mockImplementation(() => {});
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        const fakeErrors = fake?.fakeErrors ?? [];
+        fake?.restore();
+        vi.restoreAllMocks();
+        expect(fakeErrors, '前提：受測程式只用替身認得的查詢條件').toEqual([]);
+    });
+
+    it('is published on globalThis.DSSTabControl', () => {
+        fake = installFakeTabs([]);
+        expect(typeof globalThis.DSSTabControl?.sendActivePresetToActiveTab, 'DSSTabControl 必須公開 sendActivePresetToActiveTab 供彈出視窗呼叫').toBe('function');
+    });
+
+    it('delivers ACTIVE_PRESET_CHANGED only to the active DeepSeek tab of the current window', async () => {
+        fake = installFakeTabs(DEEPSEEK_TABS);
+
+        expect(await outcomeOf('preset-X', 'C')).toBe('resolved');
+
+        expect(fake.deliveries, '只有目前視窗的作用中 DeepSeek 分頁（11）收到；同視窗非作用中分頁（12）與其他視窗作用中分頁（13）都不得收到').toEqual([
+            { tabId: 11, message: { action: 'ACTIVE_PRESET_CHANGED', presetId: 'preset-X', presetContent: 'C' } },
+        ]);
+    });
+
+    it('delivers nothing and resolves when the active tab of the current window is not DeepSeek', async () => {
+        fake = installFakeTabs([
+            { id: 21, windowId: 1, active: true, url: 'https://example.com/' },
+            { id: 22, windowId: 1, active: false, url: 'https://chat.deepseek.com/' },
+            { id: 23, windowId: 2, active: true, url: 'https://chat.deepseek.com/' },
+        ]);
+
+        expect(await outcomeOf('preset-X', 'C'), '沒有可送的分頁時照常完成').toBe('resolved');
+
+        expect(fake.deliveries, '作用中分頁不是 DeepSeek 時，任何 DeepSeek 分頁都不得收到').toEqual([]);
+    });
+
+    it('resolves without throwing when chrome.tabs.sendMessage rejects', async () => {
+        fake = installFakeTabs(DEEPSEEK_TABS, { route: () => Promise.reject(new Error('Could not establish connection. Receiving end does not exist.')) });
+
+        expect(await outcomeOf('preset-X', 'C'), '送出失敗不得讓呼叫端收到 rejection').toBe('resolved');
+
+        expect(fake.deliveries.map((d) => d.tabId), '失敗前只嘗試送往作用中分頁 11').toEqual([11]);
+    });
+
+    it('resolves without throwing when chrome.tabs.query rejects', async () => {
+        fake = installFakeTabs(DEEPSEEK_TABS);
+        chrome.tabs.query = () => Promise.reject(new Error('tabs API error'));
+
+        expect(await outcomeOf('preset-X', 'C'), '查詢分頁失敗不得讓呼叫端收到 rejection').toBe('resolved');
+
+        expect(fake.deliveries, '查不到分頁時不送出任何訊息').toEqual([]);
+    });
+
+    it('resolves without throwing when chrome.tabs.sendMessage throws synchronously', async () => {
+        fake = installFakeTabs(DEEPSEEK_TABS, { route: () => { throw new Error('Extension context invalidated.'); } });
+
+        expect(await outcomeOf('preset-X', 'C'), 'sendMessage 同步例外不得同步拋出，也不得讓呼叫端收到 rejection').toBe('resolved');
+
+        expect(fake.deliveries.map((d) => d.tabId), '拋出前只嘗試送往作用中分頁 11').toEqual([11]);
     });
 });

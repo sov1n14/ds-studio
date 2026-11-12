@@ -72,7 +72,7 @@
 - **Popup sync**: When the popup opens on a bound conversation, the dropdown auto-selects the bound prompt group. On an unbound conversation, the dropdown queries the Content Script's in-memory `pendingPresetId` via a `GET_PENDING_PRESET` message; if there is no pending selection, the blank option is shown.
 - **Unbinding**: Selecting the blank option in the dropdown on a conversation with a UUID removes the binding from `chatPresetMap`.
 - **New prompt group binding**: Creating a new prompt group on a bound conversation updates the binding to the new prompt group.
-- **Tab independence**: Prompt group selection is independent per tab. When the popup selects a prompt group on one tab, it concurrently broadcasts an `ACTIVE_PRESET_CHANGED` message to all open `chat.deepseek.com` tabs' Content Scripts via `broadcastActivePreset()` (individual tab send failures are silently swallowed). Other tabs' Content Scripts retain their own prompt group selection via their respective `chatPresetMap` bindings, preventing cross-tab contamination.
+- **Tab independence**: Prompt group selection is independent per tab. When the popup selects a prompt group (or opens), it sends an `ACTIVE_PRESET_CHANGED` message through `sendActivePresetToActiveTab()` to the Content Script of the active `chat.deepseek.com` tab of the current window only; nothing is sent when the active tab is not a DeepSeek tab, and send failures are silently swallowed. Every other open DeepSeek tab keeps its own prompt group selection (its `chatPresetMap` binding, pending pick or pinned default). A save in the editor window is the one path that still broadcasts `ACTIVE_PRESET_CHANGED` to every open `chat.deepseek.com` tab, through `broadcastActivePreset()`.
 
 ## 5. Global Prompt
 

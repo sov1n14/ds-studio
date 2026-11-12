@@ -120,11 +120,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /** 廣播目前活躍提示詞組至內容腳本 */
+    /** 將目前活躍提示詞組只送往彈出視窗底下的 DeepSeek 分頁 */
     function sendActivePresetToContentScript() {
         const preset  = presets.find(p => p.id === activePresetId);
         const content = preset?.content ?? '';
-        window.DSSTabControl?.broadcastActivePreset(activePresetId, content);
+        // Stryker disable next-line OptionalChaining: 等價變異 — popup.html 在 popup.js 之前以一般 script 載入 tab-control.js，DSSTabControl 必定存在
+        window.DSSTabControl?.sendActivePresetToActiveTab(activePresetId, content);
     }
 
     // --- 建立 pin manager（釘選預設提示詞組） ---

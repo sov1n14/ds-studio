@@ -76,9 +76,36 @@ async function broadcastActivePreset(presetId, presetContent) {
     );
 }
 
-globalThis.DSSTabControl = { queryActiveDeepseekTab, queryDeepseekTabs, sendToTab, broadcastActivePreset };
+/**
+ * 將目前啟用的預設提示詞只送往目前視窗中作用中的 DeepSeek 分頁（即彈出視窗底下的分頁）。
+ * 其他 DeepSeek 分頁保留各自的選擇；查無分頁或分頁無 id 時直接結束。
+ * 查詢失敗由 queryActiveDeepseekTab 吞掉，送出失敗由 sendToTab 吞掉，呼叫端不會收到例外。
+ *
+ * @param {string} presetId      - 目前啟用的預設 ID
+ * @param {string} presetContent - 預設提示詞內容
+ * @returns {Promise<void>}
+ */
+async function sendActivePresetToActiveTab(presetId, presetContent) {
+    const tab = await queryActiveDeepseekTab();
+    if (tab?.id === undefined) return;
+    await sendToTab(tab.id, { action: DSS_CONTENT_MSG.ACTIVE_PRESET_CHANGED, presetId, presetContent });
+}
+
+globalThis.DSSTabControl = {
+    queryActiveDeepseekTab,
+    queryDeepseekTabs,
+    sendToTab,
+    broadcastActivePreset,
+    sendActivePresetToActiveTab,
+};
 
 // 匯出供 Node.js 單元測試環境使用
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { queryActiveDeepseekTab, queryDeepseekTabs, sendToTab, broadcastActivePreset };
+    module.exports = {
+        queryActiveDeepseekTab,
+        queryDeepseekTabs,
+        sendToTab,
+        broadcastActivePreset,
+        sendActivePresetToActiveTab,
+    };
 }

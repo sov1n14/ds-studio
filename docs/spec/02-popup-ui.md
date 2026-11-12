@@ -29,7 +29,7 @@
 - **Activation timing**: Automatically activated during Content Script initialization (`initSettings()`), requiring no additional user action.
 - **Bidirectional sync**:
   - Overlay selection change → writes to `activePresetId` and `chatPresetMap` → popup reflects the change on next open.
-  - Popup change → `ACTIVE_PRESET_CHANGED` message → overlay updates selected value in real time.
+  - Popup change → `ACTIVE_PRESET_CHANGED` message to the active DeepSeek tab of the current window only → that tab's overlay updates selected value in real time; other open DeepSeek tabs keep their own prompt group.
   - Prompt group list changes (add/delete/rename) → `storage.onChanged` → overlay re-renders the option list.
 - **Conversation binding support**: Selecting a prompt group via the overlay on a conversation with a UUID also updates the `chatPresetMap` binding. Selecting the blank option unbinds.
 - **SPA navigation resilience**: A `MutationObserver` monitors DOM changes. When a conversation switch causes the header bar to be rebuilt, the overlay is automatically remounted with the correct binding state restored.
