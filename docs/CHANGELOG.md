@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.18](changelog/v4.md#43918---2026-11-12) | Fixes a composer holding only a stale `Current Time:` line being sent unchanged: with no attachment the send is now suppressed and the text stays, and with an attachment the old line is replaced by a fresh one followed by the group prefix |
 | [4.39.17](changelog/v4.md#43917---2026-11-12) | Fixes picking a prompt group in the popup, or opening the popup, changing the group of every open DeepSeek new-conversation tab: the popup now sends the selection only to the active DeepSeek tab of the current window; the prompt group editor window still updates every open tab |
 | [4.39.16](changelog/v4.md#43916---2026-11-12) | Fixes Import Restore Records accepting an array as `restored_messages` and a file of any size: the import now rejects an array and a file with more than 200 records with an error dialog and leaves storage unchanged; a merged total above 200 is still accepted and trimmed by the content script at its next save |
 | [4.39.15](changelog/v4.md#43915---2026-11-12) | Fixes the sync-retry queue `dsLocalAuth`, the oversized-key list `dsOversizedKeys` and `restored_messages` being written to the cloud although they are local-only: the popup-open migration push, the conflict-resolution write-back and the default fill now skip them through `StorageManager.SYNC_EXCLUDED_KEYS` |

@@ -2,7 +2,7 @@
  * DS studio — Prompt Injector / 送出按鈕辨識部件
  *
  * 單一職責：判定某個 DOM 元素是否為 DeepSeek 的送出按鈕、該按鈕是否可送出，
- * 以及解析該按鈕對應的 textarea。不含任何注入邏輯與事件監聽。
+ * 解析該按鈕對應的 textarea，以及判定主輸入框是否帶有附件。不含任何注入邏輯與事件監聽。
  * 選擇器一律取自 content/ds-selectors.js，本檔不硬編任何 DeepSeek class 字串。
  *
  * 無載入期副作用：載入僅完成 globalThis 指派。
@@ -14,6 +14,12 @@
     const selectors = root.DSstudio?.Selectors ||
     // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
+
+    // 本擴充功能自行注入的節點一律以此前綴標記 class 或 id
+    const EXTENSION_INJECTED_PREFIX = 'dss-';
+
+    // 主輸入框動作列（附件鈕、隱藏檔案輸入與送出鈕）；class 取自 ds-selectors.js
+    const SEND_BUTTON_ROW_SELECTOR = '.' + selectors.SEND_BUTTON_ROW_CLASS;
 
     /**
      * 判斷按鈕是否為編輯視窗的「傳送」按鈕（結構性比對，不比對文字內容）：
@@ -122,6 +128,50 @@
         return findTextareaNearButton(button);
     }
 
+    /**
+     * 由主輸入框 textarea 向上找出其專屬的輸入框包裝層：最近一個含送出按鈕列的祖先，且其中只有這一個 textarea（否則找到的是訊息列表等更外層容器，該列不屬於此 textarea）。
+     * @param {HTMLTextAreaElement} textarea
+     * @returns {Element|null}
+     */
+    function findComposerWrapper(textarea) {
+        let el = textarea.parentElement;
+        // Stryker disable next-line BlockStatement: 等價變異 — 清空迴圈主體會讓 el 永不前進，形成同步無窮迴圈，只能被判為 Timeout，無法以測試 Killed
+        while (el && el !== document.body) {
+            if (el.querySelector(SEND_BUTTON_ROW_SELECTOR)) {
+                const isOwnWrapper = el.querySelectorAll(selectors.ANY_TEXTAREA_SELECTOR).length === 1;
+                return isOwnWrapper ? el : null;
+            }
+            el = el.parentElement;
+        }
+        return null;
+    }
+
+    /**
+     * 判斷元素是否為本擴充功能自行注入的節點（class 或 id 帶擴充功能前綴）。
+     * @param {Element} el
+     * @returns {boolean}
+     */
+    function isExtensionInjectedElement(el) {
+        if (el.id.startsWith(EXTENSION_INJECTED_PREFIX)) return true;
+        return Array.from(el.classList).some(cls => cls.startsWith(EXTENSION_INJECTED_PREFIX));
+    }
+
+    /**
+     * 判斷主輸入框是否附有檔案或圖片：附件卡片是輸入框包裝層的兄弟元素，故包裝層的父層若另有不含此 textarea、且非本擴充功能注入的子元素，即視為有附件。送出按鈕在輸入框非空時一律啟用，無法以按鈕狀態判斷附件。非主輸入框（例如編輯視窗的編輯框）一律回傳 false。
+     * @param {HTMLTextAreaElement} textarea
+     * @returns {boolean}
+     */
+    function hasComposerAttachment(textarea) {
+        if (!textarea || !textarea.matches(selectors.INPUT_TEXTAREA_SELECTOR)) return false;
+
+        const wrapper = findComposerWrapper(textarea);
+        const composerBox = wrapper?.parentElement;
+        if (!composerBox) return false;
+
+        return Array.from(composerBox.children)
+            .some(child => !child.contains(textarea) && !isExtensionInjectedElement(child));
+    }
+
     // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node
     root.__DS_PromptInjectorSendButton = {
         isEditWindowSendButton,
@@ -129,6 +179,7 @@
         isSendButtonEnabled,
         findSendButtonForTextarea,
         resolveTextareaForButton,
+        hasComposerAttachment,
     };
 
     // === 測試匯出（瀏覽器情境為 no-op） ===

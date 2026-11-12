@@ -28,6 +28,7 @@
         isSendButtonEnabled,
         findSendButtonForTextarea,
         resolveTextareaForButton,
+        hasComposerAttachment,
     } = sendButton;
 
     // 行動裝置判定共用工具（瀏覽器：content/mobile-device.js 於前載入；Node.js 測試：直接 require）
@@ -46,6 +47,12 @@
      */
     function stripLeadingSystemTimeLine(text) {
         return text.replace(LEADING_SYSTEM_TIME_LINE_PATTERN, '');
+    }
+
+    // 取出 <user-input> 包裝內的使用者文字；未包裝時原樣回傳
+    function unwrapUserInput(text) {
+        const userInputMatch = text.match(/<user-input>\n([\s\S]*)\n<\/user-input>$/);
+        return userInputMatch ? userInputMatch[1] : text;
     }
 
     /**
@@ -74,10 +81,8 @@
             if (!ctx.getIsEnabled()) return false;
 
             const injectionPrefix = buildInjectionPrefix();
-            const rawVal = textarea.value;
-            const userInputMatch = rawVal.match(/<user-input>\n([\s\S]*)\n<\/user-input>$/);
             const isShowSystemTime = ctx.getIsShowSystemTime();
-            const unwrappedVal = userInputMatch ? userInputMatch[1] : rawVal;
+            const unwrappedVal = unwrapUserInput(textarea.value);
             // 系統時間開啟時剝除開頭的舊時間戳，確保送出內容僅有一行 Current Time
             const currentVal = isShowSystemTime ? stripLeadingSystemTimeLine(unwrappedVal) : unwrappedVal;
             const hasUserText = currentVal.trim() !== '';
@@ -103,6 +108,16 @@
             textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
             return true;
+        }
+
+        // 輸入框是否只剩開頭的舊時間戳行（擴充功能啟用且系統時間開啟時；與 injectPrefix 採同一剝除規則）
+        function isStaleTimeLineOnly(textarea) {
+            if (!ctx.getIsEnabled() || !ctx.getIsShowSystemTime()) return false;
+            const unwrappedVal = unwrapUserInput(textarea.value);
+            const strippedVal = stripLeadingSystemTimeLine(unwrappedVal);
+            return strippedVal !== unwrappedVal &&
+                // Stryker disable next-line ConditionalExpression: 等價變異 — 舊時間行後接使用者文字時，injectPrefix 依同一段去除後的文字判定有內容，送出結果與原式相同
+                strippedVal.trim() === '';
         }
 
         // 攔截原始事件，改由本模組於注入完成後自行重送
@@ -161,14 +176,20 @@
             if (!activeElement || activeElement.tagName !== 'TEXTAREA') return;
 
             const hasText = activeElement.value.trim() !== '';
-            if (hasText) ctx.markChatCreationAttempt();
+            const isStaleOnly = isStaleTimeLineOnly(activeElement);
+            if (hasText && !isStaleOnly) ctx.markChatCreationAttempt();
 
-            // 僅在無文字時才需確認送出按鈕是否可送出（僅附件/圖片的情境）
-            const sendButtonEl = hasText ? null : findSendButtonForTextarea(activeElement);
-            const isSendableWithoutText = !hasText && isSendButtonEnabled(sendButtonEl);
+            // 只剩舊時間戳時以附件判斷可否送出（按鈕此時必為啟用）；無文字時才確認送出按鈕狀態（僅附件/圖片的情境）
+            const isSendableWithoutText = isStaleOnly
+                ? hasComposerAttachment(activeElement)
+                : !hasText && isSendButtonEnabled(findSendButtonForTextarea(activeElement));
 
-            if (!injectPrefix(activeElement, isSendableWithoutText)) return;
-            if (!hasText) ctx.markChatCreationAttempt();
+            if (!injectPrefix(activeElement, isSendableWithoutText)) {
+                // 只剩舊時間戳且無附件：攔下送出，輸入框維持原狀
+                if (isStaleOnly) suppressEvent(e);
+                return;
+            }
+            if (!hasText || isStaleOnly) ctx.markChatCreationAttempt();
 
             suppressEvent(e);
             redispatchEnter(activeElement);
@@ -190,11 +211,19 @@
                 if (!textarea) return;
 
                 const hasText = textarea.value.trim() !== '';
-                const isSendableWithoutText = !hasText && isSendButtonEnabled(button);
+                const isStaleOnly = isStaleTimeLineOnly(textarea);
+                // 只剩舊時間戳時以附件判斷可否送出，否則沿用送出按鈕狀態
+                const isSendableWithoutText = isStaleOnly
+                    ? hasComposerAttachment(textarea)
+                    : !hasText && isSendButtonEnabled(button);
 
-                if (hasText) ctx.markChatCreationAttempt();
-                if (!injectPrefix(textarea, isSendableWithoutText)) return;
-                if (!hasText) ctx.markChatCreationAttempt();
+                if (hasText && !isStaleOnly) ctx.markChatCreationAttempt();
+                if (!injectPrefix(textarea, isSendableWithoutText)) {
+                    // 只剩舊時間戳且無附件：攔下點擊，輸入框維持原狀
+                    if (isStaleOnly) suppressEvent(e);
+                    return;
+                }
+                if (!hasText || isStaleOnly) ctx.markChatCreationAttempt();
 
                 // 同步設定注入旗標，防止同一次實體點擊的後續事件（mousedown/click）重複注入
                 ctx.setIsInjecting(true);

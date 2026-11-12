@@ -9,7 +9,7 @@ import { expectTimeLine, timedSend } from './helpers/system-time.js';
 // 只附檔案的送出（docs/spec/01-prompt-system.md 第 2 節 Attachment/image-only submission；docs/spec/04-features.md 第 19 節 Attachment/Image-Only Sends）：
 // - 輸入框為空但送出按鈕未停用時仍會注入，送出內容只有時間行（系統時間開啟時）與群組或全域提示詞的 <system-reminder> 區塊，整個 <user-input> 包裝刻意省略。
 // - 按 Enter 與點擊送出按鈕都會觸發；輸入框為空且送出按鈕停用時不注入。
-// - 輸入框只有一行舊時間行且附有檔案時，舊時間行換成新的一行（docs/FEATURES.md, System Time Injection, Duplicate Prevention）。
+// - 輸入框只有一行舊時間行且附有檔案時，舊時間行換成新的一行；沒有附件時不送出，輸入框內容不變（docs/FEATURES.md, System Time Injection, Duplicate Prevention；docs/spec/04-features.md 第 19 節 Duplicate Injection Handling）。
 // 上傳請求以瀏覽器內替身回應，不會在測試帳號留下檔案；每個送出請求都在瀏覽器內中止，沒有任何內容抵達 DeepSeek；所有寫入的儲存鍵在測試後還原。
 
 const HOME = DEEPSEEK_ORIGIN + '/';
@@ -96,9 +96,6 @@ test.describe('prompt injection on an attachment-only send', () => {
     });
 
     test('a composer holding only an old time line plus an attachment sends one fresh time line, then the group content in system-reminder', async ({ page, context, settings }) => {
-        // 已知與文件不符（2026-11-12 在真實頁面觀察）：按 Enter 時送出的是原封不動的舊時間行，沒有新時間行，也沒有群組內容。
-        // 標記為預期失敗，讓此行為缺口持續可見；產品修正後此測試會轉為「意外通過」而失敗，屆時移除這一行。
-        test.fail(true, 'known gap: a composer holding only an old time line plus an attachment is sent unchanged, with no injection');
         const group = createTestPreset('attach-stale-time');
         const { upload, blocked } = await openHomeWithGroupPicked(page, context, settings, group, true);
         await attachAndWaitUntilReady(page, upload, uniqueFileName('stale-time'));
@@ -109,6 +106,23 @@ test.describe('prompt injection on an attachment-only send', () => {
         expect(completion.ref_file_ids, 'the send carries the attached file (precondition)').toEqual(uploadedIds(upload));
         expect(timed.prompt.split('Current Time:').length - 1, 'the sent prompt carries exactly one time line').toBe(1);
         expect(expectTimeLine(timed), 'the old time line is replaced by a fresh one, followed only by the system-reminder block with the group content').toBe(attachmentOnlyPrompt(group.content));
+    });
+
+    test('a composer holding only an old time line with no attachment sends nothing on Enter or a click, and the composer keeps the old line', async ({ page, context, settings }) => {
+        const group = createTestPreset('attach-none-stale-time');
+        const { upload, blocked } = await openHomeWithGroupPicked(page, context, settings, group, true);
+        await composer(page).fill(STALE_TIME_LINE);
+        await expect(composer(page), 'the composer holds only the old time line (precondition)').toHaveValue(STALE_TIME_LINE);
+        expect(upload.uploads(), 'no file is attached (precondition)').toEqual([]);
+
+        const before = blocked.requests().length;
+        await composer(page).press('Enter');
+        await composerSendButton(page).click();
+        await new Promise((resolve) => setTimeout(resolve, NO_SEND_WINDOW_MS));
+        // 連同送出內容一起列出，失敗時直接看出送出了什麼。
+        const sendsAfter = blocked.requests().slice(before).map((request) => ({ url: request.url, prompt: request.body?.prompt }));
+        expect(sendsAfter, 'no send request within the observation window after Enter and a click').toEqual([]);
+        await expect(composer(page), 'the composer still holds the old time line unchanged').toHaveValue(STALE_TIME_LINE);
     });
 
     test('with no attachment and an empty composer the send button stays disabled, and neither Enter nor a click injects or sends anything', async ({ page, context, settings }) => {
