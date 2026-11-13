@@ -6,7 +6,7 @@
  *   hasNotificationPermission()     -> chrome.permissions.contains({ permissions: ['notifications'] })
  *   requestNotificationPermission() -> chrome.permissions.request({ permissions: ['notifications'] })
  *
- * Both resolve the boundary's boolean answer; a rejection or synchronous throw resolves false and logs a console.error whose first argument starts with '[DSS] notification-permission.<function name>'; an absent chrome or chrome.permissions resolves false without logging.
+ * Both resolve the boundary's boolean answer; a rejection or synchronous throw resolves false and logs a console.error whose first argument starts with '[DSS] notification-permission.<function name>'; an absent chrome or chrome.permissions resolves false without logging. The one exception: when utils/permission-request-errors.js is loaded (globalThis.DSSPermissionRequestErrors) and the request function's chrome.permissions.request rejects with Chromium's exact `Error: Could not find an active window.` (no window can host the prompt, as on Kiwi Browser), the request function resolves true; the check function still resolves false on that rejection.
  *
  * test/setup/vitest.setup.js installs no chrome.permissions, so each test installs its own and afterEach restores the original (absent) state. loadApi() evaluates the module afresh in every test (vi.resetModules), so its load-time code runs inside the test that asserts it; the wrapper must still read chrome.permissions at call time, because each test installs its mock after loading.
  */
@@ -20,6 +20,16 @@ const MODULE_PATH = resolve(import.meta.dirname, '../../utils/notification-permi
 const MODULE_LOADERS = import.meta.glob('../../utils/notification-permission.js');
 const NOTIFICATIONS_PERMISSION_SET = { permissions: ['notifications'] };
 const LOG_PREFIX = '[DSS] notification-permission.';
+const ERRORS_MODULE_LOADERS = import.meta.glob('../../utils/permission-request-errors.js');
+const WINDOW_UNAVAILABLE = 'Could not find an active window.';
+
+/** Loads the real utils/permission-request-errors.js, which popup.html and service-worker.js load beside this wrapper; call it after loadApi(), whose vi.resetModules() would discard it. */
+async function loadErrorsModule() {
+    const [loader] = Object.values(ERRORS_MODULE_LOADERS);
+    if (!loader) throw new Error('utils/permission-request-errors.js is missing or import.meta.glob did not match it');
+    await loader();
+    if (!globalThis.DSSPermissionRequestErrors) throw new Error('utils/permission-request-errors.js loaded but did not publish globalThis.DSSPermissionRequestErrors');
+}
 
 /**
  * Loads the module under test and returns its published global.
@@ -164,5 +174,42 @@ describe('DSSNotificationPermission', () => {
         await api.hasNotificationPermission();
 
         expect(permissions.request).not.toHaveBeenCalled();
+    });
+
+    // Kiwi Browser on Android: no native window can host the prompt, so Chromium rejects chrome.permissions.request with "Could not find an active window."; the request counts as granted only for that exact rejection, and only when utils/permission-request-errors.js is loaded.
+    describe('when chrome.permissions rejects because no window can host the prompt', () => {
+        afterEach(() => { delete globalThis.DSSPermissionRequestErrors; });
+
+        it('requestNotificationPermission resolves true when request rejects with the exact window error', async () => {
+            const api = await loadApi();
+            await loadErrorsModule();
+            installPermissions('request', vi.fn().mockRejectedValue(new Error(WINDOW_UNAVAILABLE)));
+
+            await expect(api.requestNotificationPermission()).resolves.toBe(true);
+        });
+
+        it('requestNotificationPermission resolves false when request rejects with any other error, with the errors module loaded', async () => {
+            const api = await loadApi();
+            await loadErrorsModule();
+            installPermissions('request', vi.fn().mockRejectedValue(new Error('permissions API error')));
+
+            await expect(api.requestNotificationPermission()).resolves.toBe(false);
+        });
+
+        it('hasNotificationPermission resolves false when contains rejects with the exact window error (a check is never a grant)', async () => {
+            const api = await loadApi();
+            await loadErrorsModule();
+            installPermissions('contains', vi.fn().mockRejectedValue(new Error(WINDOW_UNAVAILABLE)));
+
+            await expect(api.hasNotificationPermission()).resolves.toBe(false);
+        });
+
+        it('requestNotificationPermission resolves false on the window error when the errors module is not loaded', async () => {
+            const api = await loadApi();
+            delete globalThis.DSSPermissionRequestErrors;
+            installPermissions('request', vi.fn().mockRejectedValue(new Error(WINDOW_UNAVAILABLE)));
+
+            await expect(api.requestNotificationPermission()).resolves.toBe(false);
+        });
     });
 });

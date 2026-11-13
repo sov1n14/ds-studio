@@ -31,7 +31,7 @@ function createToggleManager(ctx) {
     const intentNamesRecordedSinceOpen = new Set();
 
     /**
-     * 確認權限包裝模組回報已取得權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false。
+     * 確認權限包裝模組回報已取得權限，未取得時才請求；包裝模組缺失視為未取得，API 失敗由包裝模組轉為 false（唯沒有視窗可承載權限提示時包裝模組視同同意）。
      * 請求前先記下待完成意圖：Chrome 顯示提示時會關閉 popup，同意後改由 background/permission-intent-routes.js 開啟設定；遭拒或失敗時清除意圖。
      */
     async function ensurePermission(permissionModule, hasMethodName, requestMethodName, intentName) {

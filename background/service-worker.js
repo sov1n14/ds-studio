@@ -24,6 +24,7 @@ importScripts(
     '../utils/storage-manager.js',
     '../utils/deepseek-api.js',
     '../utils/temporary-chat-constants.js',
+    '../utils/permission-request-errors.js',
     '../utils/clipboard-permission.js',
     '../utils/notification-permission.js',
     'pending-store.js',

@@ -6,7 +6,7 @@
  *   hasClipboardPermission()     -> chrome.permissions.contains({ permissions: ['clipboardWrite', 'offscreen'] })
  *   requestClipboardPermission() -> chrome.permissions.request({ permissions: ['clipboardWrite', 'offscreen'] })
  *
- * Both resolve the boundary's boolean answer; a rejection or synchronous throw resolves false and logs exactly one console.error whose first argument starts with '[DSS] clipboard-permission' (the log channel and prefix shape of utils/notification-permission.js); an absent chrome or chrome.permissions resolves false without logging. The permission order inside the array is not part of the contract.
+ * Both resolve the boundary's boolean answer; a rejection or synchronous throw resolves false and logs exactly one console.error whose first argument starts with '[DSS] clipboard-permission' (the log channel and prefix shape of utils/notification-permission.js); an absent chrome or chrome.permissions resolves false without logging. The permission order inside the array is not part of the contract. The one exception: when utils/permission-request-errors.js is loaded (globalThis.DSSPermissionRequestErrors) and the request function's chrome.permissions.request rejects with Chromium's exact `Error: Could not find an active window.` (no window can host the prompt, as on Kiwi Browser), the request function resolves true; the check function still resolves false on that rejection.
  *
  * test/setup/vitest.setup.js installs no chrome.permissions, so each test installs its own double and afterEach restores the original (absent) state. loadApi() evaluates the module afresh in every test (vi.resetModules), so the wrapper must read chrome.permissions at call time, because each test installs its double after loading.
  */
@@ -20,6 +20,16 @@ const MODULE_PATH = resolve(import.meta.dirname, '../../utils/clipboard-permissi
 const MODULE_LOADERS = import.meta.glob('../../utils/clipboard-permission.js');
 const EXPECTED_PERMISSIONS = ['clipboardWrite', 'offscreen'];
 const LOG_PREFIX = '[DSS] clipboard-permission';
+const ERRORS_MODULE_LOADERS = import.meta.glob('../../utils/permission-request-errors.js');
+const WINDOW_UNAVAILABLE = 'Could not find an active window.';
+
+/** Loads the real utils/permission-request-errors.js, which popup.html and service-worker.js load beside this wrapper; call it after loadApi(), whose vi.resetModules() would discard it. */
+async function loadErrorsModule() {
+    const [loader] = Object.values(ERRORS_MODULE_LOADERS);
+    if (!loader) throw new Error('utils/permission-request-errors.js is missing or import.meta.glob did not match it');
+    await loader();
+    if (!globalThis.DSSPermissionRequestErrors) throw new Error('utils/permission-request-errors.js loaded but did not publish globalThis.DSSPermissionRequestErrors');
+}
 
 /**
  * Loads the module under test and returns its published global.
@@ -186,5 +196,42 @@ describe('DSSClipboardPermission', () => {
         await api.hasClipboardPermission();
 
         expect(received.request).toEqual([]);
+    });
+
+    // Kiwi Browser on Android: no native window can host the prompt, so Chromium rejects chrome.permissions.request with "Could not find an active window."; the request counts as granted only for that exact rejection, and only when utils/permission-request-errors.js is loaded.
+    describe('when chrome.permissions rejects because no window can host the prompt', () => {
+        afterEach(() => { delete globalThis.DSSPermissionRequestErrors; });
+
+        it('requestClipboardPermission resolves true when request rejects with the exact window error', async () => {
+            const api = await loadApi();
+            await loadErrorsModule();
+            installPermissions('request', () => Promise.reject(new Error(WINDOW_UNAVAILABLE)));
+
+            await expect(api.requestClipboardPermission()).resolves.toBe(true);
+        });
+
+        it('requestClipboardPermission resolves false when request rejects with any other error, with the errors module loaded', async () => {
+            const api = await loadApi();
+            await loadErrorsModule();
+            installPermissions('request', () => Promise.reject(new Error('permissions API error')));
+
+            await expect(api.requestClipboardPermission()).resolves.toBe(false);
+        });
+
+        it('hasClipboardPermission resolves false when contains rejects with the exact window error (a check is never a grant)', async () => {
+            const api = await loadApi();
+            await loadErrorsModule();
+            installPermissions('contains', () => Promise.reject(new Error(WINDOW_UNAVAILABLE)));
+
+            await expect(api.hasClipboardPermission()).resolves.toBe(false);
+        });
+
+        it('requestClipboardPermission resolves false on the window error when the errors module is not loaded', async () => {
+            const api = await loadApi();
+            delete globalThis.DSSPermissionRequestErrors;
+            installPermissions('request', () => Promise.reject(new Error(WINDOW_UNAVAILABLE)));
+
+            await expect(api.requestClipboardPermission()).resolves.toBe(false);
+        });
     });
 });
