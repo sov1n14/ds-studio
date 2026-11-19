@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
+import { pacedTimeout } from './helpers/human.js';
 import { readListScroll, scrollListFromPage, waitForListScrollToSettle, wheelOverList } from './helpers/scroll.js';
 
 // Prevent auto-scroll (`dsPreventAutoScroll`) stops the page from scrolling the message list downward, while the user's own wheel keeps working; off restores page-driven scrolling.
@@ -40,7 +41,7 @@ test.describe('prevent auto-scroll', () => {
                 await scrollListFromPage(page, api, 'down');
                 await waitForListScrollToSettle(page);
                 expect((await readListScroll(page)).top, `with the feature on, page ${api} leaves the list where the user scrolled it`).toBe(start.top);
-            }).toPass({ timeout: 20_000 });
+            }).toPass({ timeout: pacedTimeout(20_000) });
         }
 
         const beforeWheel = await scrollUpByWheel(page);

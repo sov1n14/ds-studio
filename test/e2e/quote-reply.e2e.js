@@ -2,7 +2,7 @@ import { test, expect } from './fixtures.js';
 import { blockSendRequests, composer } from './helpers/composer.js';
 import { CONVERSATIONS } from './helpers/conversations.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
-import { humanType } from './helpers/human.js';
+import { humanType, pacedTimeout } from './helpers/human.js';
 import { expectNeverWithin } from './helpers/observation.js';
 import { asBlockquote, dragSelectTwoReplyParagraphs, dragSelectWithinReplyLine } from './helpers/quote.js';
 import { readListScroll, waitForListScrollToSettle, wheelOverList } from './helpers/scroll.js';
@@ -74,7 +74,7 @@ test.describe('quote reply', () => {
             await page.evaluate(() => window.getSelection().removeAllRanges());
             await dragSelectTwoReplyParagraphs(page);
             await expect(quoteButton, 'after switching on, the same selection shows the quote button').toBeVisible({ timeout: 2_000 });
-        }).toPass({ timeout: 20_000 });
+        }).toPass({ timeout: pacedTimeout(20_000) });
     });
 });
 

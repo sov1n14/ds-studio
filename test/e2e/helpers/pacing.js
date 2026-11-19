@@ -105,6 +105,10 @@ export function createPacer({ config, rng = Math.random, delay, extendBudget = (
 
 const PACED = Symbol.for('dss.e2e.pacedAction');
 
+// Page and Locator actions that pause before they run. evaluate, route, expect and CDP stay unpaced; Keyboard, Mouse and Touchscreen primitives are paced by installInputPacing.
+export const PAGE_ACTIONS = ['click', 'dblclick', 'tap', 'fill', 'press', 'type', 'hover', 'check', 'uncheck', 'setChecked', 'selectOption', 'setInputFiles', 'goto', 'reload', 'goBack', 'goForward'];
+export const LOCATOR_ACTIONS = ['click', 'dblclick', 'tap', 'fill', 'press', 'pressSequentially', 'type', 'hover', 'check', 'uncheck', 'setChecked', 'selectOption', 'setInputFiles', 'dragTo'];
+
 /**
  * Wraps each method of `prototype` named in `methodNames` so it pauses one between-actions delay before it runs.
  * An action called from inside a paced action (Playwright's pressSequentially calls type) or inside `pacer.runUnpaced` runs without a pause.
@@ -122,6 +126,73 @@ export function installActionPacing(prototype, methodNames, pacer) {
         paced[PACED] = true;
         Object.defineProperty(prototype, name, { value: paced, writable: true, configurable: true, enumerable: false });
     }
+}
+
+// Input primitives of a Page that pause like a person before they run. A drag pauses once per primitive (down, each move, up).
+const INPUT_ACTIONS = Object.freeze({
+    keyboard: ['press', 'type', 'down', 'up', 'insertText'],
+    mouse: ['click', 'dblclick', 'down', 'up', 'move', 'wheel'],
+    touchscreen: ['tap'],
+});
+
+/** Paces the Keyboard, Mouse and Touchscreen of `page` like `installActionPacing`; those classes are shared, so one install covers every page of the worker. */
+export function installInputPacing(page, pacer) {
+    for (const [device, methodNames] of Object.entries(INPUT_ACTIONS)) {
+        installActionPacing(Object.getPrototypeOf(page[device]), methodNames, pacer);
+    }
+}
+
+async function typeSteps(pacer, steps, pressKey) {
+    for (const { key, delayMs, thinkMs } of steps) {
+        await pacer.wait(thinkMs);
+        await pacer.wait(delayMs);
+        await pressKey(key);
+    }
+}
+
+/**
+ * Enters `text` into `locator` as a person types it: one pause, then one key at a time with random gaps and think pauses, a line break as Shift+Enter (Enter would send).
+ * Like `fill`, the text replaces the current value (selected first, so the first key overwrites it and the field is never empty in between); with `{ isAppending: true }` it is typed at the caret instead.
+ * Text over 200 characters, empty text, a fill-only `inputType`, or pacing off: one paced `fill`, like a paste.
+ * The keys are sent inside `pacer.runUnpaced`, so the paced Locator actions add no pause of their own.
+ */
+export async function typeIntoLocator(pacer, locator, text, { isAppending = false, inputType = '' } = {}) {
+    const plan = planTyping(text, { config: pacer.config, rng: pacer.rng, inputType });
+    if (plan.mode === 'fill') {
+        await locator.fill(isAppending ? (await locator.inputValue()) + text : text);
+        return;
+    }
+    await pacer.pause('betweenActions');
+    await pacer.runUnpaced(async () => {
+        if (!isAppending) await locator.selectText();
+        await typeSteps(pacer, plan.steps, (key) => (key === 'Shift+Enter' ? locator.press(key) : locator.pressSequentially(key)));
+    });
+}
+
+/**
+ * Typing helpers bound to `pacer`. The keys are sent inside `pacer.runUnpaced`, so the paced Locator and Keyboard actions add no pause of their own: the key gaps are the only waits between keys.
+ * `humanType(locator, text, { isAppending })` enters `text` into `locator` as a person types it: one pause, then one key at a time with random gaps and think pauses, a line break as Shift+Enter (Enter would send).
+ * Like `fill`, the text replaces the current value (selected first, so the first key overwrites it and the field is never empty in between); with `{ isAppending: true }` it is typed at the caret instead.
+ * Text over 200 characters, empty text, a range input, or pacing off: one paced `fill`, like a paste.
+ * `humanTypeAtFocus(keyboard, text)` types `text` (no line breaks: the fill branch presses Enter for one) wherever the keyboard focus is, with the same keys and waits; the fill branch is one paced `keyboard.type` call.
+ */
+export function createTyper(pacer) {
+    async function humanType(locator, text, { isAppending = false } = {}) {
+        const inputType = await locator.evaluate((element) => (element instanceof HTMLInputElement ? element.type : ''));
+        await typeIntoLocator(pacer, locator, text, { isAppending, inputType });
+    }
+
+    async function humanTypeAtFocus(keyboard, text) {
+        const plan = planTyping(text, { config: pacer.config, rng: pacer.rng });
+        if (plan.mode === 'fill') {
+            await keyboard.type(text);
+            return;
+        }
+        await pacer.pause('betweenActions');
+        await pacer.runUnpaced(() => typeSteps(pacer, plan.steps, (key) => (key === 'Shift+Enter' ? keyboard.press(key) : keyboard.type(key))));
+    }
+
+    return { humanType, humanTypeAtFocus };
 }
 
 // Extra retry budget per unit of scale: one worst-case paced attempt of a 63-character prompt with its clicks is about 33 s.

@@ -9,6 +9,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { launchProfile } from './profile.mjs';
+import { installPacing } from './human-pacing.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TIMEOUT_MS = 150_000; // 2.5 min total budget
@@ -32,6 +33,7 @@ const context = await launchProfile(chromium, {
   locale: 'en-US',
 });
 
+await installPacing(context);
 const page = context.pages()[0] || await context.newPage();
 const deadline = Date.now() + TIMEOUT_MS;
 const remaining = () => Math.max(deadline - Date.now(), 1000);

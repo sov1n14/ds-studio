@@ -221,7 +221,9 @@ ds-studio/
 
 The shared fixtures of `test/e2e/` live in `fixtures.js` and the helpers in `test/e2e/helpers/`; `helpers/popup.js` opens and drives the extension popup, and `helpers/prompt-capture.js` captures the outgoing prompt by aborting the send in the browser; `helpers/pacing.js` holds the pacing logic and `helpers/human.js` wires it to Playwright, as the pacing paragraph below describes; settings are written through the extension service worker and restored after each test, and keys a test cannot name in advance are tracked with `trackNewKeys` and removed afterwards; sends never reach DeepSeek: they are either aborted or, in the auto-copy and reply-notification specs, answered in the browser by a stubbed completion (`helpers/reply-stub.js`: a streaming completion followed by a stubbed `resume_stream`), so a reply renders without any request reaching DeepSeek's chat history; only one browser may hold `.browser-profile/` at a time; before any page opens, the shared browser context calls `reloadExtension` once to reload the unpacked extension, then fails the run when the service worker's manifest version differs from `manifest.json` on disk, because a persistent profile can keep running a cached older service worker.
 
-E2E runs are paced like a person, so a run takes much longer than the bare test time: a pause of 5–20 s before each test except the first of the worker, a pause of 0.3–1.5 s before each Page and Locator action (click, fill, press, hover, check, select, file upload, goto, reload and similar; Mouse, Keyboard and Touchscreen primitives, evaluate and route run unpaced), and typed text entered one key at a time with 60–220 ms between keys, a think pause of 0.3–0.7 s after every 5–12 keys and a line break typed as Shift+Enter; text over 200 characters, empty text and range, color and date inputs are filled in one step, as a paste; every wait extends the running test's time budget, retry budgets around paced actions use `pacedTimeout` (60 s per unit of scale added), and a step whose timing is under test runs inside `runUnpaced`; the `DSS_E2E_PACE` environment variable sets the pacing: unset gives full pacing, which every full-suite run uses, `off` disables it, a positive number such as `0.5` scales every wait, and any other value is rejected with an error; set `off` or a scale only while debugging a single spec locally, for example `DSS_E2E_PACE=off npm run test:e2e -- <spec>`.
+E2E runs are paced like a person, so a run takes much longer than the bare test time: a pause of 5–20 s before each test except the first of the worker, a pause of 0.3–1.5 s before each Page and Locator action (click, fill, press, hover, check, select, file upload, goto, reload and similar), each Keyboard call (press, type, down, up, insertText), each Mouse call (click, dblclick, down, up, move, wheel) and each Touchscreen tap, and once before each CDP touch swipe gesture; the typing helpers `humanType` and `humanTypeAtFocus` make one 0.3–1.5 s pause before the first key, then only the key gaps and think pauses below, and evaluate, route and CDP stubs run unpaced; typed text is entered one key at a time with 60–220 ms between keys, a think pause of 0.3–0.7 s after every 5–12 keys and a line break typed as Shift+Enter; text over 200 characters, empty text and range, color and date inputs are filled in one step, as a paste; every wait extends the running test's time budget, retry budgets around paced actions use `pacedTimeout` (60 s per unit of scale added), and a step whose timing is under test runs inside `runUnpaced`; the `DSS_E2E_PACE` environment variable sets the pacing: unset gives full pacing, which every full-suite run uses, `off` disables it, a positive number such as `0.5` scales every wait, and any other value is rejected with an error; set `off` or a scale only while debugging a single spec locally, for example `DSS_E2E_PACE=off npm run test:e2e -- <spec>`. The action lists `PAGE_ACTIONS` and `LOCATOR_ACTIONS` and the shared typing primitive `typeIntoLocator` live in `helpers/pacing.js`.
+
+The capture tool reuses the same pacing: `tools/human-pacing.mjs` installs the Page and Locator pauses above on the pages that `tools/capture.mjs` and `tools/poc-login.mjs` open, `submitPrompt` in `tools/scenario-helpers.mjs` types the prompt one key at a time through `typeIntoLocator` before pressing Enter, and `DSS_E2E_PACE` controls it the same way.
 
 - `attachment-only.e2e.js`: an attachment-only send, by Enter or the send button, carries the group content in a system-reminder block with no user-input wrapper, a stale time line plus an attachment becomes one fresh time line, and a stale time line or an empty composer with no attachment sends nothing.
 - `auto-click.e2e.js`: with each auto-click switch off its button is never clicked and switching it on gets it clicked; with the master switch off auto retry never clicks.
@@ -413,7 +415,7 @@ The standalone prompt editor opens as its own OS window, so it can end up buried
 
 ### Reply Notification Message Route (Reply Notification, v4.38.0)
 
-The background layer is the only place that calls `chrome.notifications`; the content script only sends a message. For the behavior specification see [Feature Spec §27](spec/04-features.md#27-reply-complete-notification-reply-notification-v4380).
+The background layer is the only place that calls `chrome.notifications`; the content script only sends a message. For the behavior specification see [Feature Spec §27](spec/04-features.md#27-reply-complete-notification-reply-notification--v4380).
 
 | Message type | Payload | Effect in the service worker |
 |-|-|-|
@@ -425,7 +427,7 @@ The background layer is the only place that calls `chrome.notifications`; the co
 
 ### Clipboard Write Message Route (Clipboard Write, v4.39.0)
 
-The background layer is the only place that calls `chrome.offscreen`; the content script only sends a message, and the offscreen document only answers messages from background. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+The background layer is the only place that calls `chrome.offscreen`; the content script only sends a message, and the offscreen document only answers messages from background. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy--v4370).
 
 | Message type | Sender → receiver | Payload | Effect |
 |-|-|-|-|
@@ -439,7 +441,7 @@ The background layer is the only place that calls `chrome.offscreen`; the conten
 
 ### Permission Intent Route (Permission Intent, v4.39.3)
 
-Chrome closes the action popup when it shows an optional-permission prompt, so the popup cannot finish its own write after `chrome.permissions.request`; the popup records a pending intent first and the service worker completes it. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy-v4370).
+Chrome closes the action popup when it shows an optional-permission prompt, so the popup cannot finish its own write after `chrome.permissions.request`; the popup records a pending intent first and the service worker completes it. For the behavior specification see [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy--v4370).
 
 | Event | Listener | Effect in the service worker |
 |-|-|-|

@@ -5,7 +5,7 @@ import {
     popupGroupNames, popupGroupRow, popupPickedGroup, popupPinButton,
 } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, presetOverlay, seedOnlyPreset, seedOnlyPresets, trackPresetsCreatedDuringTest } from './helpers/presets.js';
-import { humanType } from './helpers/human.js';
+import { humanType, runUnpaced } from './helpers/human.js';
 import { documentedPrompt, gotoWithOverlay, inNewHomeTab, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
 
 // Managing Prompt Groups in the popup (docs/FEATURES.md, Managing Prompt Groups; docs/spec/01-prompt-system.md sections 1 and 6; docs/spec/02-popup-ui.md sections 7 and 15).
@@ -132,7 +132,8 @@ test.describe('prompt group editor window', () => {
         await expect(editor.locator('#editorNameInput'), 'the editor shows the added group name (precondition)').toHaveValue(addedName);
         await humanType(editor.locator('#editorTextarea'), 'E2E-ESC-CONTENT-' + stamp);
         await humanType(editor.locator('#editorNameInput'), renamed);
-        await closeEditorWithEscape(editor);
+        // Esc must follow the last key at once (D-105 exemption): a pause longer than the 500 ms auto-save debounce would let the name save by itself and the Esc save path would go untested.
+        await runUnpaced(() => closeEditorWithEscape(editor));
 
         await openPopupGroupList(popup);
         await expect(popupGroupRow(popup, renamed), 'the name typed just before Esc was saved').toHaveCount(1);

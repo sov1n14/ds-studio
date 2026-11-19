@@ -4,6 +4,7 @@
  */
 
 import { createRequire } from 'node:module';
+import { typeText } from './human-pacing.mjs';
 const require = createRequire(import.meta.url);
 const DSSelectors = require('../content/ds-selectors.js');
 
@@ -47,7 +48,7 @@ export async function ensureSmartSearchOn(page) {
 
 export async function submitPrompt(page, text) {
   const ta = page.locator('textarea').first();
-  await ta.fill(text);
+  await typeText(ta, text);
   await ta.press('Enter');
 }
 

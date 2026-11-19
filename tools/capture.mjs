@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { scenarios } from './scenarios.mjs';
 import { launchProfile } from './profile.mjs';
+import { installPacing } from './human-pacing.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CAPTURES_DIR = join(__dirname, 'captures');
@@ -144,6 +145,7 @@ async function runPass(passGroups, contextOptions, isMobile) {
   });
 
   try {
+    await installPacing(context);
     for (const groupScenarios of passGroups) {
       const page = await context.newPage();
       try {

@@ -1,6 +1,7 @@
 import { test as base, expect } from './fixtures.js';
 import { CONVERSATIONS, openConversation } from './helpers/conversations.js';
 import { PRESET_OVERLAY_SELECTOR } from './helpers/extension-ui.js';
+import { humanPause, pacedTimeout } from './helpers/human.js';
 import { expectNeverWithin } from './helpers/observation.js';
 import { SIDEBAR_STATE_ARG, isPanelHiddenInPage, isPanelShownInPage } from './helpers/sidebar.js';
 
@@ -86,8 +87,9 @@ async function loadConversationAs(page, cdp, device) {
     await expect.poll(() => panelShown(page), { message: 'the sidebar panel starts hidden in the phone layout (precondition)' }).toBe(false);
 }
 
-/** 從 `start` 以 `durationMs` 滑動 (`dx`, `dy`) 後放開手指，全程是真的觸控事件。 */
+/** 從 `start` 以 `durationMs` 滑動 (`dx`, `dy`) 後放開手指，全程是真的觸控事件；手指落下前先停頓一次（D-105），同一次滑動的觸控事件之間不停頓。 */
 async function swipe(cdp, start, { dx, dy = 0, durationMs = FAST_MS }) {
+    await humanPause();
     const at = (fraction) => ({ x: start.x + dx * fraction, y: start.y + dy * fraction });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at(0)] });
     for (let step = 1; step <= MOVE_STEPS; step += 1) {
@@ -118,7 +120,7 @@ async function openWithFirstSwipe(page, cdp, message) {
     await expect(async () => {
         await swipe(cdp, RIGHT_SWIPE_START, { dx: CLEAR_DISTANCE_PX });
         await expect.poll(() => panelShown(page), { timeout: FIRST_SWIPE_ATTEMPT_MS }).toBe(true);
-    }, message).toPass({ timeout: FIRST_SWIPE_RETRY_MS });
+    }, message).toPass({ timeout: pacedTimeout(FIRST_SWIPE_RETRY_MS) });
 }
 
 /** 先右滑開啟再左滑關閉，證明觸控事件已綁定；回傳時側邊欄面板未顯示。 */
