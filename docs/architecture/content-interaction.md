@@ -6,7 +6,7 @@
 
 ## Quote Reply Module
 
-`content/quote-reply.js` implements a `QuoteReply` singleton that adds a floating "Quote Reply" button triggered by text selection in the AI response area.
+`content/quote-reply.js` implements a `QuoteReply` singleton that adds a floating "Quote Reply" button triggered by a text selection within the chat message list (user messages or AI replies).
 
 ### Trigger and Scope
 

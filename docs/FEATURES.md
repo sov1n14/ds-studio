@@ -280,9 +280,9 @@ The following export behaviors can be controlled in the popup menu:
 
 ## Quote Reply
 
-After selecting text within an AI reply area, a **Quote Reply** floating button appears at the top of the page:
+After selecting text within the chat message list (user messages or AI replies), a **Quote Reply** floating button appears at the top of the page:
 
-- **Trigger Scope**: Only activates when the user selects text within an AI reply area.
+- **Trigger Scope**: Activates when the selection is non-empty and both of its ends lie within the chat message list; this includes text in the user's own messages as well as AI replies.
 - **Injection Format**: Clicking the button appends the selected content to the input box as a Markdown blockquote (`> content`).
 - **Multi-Line Support**: When multiple lines are selected, each line is prefixed with `> `.
 - **Auto-Dismiss**: Automatically hides when the selection is cleared, when clicking outside the button area, or when the button scrolls out of the viewport.
