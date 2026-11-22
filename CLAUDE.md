@@ -24,7 +24,7 @@ DOM-adapter behavior is defined by the live page (selectors, React timing, class
 
 ## Testing Policy
 
-- E2E tests use `@playwright/test`, live under `test/e2e/`, and run only locally against the gitignored persistent Chrome profile `.browser-profile/` (logged-in DeepSeek account and the unpacked extension).
+- E2E tests use `@playwright/test`, live under `test/e2e/`, and run locally only in the offline lane (`npm run test:e2e:offline`, tests tagged `@offline`, no network); specs without `@offline` drive the live site and stay unrun until migrated, as [ARCHITECTURE E2E Specs](docs/ARCHITECTURE.md#e2e-specs) describes.
 - **MUST NOT** drive the live DeepSeek site from any automation (E2E spec, `tools/` script, `playwright-cli`); only the user checks the live site, by hand in their own browser before each release, as [Release HAR Freshness Check](.claude/skills/version-bump/SKILL.md#release-har-freshness-check) describes.
 - E2E tests add to unit tests and never replace the unit tests a change requires; run them only when explicitly requested; Stryker mutation testing covers the unit suite.
 - For a test-only commit (only test files changed, production code untouched), take the before and after evidence from the mutation status of the targeted mutants, Survived on the parent's tests and Killed on the commit's, quoted from a Stryker report in the session, by running the scoped run that [Pre-Bump Quality Gate](.claude/skills/version-bump/SKILL.md#pre-bump-quality-gate) describes; state that status as the done condition, not a test-pass rerun.

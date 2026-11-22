@@ -348,3 +348,29 @@ describe('withPacingAllowance(ms, config)', () => {
         expect(withPacingAllowance(15_000, OFF)).toBe(15_000);
     });
 });
+
+describe('pacingConfig(env) in the offline lane (DSS_E2E_LANE=offline)', () => {
+    // Requirement (lead decision, offline harness stage 1): the offline lane runs unpaced unless DSS_E2E_PACE is set explicitly; a set value means what it means everywhere else.
+    const OFFLINE = { DSS_E2E_LANE: 'offline' };
+
+    it('turns pacing off when DSS_E2E_PACE is unset or blank', () => {
+        expect(pacingConfig(OFFLINE)).toEqual({ isEnabled: false, scale: 0 });
+        expect(pacingConfig({ ...OFFLINE, DSS_E2E_PACE: '' })).toEqual({ isEnabled: false, scale: 0 });
+        expect(pacingConfig({ ...OFFLINE, DSS_E2E_PACE: '  ' })).toEqual({ isEnabled: false, scale: 0 });
+    });
+
+    it('honours an explicit scale', () => {
+        expect(pacingConfig({ ...OFFLINE, DSS_E2E_PACE: '0.5' })).toEqual({ isEnabled: true, scale: 0.5 });
+        expect(pacingConfig({ ...OFFLINE, DSS_E2E_PACE: '1' })).toEqual({ isEnabled: true, scale: 1 });
+    });
+
+    it('honours an explicit "off" and still rejects an invalid value', () => {
+        expect(pacingConfig({ ...OFFLINE, DSS_E2E_PACE: 'off' }).isEnabled).toBe(false);
+        expect(() => pacingConfig({ ...OFFLINE, DSS_E2E_PACE: 'fast' })).toThrow(/DSS_E2E_PACE/);
+    });
+
+    it('keeps full pacing by default for any other lane value', () => {
+        expect(pacingConfig({ DSS_E2E_LANE: 'live' })).toEqual({ isEnabled: true, scale: 1 });
+        expect(pacingConfig({ DSS_E2E_LANE: '' })).toEqual({ isEnabled: true, scale: 1 });
+    });
+});

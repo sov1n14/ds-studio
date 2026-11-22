@@ -144,7 +144,7 @@ const test = base.extend({
 });
 
 // Each test requests a locale fixture for its snapshot and teardown restore only; the test body does not read it.
-test.describe('popup language switcher', () => {
+test.describe('popup language switcher', { tag: '@offline' }, () => {
     for (const [from, to] of [['zh_TW', 'en'], ['en', 'zh_TW']]) {
         test('picking ' + to + ' in the language panel of a ' + from + ' popup reloads it in ' + to + ', stores ' + to + ' in sync and the extension localStorage, and a reopened popup is still in ' + to, async ({ context, extensionId, extensionLocale }) => {
             const popup = await openPopupIn({ context, extensionId }, from);

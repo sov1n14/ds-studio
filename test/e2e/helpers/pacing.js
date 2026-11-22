@@ -4,6 +4,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export const PACE_ENV = 'DSS_E2E_PACE';
+// The offline lane (playwright.offline.config.js) sets this to OFFLINE_LANE; its default pacing is off.
+export const LANE_ENV = 'DSS_E2E_LANE';
+export const OFFLINE_LANE = 'offline';
 
 // Wait ranges in milliseconds at scale 1.
 const RANGES_MS = Object.freeze({
@@ -19,10 +22,10 @@ const MAX_TYPED_CHARS = 200;
 // Input types whose value typing cannot set; they are filled in one step.
 const FILL_ONLY_INPUT_TYPES = new Set(['range', 'color', 'date', 'datetime-local', 'month', 'time', 'week']);
 
-/** Reads DSS_E2E_PACE: unset or blank → scale 1; "off" (any case) → pacing off; a positive number → that scale; anything else throws. */
+/** Reads DSS_E2E_PACE: unset or blank → scale 1, or pacing off in the offline lane (DSS_E2E_LANE=offline); "off" (any case) → pacing off; a positive number → that scale; anything else throws. */
 export function pacingConfig(env) {
     const raw = String(env[PACE_ENV] ?? '').trim();
-    if (raw === '') return { isEnabled: true, scale: 1 };
+    if (raw === '') return env[LANE_ENV] === OFFLINE_LANE ? { isEnabled: false, scale: 0 } : { isEnabled: true, scale: 1 };
     if (raw.toLowerCase() === 'off') return { isEnabled: false, scale: 0 };
     const scale = /^\d*\.?\d+$/.test(raw) ? Number(raw) : NaN;
     if (!Number.isFinite(scale) || scale <= 0) {

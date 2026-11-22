@@ -34,7 +34,7 @@ test.describe('popup prompt group list', () => {
         await closeExtensionPages(context);
     });
 
-    test('search filter narrows the listed groups by name, shows the no-match hint, restores every group when cleared, and keeps the picked group', async ({ context, settings, extensionId }) => {
+    test('search filter narrows the listed groups by name, shows the no-match hint, restores every group when cleared, and keeps the picked group', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const groups = ['search-apple', 'search-banana', 'search-cherry'].map((label) => createTestPreset(label));
         const [apple, banana, cherry] = groups;
         const allNames = groups.map((group) => group.name);
@@ -68,7 +68,7 @@ test.describe('popup prompt group list', () => {
         await expect(popupPickedGroup(popup), 'filtering never changes the picked group').toHaveText(apple.name);
     });
 
-    test('deleting a group with its row ✕ asks for confirmation: cancel keeps it, confirm removes it, also after reopening the popup', async ({ context, settings, extensionId }) => {
+    test('deleting a group with its row ✕ asks for confirmation: cancel keeps it, confirm removes it, also after reopening the popup', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const groups = ['delete-keep', 'delete-gone'].map((label) => createTestPreset(label));
         const [kept, deleted] = groups;
         await seedOnlyPresets(settings, context, groups);
@@ -94,7 +94,7 @@ test.describe('popup prompt group list', () => {
         expect(await popupGroupNames(reopened), 'the reopened popup no longer lists the deleted group').toEqual([kept.name]);
     });
 
-    test('deleting the picked group leaves the blank option picked and the pencil disabled', async ({ context, settings, extensionId }) => {
+    test('deleting the picked group leaves the blank option picked and the pencil disabled', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const groups = ['active-other', 'active-picked'].map((label) => createTestPreset(label));
         const [other, picked] = groups;
         await seedOnlyPresets(settings, context, groups);
@@ -116,7 +116,7 @@ test.describe('popup prompt group list', () => {
         expect(await popupGroupNames(popup), 'the other group is still listed').toEqual([other.name]);
     });
 
-    test('delete all from the blank row asks for confirmation: cancel keeps every group, confirm empties the list, picks the blank option and disables the pencil', async ({ context, settings, extensionId }) => {
+    test('delete all from the blank row asks for confirmation: cancel keeps every group, confirm empties the list, picks the blank option and disables the pencil', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const groups = ['all-first', 'all-second'].map((label) => createTestPreset(label));
         await seedOnlyPresets(settings, context, groups);
 
@@ -198,7 +198,7 @@ test.describe('popup prompt group list', () => {
         });
     });
 
-    test('the pencil is disabled with the blank option, opens no editor when clicked, and is disabled again after picking the blank row', async ({ context, settings, extensionId }) => {
+    test('the pencil is disabled with the blank option, opens no editor when clicked, and is disabled again after picking the blank row', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const groups = ['pencil-first', 'pencil-second'].map((label) => createTestPreset(label));
         await seedOnlyPresets(settings, context, groups);
 

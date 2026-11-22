@@ -1,7 +1,8 @@
 import { test, expect } from './fixtures.js';
+import { closeExtensionPages } from './helpers/popup.js';
 
 // Rendered control order of the popup settings cards (unit counterpart: test/unit/popup-card-order.spec.js).
-// The popup page is opened in a tab and only read: no toggle is clicked, so no permission prompt can appear.
+// The popup page is opened in a tab of its own (no DeepSeek page is loaded) and only read: no toggle is clicked, so no permission prompt can appear.
 // A control is a checkbox id or a radio group name; the spec checks both the DOM order and that the rows render top to bottom in that order.
 
 const POPUP_PATH = 'popup/popup.html';
@@ -45,8 +46,13 @@ function readCardControls(page, heading) {
     }, heading);
 }
 
-test.describe('popup control order', () => {
-    test('the Features and UI Adjustments cards render their controls in the required order', async ({ page, extensionId }) => {
+test.describe('popup control order', { tag: '@offline' }, () => {
+    test.afterEach(async ({ context }) => {
+        await closeExtensionPages(context);
+    });
+
+    test('the Features and UI Adjustments cards render their controls in the required order', async ({ context, extensionId }) => {
+        const page = await context.newPage();
         await page.goto(`chrome-extension://${extensionId}/${POPUP_PATH}`);
         await expect(page.locator('.card-title', { hasText: 'Features' }), 'the popup has rendered its cards (precondition)').toBeVisible();
 

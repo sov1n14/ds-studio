@@ -22,7 +22,7 @@ function checkedRadioValue(popup, name) {
     return popup.locator(`input[name="${name}"]:checked`).getAttribute('value');
 }
 
-test.describe('popup live sync', () => {
+test.describe('popup live sync', { tag: '@offline' }, () => {
     test.beforeEach(async ({ settings }) => {
         await settings.set({ isEnabled: true });
     });

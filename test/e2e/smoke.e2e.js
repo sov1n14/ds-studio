@@ -6,13 +6,13 @@ test.describe('live DeepSeek with the extension loaded', () => {
         await expect(page.getByRole('textbox').first()).toBeVisible();
     });
 
-    test('extension service worker is running as DS studio', async ({ serviceWorker, extensionId }) => {
+    test('extension service worker is running as DS studio', { tag: '@offline' }, async ({ serviceWorker, extensionId }) => {
         expect(extensionId).toMatch(/^[a-p]{32}$/);
         const name = await serviceWorker.evaluate(() => chrome.runtime.getManifest().name);
         expect(name).toBe('DS studio');
     });
 
-    test('running service worker reports the manifest.json version on disk', async ({ serviceWorker }) => {
+    test('running service worker reports the manifest.json version on disk', { tag: '@offline' }, async ({ serviceWorker }) => {
         // 防止持久設定檔執行快取的舊版擴充功能：執行中的版本必須等於 repo 內 manifest.json 的版本。
         const runningVersion = await serviceWorker.evaluate(() => chrome.runtime.getManifest().version);
         expect(runningVersion, 'service worker version must equal manifest.json on disk').toBe(readDiskManifestVersion());

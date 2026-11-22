@@ -155,7 +155,7 @@ test.afterAll(async ({ profileContext }) => {
     expect(diffs, 'both storage areas end the file exactly as they began').toEqual({ local: [], sync: [] });
 });
 
-test.describe('backup and restore: Export Settings', () => {
+test.describe('backup and restore: Export Settings', { tag: '@offline' }, () => {
     test('Export Settings downloads ds-studio-backup-YYYYMMDD.json holding exactly the documented 28 settings fields, the prompt groups and the pinned default', async ({ context, extensionId, storageSnapshot }) => {
         const group = makeGroup('export');
         const includeThinking = !syncedValue(storageSnapshot, 'includeThinking', DEFAULT_INCLUDE_THINKING);
@@ -177,12 +177,14 @@ test.describe('backup and restore: Export Settings', () => {
     });
 });
 
-test.describe('backup and restore: Import Settings', () => {
+test.describe('backup and restore: Import Settings', { tag: '@offline' }, () => {
     test('Import Settings with a backup file, confirmed, merges the new prompt group, overwrites the UI settings and the pin, keeps the device-local toggles, and the reloaded popup shows the imported values', async ({ context, extensionId, storageSnapshot }) => {
         const group = makeGroup('import');
         const includeThinking = !syncedValue(storageSnapshot, 'includeThinking', DEFAULT_INCLUDE_THINKING);
         const chatWidth = syncedValue(storageSnapshot, 'dsChatWidth', DEFAULT_CHAT_WIDTH) === 43 ? 44 : 43;
-        const localToggles = { isEnabled: storageSnapshot.local.isEnabled, globalPromptEnabled: storageSnapshot.local.globalPromptEnabled, isReplyNotificationEnabled: storageSnapshot.local.isReplyNotificationEnabled };
+        // A fresh profile holds none of these keys until the popup first opens and fills the defaults (isEnabled false, globalPromptEnabled true, isReplyNotificationEnabled false), so the test pins each one itself, the first two away from their defaults.
+        const localToggles = { isEnabled: true, globalPromptEnabled: false, isReplyNotificationEnabled: false };
+        await setLocal(context, localToggles);
         const backup = {
             promptPresets: [group], activePresetId: group.id, pinnedPresetId: group.id, includeThinking, chatWidth, chatPresetMap: {},
             // docs/spec/05-data-storage.md:30: an import must not overwrite the device-local toggles, so the file carries the opposite of each.
@@ -229,7 +231,7 @@ test.describe('backup and restore: Import Settings', () => {
     });
 });
 
-test.describe('backup and restore: Import Settings cancel', () => {
+test.describe('backup and restore: Import Settings cancel', { tag: '@offline' }, () => {
     test('Import Settings cancelled at the confirmation leaves both storage areas unchanged, shows no success toast and does not reload the popup', async ({ context, extensionId }) => {
         const group = makeGroup('cancel');
         const popup = await openBoundPopup(context, extensionId);
@@ -252,7 +254,7 @@ test.describe('backup and restore: Import Settings cancel', () => {
     });
 });
 
-test.describe('backup and restore: rejected settings files', () => {
+test.describe('backup and restore: rejected settings files', { tag: '@offline' }, () => {
     const REJECTED_FILES = [
         { label: 'malformed JSON', content: '{ "promptPresets": [ { "id": "e2e-broken" ' },
         { label: 'valid JSON without a promptPresets array', content: JSON.stringify({ includeThinking: false, chatWidth: 31, pinnedPresetId: 'e2e-wrong-shape' }) },
@@ -278,7 +280,7 @@ test.describe('backup and restore: rejected settings files', () => {
     }
 });
 
-test.describe('backup and restore: restored_messages', () => {
+test.describe('backup and restore: restored_messages', { tag: '@offline' }, () => {
     // docs/spec/04-features.md:76: a record is keyed "<session>::<message_id>" and holds message_id, fragments, thinking_elapsed_secs, chat_session_id and prompt_key.
     function makeRestoredMessages() {
         const session = `e2e-session-${Date.now()}`;

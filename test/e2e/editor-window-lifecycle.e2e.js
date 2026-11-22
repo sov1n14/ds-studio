@@ -54,7 +54,7 @@ test.describe('prompt group editor window lifecycle', () => {
 
     // docs/FEATURES.md:49「name input ... auto-focused with its text left unselected ... the caret sits at the end of the existing name, so typing appends instead of replacing it」
     // docs/spec/01-prompt-system.md:12「focused but not fully selected ... cursor placed at the end of the name」；docs/architecture/POPUP.md:15「a focused name input ... whose text is not selected」
-    test('opening the editor from the pencil focuses the name field with a collapsed caret at the end, so typing appends to the name', async ({ context, settings, extensionId }) => {
+    test('opening the editor from the pencil focuses the name field with a collapsed caret at the end, so typing appends to the name', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const group = createTestPreset('lifecycle-caret');
         const suffix = ' appended';
         await seedOnlyPresets(settings, context, [group]);

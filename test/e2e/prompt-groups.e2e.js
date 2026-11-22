@@ -84,7 +84,7 @@ test.describe('managing prompt groups in the popup', () => {
         });
     });
 
-    test('dragging a group by its handle reorders the popup list, and the order is kept after reopening the popup', async ({ context, settings, extensionId }) => {
+    test('dragging a group by its handle reorders the popup list, and the order is kept after reopening the popup', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const groups = ['drag-a', 'drag-b', 'drag-c'].map((label) => createTestPreset(label));
         const [first, middle, last] = groups;
         await seedOnlyPresets(settings, context, groups);
@@ -118,7 +118,7 @@ test.describe('prompt group editor window', () => {
         await closeExtensionPages(context);
     });
 
-    test('Esc pressed right after typing saves the typed name and content before the editor window closes', async ({ context, settings, extensionId }) => {
+    test('Esc pressed right after typing saves the typed name and content before the editor window closes', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
         const stamp = Date.now();
         const addedName = 'E2E esc ' + stamp;
         const renamed = addedName + ' renamed';

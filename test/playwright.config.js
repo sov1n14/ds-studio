@@ -4,6 +4,8 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
     testDir: './e2e',
     testMatch: '**/*.e2e.js',
+    // Tests tagged @offline run in the offline lane (playwright.offline.config.js), never against the live site.
+    grepInvert: /@offline/,
     workers: 1,
     fullyParallel: false,
     timeout: 60_000,

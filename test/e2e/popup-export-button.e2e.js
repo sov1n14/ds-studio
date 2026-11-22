@@ -118,7 +118,7 @@ test.describe('popup export button', () => {
         });
     });
 
-    test('Export in the popup with no DeepSeek tab open shows the notice to use the feature on chat.deepseek.com and downloads nothing', async ({ context, extensionId }) => {
+    test('Export in the popup with no DeepSeek tab open shows the notice to use the feature on chat.deepseek.com and downloads nothing', { tag: '@offline' }, async ({ context, extensionId }) => {
         const deepSeekTabs = await evaluateInWorker(context, (pattern) => chrome.tabs.query({ url: pattern }).then((tabs) => tabs.length), DEEPSEEK_TAB_PATTERN);
         expect(deepSeekTabs, 'no DeepSeek tab is open (precondition)').toBe(0);
         const popup = await openPopup(context, extensionId);

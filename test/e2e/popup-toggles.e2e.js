@@ -82,7 +82,7 @@ async function reopenPopup(popup, context, extensionId) {
     return openPopup(context, extensionId);
 }
 
-test.describe('popup toggles save and persist', () => {
+test.describe('popup toggles save and persist', { tag: '@offline' }, () => {
     test.afterEach(async ({ context }) => {
         await closeExtensionPages(context);
     });
