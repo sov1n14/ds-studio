@@ -68,16 +68,13 @@ A kill claim counts only after a Stryker rerun reports the mutant Killed; when c
 
 The script reuses the gitignored `test/stryker-incremental.scoped.json`. After a change to fixtures, mocks, helpers or the Stryker or vitest config, recycle that file before the run so no stale result is reused.
 
-### Selector Health Check (Capture Sweep)
+### Release HAR Freshness Check
 
-Before finalizing a version bump, run the DOM capture sweep to verify selectors still match live DeepSeek elements:
+Before each release, the offline E2E recordings and the live site get one check each:
 
-| Timing | Command | Expected |
-|-|-|-|
-| Every version bump | `node tools/capture.mjs && node tools/report.mjs` | No new zero-match selectors vs previous sweep |
-| After suspected DeepSeek build update | Same | Identifies rotated CSS hash classes |
-
-Runtime: several minutes, because the sweep is paced like a person (headed browser required, uses persistent profile at `.browser-profile/`, which must be free — no E2E running). Review the report's "matched nowhere" list — any selector dropping to zero matches is a rotation candidate requiring update in `content/ds-selectors.js`.
+1. Find the newest `.har` file under `tools/recordings/` and its modification date.
+2. If that file is older than 14 days, or none exists, ask the user to re-record before the release: export a sanitized HAR of `chat.deepseek.com` from Chrome DevTools in their normal browser, with the extension disabled, and save it under `tools/recordings/`.
+3. Ask the user to run the live smoke checklist (about 5 minutes) by hand in their own browser, then wait for their result before the release.
 
 ## Verification Checklist
 
