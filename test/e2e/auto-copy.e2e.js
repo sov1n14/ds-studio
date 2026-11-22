@@ -47,7 +47,7 @@ async function expectNoAutoWriteThenManualCopyIsSeen(page, message) {
     await expect.poll(() => clipboardWrites(page), { message: 'a manual click on the reply copy button is recorded (the observer sees writes on this page)' }).toEqual([STUB_REPLY]);
 }
 
-test.describe('auto copy reply and code blocks', () => {
+test.describe('auto copy reply and code blocks', { tag: '@offline' }, () => {
     test.beforeEach(async ({ context }) => {
         expect(await hasPermissions(context, CLIPBOARD_PERMISSIONS), `optional permissions ${CLIPBOARD_PERMISSIONS.join(' + ')} must already be granted in .browser-profile (a permission prompt cannot be driven)`).toBe(true);
     });

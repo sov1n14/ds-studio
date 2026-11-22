@@ -62,7 +62,7 @@ async function withSidebarRestored(page, settings, body) {
     if (bodyError) throw bodyError;
 }
 
-test.describe('sidebar', () => {
+test.describe('sidebar', { tag: '@offline' }, () => {
     test('auto-hide shrinks the expanded sidebar to 60px, widens it on hover, and off restores the native width', async ({ page, settings }) => {
         await settings.set({ isEnabled: true, ...BOTH_OFF });
         await withSidebarRestored(page, settings, async () => {

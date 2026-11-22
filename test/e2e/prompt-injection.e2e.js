@@ -49,7 +49,7 @@ async function openHomeBlockingSends(page, preset = PRESET) {
     return blocked;
 }
 
-test.describe('prompt injection', () => {
+test.describe('prompt injection', { tag: '@offline' }, () => {
     test.beforeEach(async ({ context, settings }) => {
         await seedOnlyPreset(settings, context, PRESET);
         await settings.set({ isEnabled: true });
@@ -72,7 +72,7 @@ test.describe('prompt injection', () => {
     });
 });
 
-test.describe('prompt injection triggers', () => {
+test.describe('prompt injection triggers', { tag: '@offline' }, () => {
     // 固定精確提示詞所依賴的每個鍵，每次寫入一個鍵：所選群組（其自身的全域提示詞開關為關閉）、全域提示詞、裝置層級的全域提示詞開關，以及系統時間行。
     test.beforeEach(async ({ settings }) => {
         await settings.setInBothAreas({ globalDefaultPrompt: '' });

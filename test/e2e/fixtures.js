@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { chromium, test as base, expect } from '@playwright/test';
 import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
 import { getExtensionWorker, reloadExtension } from './helpers/extension.js';
+import { installHarReplay } from './helpers/har-replay.js';
 import { installHumanPacing, pauseBetweenTests } from './helpers/human.js';
 import { launchOfflineLane } from './helpers/offline-lane.js';
 import { LANE_ENV, OFFLINE_LANE } from './helpers/pacing.js';
+import { REPLAY_MISSES_ANNOTATION, summarizeMisses } from './helpers/replay-misses.js';
 import { createSettingsSession } from './helpers/settings.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -42,10 +44,22 @@ export const test = base.extend({
         }
     }, { scope: 'worker' }],
 
+    // Offline lane only: the recorded DeepSeek session replayed in the lane's browser (helpers/har-replay.js), installed when the first test asks for it; null in the live lane.
+    // It throws, naming tools/recordings/, when the repository holds no recording.
+    deepseekReplay: [async ({ offlineLane }, use) => {
+        if (!offlineLane) {
+            await use(null);
+            return;
+        }
+        await use(await installHarReplay(offlineLane.context, { repoRoot: REPO_ROOT, workDir: offlineLane.workDir, misses: offlineLane.replayMisses }));
+    }, { scope: 'worker' }],
+
     // Offline lane only: after the test and every fixture it used have been torn down, no request may have escaped the context. The count goes to the report as an annotation.
+    // The requests the HAR replay aborted because the recording holds no answer (never sent to the network) go to the report as a second annotation and fail nothing.
     escapedRequestGuard: [async ({ offlineLane }, use, testInfo) => {
         await use();
         if (!offlineLane) return;
+        testInfo.annotations.push({ type: REPLAY_MISSES_ANNOTATION, description: JSON.stringify(summarizeMisses(offlineLane.replayMisses.take())) });
         const escaped = offlineLane.guard.takeEscaped();
         testInfo.annotations.push({ type: ESCAPED_REQUESTS_ANNOTATION, description: String(escaped.length) });
         if (escaped.length > 0) {
@@ -122,10 +136,8 @@ export const test = base.extend({
     },
 
     // Depends on `settings` so Playwright closes the page before `settings` restores storage: its content script can no longer rewrite restored keys.
-    page: async ({ context, settings }, use) => {
-        if (IS_OFFLINE_LANE) {
-            throw new Error('The offline lane serves no DeepSeek page: a test that needs the `page` fixture belongs to a later stage and carries no @offline tag.');
-        }
+    // In the offline lane the page is served from the recording (`deepseekReplay`); the live lane loads the real site.
+    page: async ({ context, settings, deepseekReplay }, use) => {
         const page = await context.newPage();
         await page.goto(`${DEEPSEEK_ORIGIN}/`);
         await use(page);

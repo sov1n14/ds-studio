@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
 import { grantOptionalPermissions } from './offline-manifest.js';
+import { createReplayMissLog } from './replay-misses.js';
 import { createRequestGuard } from './request-guard.js';
 
 // Directories and files the packed extension contains (pack-for-chrome.ps1 `$includeDirs`); the copy holds the same set.
@@ -21,10 +22,11 @@ export function buildOfflineExtension(repoRoot, destination) {
 }
 
 /**
- * Launches the offline lane for one Playwright worker and resolves `{ context, guard, extensionDir, close }`.
+ * Launches the offline lane for one Playwright worker and resolves `{ context, guard, replayMisses, extensionDir, workDir, close }`.
  * `channel: 'chromium'` selects the bundled Chromium in its new headless mode: branded Chrome ignores `--load-extension`.
  * `--host-resolver-rules` makes every host fail DNS, so a request that bypasses the route guard (an extension service worker fetch) still cannot connect.
  * Playwright's default `serviceWorkers: 'allow'` stays: blocking them would break the extension service worker.
+ * `replayMisses` collects the requests an installed HAR replay (har-replay.js) aborts, and `workDir` is the temp directory it may write to.
  * `close()` closes the browser and removes both temp directories.
  */
 export async function launchOfflineLane(repoRoot) {
@@ -51,7 +53,9 @@ export async function launchOfflineLane(repoRoot) {
         return {
             context,
             guard,
+            replayMisses: createReplayMissLog(),
             extensionDir,
+            workDir: root,
             async close() {
                 await context.close();
                 rmSync(root, { recursive: true, force: true });

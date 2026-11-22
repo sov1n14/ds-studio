@@ -2,6 +2,7 @@
 // 替身的形狀照抄 2026-11-12 在真實頁面觀察到的串流：completion 先回一段未完成（WIP）、沒有 `event: close` 的串流，頁面隨即呼叫 `chat/resume_stream` 續接；第一次續接回傳已完成（FINISHED）的串流，之後的續接全部中止。
 // 只有這個「先串流、後完成」的順序會讓回覆工具列晚於訊息項目掛載，也就是文件所說的新回覆完成；一次就回傳 FINISHED 的串流會讓工具列與項目在同一批掛載，如同頁面載入時已存在的訊息。
 // chat_session/create 與 chat/create_pow_challenge 照常放行（DeepSeek 本來就會自行預先建立空白對話）；其餘非 GET 的 API 請求（遙測、裝置檢查、regenerate、continue、edit_message 等）一律在瀏覽器內中止。
+// 放行一律用 `route.fallback()` 交給下一層路由，不用 `route.continue()`：實機通道沒有其他路由，請求照常送往網路；離線通道由 HAR 重播（helpers/har-replay.js）回答，`continue` 則會繞過重播與請求守衛。
 
 import { expect } from '@playwright/test';
 import { composer } from './composer.js';
@@ -134,7 +135,7 @@ export async function armReplyStub(page, { completionBody } = {}) {
             current.firstResumeAt = Date.now();
             return answerResume(current);
         }
-        if (request.method() === 'GET' || PASS_THROUGH_PATHS.has(pathname)) return route.continue();
+        if (request.method() === 'GET' || PASS_THROUGH_PATHS.has(pathname)) return route.fallback();
         return route.abort();
     });
 
