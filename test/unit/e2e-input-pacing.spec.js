@@ -1,5 +1,5 @@
 /**
- * test/e2e/helpers/pacing.js — pacing of the Keyboard, Mouse and Touchscreen primitives of a Page (decision D-105 extension, user ruling: "keyboard／mouse 動作前加隨機停頓；量時序的 runUnpaced 例外維持不動").
+ * test/helpers/pacing.js — pacing of the Keyboard, Mouse and Touchscreen primitives of a Page (decision D-105 extension, user ruling: "keyboard／mouse 動作前加隨機停頓；量時序的 runUnpaced 例外維持不動").
  *
  * Requirement (every expected value below comes from that text, not from the implementation):
  *   - A pause of 0.3–1.5 s comes before each call of keyboard press/type/down/up/insertText, mouse click/dblclick/down/up/move/wheel and touchscreen tap.
@@ -8,7 +8,7 @@
  *   - Typing keeps its own 60–220 ms key gaps: `humanType` and `humanTypeAtFocus` pause once before the first key and never again per key.
  */
 import { describe, it, expect } from 'vitest';
-import { createPacer, createTyper, installActionPacing, installInputPacing } from '../e2e/helpers/pacing.js';
+import { createPacer, createTyper, installActionPacing, installInputPacing } from '../helpers/pacing.js';
 
 const ON = Object.freeze({ isEnabled: true, scale: 1 });
 const OFF = Object.freeze({ isEnabled: false, scale: 0 });

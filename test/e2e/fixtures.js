@@ -7,7 +7,7 @@ import { getExtensionWorker, reloadExtension } from './helpers/extension.js';
 import { installHarReplay } from './helpers/har-replay.js';
 import { installHumanPacing, pauseBetweenTests } from './helpers/human.js';
 import { launchOfflineLane } from './helpers/offline-lane.js';
-import { LANE_ENV, OFFLINE_LANE } from './helpers/pacing.js';
+import { LANE_ENV, OFFLINE_LANE } from '../helpers/pacing.js';
 import { REPLAY_MISSES_ANNOTATION, summarizeMisses } from './helpers/replay-misses.js';
 import { createSettingsSession } from './helpers/settings.js';
 

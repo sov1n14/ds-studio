@@ -1,8 +1,8 @@
-// Playwright wiring of the human-like pacing in pacing.js (D-105): one pacer per worker, a pause before every Page, Locator, Keyboard, Mouse and Touchscreen action, and character-by-character typing.
+// Playwright wiring of the human-like pacing in test/helpers/pacing.js (D-105): one pacer per worker, a pause before every Page, Locator, Keyboard, Mouse and Touchscreen action, and character-by-character typing.
 // DSS_E2E_PACE: unset → full pacing (the two full-suite runs); "off" → no pacing, for debugging one spec locally; a positive number scales every wait (for example 0.5).
 
 import { test } from '@playwright/test';
-import { LOCATOR_ACTIONS, PAGE_ACTIONS, createPacer, createTyper, installActionPacing, installInputPacing, pacingConfig, withPacingAllowance } from './pacing.js';
+import { LOCATOR_ACTIONS, PAGE_ACTIONS, createPacer, createTyper, installActionPacing, installInputPacing, pacingConfig, withPacingAllowance } from '../../helpers/pacing.js';
 
 /** Adds `ms` to the running test's timeout, so pacing never eats into the test's own budget; outside a running test there is no budget to extend. */
 function extendTestBudget(ms) {

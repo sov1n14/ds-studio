@@ -1,8 +1,8 @@
 import { defineConfig } from '@playwright/test';
-import { LANE_ENV, OFFLINE_LANE } from './e2e/helpers/pacing.js';
+import { LANE_ENV, OFFLINE_LANE } from './helpers/pacing.js';
 
 // The offline lane: tests tagged @offline run in a disposable bundled Chromium with the extension loaded and no network (fixtures.js, helpers/offline-lane.js).
-// Every worker owns its browser and profile, so workers run in parallel. Pacing is off unless DSS_E2E_PACE is set (pacing.js).
+// Every worker owns its browser and profile, so workers run in parallel. Pacing is off unless DSS_E2E_PACE is set (helpers/pacing.js).
 process.env[LANE_ENV] = OFFLINE_LANE;
 
 export default defineConfig({

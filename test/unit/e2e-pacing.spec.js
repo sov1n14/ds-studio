@@ -1,5 +1,5 @@
 /**
- * test/e2e/helpers/pacing.js — human-like pacing for the E2E suite (decision D-105, ruled 2026-11-12).
+ * test/helpers/pacing.js — human-like pacing for the E2E suite (decision D-105, ruled 2026-11-12).
  *
  * Requirement (user ruling plus lead design; every expected value below comes from that text, not from the implementation):
  *   - DSS_E2E_PACE: unset or blank → pacing on at scale 1; "off" in any letter case → pacing off; a positive number → that scale; anything else → an error naming the variable and the allowed values.
@@ -10,7 +10,7 @@
  *   - A retry budget (expect.toPass) around paced actions and typing gets 60 s × scale more while pacing is on (one worst-case paced attempt of a 63-character prompt with its clicks is about 33 s), and stays unchanged while pacing is off.
  */
 import { describe, it, expect } from 'vitest';
-import { createPacer, drawDelay, installActionPacing, pacingConfig, planTyping, randomBetween, randomIntBetween, withPacingAllowance } from '../e2e/helpers/pacing.js';
+import { createPacer, drawDelay, installActionPacing, pacingConfig, planTyping, randomBetween, randomIntBetween, withPacingAllowance } from '../helpers/pacing.js';
 
 /** Deterministic PRNG (mulberry32) so every draw sequence is reproducible. */
 function seededRng(seed) {

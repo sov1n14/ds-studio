@@ -1,5 +1,5 @@
 /**
- * tools/human-pacing.mjs — human-like pacing for the capture sweep (tools/capture.mjs), reusing test/e2e/helpers/pacing.js.
+ * tools/human-pacing.mjs — human-like pacing for the capture sweep (tools/capture.mjs), reusing test/helpers/pacing.js.
  *
  * Requirement (user ruling, 「每個動作前隨機停 0.3–1.5 秒，送出文字改成逐字輸入」; expected values come from that text and from DSS_E2E_PACE, not from the implementation):
  *   - Every Page and Locator action (click, fill, press, goto, ...) waits 0.3–1.5 s first; evaluate and waitFor stay unpaced.
