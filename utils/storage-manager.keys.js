@@ -146,6 +146,12 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
     },
 
     /**
+     * 已還原訊息「清除全部」的世代值，存於 chrome.storage.local，每次 clearRestoredMessages() 遞增。分頁存檔以此判斷讀取記錄之後是否有其他情境清除過，避免把清除前的記錄寫回。
+     * 不列入 KEYS，同步合併因此不會把它寫進 sync。
+     */
+    RESTORED_MESSAGES_CLEAR_GENERATION_KEY: 'dsRestoredMessagesClearGeneration',
+
+    /**
      * Helper to get storage key for a specific preset
      */
     _presetKey(id) {

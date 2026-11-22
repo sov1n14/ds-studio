@@ -46,6 +46,48 @@
             return data[this.KEYS.RESTORED_MESSAGES] || {};
         },
 
+        /**
+         * 以同一次 storage 讀取取得已還原訊息快取與清除世代，讓存檔能判斷讀取之後是否發生清除。
+         * 從未寫入時記錄為空物件 {}，從未清除過時世代為 0；讀取失敗時 reject，不會被當成世代 0。
+         * @returns {Promise<{records: Object, clearGeneration: number}>}
+         */
+        async getRestoredMessagesSnapshot() {
+            const recordsKey = this.KEYS.RESTORED_MESSAGES;
+            const generationKey = this.RESTORED_MESSAGES_CLEAR_GENERATION_KEY;
+            const data = await this._getLocalOrReject([recordsKey, generationKey]);
+            return { records: data[recordsKey] || {}, clearGeneration: data[generationKey] || 0 };
+        },
+
+        /**
+         * 讀取目前的清除世代；從未清除過時為 0；讀取失敗時 reject，不會被當成世代 0。
+         * @returns {Promise<number>}
+         */
+        async getRestoredMessagesClearGeneration() {
+            const generationKey = this.RESTORED_MESSAGES_CLEAR_GENERATION_KEY;
+            const data = await this._getLocalOrReject(generationKey);
+            return data[generationKey] || 0;
+        },
+
+        /**
+         * 讀取 chrome.storage.local；chrome.runtime.lastError 或同步拋出時 reject。
+         * _safeGet 在失敗時回傳 {}，清除世代的讀取不能這樣做：{} 會被讀成世代 0，讓存檔誤把目前世代的記錄當成清除前的記錄移除。
+         * @param {string|string[]} keys
+         * @returns {Promise<Object>}
+         */
+        _getLocalOrReject(keys) {
+            return new Promise((resolve, reject) => {
+                try {
+                    chrome.storage.local.get(keys, (data) => {
+                        const lastError = chrome.runtime.lastError;
+                        if (lastError) { reject(new Error(lastError.message || String(lastError))); return; }
+                        resolve(data || {});
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        },
+
         saveRestoredMessages(messages) {
             return this._safeSet('local', { [this.KEYS.RESTORED_MESSAGES]: messages });
         },
@@ -63,11 +105,17 @@
         },
 
         /**
-         * 移除整個已還原訊息快取 key；未曾寫入時為 no-op。
+         * 移除整個已還原訊息快取 key，並遞增清除世代。
+         * 先以單次寫入同時清空記錄與遞增世代，任何讀取都不會取得「清除前的記錄配上新世代」；再移除 key，不留殘餘。
          * @returns {Promise<void>}
          */
-        clearRestoredMessages() {
-            return this._safeRemove('local', this.KEYS.RESTORED_MESSAGES);
+        async clearRestoredMessages() {
+            const nextGeneration = (await this.getRestoredMessagesClearGeneration()) + 1;
+            await this._safeSet('local', {
+                [this.KEYS.RESTORED_MESSAGES]: {},
+                [this.RESTORED_MESSAGES_CLEAR_GENERATION_KEY]: nextGeneration
+            });
+            await this._safeRemove('local', this.KEYS.RESTORED_MESSAGES);
         },
 
         /** 組出單筆權限意圖的 storage key。 */

@@ -29,7 +29,9 @@
                     resolve();
                 });
             } catch (e) {
-                resolve(); // Context invalidated — silently succeed
+                // 同步拋出（例如擴充功能情境失效）：維持 resolve 讓既有呼叫端行為不變，但記錄錯誤供診斷
+                console.warn('[DSS] storage-manager: chrome.storage.' + area + '.set threw:', e);
+                resolve();
             }
         });
     },

@@ -16,8 +16,9 @@
  * These specs assert observable behavior (resolved values + what actually
  * landed in chrome.storage.local) only.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
+import { failRestoredReads, requestsGenerationKey } from '../helpers/censor-reply-restore-harness.js';
 
 const KEY = 'restored_messages';
 
@@ -148,5 +149,135 @@ describe('StorageManager — restored-messages API (backlog B2)', () => {
 
             await expect(StorageManager.getRestoredMessages()).resolves.toEqual({});
         });
+    });
+});
+
+// A clear whose clear-generation read fails must not write anything: the records stay and the generation is neither raised nor lowered (docs/spec/05-data-storage.md "Clear All Restored Records")
+describe('clearRestoredMessages() — the clear-generation read fails', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it.each([['lastError'], ['throw']])('rejects and leaves restored_messages and the generation unchanged when the generation read fails with %s', async (mode) => {
+        const generationKey = StorageManager.RESTORED_MESSAGES_CLEAR_GENERATION_KEY;
+        // 兩次真實清除把世代推到 2 以上，再存一筆記錄
+        await StorageManager.clearRestoredMessages();
+        await StorageManager.clearRestoredMessages();
+        await StorageManager.mergeRestoredMessages({ 'msg-1': { text: 'alpha' } });
+        const before = await chrome.storage.local.get([KEY, generationKey]);
+        expect(before[generationKey], 'precondition: two clears must have raised the clear generation to 2 or more').toBeGreaterThanOrEqual(2);
+        expect(before[KEY], 'precondition: the record must be stored').toEqual({ 'msg-1': { text: 'alpha' } });
+
+        const failure = failRestoredReads(mode, { matches: requestsGenerationKey });
+        let rejection = null;
+        await StorageManager.clearRestoredMessages().catch((err) => { rejection = err ?? 'rejected without a reason'; });
+        failure.disarm();
+
+        expect(failure.failedForms().length, 'precondition: the clear must have hit the failing generation read').toBeGreaterThan(0);
+        expect(rejection, 'the clear must reject when its generation read fails').not.toBeNull();
+        expect(await chrome.storage.local.get([KEY, generationKey]), 'the failed clear must leave the records and the generation as they were').toEqual(before);
+    });
+});
+
+// A failed restored-message read rejects with the platform's own lastError message, so the caller (the popup clear-failed path, a tab save's warning) can report what failed
+describe('restored-message reads that fail with chrome.runtime.lastError', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it.each([['getRestoredMessagesClearGeneration'], ['getRestoredMessagesSnapshot'], ['clearRestoredMessages']])('%s() rejects with an Error carrying the lastError message', async (method) => {
+        const failure = failRestoredReads('lastError', { matches: requestsGenerationKey });
+
+        const rejection = await StorageManager[method]().then(() => null, (err) => err);
+        failure.disarm();
+
+        expect(failure.failedForms(), 'precondition: the call must have hit the failing callback-form read').toContain('callback lastError');
+        expect(rejection, 'the call must reject with an Error').toBeInstanceOf(Error);
+        expect(rejection.message, 'the rejection must carry the lastError message').toBe('IO error: restored_messages read failed');
+    });
+});
+
+// docs/architecture/STORAGE.md and docs/spec/05-data-storage.md name the persisted key; a stored generation under another name would read as 0 after an update
+describe('the clear generation storage key', () => {
+    it('persists the clear generation under dsRestoredMessagesClearGeneration in chrome.storage.local', async () => {
+        const previousManager = globalThis.StorageManager;
+        const previousKeys = globalThis.__DS_StorageManager_keys;
+        try {
+            // 在測試內重新載入鍵值群組與入口檔，取得以本次載入結果組成的 StorageManager
+            vi.resetModules();
+            await import('../../utils/storage-manager.keys.js');
+            const mod = await import('../../utils/storage-manager.js');
+            const fresh = mod.default ?? mod;
+            expect(fresh, 'precondition: the StorageManager must be freshly composed').not.toBe(previousManager);
+
+            await fresh.clearRestoredMessages();
+            await fresh.clearRestoredMessages();
+
+            const stored = await chrome.storage.local.get('dsRestoredMessagesClearGeneration');
+            expect(stored.dsRestoredMessagesClearGeneration, 'two clears must leave generation 2 under the documented key').toBe(2);
+        } finally {
+            globalThis.StorageManager = previousManager;
+            if (typeof window !== 'undefined') window.StorageManager = previousManager;
+            globalThis.__DS_StorageManager_keys = previousKeys;
+        }
+    });
+});
+
+// A synchronous throw of chrome.storage.local.set (such as "Extension context invalidated.") must not hang the caller and must leave a readable trace (CHANGELOG v4: "`_safeSet` logs a `[DSS]` warning for a synchronous throw and still resolves")
+describe('saveRestoredMessages() — chrome.storage.local.set throws synchronously', () => {
+    const THROW_MESSAGE = 'Extension context invalidated.';
+    const SETTLE_BUDGET_MS = 500;
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    // 讓寫入 restored_messages 的 chrome.storage.local.set 同步拋出，回傳拋出的錯誤與次數
+    function throwOnRestoredWrite() {
+        const area = chrome.storage.local;
+        const originalSet = area.set.bind(area);
+        const thrown = [];
+        vi.spyOn(area, 'set').mockImplementation((items, callback) => {
+            if (items && typeof items === 'object' && KEY in items) {
+                const error = new Error(THROW_MESSAGE);
+                thrown.push(error);
+                throw error;
+            }
+            return originalSet(items, callback);
+        });
+        return { thrown: () => thrown.slice() };
+    }
+
+    // 在時限內等待 promise 結算：回傳 'resolved'、'rejected' 或 'did not settle'，永不結算的 promise 讓測試失敗而不是卡住
+    async function settlementWithin(promise, ms) {
+        let timer;
+        const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve('did not settle within ' + ms + ' ms'), ms); });
+        try {
+            return await Promise.race([promise.then(() => 'resolved', () => 'rejected'), timeout]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    it('resolves the save promise instead of leaving the caller waiting forever', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const write = throwOnRestoredWrite();
+
+        const outcome = await settlementWithin(StorageManager.saveRestoredMessages({ 'msg-1': { text: 'alpha' } }), SETTLE_BUDGET_MS);
+
+        expect(write.thrown(), 'precondition: the save must have hit the throwing set').toHaveLength(1);
+        expect(outcome, 'the save must resolve after a synchronous set throw').toBe('resolved');
+    });
+
+    it('logs one [DSS] warning that names the throwing call and carries the thrown error', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const write = throwOnRestoredWrite();
+
+        await settlementWithin(StorageManager.saveRestoredMessages({ 'msg-1': { text: 'alpha' } }), SETTLE_BUDGET_MS);
+
+        expect(write.thrown(), 'precondition: the save must have hit the throwing set').toHaveLength(1);
+        expect(warnSpy.mock.calls, 'the console must show which storage call threw, followed by the thrown error').toEqual([
+            ['[DSS] storage-manager: chrome.storage.local.set threw:', write.thrown()[0]]
+        ]);
     });
 });
