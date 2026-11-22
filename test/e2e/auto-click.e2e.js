@@ -64,7 +64,7 @@ async function openHomeWithSyntheticButton(page, settings, values, kind) {
     expect(await trustedClicks(page, selector), 'the synthetic ' + kind + ' button starts unclicked (precondition)').toBe(0);
 }
 
-test.describe('auto click', () => {
+test.describe('auto click', { tag: '@offline' }, () => {
     for (const kind of Object.keys(BUTTONS)) {
         const { ownKey, selector } = BUTTONS[kind];
 

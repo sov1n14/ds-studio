@@ -36,13 +36,15 @@ async function expectSubControls(popup, isEnabled, suffix) {
     }
 }
 
-test.describe('popup master switch', () => {
+test.describe('popup master switch', { tag: '@offline' }, () => {
     test.afterEach(async ({ context }) => {
         await closeExtensionPages(context);
     });
 
     test('master off in the popup disables every sub-control (system-time toggle disabled when master off), keeps the global prompt toggle enabled and hides the preset overlay; master on restores them', async ({ page, context, settings, extensionId }) => {
         await settings.set({ isEnabled: true });
+        // A fresh profile boots the page with the master switch off, and a switch written before the content script finishes starting is not delivered to it; reloading boots the page with the switch on.
+        await page.reload();
         await expect(page.locator(PRESET_OVERLAY), 'the preset overlay is shown on the DeepSeek page while the master switch is on (precondition)').toBeVisible();
 
         const popup = await openPopup(context, extensionId, { activeTabUrlPart: DEEPSEEK_ORIGIN });

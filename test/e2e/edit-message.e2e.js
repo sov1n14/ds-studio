@@ -1,6 +1,5 @@
-import { test, expect } from './fixtures.js';
+import { test, expect } from './helpers/batch1-recorded.js';
 import { clickSendWith, composer, guardAgainstSending } from './helpers/composer.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
 import { pacedTimeout } from './helpers/human.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
 import { createTestPreset, pickPreset, seedOnlyPreset } from './helpers/presets.js';
@@ -42,11 +41,11 @@ async function openEditBoxOnFirstUserMessage(page) {
     return { editBox, original };
 }
 
-test.describe('edit message (v4.36.8 regression)', () => {
-    test('with the edit box open, a quote reply and the preset prefix land in the main composer and the edit box keeps only the original text', async ({ page, context, settings, openConversation }) => {
+test.describe('edit message (v4.36.8 regression)', { tag: '@offline' }, () => {
+    test('with the edit box open, a quote reply and the preset prefix land in the main composer and the edit box keeps only the original text', async ({ page, context, settings, openRecorded }) => {
         await seedOnlyPreset(settings, context, PRESET);
         await settings.set({ isEnabled: true });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecorded('withThinking');
         await pickPreset(page, PRESET);
         const guard = await guardAgainstSending(page);
         const input = composer(page);

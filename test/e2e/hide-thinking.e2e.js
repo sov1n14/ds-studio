@@ -1,5 +1,4 @@
-import { test, expect } from './fixtures.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
+import { test, expect } from './helpers/batch1-recorded.js';
 import { DSSelectors } from './helpers/selectors.js';
 
 // "Hide Thinking Process" (`dsHideThinking`) collapses every mounted thinking block through DeepSeek's own toggle, which unmounts the thinking body (`.ds-think-content`); turning it off expands them again.
@@ -12,16 +11,17 @@ function readThinkState(page) {
     }), { block: DSSelectors.THINK_BLOCK_SELECTOR, content: DSSelectors.THINK_CONTENT_SELECTOR });
 }
 
+// The recording's conversation with a search reply and the one with the most thinking replies (they may be the same conversation).
 const cases = [
-    { name: 'thinking with web search', uuid: CONVERSATIONS.thinkingWithSearch },
-    { name: 'five replies with thinking', uuid: CONVERSATIONS.fiveThinkingReplies },
+    { name: 'thinking with web search', role: 'withSearch' },
+    { name: 'most replies with thinking', role: 'withThinking' },
 ];
 
-test.describe('hide thinking process', () => {
-    for (const { name, uuid } of cases) {
-        test(`collapses every thinking block when on and expands them when off (${name})`, async ({ page, settings, openConversation }) => {
+test.describe('hide thinking process', { tag: '@offline' }, () => {
+    for (const { name, role } of cases) {
+        test(`collapses every thinking block when on and expands them when off (${name})`, async ({ page, settings, openRecorded }) => {
             await settings.set({ isEnabled: true, dsHideThinking: false });
-            await openConversation(uuid);
+            await openRecorded(role);
 
             // Baseline: bodies are mounted, otherwise "no body after enabling" would prove nothing.
             await expect.poll(async () => {

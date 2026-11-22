@@ -1,5 +1,5 @@
-import { test, expect } from './fixtures.js';
-import { CONVERSATIONS, MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
+import { test, expect } from './helpers/batch1-recorded.js';
+import { MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
 import { DSSelectors } from './helpers/selectors.js';
 
 // Conversation width (`dsChatWidthEnabled` / `dsChatWidth`) and input width (`dsInputWidthEnabled` / `dsInputWidth`) cap their areas at a viewport percentage; the input never exceeds an enabled chat width. Assertions measure rendered widths only, so they fail if DeepSeek stops honouring the injected CSS.
@@ -35,10 +35,10 @@ async function expectRatio(page, measure, comparison, ratio, message) {
     }, { message }).toBe(true);
 }
 
-test.describe('conversation and input width', () => {
-    test('chat width 50 caps messages at 50vw and disabling it restores the native width', async ({ page, settings, openConversation }) => {
+test.describe('conversation and input width', { tag: '@offline' }, () => {
+    test('chat width 50 caps messages at 50vw and disabling it restores the native width', async ({ page, settings, openRecorded }) => {
         await settings.set(ALL_WIDTH_OFF);
-        await openConversation(CONVERSATIONS.thinkingWithSearch);
+        await openRecorded('withSearch');
         await expectRatio(page, widestMessageRatio, 'above', 0.5, 'native messages are wider than 50vw (precondition)');
 
         await settings.set({ dsChatWidth: 50, dsChatWidthEnabled: true });
@@ -48,9 +48,9 @@ test.describe('conversation and input width', () => {
         await expectRatio(page, widestMessageRatio, 'above', 0.5, 'messages return to their native width');
     });
 
-    test('input width 40 caps the composer at 40vw and disabling it restores the native width', async ({ page, settings, openConversation }) => {
+    test('input width 40 caps the composer at 40vw and disabling it restores the native width', async ({ page, settings, openRecorded }) => {
         await settings.set(ALL_WIDTH_OFF);
-        await openConversation(CONVERSATIONS.thinkingWithSearch);
+        await openRecorded('withSearch');
         await expectRatio(page, composerRatio, 'above', 0.4, 'native composer is wider than 40vw (precondition)');
 
         await settings.set({ dsInputWidth: 40, dsInputWidthEnabled: true });
@@ -60,9 +60,9 @@ test.describe('conversation and input width', () => {
         await expectRatio(page, composerRatio, 'above', 0.4, 'composer returns to its native width');
     });
 
-    test('input width 100 is clamped to an enabled chat width of 40 and released when chat width turns off', async ({ page, settings, openConversation }) => {
+    test('input width 100 is clamped to an enabled chat width of 40 and released when chat width turns off', async ({ page, settings, openRecorded }) => {
         await settings.set({ ...ALL_WIDTH_OFF, dsInputWidth: 100, dsInputWidthEnabled: true });
-        await openConversation(CONVERSATIONS.thinkingWithSearch);
+        await openRecorded('withSearch');
         await expectRatio(page, composerRatio, 'above', 0.4, 'unclamped composer is wider than 40vw (precondition)');
 
         await settings.set({ dsChatWidth: 40, dsChatWidthEnabled: true });

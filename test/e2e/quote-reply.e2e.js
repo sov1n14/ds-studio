@@ -1,6 +1,5 @@
-import { test, expect } from './fixtures.js';
+import { test, expect } from './helpers/batch1-recorded.js';
 import { blockSendRequests, composer } from './helpers/composer.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
 import { humanType, pacedTimeout } from './helpers/human.js';
 import { expectNeverWithin } from './helpers/observation.js';
@@ -28,19 +27,19 @@ function readSelectionBox(page) {
 }
 
 /** 開啟測試對話、拖曳選取回覆中的兩段文字，並確認引用按鈕已顯示；回傳選取的文字。 */
-async function showQuoteButtonOverReply(page, settings, openConversation) {
+async function showQuoteButtonOverReply(page, settings, openRecorded) {
     await settings.set({ isEnabled: true });
-    await openConversation(CONVERSATIONS.fiveThinkingReplies);
+    await openRecorded('withThinking');
     const selected = await dragSelectTwoReplyParagraphs(page);
     expect(selected.trim(), 'the drag selected reply text (precondition)').not.toBe('');
     await expect(page.locator(QUOTE_BUTTON_SELECTOR), 'selecting reply text shows the quote button (precondition)').toBeVisible();
     return selected;
 }
 
-test.describe('quote reply', () => {
-    test('quoting a two-paragraph reply selection writes it into the empty composer as a blockquote', async ({ page, settings, openConversation }) => {
+test.describe('quote reply', { tag: '@offline' }, () => {
+    test('quoting a two-paragraph reply selection writes it into the empty composer as a blockquote', async ({ page, settings, openRecorded }) => {
         await settings.set({ isEnabled: true });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecorded('withThinking');
         const input = composer(page);
         const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
         try {
@@ -59,9 +58,9 @@ test.describe('quote reply', () => {
         }
     });
 
-    test('with the master switch off a reply selection shows no quote button; switching it on brings the button back', async ({ page, settings, openConversation }) => {
+    test('with the master switch off a reply selection shows no quote button; switching it on brings the button back', async ({ page, settings, openRecorded }) => {
         await settings.set({ isEnabled: false });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecorded('withThinking');
         const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
 
         const selectedWhileOff = await dragSelectTwoReplyParagraphs(page);
@@ -78,15 +77,15 @@ test.describe('quote reply', () => {
     });
 });
 
-test.describe('quote reply: appending and single-line format', () => {
+test.describe('quote reply: appending and single-line format', { tag: '@offline' }, () => {
     // 撰寫框已有內容時，引用附加在原內容之後：原內容沒有結尾換行時補一個 `\n`，已有結尾換行時不再多補（docs/spec/04-features.md:55）。
     for (const { name, draft } of [
         { name: 'a draft without a trailing newline gets one newline before the quote', draft: DRAFT },
         { name: 'a draft already ending with a newline gets no extra one before the quote', draft: DRAFT + '\n' },
     ]) {
-        test(`quoting into a non-empty composer appends the blockquote after the draft: ${name}`, async ({ page, settings, openConversation }) => {
+        test(`quoting into a non-empty composer appends the blockquote after the draft: ${name}`, async ({ page, settings, openRecorded }) => {
             await settings.set({ isEnabled: true });
-            await openConversation(CONVERSATIONS.fiveThinkingReplies);
+            await openRecorded('withThinking');
             // The draft is typed key by key, its trailing line break as Shift+Enter, which inserts a line break and does not send; aborting every send request guards the account should a key ever send.
             await blockSendRequests(page);
             const input = composer(page);
@@ -108,9 +107,9 @@ test.describe('quote reply: appending and single-line format', () => {
         });
     }
 
-    test('quoting a selection inside one line writes "> " plus exactly that text into the empty composer', async ({ page, settings, openConversation }) => {
+    test('quoting a selection inside one line writes "> " plus exactly that text into the empty composer', async ({ page, settings, openRecorded }) => {
         await settings.set({ isEnabled: true });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecorded('withThinking');
         const input = composer(page);
         const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
         try {
@@ -129,23 +128,23 @@ test.describe('quote reply: appending and single-line format', () => {
     });
 });
 
-test.describe('quote reply: auto-dismiss', () => {
-    test('clearing the selection hides the quote button', async ({ page, settings, openConversation }) => {
-        await showQuoteButtonOverReply(page, settings, openConversation);
+test.describe('quote reply: auto-dismiss', { tag: '@offline' }, () => {
+    test('clearing the selection hides the quote button', async ({ page, settings, openRecorded }) => {
+        await showQuoteButtonOverReply(page, settings, openRecorded);
         await page.evaluate(() => window.getSelection().removeAllRanges());
         expect(await page.evaluate(() => window.getSelection().rangeCount), 'the selection is cleared (precondition)').toBe(0);
         await expect(page.locator(QUOTE_BUTTON_SELECTOR), 'clearing the selection hides the quote button').toBeHidden();
     });
 
-    test('collapsing the selection to a caret hides the quote button', async ({ page, settings, openConversation }) => {
-        await showQuoteButtonOverReply(page, settings, openConversation);
+    test('collapsing the selection to a caret hides the quote button', async ({ page, settings, openRecorded }) => {
+        await showQuoteButtonOverReply(page, settings, openRecorded);
         await page.evaluate(() => window.getSelection().collapseToEnd());
         expect(await page.evaluate(() => window.getSelection().isCollapsed), 'the selection is collapsed to a caret (precondition)').toBe(true);
         await expect(page.locator(QUOTE_BUTTON_SELECTOR), 'collapsing the selection hides the quote button').toBeHidden();
     });
 
-    test('a click outside the button hides it even while the selection stays', async ({ page, settings, openConversation }) => {
-        const selected = await showQuoteButtonOverReply(page, settings, openConversation);
+    test('a click outside the button hides it even while the selection stays', async ({ page, settings, openRecorded }) => {
+        const selected = await showQuoteButtonOverReply(page, settings, openRecorded);
         const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
         // 一般點擊也會清除選取範圍，無法區分是哪個條件讓按鈕隱藏；取消 mousedown 的預設動作可保住選取範圍，事件仍會傳到文件上的監聽器。
         await page.evaluate(() => window.addEventListener('mousedown', (event) => event.preventDefault(), { capture: true }));
@@ -163,8 +162,8 @@ test.describe('quote reply: auto-dismiss', () => {
         await expect(quoteButton, 'a click outside the button hides the quote button').toBeHidden();
     });
 
-    test('scrolling the selection fully out of the viewport hides the quote button', async ({ page, settings, openConversation }) => {
-        const selected = await showQuoteButtonOverReply(page, settings, openConversation);
+    test('scrolling the selection fully out of the viewport hides the quote button', async ({ page, settings, openRecorded }) => {
+        const selected = await showQuoteButtonOverReply(page, settings, openRecorded);
         const box = await readSelectionBox(page);
         const scroll = await readListScroll(page);
         // 往有空間的方向捲動，讓整個選取範圍離開視窗：向下捲時選取範圍移到視窗上緣之上，向上捲時移到下緣之下。
@@ -183,8 +182,8 @@ test.describe('quote reply: auto-dismiss', () => {
         await expect(page.locator(QUOTE_BUTTON_SELECTOR), 'scrolling the selection out of the viewport hides the quote button').toBeHidden();
     });
 
-    test('resizing the window so the selection falls below the viewport hides the quote button', async ({ page, settings, openConversation }) => {
-        const selected = await showQuoteButtonOverReply(page, settings, openConversation);
+    test('resizing the window so the selection falls below the viewport hides the quote button', async ({ page, settings, openRecorded }) => {
+        const selected = await showQuoteButtonOverReply(page, settings, openRecorded);
         const viewport = page.viewportSize();
         const box = await readSelectionBox(page);
         // 視窗高度縮到選取範圍上緣之上，整個選取範圍便落在新視窗之外（docs/spec/04-features.md:58 第 4 項）。

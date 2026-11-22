@@ -34,7 +34,7 @@ async function clickSearchButtonPressedAs(page, value) {
     await handle.dispose();
 }
 
-test.describe('web-search start state', () => {
+test.describe('web-search start state', { tag: '@offline' }, () => {
     test('mode off releases DeepSeek\'s Search toggle and mode on presses it again', async ({ page, settings }) => {
         // 產品每次只寫一個鍵；先寫模式再開總開關，不把兩個鍵併成一次寫入，也不依賴設定檔殘留的值。
         await settings.set({ dsWebSearchToggle: 'on' });

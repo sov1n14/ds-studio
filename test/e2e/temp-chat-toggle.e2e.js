@@ -7,7 +7,7 @@ import { TEMP_CHAT_ROW_SELECTOR } from './helpers/extension-ui.js';
 
 const ROW_LABEL = '臨時對話';
 
-test.describe('temporary-chat row', () => {
+test.describe('temporary-chat row', { tag: '@offline' }, () => {
     test('the row is shown on the home page while the master switch is on, removed when it turns off, and shown again when it turns back on', async ({ page, settings }) => {
         await settings.set({ isEnabled: true });
         await page.goto(DEEPSEEK_ORIGIN + '/');

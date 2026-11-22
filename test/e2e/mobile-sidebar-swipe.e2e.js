@@ -1,5 +1,4 @@
-import { test as base, expect } from './fixtures.js';
-import { CONVERSATIONS, openConversation } from './helpers/conversations.js';
+import { test as base, expect } from './helpers/batch1-recorded.js';
 import { PRESET_OVERLAY_SELECTOR } from './helpers/extension-ui.js';
 import { humanPause, pacedTimeout } from './helpers/human.js';
 import { expectNeverWithin } from './helpers/observation.js';
@@ -10,9 +9,9 @@ import { SIDEBAR_STATE_ARG, isPanelHiddenInPage, isPanelShownInPage } from './he
 // - 在畫面中央 80% 區域內水平滑動：右滑開啟側邊欄、左滑關閉（FEATURES.md:192；03-ui-adjustments.md:99-101、110）。
 // - 只有明確的水平滑動才觸發：距離 ≥ 50px、以水平為主（|dx| > |dy| × 1.5）、歷時 < 500ms（FEATURES.md:193；03-ui-adjustments.md:105-107）。
 // - 跟隨總開關，沒有獨立開關（FEATURES.md:195），切換即時生效（03-ui-adjustments.md:114）。
-// 持久設定檔是桌機 Chrome，所以用 CDP 模擬一支真實的 Android 手機（Pixel 8 的 User-Agent、platform、觸控點數與 412×915 視窗），
+// 瀏覽器是桌機 Chromium，所以用 CDP 模擬一支真實的 Android 手機（Pixel 8 的 User-Agent、platform、觸控點數與 412×915 視窗），
 // 再以 CDP `Input.dispatchTouchEvent` 送出真的觸控事件。觀察的是使用者看得到的結果：DeepSeek 的側邊欄面板是否顯示在畫面內。
-// 只開啟保留的對話並滑動，不送出訊息、不修改或刪除任何對話；每個測試結束時還原視窗大小與模擬設定，寫入的儲存鍵由 settings fixture 還原。
+// 只開啟錄製中的對話並滑動（離線通道，沒有任何請求抵達 DeepSeek）；每個測試結束時還原視窗大小與模擬設定，寫入的儲存鍵由 settings fixture 還原。
 
 // 真實 Android 手機（Pixel 8，Chrome）回報的完整裝置資料。
 const ANDROID_PHONE = Object.freeze({
@@ -69,6 +68,11 @@ const test = base.extend({
             }
         }
     },
+
+    // 以 `device` 載入錄製中的對話：`await loadAs(device)`。
+    loadAs: async ({ page, touch, openRecorded }, use) => {
+        await use((device) => loadConversationAs(page, touch, device, openRecorded));
+    },
 });
 
 /** 固定會改變側邊欄的另外兩項設定為關閉，一次寫一個鍵，總開關最後寫。 */
@@ -78,11 +82,11 @@ async function pinSettings(settings) {
     await settings.set({ isEnabled: true });
 }
 
-/** 以 `device` 的裝置資料載入保留的對話；回傳時頁面看到的是模擬的 User-Agent，側邊欄面板未顯示。 */
-async function loadConversationAs(page, cdp, device) {
+/** 以 `device` 的裝置資料載入錄製中的對話；回傳時頁面看到的是模擬的 User-Agent，側邊欄面板未顯示。 */
+async function loadConversationAs(page, cdp, device, openRecorded) {
     await cdp.send('Emulation.setUserAgentOverride', { userAgent: device.userAgent, platform: device.platform });
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: device.maxTouchPoints });
-    await openConversation(page, CONVERSATIONS.fiveThinkingReplies);
+    await openRecorded('withThinking');
     expect(await page.evaluate(() => navigator.userAgent), 'the page sees the emulated User-Agent (precondition)').toBe(device.userAgent);
     await expect.poll(() => panelShown(page), { message: 'the sidebar panel starts hidden in the phone layout (precondition)' }).toBe(false);
 }
@@ -130,10 +134,10 @@ async function armSwipe(page, cdp) {
     await expectPanel(page, false, 'a clear left swipe closes the sidebar (control)');
 }
 
-test.describe('mobile sidebar swipe', () => {
-    test('on a phone, a right swipe in the central area opens the sidebar and a left swipe closes it', async ({ page, settings, touch }) => {
+test.describe('mobile sidebar swipe', { tag: '@offline' }, () => {
+    test('on a phone, a right swipe in the central area opens the sidebar and a left swipe closes it', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
 
         // FEATURES.md:192：右滑（左→右）開啟側邊欄。
         await openWithFirstSwipe(page, touch, 'a right swipe opens the sidebar');
@@ -147,9 +151,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectPanel(page, false, 'a second left swipe closes the sidebar again');
     });
 
-    test('a swipe shorter than 50px does nothing, while one past 50px acts', async ({ page, settings, touch }) => {
+    test('a swipe shorter than 50px does nothing, while one past 50px acts', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
 
         // FEATURES.md:193、03-ui-adjustments.md:105：|dx| ≥ 50px 才觸發，兩個方向都一樣。
@@ -164,9 +168,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectPanel(page, false, `a ${ABOVE_THRESHOLD_PX}px left swipe closes the sidebar`);
     });
 
-    test('a left swipe does not open a closed sidebar', async ({ page, settings, touch }) => {
+    test('a left swipe does not open a closed sidebar', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
 
         // FEATURES.md:192、03-ui-adjustments.md:110：左滑只會關閉側邊欄。
@@ -174,9 +178,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectStaysClosed(page, 'a left swipe must not open a closed sidebar');
     });
 
-    test('a right swipe does not close an open sidebar', async ({ page, settings, touch }) => {
+    test('a right swipe does not close an open sidebar', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
         await swipe(touch, RIGHT_SWIPE_START, { dx: CLEAR_DISTANCE_PX });
         await expectPanel(page, true, 'a right swipe opens the sidebar (control)');
@@ -186,9 +190,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectStaysOpen(page, 'a right swipe must not close an open sidebar');
     });
 
-    test('vertical scrolling and a swipe that is not mostly horizontal do nothing', async ({ page, settings, touch }) => {
+    test('vertical scrolling and a swipe that is not mostly horizontal do nothing', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
 
         // FEATURES.md:193：垂直捲動不會觸發。
@@ -202,9 +206,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectPanel(page, true, 'a 60px right / 30px down swipe is mostly horizontal and opens the sidebar');
     });
 
-    test('a slow drag does nothing, while the same swipe done fast acts', async ({ page, settings, touch }) => {
+    test('a slow drag does nothing, while the same swipe done fast acts', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
 
         // FEATURES.md:193、03-ui-adjustments.md:107：歷時 < 500ms 才觸發。
@@ -214,9 +218,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectPanel(page, true, `the same right swipe lasting ${FAST_MS}ms opens the sidebar`);
     });
 
-    test('a swipe that starts in the 10% edge margins does nothing, while one just inside acts', async ({ page, settings, touch }) => {
+    test('a swipe that starts in the 10% edge margins does nothing, while one just inside acts', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
 
         // FEATURES.md:192、03-ui-adjustments.md:100：起點 x 須在 [41.2, 370.8]；x = 30 落在左側邊界內。
@@ -235,9 +239,9 @@ test.describe('mobile sidebar swipe', () => {
         await expectPanel(page, false, 'a left swipe starting inside the central area closes the sidebar');
     });
 
-    test('turning the master switch off stops the swipe, and turning it back on restores it', async ({ page, settings, touch }) => {
+    test('turning the master switch off stops the swipe, and turning it back on restores it', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await armSwipe(page, touch);
         const overlay = page.locator(PRESET_OVERLAY_SELECTOR);
         await expect(overlay, 'the preset overlay is shown while the master switch is on (precondition)').toBeVisible();
@@ -253,9 +257,9 @@ test.describe('mobile sidebar swipe', () => {
         await openWithFirstSwipe(page, touch, 'after the master switch turns back on a right swipe opens the sidebar');
     });
 
-    test('a desktop browser that reports touch points gets no swipe gesture', async ({ page, settings, touch }) => {
+    test('a desktop browser that reports touch points gets no swipe gesture', async ({ page, settings, touch, loadAs }) => {
         await pinSettings(settings);
-        await loadConversationAs(page, touch, TOUCH_DESKTOP);
+        await loadAs(TOUCH_DESKTOP);
 
         // FEATURES.md:190：只在手機上運作；03-ui-adjustments.md:98：桌機 User-Agent 即使回報觸控點仍是桌機。
         // 同樣的窄版面、同樣的手勢，分幾輪滑動，涵蓋擴充功能每 500ms 重試綁定的時間。
@@ -265,7 +269,7 @@ test.describe('mobile sidebar swipe', () => {
         }
 
         // 同一分頁改為手機重新載入，同樣的手勢就會開啟側邊欄，證明上面的結果來自裝置判斷。
-        await loadConversationAs(page, touch, ANDROID_PHONE);
+        await loadAs(ANDROID_PHONE);
         await openWithFirstSwipe(page, touch, 'the same right swipe opens the sidebar once the tab is a phone (control)');
     });
 });

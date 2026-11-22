@@ -10,7 +10,7 @@ import { createTestPreset, pickPreset, pickPresetOption, presetOverlay, seedOnly
 const PRESET = createTestPreset('overlay');
 const USER_TEXT = 'e2e preset overlay probe (never sent)';
 
-test.describe('preset overlay', () => {
+test.describe('preset overlay', { tag: '@offline' }, () => {
     test('picking a preset makes the composer carry its content at send time; picking the empty option drops it', async ({ page, context, settings }) => {
         await seedOnlyPreset(settings, context, PRESET);
         await settings.set({ isEnabled: true });
