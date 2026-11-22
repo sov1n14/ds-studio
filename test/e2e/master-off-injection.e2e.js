@@ -28,7 +28,7 @@ async function configureEveryPromptSource(settings, context, group, globalPrompt
     await settings.setInBothAreas({ dsShowSystemTime: true });
 }
 
-test.describe('master switch and prompt injection', () => {
+test.describe('master switch and prompt injection', { tag: '@offline' }, () => {
     test.afterEach(async ({ context }) => {
         await closeExtensionPages(context);
     });

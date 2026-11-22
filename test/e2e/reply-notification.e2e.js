@@ -111,7 +111,7 @@ async function completeReplyInForeground(page, stub) {
     expect(await focusAtCompletion(page), 'the DeepSeek page was visible and focused when the reply finished (precondition)').toEqual({ visibilityState: 'visible', hasFocus: true });
 }
 
-test.describe('reply-complete notification', () => {
+test.describe('reply-complete notification', { tag: '@offline' }, () => {
     test.beforeEach(async ({ context }) => {
         expect(await hasPermissions(context, NOTIFICATION_PERMISSIONS), 'optional permission notifications must already be granted in .browser-profile (a permission prompt cannot be driven)').toBe(true);
     });

@@ -1,5 +1,4 @@
-import { test, expect } from './fixtures.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
+import { test, expect } from './helpers/batch2-fixtures.js';
 import { pacedTimeout } from './helpers/human.js';
 import { readListScroll, scrollListFromPage, waitForListScrollToSettle, wheelOverList } from './helpers/scroll.js';
 
@@ -14,18 +13,18 @@ const MIN_PAGE_SCROLL_PX = 500;
 
 /** Wheels the list up until it sits well above the bottom, waits for the wheel animation, and returns the settled position. */
 async function scrollUpByWheel(page) {
-    const { max } = await readListScroll(page);
     await wheelOverList(page, -3_000);
-    await expect.poll(async () => (await readListScroll(page)).top, { message: 'the mouse wheel scrolls the list up' }).toBeLessThan(max - FAR_FROM_BOTTOM_PX);
+    // The distance is measured against the current scroll height: a short list renders its unmounted items with estimated heights, so the height grows once the wheel mounts them.
+    await expect.poll(async () => { const { top, max } = await readListScroll(page); return max - top; }, { message: 'the mouse wheel scrolls the list up' }).toBeGreaterThan(FAR_FROM_BOTTOM_PX);
     await waitForListScrollToSettle(page);
     return readListScroll(page);
 }
 
-test.describe('prevent auto-scroll', () => {
-    test('on: page scripts cannot scroll the list down while the wheel and upward page scrolls still work; off: page scripts scroll down again', async ({ page, settings, openConversation }) => {
+test.describe('prevent auto-scroll', { tag: '@offline' }, () => {
+    test('on: page scripts cannot scroll the list down while the wheel and upward page scrolls still work; off: page scripts scroll down again', async ({ page, settings, openConversation, deepseekReplay }) => {
         await settings.set({ isEnabled: true, dsPreventAutoScroll: false });
-        await openConversation(CONVERSATIONS.longWithCode);
-        await expect.poll(async () => (await readListScroll(page))?.max ?? 0, { message: 'the conversation is long enough to scroll' }).toBeGreaterThan(3 * FAR_FROM_BOTTOM_PX);
+        await openConversation(deepseekReplay.requireConversation('mostMessages').id);
+        await expect.poll(async () => (await readListScroll(page))?.max ?? 0, { message: 'the conversation is long enough to scroll beyond the far-from-bottom distance plus the minimum page scroll' }).toBeGreaterThan(FAR_FROM_BOTTOM_PX + MIN_PAGE_SCROLL_PX);
 
         // Precondition with the feature off: each page-world API really scrolls the list down, so "did not move" below is caused by the feature.
         for (const api of PAGE_SCROLL_APIS) {

@@ -1,6 +1,7 @@
-import { test, expect } from './fixtures.js';
+import { test, expect } from './helpers/batch2-fixtures.js';
 import { blockSendRequests } from './helpers/composer.js';
-import { CONVERSATIONS, DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
+import { shortestConversation } from './helpers/batch2-conversations.js';
+import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
 import { expectNeverWithin } from './helpers/observation.js';
 import { armReplyStub, openHome, REPLY_MESSAGE_ID, sendStubbedPrompt, sseEvent, USER_MESSAGE_ID } from './helpers/reply-stub.js';
 import { DSSelectors } from './helpers/selectors.js';
@@ -31,9 +32,7 @@ const RECORD_CAP = 200;
 const NEVER_WINDOW_MS = 3_000;
 const STORE_POLL_MS = 250;
 
-// 保留的對話：一則提問、一則回覆（只開啟，從不寫入）；提問文字在測試中以前提斷言核對。
-const KEPT_UUID = CONVERSATIONS.thinkingWithSearch;
-const KEPT_PROMPT = "What is today's top news headline? Cite sources.";
+// 保留的對話取自錄製中訊息最少的對話（只開啟，從不寫入）；其提問文字在執行時從頁面讀出，不寫在 spec 內。
 const SEEDED_REPLY = 'Seeded **restored** reply from the local records.';
 const SEEDED_PLAIN_TAIL = 'reply from the local records.';
 const FOREIGN_REPLY = 'Foreign record of another conversation with the same prompt.';
@@ -85,7 +84,7 @@ function censoredThinkBody() {
 }
 
 /** 一筆還原記錄，形狀依 docs/spec/04-features.md:76。 */
-function record(session, messageId, content, restoredAt, promptKey = KEPT_PROMPT) {
+function record(session, messageId, content, restoredAt, promptKey) {
     return { message_id: messageId, fragments: [{ id: 1, type: 'RESPONSE', content }], thinking_elapsed_secs: 0, chat_session_id: session, prompt_key: promptKey, censored: true, restored_at: restoredAt };
 }
 
@@ -148,25 +147,36 @@ async function expectCensoredToolbar(item) {
     }
 }
 
-/** 開啟保留的對話並中止任何送出；核對它只有一則提問 KEPT_PROMPT 與一則回覆。 */
-async function openKeptChat(page) {
-    await blockSendRequests(page);
-    await openConversation(page, KEPT_UUID);
-    await expect(page.locator(DSSelectors.USER_CONTENT_SELECTOR), 'the kept chat has its single prompt (precondition)').toHaveText([KEPT_PROMPT]);
-    await expect(keptReplyItem(page), 'the kept chat has a single reply (precondition)').toHaveCount(1);
+/** 保留對話中第一則已掛載的使用者提問所在的虛擬列表項目。 */
+function firstPromptItem(page) {
+    return page.locator(DSSelectors.VIRTUAL_ITEM_KEY_SELECTOR).filter({ has: page.locator(DSSelectors.USER_CONTENT_SELECTOR) }).first();
 }
 
-function keptReplyItem(page) {
-    return page.locator(DSSelectors.VIRTUAL_ITEM_KEY_SELECTOR).filter({ has: page.locator(DSSelectors.ASSISTANT_MAIN_CONTENT_SELECTOR) });
+/**
+ * 開啟保留的對話（任何送出都中止），讀出第一則已掛載提問的文字（頭尾空白去除、連續空白併成一個），交給 `makeRecords(prompt)` 取得要寫入的記錄，
+ * 寫入後重新載入頁面（記錄只在頁面載入時讀取），回傳 `{ prompt, reply }`：`reply` 是緊接在該提問之後的回覆項目，以 key 釘住（虛擬列表會重新渲染）。
+ */
+async function openKeptChat(page, settings, kept, makeRecords) {
+    await blockSendRequests(page);
+    await openConversation(page, kept.id);
+    await expect(firstPromptItem(page), 'the kept chat shows a prompt (precondition)').toBeVisible();
+    const prompt = (await firstPromptItem(page).locator(DSSelectors.USER_CONTENT_SELECTOR).innerText()).trim().replace(/\s+/g, ' ');
+    expect(prompt, 'the kept prompt has text (precondition)').not.toBe('');
+    await pinSettings(settings, makeRecords(prompt));
+    await page.reload();
+    const following = firstPromptItem(page).locator('xpath=following-sibling::*[1]');
+    await expect(following.locator(DSSelectors.ASSISTANT_MAIN_CONTENT_SELECTOR), 'the item after the first prompt is its reply (precondition)').toHaveCount(1);
+    const key = await following.getAttribute(DSSelectors.VIRTUAL_ITEM_KEY_ATTR);
+    return { prompt, reply: page.locator(`${DSSelectors.VIRTUAL_ITEM_KEY_SELECTOR}[${DSSelectors.VIRTUAL_ITEM_KEY_ATTR}="${key}"]`) };
 }
 
 /**
  * 手動把保留對話回覆的工具列第 2、5 個按鈕標為停用（只改 DOM），再在項目內加入一個子節點，讓擴充功能的觀察器看到變化。
  * 子節點須留在頁面上：同一個工作內加入又移除的節點不會觸發還原（2026-11-12 實測）。
  */
-async function markKeptReplyCensored(page) {
-    await toolbarButtons(keptReplyItem(page)).nth(4).waitFor({ state: 'attached' });
-    await keptReplyItem(page).evaluate((item, { toolbarSelector, buttonSelector, disabledClass }) => {
+async function markKeptReplyCensored(reply) {
+    await toolbarButtons(reply).nth(4).waitFor({ state: 'attached' });
+    await reply.evaluate((item, { toolbarSelector, buttonSelector, disabledClass }) => {
         const buttons = item.querySelector(toolbarSelector).querySelectorAll(`:scope > ${buttonSelector}`);
         buttons[1].classList.add(disabledClass);
         buttons[4].classList.add(disabledClass);
@@ -175,16 +185,15 @@ async function markKeptReplyCensored(page) {
 }
 
 /** 斷言保留對話的回覆已還原為 SEEDED_REPLY：Markdown 已轉成 HTML、帶標記，原內容隱藏。 */
-async function expectKeptReplyRestoredFromSeed(page) {
-    const item = keptReplyItem(page);
-    const restored = item.locator('.restored-content');
+async function expectKeptReplyRestoredFromSeed(reply) {
+    const restored = reply.locator('.restored-content');
     await expect(restored, 'the stored record restores the censored reply').toContainText(SEEDED_PLAIN_TAIL);
     await expect(restored.locator('strong'), 'the stored Markdown is rendered (bold)').toHaveText('restored');
     await expect(restored.locator('.restored-badge'), 'the restored reply carries the Content Restored badge').toContainText('⚠');
-    await expect(item.locator('.dss-censored-hidden'), 'the censored original content is hidden').toBeHidden();
+    await expect(reply.locator('.dss-censored-hidden'), 'the censored original content is hidden').toBeHidden();
 }
 
-test.describe('censored reply restoration', () => {
+test.describe('censored reply restoration', { tag: '@offline' }, () => {
     test('a CONTENT_FILTER stream saves its original reply as a record keyed by the conversation id and the reply message id', async ({ page, settings, context }) => {
         await pinSettings(settings);
         const startedAt = Date.now();
@@ -258,25 +267,25 @@ test.describe('censored reply restoration', () => {
         await expect.poll(async () => (await storedRecords(context))[key]?.thinking_elapsed_secs, { message: 'the record keeps the elapsed thinking seconds the stream sent' }).toBe(ELAPSED_SECS);
     });
 
-    test('a stored record restores the censored reply of a kept chat after page load, matched by chat id and preceding prompt', async ({ page, settings }) => {
-        await pinSettings(settings, { [`${KEPT_UUID}::${REPLY_MESSAGE_ID}`]: record(KEPT_UUID, REPLY_MESSAGE_ID, SEEDED_REPLY, Date.now()) });
-        await openKeptChat(page);
+    test('a stored record restores the censored reply of a kept chat after page load, matched by chat id and preceding prompt', async ({ page, settings, deepseekReplay }) => {
+        const kept = shortestConversation(deepseekReplay);
+        const { reply } = await openKeptChat(page, settings, kept, (prompt) => ({ [`${kept.id}::${REPLY_MESSAGE_ID}`]: record(kept.id, REPLY_MESSAGE_ID, SEEDED_REPLY, Date.now(), prompt) }));
 
         await expectNeverWithin(page, () => document.querySelector('.restored-content') !== null, null, NEVER_WINDOW_MS, 'a matching record restores nothing while the reply has no censored toolbar');
-        await markKeptReplyCensored(page);
-        await expectKeptReplyRestoredFromSeed(page);
+        await markKeptReplyCensored(reply);
+        await expectKeptReplyRestoredFromSeed(reply);
     });
 
-    test('a record of another conversation with the same prompt is never used', async ({ page, settings }) => {
+    test('a record of another conversation with the same prompt is never used', async ({ page, settings, deepseekReplay }) => {
+        const kept = shortestConversation(deepseekReplay);
         // 另一個對話的記錄 message_id 較小：若配對不分對話，它會排在前面而被套用。
-        await pinSettings(settings, {
-            [`${FOREIGN_SESSION}::1`]: record(FOREIGN_SESSION, 1, FOREIGN_REPLY, Date.now() - 1),
-            [`${KEPT_UUID}::${REPLY_MESSAGE_ID}`]: record(KEPT_UUID, REPLY_MESSAGE_ID, SEEDED_REPLY, Date.now()),
-        });
-        await openKeptChat(page);
-        await markKeptReplyCensored(page);
+        const { reply } = await openKeptChat(page, settings, kept, (prompt) => ({
+            [`${FOREIGN_SESSION}::1`]: record(FOREIGN_SESSION, 1, FOREIGN_REPLY, Date.now() - 1, prompt),
+            [`${kept.id}::${REPLY_MESSAGE_ID}`]: record(kept.id, REPLY_MESSAGE_ID, SEEDED_REPLY, Date.now(), prompt),
+        }));
+        await markKeptReplyCensored(reply);
 
-        await expectKeptReplyRestoredFromSeed(page);
+        await expectKeptReplyRestoredFromSeed(reply);
         await expect(page.locator('.restored-content'), 'exactly one reply is restored').toHaveCount(1);
         await expect(page.getByText(FOREIGN_REPLY), 'the record of another conversation is not shown').toHaveCount(0);
     });

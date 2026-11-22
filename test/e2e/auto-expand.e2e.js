@@ -73,7 +73,7 @@ async function expectCollapsed(page, message) {
     await expect.poll(() => probeState(page), { message }).toBe('collapsed');
 }
 
-test.describe('auto expand messages', () => {
+test.describe('auto expand messages', { tag: '@offline' }, () => {
     test('with the setting off a collapsed message stays collapsed; switching it on expands it; switching it off collapses it again', async ({ page, settings }) => {
         await pinSettings(settings, { autoExpand: false });
         await sendLongPromptAndFinish(page);

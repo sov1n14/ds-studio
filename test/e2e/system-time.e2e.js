@@ -19,7 +19,7 @@ function sendTimed(page, blocked, text) {
     return timedSend(page, () => sendAndCapturePrompt(page, blocked, text));
 }
 
-test.describe('system time injection', () => {
+test.describe('system time injection', { tag: '@offline' }, () => {
     test.beforeEach(async ({ settings }) => {
         await settings.set({ isEnabled: true, globalPromptEnabled: false });
     });

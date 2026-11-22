@@ -90,7 +90,7 @@ async function cancelEdit(page, item, cancel) {
     await expect(item.locator('textarea'), 'Cancel closes the edit box without submitting').toHaveCount(0);
 }
 
-test.describe('edit message cleanup', () => {
+test.describe('edit message cleanup', { tag: '@offline' }, () => {
     test('the edit box of a message sent with a group, the global prompt and the system time holds only the typed text', async ({ page, context, settings }) => {
         const group = { ...createTestPreset('edit-cleanup'), globalPromptEnabled: true };
         await pinInjectedSettings(settings, context, group);

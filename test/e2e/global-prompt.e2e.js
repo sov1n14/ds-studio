@@ -1,5 +1,6 @@
-import { test, expect } from './fixtures.js';
-import { CONVERSATIONS, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { test, expect } from './helpers/batch2-fixtures.js';
+import { conversationOtherThan } from './helpers/batch2-conversations.js';
+import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { pacedTimeout } from './helpers/human.js';
 import { clickPopupSwitch, closeEditorWithEscape, closeExtensionPages, fillEditorAndWaitForSave, openEditorWith, openPopup } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, seedOnlyPreset, seedOnlyPresets } from './helpers/presets.js';
@@ -12,8 +13,6 @@ import { readBothAreas } from './helpers/settings.js';
 
 const USER_TEXT = 'e2e global prompt probe (aborted before it leaves the browser)';
 const HOME = DEEPSEEK_ORIGIN + '/';
-// 保留在測試帳號中的既有對話（chat-binding.e2e.js 也把它當作未綁定的對話）；只開啟並送出會被中止的請求，從不寫入或刪除。
-const EXISTING_CHAT_URL = `${DEEPSEEK_ORIGIN}/a/chat/s/${CONVERSATIONS.fiveThinkingReplies}`;
 
 /** A test group whose own global-prompt switch is `isGlobalPromptEnabled`. */
 function groupWithGlobalSwitch(label, isGlobalPromptEnabled) {
@@ -27,7 +26,7 @@ function legacyGroupWithoutGlobalSwitch(label) {
     return group;
 }
 
-test.describe('global prompt', () => {
+test.describe('global prompt', { tag: '@offline' }, () => {
     test.beforeEach(async ({ settings }) => {
         await settings.set({ isEnabled: true });
         await settings.setInBothAreas({ dsShowSystemTime: false });
@@ -140,7 +139,9 @@ test.describe('global prompt', () => {
         expect(prompt, 'a group without the field is treated as switched on: the global prompt, a blank line, then the group content').toBe(documentedPrompt({ reminder: `${globalPrompt}\n\n${group.content}`, text: USER_TEXT }));
     });
 
-    test('an existing conversation bound to no group sends the global prompt alone when the device-level switch is on, even right after a group was picked in a new conversation', async ({ page, context, settings }) => {
+    test('an existing conversation bound to no group sends the global prompt alone when the device-level switch is on, even right after a group was picked in a new conversation', async ({ page, context, settings, deepseekReplay }) => {
+        // 錄製中的既有對話：取不同於 chat-binding.e2e.js 所綁定對話（"withSearch" 角色）的另一個，兩個 spec 不會在同一個對話上互相留下綁定；只開啟並送出會被中止的請求，從不寫入或刪除。
+        const existingChatUrl = `${DEEPSEEK_ORIGIN}/a/chat/s/${conversationOtherThan(deepseekReplay, deepseekReplay.requireConversation('withSearch').id).id}`;
         // 所選群組自身的開關為關閉：若既有對話誤沿用此群組，送出內容會帶群組內容且缺少全域提示詞。
         const group = groupWithGlobalSwitch('unbound-chat', false);
         const globalPrompt = 'E2E-GLOBAL-PROMPT-' + Date.now();
@@ -151,7 +152,7 @@ test.describe('global prompt', () => {
 
         await gotoWithOverlay(page, HOME);
         await pickPreset(page, group);
-        const blocked = await openBlockingSends(page, EXISTING_CHAT_URL);
+        const blocked = await openBlockingSends(page, existingChatUrl);
         await expectOverlayNeverShows(page, group.name, 'the existing conversation shows no group (precondition: it is bound to none)');
         const prompt = await sendAndCapturePrompt(page, blocked, USER_TEXT);
         expect(prompt, 'the unbound existing conversation sends the global prompt alone in the system-reminder, with no group content').toBe(documentedPrompt({ reminder: globalPrompt, text: USER_TEXT }));

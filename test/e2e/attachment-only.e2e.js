@@ -68,7 +68,7 @@ function uploadedIds(upload) {
     return upload.uploads().map((entry) => entry.id);
 }
 
-test.describe('prompt injection on an attachment-only send', () => {
+test.describe('prompt injection on an attachment-only send', { tag: '@offline' }, () => {
     // 固定精確送出內容所依賴的每個鍵，每次寫入一個鍵：全域提示詞、裝置層級的全域提示詞開關，以及總開關；群組自身的全域提示詞開關由 createTestPreset 設為關閉，系統時間開關由各測試設定。
     test.beforeEach(async ({ settings }) => {
         await settings.setInBothAreas({ globalDefaultPrompt: '' });
