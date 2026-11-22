@@ -1,11 +1,11 @@
 /**
  * Harness for scenario tests that drive the real prompt-group editor window (popup/editor/editor.js) end to end.
  *
- * Real modules: editor.js and its editor.* parts (preloaded by test/setup/vitest.setup.js), StorageManager, DSSDebounce, DSSPresetDomain, the i18n apply helper. The only double is the trust boundary: the in-memory chrome.storage from test/fixtures/chrome-storage-mock.js, plus window.close, which a test environment cannot honour. DSSTabControl (a chrome.tabs wrapper) stays absent, a case the editor supports.
+ * Real modules: editor.js and its editor.* parts (preloaded by test/setup/vitest.setup.js), StorageManager, DSSDebounce, DSSPresetDomain, the i18n apply helper. The only double is the trust boundary: the in-memory chrome.storage from test/fixtures/chrome-storage-mock.js, plus window.close, which a test environment cannot honour.
  *
  * chrome.runtime.onMessage listeners that the editor page registers are captured in `pageMessageListeners` instead of joining the shared mock event, so a scenario can deliver runtime messages to this page alone (see test/helpers/editor-window-flush-doubles.js connectRuntimeBus).
  *
- * Scripts that popup/editor/editor.html declares beyond the ones known when this harness was written (EDITOR_SCRIPTS_KNOWN) are loaded before editor.js, in declaration order, so a new editor part or utils/ wrapper reaches the page the way the real window loads it. utils/tab-control.js stays deliberately absent.
+ * Scripts that popup/editor/editor.html declares beyond the ones known when this harness was written (EDITOR_SCRIPTS_KNOWN) are loaded before editor.js, in declaration order, so a new editor part or utils/ wrapper reaches the page the way the real window loads it.
  *
  * Timers are faked from the moment editor.js loads, so the debounce and any bounded wait the editor uses run on test-controlled time, and leftover timers die in cleanup() instead of writing into the next test's storage.
  */
@@ -35,9 +35,9 @@ const EDITOR_BODY_HTML = `
 
 const STEP_MS = 50;
 
-// Repo paths of the editor.html scripts this harness already provides (preloaded by test/setup/vitest.setup.js or imported above), plus utils/tab-control.js (deliberately absent) and editor.js (imported per test).
+// Repo paths of the editor.html scripts this harness already provides (preloaded by test/setup/vitest.setup.js or imported above), plus editor.js (imported per test).
 const EDITOR_SCRIPTS_KNOWN = new Set([
-    'utils/logger.js', 'utils/debounce.js', 'utils/message-constants.js', 'utils/tab-control.js',
+    'utils/logger.js', 'utils/debounce.js', 'utils/message-constants.js',
     'utils/storage-manager.keys.js', 'utils/storage-manager.rw.js', 'utils/storage-manager.sync.js', 'utils/storage-manager.sync.retry.js',
     'utils/storage-manager.restore.js', 'utils/storage-manager.tombstone.js', 'utils/storage-manager.preset-merge.js', 'utils/storage-manager.preset-recency.js',
     'utils/storage-manager.presets.js', 'utils/storage-manager.chatmap.diff.js', 'utils/storage-manager.chatmap.ops.js', 'utils/storage-manager.chatmap.js',
@@ -61,7 +61,8 @@ function newEditorScriptPaths() {
     }).filter(p => !EDITOR_SCRIPTS_KNOWN.has(p));
 }
 
-async function importNewEditorScripts() {
+/** Load the editor.html scripts outside EDITOR_SCRIPTS_KNOWN, in declaration order; exported so a scenario that calls an editor part directly, without opening the editor page, still gets the editor window's script composition. */
+export async function importNewEditorScripts() {
     for (const repoPath of newEditorScriptPaths()) {
         const load = SCRIPT_LOADERS[`../../${repoPath}`];
         if (!load) throw new Error(`harness: popup/editor/editor.html declares ${repoPath}, which the harness glob cannot load (extend SCRIPT_LOADERS in test/helpers/editor-window-harness.js)`);

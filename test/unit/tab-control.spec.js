@@ -1,29 +1,28 @@
 /**
  * RED-phase spec for utils/tab-control.js (backlog B1 / B17).
  *
- * Contract under test — a popup-facing adapter over chrome.tabs that never
- * throws at its callers:
+ * Contract under test — a popup-facing adapter over chrome.tabs that never throws at its callers:
  *
  *   queryActiveDeepseekTab()
- *     - queries chrome.tabs.query({active:true, currentWindow:true,
- *       url:'*://chat.deepseek.com/*'}) — the url condition is pushed into the
- *       query rather than filtered in JS (B17)
+ *     - queries chrome.tabs.query({active:true, currentWindow:true, url:'*://chat.deepseek.com/*'}) — the url condition is pushed into the query rather than filtered in JS (B17)
  *     - resolves the FIRST matching tab, or null when nothing matches
  *     - a rejected query resolves null and logs a '[DSS]'-prefixed console.error
  *
+ *   queryDeepseekTabs()
+ *     - resolves every DeepSeek chat tab across all windows, active or not, and no other-URL tab
+ *     - resolves [] when nothing matches, and [] plus a '[DSS]'-prefixed console.error when the query rejects or throws
+ *
  *   sendToTab(tabId, message)
  *     - forwards to chrome.tabs.sendMessage(tabId, message) and resolves the response
- *     - a rejected send resolves undefined and logs a '[DSS]'-prefixed console.debug
- *       (popup callers today treat a failed send as non-fatal)
+ *     - a rejected send resolves undefined and logs a '[DSS]'-prefixed console.debug (popup callers today treat a failed send as non-fatal)
  *
- * The chrome.tabs mock comes from test/setup/vitest.setup.js; each test installs
- * its own vi.fn() implementations.
+ * The chrome.tabs mock comes from test/setup/vitest.setup.js; each test installs its own vi.fn() implementations or the honest tab double test/helpers/fake-chrome-tabs.js.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { installFakeTabs } from '../helpers/fake-chrome-tabs.js';
 
 const tabControlModule = await import('../../utils/tab-control.js');
-const { queryActiveDeepseekTab, sendToTab, broadcastActivePreset } = tabControlModule;
+const { queryActiveDeepseekTab, sendToTab } = tabControlModule;
 
 const ACTIVE_DEEPSEEK_QUERY = {
     active: true,
@@ -113,123 +112,6 @@ describe('DSSTabControl', () => {
             await expect(sendToTab(42, { action: 'PING' })).resolves.toBeUndefined();
             expect(loggedDss(errorSpy)).toBe(false);
             expect(loggedDss(debugSpy)).toBe(false);
-        });
-    });
-
-    // ── broadcastActivePreset: BROADCAST COMPOSITION (ported from messaging.spec.js) ──
-    // Fans ACTIVE_PRESET_CHANGED out to every DeepSeek tab, built on
-    // queryDeepseekTabs() + sendToTab(). Individual tab failures are swallowed
-    // by sendToTab and must not block the others or reject the overall call.
-    describe('broadcastActivePreset', () => {
-        const message = (presetId, presetContent) => ({
-            action: 'ACTIVE_PRESET_CHANGED',
-            presetId,
-            presetContent,
-        });
-        const deliveries = (sendMessage) =>
-            sendMessage.mock.calls.map(([tabId, payload]) => ({ tabId, payload }));
-        const deliveredTabIds = (sendMessage) =>
-            sendMessage.mock.calls.map(([tabId]) => tabId).sort((a, b) => a - b);
-
-        it('delivers ACTIVE_PRESET_CHANGED to every matching chat.deepseek.com tab', async () => {
-            chrome.tabs.query = vi.fn().mockResolvedValue([
-                { id: 42, url: 'https://chat.deepseek.com/a/chat/s/abc' },
-                { id: 77, url: 'https://chat.deepseek.com/' },
-                { id: 99, url: 'https://chat.deepseek.com/a/chat/s/xyz' },
-            ]);
-            chrome.tabs.sendMessage = vi.fn().mockResolvedValue({});
-
-            await broadcastActivePreset('preset-1', 'Hello world');
-
-            expect(chrome.tabs.query).toHaveBeenCalledWith({ url: '*://chat.deepseek.com/*' });
-            expect(deliveredTabIds(chrome.tabs.sendMessage)).toEqual([42, 77, 99]);
-            for (const tabId of [42, 77, 99]) {
-                expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
-                    tabId,
-                    message('preset-1', 'Hello world'),
-                );
-            }
-        });
-
-        it('delivers an empty presetId (selection cleared) to every matching tab', async () => {
-            chrome.tabs.query = vi.fn().mockResolvedValue([
-                { id: 42, url: 'https://chat.deepseek.com/' },
-                { id: 77, url: 'https://chat.deepseek.com/' },
-            ]);
-            chrome.tabs.sendMessage = vi.fn().mockResolvedValue({});
-
-            await broadcastActivePreset('', '');
-
-            expect(deliveries(chrome.tabs.sendMessage)).toEqual([
-                { tabId: 42, payload: message('', '') },
-                { tabId: 77, payload: message('', '') },
-            ]);
-        });
-
-        it('still delivers to the remaining tabs when one tab rejects, and resolves', async () => {
-            chrome.tabs.query = vi.fn().mockResolvedValue([
-                { id: 42, url: 'https://chat.deepseek.com/' },
-                { id: 77, url: 'https://chat.deepseek.com/' },
-                { id: 99, url: 'https://chat.deepseek.com/' },
-            ]);
-            chrome.tabs.sendMessage = vi.fn().mockImplementation((tabId) =>
-                tabId === 77
-                    ? Promise.reject(new Error('Could not establish connection'))
-                    : Promise.resolve({}),
-            );
-
-            await expect(broadcastActivePreset('preset-1', 'Hello')).resolves.toBeUndefined();
-
-            expect(deliveredTabIds(chrome.tabs.sendMessage)).toEqual([42, 77, 99]);
-            expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(42, message('preset-1', 'Hello'));
-            expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(99, message('preset-1', 'Hello'));
-        });
-
-        it('still delivers to the remaining tabs when the FIRST tab rejects', async () => {
-            chrome.tabs.query = vi.fn().mockResolvedValue([
-                { id: 42, url: 'https://chat.deepseek.com/' },
-                { id: 77, url: 'https://chat.deepseek.com/' },
-            ]);
-            chrome.tabs.sendMessage = vi.fn().mockImplementation((tabId) =>
-                tabId === 42
-                    ? Promise.reject(new Error('Receiving end does not exist'))
-                    : Promise.resolve({}),
-            );
-
-            await expect(broadcastActivePreset('preset-1', 'Hello')).resolves.toBeUndefined();
-
-            expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(77, message('preset-1', 'Hello'));
-        });
-
-        it('skips a tab with no id but still delivers to the tabs that have one', async () => {
-            chrome.tabs.query = vi.fn().mockResolvedValue([
-                { url: 'https://chat.deepseek.com/' },
-                { id: 77, url: 'https://chat.deepseek.com/' },
-            ]);
-            chrome.tabs.sendMessage = vi.fn().mockResolvedValue({});
-
-            await broadcastActivePreset('preset-1', 'Hello');
-
-            expect(deliveries(chrome.tabs.sendMessage)).toEqual([
-                { tabId: 77, payload: message('preset-1', 'Hello') },
-            ]);
-        });
-
-        it('resolves without sending when no tab matches', async () => {
-            chrome.tabs.query = vi.fn().mockResolvedValue([]);
-            chrome.tabs.sendMessage = vi.fn().mockResolvedValue({});
-
-            await expect(broadcastActivePreset('preset-1', 'Hello')).resolves.toBeUndefined();
-
-            expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
-        });
-
-        it('swallows a tabs.query rejection without throwing and sends nothing', async () => {
-            chrome.tabs.query = vi.fn().mockRejectedValue(new Error('tabs API error'));
-            chrome.tabs.sendMessage = vi.fn();
-
-            await expect(broadcastActivePreset('preset-1', 'Hello')).resolves.toBeUndefined();
-            expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
         });
     });
 });
@@ -327,5 +209,76 @@ describe('sendActivePresetToActiveTab', () => {
         expect(await outcomeOf('preset-X', 'C'), 'sendMessage 同步例外不得同步拋出，也不得讓呼叫端收到 rejection').toBe('resolved');
 
         expect(fake.deliveries.map((d) => d.tabId), '拋出前只嘗試送往作用中分頁 11').toEqual([11]);
+    });
+});
+
+// ── queryDeepseekTabs：跨視窗查詢所有 DeepSeek 分頁，供廣播型呼叫端使用 ──
+// 需求（JSDoc 與 popup/popup.backup-manager.js 清除已還原紀錄的用法）：回傳所有視窗中的 DeepSeek 聊天分頁陣列，不論是否作用中；
+// 其他網址的分頁不得列入（呼叫端會對每個回傳分頁送出 CLEAR_RESTORED_MESSAGES）；查詢失敗時回傳空陣列（呼叫端直接對結果呼叫 filter），並記錄 [DSS] 錯誤。
+// 分頁表替身（test/helpers/fake-chrome-tabs.js）依網址樣式與視窗條件誠實過濾，未知查詢鍵記入 fakeErrors。
+describe('queryDeepseekTabs', () => {
+    let fake;
+    let errorSpy;
+
+    /** 依 id 排序後取出 id 清單，避免斷言依賴 chrome.tabs.query 的回傳順序。 */
+    const sortedIds = (tabs) => tabs.map((t) => t.id).sort((a, b) => a - b);
+
+    beforeEach(() => {
+        fake = undefined;
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        const fakeErrors = fake?.fakeErrors ?? [];
+        fake?.restore();
+        vi.restoreAllMocks();
+        expect(fakeErrors, 'precondition: code under test only uses query keys the fake understands').toEqual([]);
+    });
+
+    it('returns every DeepSeek chat tab across windows, active or not, and no other-URL tab', async () => {
+        fake = installFakeTabs([
+            { id: 31, windowId: 1, active: true, url: 'https://chat.deepseek.com/a/chat/s/aaa' },
+            { id: 32, windowId: 1, active: false, url: 'https://example.com/chat.deepseek.com/' },
+            { id: 33, windowId: 2, active: false, url: 'https://chat.deepseek.com/' },
+            { id: 34, windowId: 2, active: true, url: 'https://www.deepseek.com/' },
+            { id: 35, windowId: 3, active: true, url: 'https://chat.deepseek.com/a/chat/s/ccc' },
+            { id: 36, windowId: 3, active: false, url: 'chrome://extensions/' },
+        ]);
+
+        const tabs = await tabControlModule.queryDeepseekTabs();
+
+        expect(Array.isArray(tabs), 'resolves an array the caller can filter').toBe(true);
+        expect(sortedIds(tabs), 'all chat.deepseek.com tabs in windows 1, 2 and 3; never example.com, www.deepseek.com or chrome:// tabs').toEqual([31, 33, 35]);
+        expect(loggedDss(errorSpy), 'a successful query logs no [DSS] error').toBe(false);
+    });
+
+    it('resolves an empty array when no DeepSeek chat tab is open', async () => {
+        fake = installFakeTabs([
+            { id: 41, windowId: 1, active: true, url: 'https://example.com/' },
+            { id: 42, windowId: 2, active: true, url: 'https://www.deepseek.com/' },
+        ]);
+
+        await expect(tabControlModule.queryDeepseekTabs(), 'no matching tab resolves [] rather than null or other-URL tabs').resolves.toEqual([]);
+        expect(loggedDss(errorSpy), 'an empty result is not an error').toBe(false);
+    });
+
+    it('resolves an empty array and logs a [DSS] error when chrome.tabs.query rejects', async () => {
+        fake = installFakeTabs([
+            { id: 51, windowId: 1, active: true, url: 'https://chat.deepseek.com/' },
+        ]);
+        chrome.tabs.query = () => Promise.reject(new Error('tabs API error'));
+
+        await expect(tabControlModule.queryDeepseekTabs(), 'a rejected query must not reach the caller').resolves.toEqual([]);
+        expect(loggedDss(errorSpy), 'the failure is logged with the [DSS] prefix').toBe(true);
+    });
+
+    it('resolves an empty array and logs a [DSS] error when chrome.tabs.query throws synchronously', async () => {
+        fake = installFakeTabs([
+            { id: 61, windowId: 1, active: true, url: 'https://chat.deepseek.com/' },
+        ]);
+        chrome.tabs.query = () => { throw new Error('Extension context invalidated.'); };
+
+        await expect(tabControlModule.queryDeepseekTabs(), 'a synchronous throw must not reach the caller').resolves.toEqual([]);
+        expect(loggedDss(errorSpy), 'the failure is logged with the [DSS] prefix').toBe(true);
     });
 });

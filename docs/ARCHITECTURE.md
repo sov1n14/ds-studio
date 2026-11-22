@@ -187,7 +187,7 @@ ds-studio/
 │   ├── temporary-chat-constants.js ─  Shared constants for the temporary-chat feature, loaded by content scripts and the service worker (moved from content/ in v4.29.2)
 │   ├── deepseek-api.js         ─  DSSDeepSeekApi.performDeleteFetch: the single chat_session/delete fetch, shared by the service worker and content delete flow (v4.29.2 merge)
 │   ├── debounce.js             ─  The single trailing-edge debounce (globalThis.DSSDebounce)
-│   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED active-tab send and all-tabs broadcast (DSSTabControl)
+│   ├── tab-control.js          ─  DeepSeek tab query / send helpers, incl. ACTIVE_PRESET_CHANGED active-tab send (DSSTabControl)
 │   ├── window-control.js       ─  openSingletonWindow: chrome.storage.session-backed single-window guarantee (DSSWindowControl)
 │   ├── permission-request-errors.js ─  DSSPermissionRequestErrors: classifies the `chrome.permissions.request` rejection raised when no window can host the permission prompt; read by both permission wrappers below, loaded by `popup/popup.html` and by `background/service-worker.js` through `importScripts` (v4.39.22); the rule is in [Feature Spec §26](spec/04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy--v4370)
 │   ├── notification-permission.js ─  DSSNotificationPermission: wraps the chrome.permissions check and request for the optional notifications permission into a non-throwing interface shared by the popup and `background/permission-intent-routes.js` (v4.38.0)
