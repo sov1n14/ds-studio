@@ -51,6 +51,16 @@ export function conversationMessages(replies) {
     return replies.flatMap((fragmentTypes) => [['REQUEST'], fragmentTypes]);
 }
 
+/** A DeepSeek-shaped `history_messages` response body whose messages are given in full: `{ role, status?, fragments: [{ type, content }] }` each. */
+export function messagesBody(id, messages) {
+    return JSON.stringify({ code: 0, data: { biz_data: { chat_session: { id }, chat_messages: messages.map((message) => ({ status: 'FINISHED', ...message })) } } });
+}
+
+/** A HAR holding `entries` only. */
+export function harOf(...entries) {
+    return { log: { version: '1.2', creator: { name: 'synthetic', version: '0' }, pages: [], entries } };
+}
+
 export function settingsBody(marker) {
     return JSON.stringify({ code: 0, data: { biz_data: { settings: { marker: { value: marker } } } } });
 }

@@ -23,7 +23,25 @@ export function readDiskManifestVersion() {
     return JSON.parse(readFileSync(path.join(REPO_ROOT, 'manifest.json'), 'utf8')).version;
 }
 
+/** A fixture body: `await open(role)` resolves the conversation `pick(deepseekReplay, role)` names, opens it in `page`, waits for its messages and resolves its summary. */
+function opensConversationOf(pick) {
+    return async ({ page, deepseekReplay }, use) => {
+        await use(async (role) => {
+            const conversation = pick(deepseekReplay, role);
+            await openConversation(page, conversation.id);
+            return conversation;
+        });
+    };
+}
+
 export const test = base.extend({
+    // Offline lane only: false opens the lane's browser as a visible window (set per project or file with `test.use`); worker option, so it applies before the browser launches.
+    offlineHeadless: [true, { scope: 'worker', option: true }],
+
+    // Offline lane only: the delay of a real server added to the replayed history and session-create answers, in milliseconds; 0 answers at once. Opt in with `test.use({ replayLatency: { history: 400 } })`.
+    // Observed: with an instant history answer the overlay of the extension shows before the binding of the opened conversation is resolved; an instant create answer arrives before the page-world hook of the extension is installed.
+    replayLatency: [{ history: 0, create: 0 }, { option: true }],
+
     // Human-like pause before each test (D-105; the first test of the worker starts at once). Auto with no dependencies, so it runs before `settings` and `page`; its own timeout is off, and the pause extends the test budget.
     humanPacing: [async ({}, use) => {
         await pauseBetweenTests();
@@ -31,12 +49,12 @@ export const test = base.extend({
     }, { auto: true, timeout: 0 }],
 
     // The offline lane of this worker (browser, request guard); null in the live lane.
-    offlineLane: [async ({}, use) => {
+    offlineLane: [async ({ offlineHeadless }, use) => {
         if (!IS_OFFLINE_LANE) {
             await use(null);
             return;
         }
-        const lane = await launchOfflineLane(REPO_ROOT);
+        const lane = await launchOfflineLane(REPO_ROOT, { headless: offlineHeadless });
         try {
             await use(lane);
         } finally {
@@ -53,6 +71,16 @@ export const test = base.extend({
         }
         await use(await installHarReplay(offlineLane.context, { repoRoot: REPO_ROOT, workDir: offlineLane.workDir, misses: offlineLane.replayMisses }));
     }, { scope: 'worker' }],
+
+    // Offline lane only: applies `replayLatency` to the replay for the length of the test and clears it after, so the next test starts without delay.
+    replayLatencyScope: async ({ deepseekReplay, replayLatency }, use) => {
+        deepseekReplay?.setLatency({ historyMs: replayLatency.history, createMs: replayLatency.create });
+        try {
+            await use();
+        } finally {
+            deepseekReplay?.setLatency({});
+        }
+    },
 
     // Offline lane only: after the test and every fixture it used have been torn down, no request may have escaped the context. The count goes to the report as an annotation.
     // The requests the HAR replay aborted because the recording holds no answer (never sent to the network) go to the report as a second annotation and fail nothing.
@@ -130,6 +158,12 @@ export const test = base.extend({
         }
     },
 
+    // `await openRecorded(role)` opens the main-recording conversation filling `role` (a key of `deepseekReplay.picks`), waits for its messages and resolves its summary.
+    openRecorded: opensConversationOf((replay, role) => replay.requireConversation(role)),
+
+    // `await openPurpose(role)` does the same for a purpose-recording conversation (`longThread`, `withCodeBlocks`).
+    openPurpose: opensConversationOf((replay, role) => replay.requirePurposeConversation(role)),
+
     // `await openConversation(uuid)` loads a kept conversation in `page` and waits for its messages.
     openConversation: async ({ page }, use) => {
         await use((uuid) => openConversation(page, uuid));
@@ -137,7 +171,7 @@ export const test = base.extend({
 
     // Depends on `settings` so Playwright closes the page before `settings` restores storage: its content script can no longer rewrite restored keys.
     // In the offline lane the page is served from the recording (`deepseekReplay`); the live lane loads the real site.
-    page: async ({ context, settings, deepseekReplay }, use) => {
+    page: async ({ context, settings, deepseekReplay, replayLatencyScope }, use) => {
         const page = await context.newPage();
         await page.goto(`${DEEPSEEK_ORIGIN}/`);
         await use(page);

@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { API, STATIC, SHELL_URL, entry, fakeId, syntheticHar } from '../fixtures/har/synthetic-har.js';
+import { API, STATIC, SHELL_URL, entry, fakeId, harOf, syntheticHar } from '../fixtures/har/synthetic-har.js';
 import {
     bodilessScriptUrls,
     createSettingsResponder,
@@ -20,10 +20,6 @@ import {
     readShellHtml,
     selectNewestHar,
 } from '../e2e/helpers/har-recording.js';
-
-function harOf(...entries) {
-    return { log: { version: '1.2', creator: { name: 'synthetic', version: '0' }, pages: [], entries } };
-}
 
 describe('selectNewestHar(files)', () => {
     it('answers null when there is no file', () => {

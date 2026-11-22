@@ -27,9 +27,10 @@ export function buildOfflineExtension(repoRoot, destination) {
  * `--host-resolver-rules` makes every host fail DNS, so a request that bypasses the route guard (an extension service worker fetch) still cannot connect.
  * Playwright's default `serviceWorkers: 'allow'` stays: blocking them would break the extension service worker.
  * `replayMisses` collects the requests an installed HAR replay (har-replay.js) aborts, and `workDir` is the temp directory it may write to.
+ * `headless: false` opens a visible window (a spec that needs a real viewport or a headed browser).
  * `close()` closes the browser and removes both temp directories.
  */
-export async function launchOfflineLane(repoRoot) {
+export async function launchOfflineLane(repoRoot, { headless = true } = {}) {
     const root = mkdtempSync(path.join(os.tmpdir(), 'dss-e2e-offline-'));
     const extensionDir = path.join(root, 'extension');
     const userDataDir = path.join(root, 'profile');
@@ -39,7 +40,7 @@ export async function launchOfflineLane(repoRoot) {
         buildOfflineExtension(repoRoot, extensionDir);
         context = await chromium.launchPersistentContext(userDataDir, {
             channel: 'chromium',
-            headless: true,
+            headless,
             ignoreDefaultArgs: ['--disable-extensions'],
             args: [
                 `--disable-extensions-except=${extensionDir}`,
