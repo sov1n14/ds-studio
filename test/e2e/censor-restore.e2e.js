@@ -1,7 +1,6 @@
-import { test, expect } from './helpers/batch2-fixtures.js';
+import { test, expect } from './fixtures.js';
 import { blockSendRequests } from './helpers/composer.js';
-import { shortestConversation } from './helpers/batch2-conversations.js';
-import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
+import { DEEPSEEK_ORIGIN, openConversation, shortestConversation } from './helpers/conversations.js';
 import { expectNeverWithin } from './helpers/observation.js';
 import { armReplyStub, openHome, REPLY_MESSAGE_ID, sendStubbedPrompt, sseEvent, USER_MESSAGE_ID } from './helpers/reply-stub.js';
 import { DSSelectors } from './helpers/selectors.js';
@@ -192,6 +191,9 @@ async function expectKeptReplyRestoredFromSeed(reply) {
     await expect(restored.locator('.restored-badge'), 'the restored reply carries the Content Restored badge').toContainText('⚠');
     await expect(reply.locator('.dss-censored-hidden'), 'the censored original content is hidden').toBeHidden();
 }
+
+// 回放的 history 答覆延遲 400 毫秒（真實伺服器的延遲）：即時答覆會讓擴充功能的浮層早於所開啟對話的綁定解析而出現。
+test.use({ replayLatency: { history: 400 } });
 
 test.describe('censored reply restoration', { tag: '@offline' }, () => {
     test('a CONTENT_FILTER stream saves its original reply as a record keyed by the conversation id and the reply message id', async ({ page, settings, context }) => {

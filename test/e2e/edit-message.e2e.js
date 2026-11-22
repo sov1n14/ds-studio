@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/batch1-recorded.js';
+import { test, expect } from './fixtures.js';
 import { clickSendWith, composer, guardAgainstSending } from './helpers/composer.js';
 import { pacedTimeout } from './helpers/human.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';

@@ -40,6 +40,13 @@ async function expectNoSendWithin(blocked, before, durationMs, message) {
     expect(blocked.requests().slice(before).map(({ url }) => url), `${message}: no send request within ${durationMs} ms`).toEqual([]);
 }
 
+// 固定精確提示詞所依賴的每個鍵，每次寫入一個鍵：全域提示詞、裝置層級的全域提示詞開關，以及系統時間行；所選群組自身的全域提示詞開關由 createTestPreset 固定為關閉。
+async function pinPromptInputs(settings) {
+    await settings.setInBothAreas({ globalDefaultPrompt: '' });
+    await settings.set({ globalPromptEnabled: false });
+    await settings.setInBothAreas({ dsShowSystemTime: false });
+}
+
 /** Opens a fresh home page with every send request blocked, the overlay shown and no preset picked. */
 async function openHomeBlockingSends(page, preset = PRESET) {
     const blocked = await blockSendRequests(page);
@@ -51,6 +58,7 @@ async function openHomeBlockingSends(page, preset = PRESET) {
 
 test.describe('prompt injection', { tag: '@offline' }, () => {
     test.beforeEach(async ({ context, settings }) => {
+        await pinPromptInputs(settings);
         await seedOnlyPreset(settings, context, PRESET);
         await settings.set({ isEnabled: true });
     });
@@ -58,26 +66,20 @@ test.describe('prompt injection', { tag: '@offline' }, () => {
     test('with no preset picked the sent prompt carries the typed text and no preset content', async ({ page }) => {
         const blocked = await openHomeBlockingSends(page);
         const prompt = await sendAndCapturePrompt(page, blocked, USER_TEXT);
-        expect(prompt, 'the sent prompt carries the typed text').toContain(USER_TEXT);
-        expect(prompt, 'with no preset picked the sent prompt carries no preset content').not.toContain(PRESET.content);
+        expect(prompt, 'with no preset picked and the global prompt and system time pinned off, the sent prompt is only the typed text inside user-input, with no system-reminder block').toBe(documentedPrompt({ text: USER_TEXT }));
     });
 
     test('with a preset picked the sent prompt carries the preset content before the typed text', async ({ page }) => {
         const blocked = await openHomeBlockingSends(page);
         await pickPreset(page, PRESET);
         const prompt = await sendAndCapturePrompt(page, blocked, USER_TEXT);
-        expect(prompt, 'the sent prompt carries the picked preset content').toContain(PRESET.content);
-        expect(prompt, 'the sent prompt still carries the typed text').toContain(USER_TEXT);
-        expect(prompt.indexOf(PRESET.content), 'the preset content comes before the typed text').toBeLessThan(prompt.indexOf(USER_TEXT));
+        expect(prompt, 'the sent prompt is the picked preset content inside system-reminder, a blank line, then the typed text inside user-input').toBe(documentedPrompt({ reminder: PRESET.content, text: USER_TEXT }));
     });
 });
 
 test.describe('prompt injection triggers', { tag: '@offline' }, () => {
-    // 固定精確提示詞所依賴的每個鍵，每次寫入一個鍵：所選群組（其自身的全域提示詞開關為關閉）、全域提示詞、裝置層級的全域提示詞開關，以及系統時間行。
     test.beforeEach(async ({ settings }) => {
-        await settings.setInBothAreas({ globalDefaultPrompt: '' });
-        await settings.set({ globalPromptEnabled: false });
-        await settings.setInBothAreas({ dsShowSystemTime: false });
+        await pinPromptInputs(settings);
         await settings.set({ isEnabled: true });
     });
 

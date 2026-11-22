@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures.js';
-import { openRecordedConversation, recordedReplyShapes } from './helpers/batch3-replay.js';
 import { evaluateInWorker } from './helpers/extension.js';
 import { humanPause, runUnpaced } from './helpers/human.js';
 import { expectNoDownloadWithin } from './helpers/observation.js';
@@ -26,6 +25,20 @@ const DEEPSEEK_TAB_PATTERN = '*://chat.deepseek.com/*';
 
 function countMatches(text, pattern) {
     return (text.match(pattern) ?? []).length;
+}
+
+const ANSWER_FRAGMENT_TYPES = new Set(['RESPONSE', 'TEMPLATE_RESPONSE']);
+
+/** What each reply of a recorded history response (`deepseekReplay.historyOf`) holds, in order: `{ hasThinking, hasAnswer }`; the per-reply expectations follow the recording instead of a hard-coded account. */
+function replyShapesOf(history) {
+    const messages = history?.data?.biz_data?.chat_messages ?? [];
+    return messages.filter((message) => message.role === 'ASSISTANT').map((reply) => {
+        const fragments = reply.fragments ?? [];
+        return {
+            hasThinking: fragments.some((fragment) => fragment.type === 'THINK'),
+            hasAnswer: fragments.some((fragment) => ANSWER_FRAGMENT_TYPES.has(fragment.type) && (fragment.content ?? '') !== ''),
+        };
+    });
 }
 
 /** The body of every "## DeepSeek" section, up to the next "## User" heading or the end of the file. */
@@ -59,10 +72,10 @@ async function clickExportAndDownload(popup, deepSeekPage) {
 }
 
 /** Pins both export options in sync and local (the popup reads synced settings sync-first), then opens the popup over the recorded chat; resolves the popup and that conversation's reply shapes. */
-async function openPopupOverRecordedChat({ page, context, extensionId, settings, deepseekReplay }, { includeThinking, includeReferences }) {
+async function openPopupOverRecordedChat({ context, extensionId, settings, deepseekReplay, openRecorded }, { includeThinking, includeReferences }) {
     await settings.set({ isEnabled: true });
     await settings.setInBothAreas({ includeThinking, includeReferences });
-    const conversation = await openRecordedConversation(page, deepseekReplay, 'withThinking');
+    const conversation = await openRecorded('withThinking');
     const popup = await openPopup(context, extensionId, { activeTabUrlPart: conversation.id });
     await waitForPopupFullyBound(popup);
     const thinkingBox = popup.locator('#includeThinkingToggle');
@@ -71,7 +84,7 @@ async function openPopupOverRecordedChat({ page, context, extensionId, settings,
     else await expect(thinkingBox, 'the popup shows "Include Thinking Process" off (precondition)').not.toBeChecked();
     if (includeReferences) await expect(referencesBox, 'the popup shows "Include Reference Links" on (precondition)').toBeChecked();
     else await expect(referencesBox, 'the popup shows "Include Reference Links" off (precondition)').not.toBeChecked();
-    return { popup, replies: recordedReplyShapes(deepseekReplay, conversation.id) };
+    return { popup, replies: replyShapesOf(deepseekReplay.historyOf(conversation.id)) };
 }
 
 test.describe('popup export button', { tag: '@offline' }, () => {
@@ -79,8 +92,8 @@ test.describe('popup export button', { tag: '@offline' }, () => {
         await closeExtensionPages(context);
     });
 
-    test('Export in the popup over a DeepSeek chat downloads deepseek-chat-YYYYMMDD-HHmmss.md holding one User/DeepSeek turn per recorded turn, each reply that has thinking showing its thinking blockquote before its answer', async ({ page, context, extensionId, settings, deepseekReplay }) => {
-        const { popup, replies } = await openPopupOverRecordedChat({ page, context, extensionId, settings, deepseekReplay }, { includeThinking: true, includeReferences: true });
+    test('Export in the popup over a DeepSeek chat downloads deepseek-chat-YYYYMMDD-HHmmss.md holding one User/DeepSeek turn per recorded turn, each reply that has thinking showing its thinking blockquote before its answer', async ({ page, context, extensionId, settings, deepseekReplay, openRecorded }) => {
+        const { popup, replies } = await openPopupOverRecordedChat({ context, extensionId, settings, deepseekReplay, openRecorded }, { includeThinking: true, includeReferences: true });
         expect(replies.some((reply) => reply.hasThinking), 'the recording holds a reply with thinking (precondition)').toBe(true);
 
         const { fileName, content, clickedAt, arrivedAt } = await clickExportAndDownload(popup, page);
@@ -113,8 +126,8 @@ test.describe('popup export button', { tag: '@offline' }, () => {
         });
     });
 
-    test('Export with "Include Thinking Process" off in the popup downloads every recorded reply without any thinking section', async ({ page, context, extensionId, settings, deepseekReplay }) => {
-        const { popup, replies } = await openPopupOverRecordedChat({ page, context, extensionId, settings, deepseekReplay }, { includeThinking: false, includeReferences: true });
+    test('Export with "Include Thinking Process" off in the popup downloads every recorded reply without any thinking section', async ({ page, context, extensionId, settings, deepseekReplay, openRecorded }) => {
+        const { popup, replies } = await openPopupOverRecordedChat({ context, extensionId, settings, deepseekReplay, openRecorded }, { includeThinking: false, includeReferences: true });
 
         const { fileName, content } = await clickExportAndDownload(popup, page);
 

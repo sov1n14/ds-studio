@@ -1,5 +1,4 @@
 import { test as base, expect } from './fixtures.js';
-import { openRecordedConversation } from './helpers/batch3-replay.js';
 import { evaluateInExtensionOrigin } from './helpers/extension.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
 import { closeExtensionPages, openPopup } from './helpers/popup.js';
@@ -165,10 +164,10 @@ test.describe('popup language switcher', { tag: '@offline' }, () => {
 });
 
 test.describe('DeepSeek page follows the popup language', { tag: '@offline' }, () => {
-    test('switching the popup from zh_TW to en relabels the Quote Reply button on an open DeepSeek chat without reloading the page', async ({ page, context, extensionId, settings, deepseekReplay, deepSeekLocale }) => {
+    test('switching the popup from zh_TW to en relabels the Quote Reply button on an open DeepSeek chat without reloading the page', async ({ page, context, extensionId, settings, openRecorded, deepSeekLocale }) => {
         await settings.set({ isEnabled: true });
         await setSync(context, { [LOCALE_KEY]: 'zh_TW' });
-        await openRecordedConversation(page, deepseekReplay, 'withThinking');
+        await openRecorded('withThinking');
         await page.evaluate(() => { window.__dssE2eSamePage = true; });
         const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
         const selected = await dragSelectTwoReplyParagraphs(page);

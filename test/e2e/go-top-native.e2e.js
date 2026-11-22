@@ -1,5 +1,4 @@
 import { test, expect } from './fixtures.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
 import { exportMarkdown, withoutExportTimestamp } from './helpers/export.js';
 import { GO_TOP_SELECTOR } from './helpers/extension-ui.js';
 import { expectNeverWithin } from './helpers/observation.js';
@@ -21,10 +20,10 @@ const STAY_AT_BOTTOM_WINDOW_MS = 3_000;
 const STAY_VISIBLE_WINDOW_MS = 1_500;
 
 /** Opens the very long conversation with Go Top on and prevent auto-scroll off, and waits until the list rests at its bottom. */
-async function openAtBottom(page, settings, openConversation) {
+async function openAtBottom(page, settings, openPurpose) {
     await page.setViewportSize(VIEWPORT);
     await settings.set({ isEnabled: true, dsPreventAutoScroll: false });
-    await openConversation(CONVERSATIONS.veryLongThread);
+    await openPurpose('longThread');
     await expect.poll(async () => {
         const scroll = await readListScroll(page);
         return scroll !== null && scroll.max > VIEWPORT.height && scroll.top >= scroll.max - 1;
@@ -76,9 +75,9 @@ function expectToStayAtBottom(page, durationMs, message) {
     }, DSSelectors.VIRTUAL_LIST_SELECTOR, durationMs, message);
 }
 
-test.describe('go to top with the native scroll-to-bottom button', () => {
-    test('a native scroll-to-bottom click during Go Top leaves the list at the bottom and Go Top does not pull it back', async ({ page, settings, openConversation }) => {
-        await openAtBottom(page, settings, openConversation);
+test.describe('go to top with the native scroll-to-bottom button', { tag: '@offline' }, () => {
+    test('a native scroll-to-bottom click during Go Top leaves the list at the bottom and Go Top does not pull it back', async ({ page, settings, openPurpose }) => {
+        await openAtBottom(page, settings, openPurpose);
         await recordPresses(page);
 
         await page.locator(GO_TOP_SELECTOR).click();
@@ -92,8 +91,8 @@ test.describe('go to top with the native scroll-to-bottom button', () => {
         expect(await isAtBottom(page), 'the list is still at the bottom once everything has settled').toBe(true);
     });
 
-    test('after a native scroll-to-bottom click from the top of a very long thread, the Go Top button shows at the bottom', async ({ page, settings, openConversation }) => {
-        await openAtBottom(page, settings, openConversation);
+    test('after a native scroll-to-bottom click from the top of a very long thread, the Go Top button shows at the bottom', async ({ page, settings, openPurpose }) => {
+        await openAtBottom(page, settings, openPurpose);
         const goTop = page.locator(GO_TOP_SELECTOR);
         await goTop.click();
         await expect.poll(async () => (await readListScroll(page)).top, { message: 'Go Top takes the list to the very top (precondition)' }).toBe(0);
@@ -115,9 +114,9 @@ test.describe('go to top with the native scroll-to-bottom button', () => {
         await expectNeverWithin(page, (selector) => !document.querySelector(selector)?.checkVisibility(), GO_TOP_SELECTOR, STAY_VISIBLE_WINDOW_MS, 'the Go Top button must stay visible at the bottom');
     });
 
-    test('a native scroll-to-bottom click during the export scroll-to-top does not stop the export', async ({ page, settings, openConversation }) => {
+    test('a native scroll-to-bottom click during the export scroll-to-top does not stop the export', async ({ page, settings, openPurpose }) => {
         test.setTimeout(180_000);
-        await openAtBottom(page, settings, openConversation);
+        await openAtBottom(page, settings, openPurpose);
         const exportOptions = { includeThinking: false, includeReferences: false };
         const undisturbed = await exportMarkdown(page, exportOptions);
         // The export puts the list back at its earlier scrollTop, which is no longer the bottom once the whole thread has been measured; return to the real bottom so the native button unmounts and can only reappear through the next export scroll-to-top.

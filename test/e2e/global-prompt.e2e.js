@@ -1,6 +1,5 @@
-import { test, expect } from './helpers/batch2-fixtures.js';
-import { conversationOtherThan } from './helpers/batch2-conversations.js';
-import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { test, expect } from './fixtures.js';
+import { conversationOtherThan, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { pacedTimeout } from './helpers/human.js';
 import { clickPopupSwitch, closeEditorWithEscape, closeExtensionPages, fillEditorAndWaitForSave, openEditorWith, openPopup } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, seedOnlyPreset, seedOnlyPresets } from './helpers/presets.js';
@@ -25,6 +24,9 @@ function legacyGroupWithoutGlobalSwitch(label) {
     delete group.globalPromptEnabled;
     return group;
 }
+
+// 回放的 history 答覆延遲 400 毫秒（真實伺服器的延遲）：即時答覆會讓擴充功能的浮層早於所開啟對話的綁定解析而出現。
+test.use({ replayLatency: { history: 400 } });
 
 test.describe('global prompt', { tag: '@offline' }, () => {
     test.beforeEach(async ({ settings }) => {

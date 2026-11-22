@@ -1,5 +1,4 @@
 import { test, expect } from './fixtures.js';
-import { serveHistoryWithoutCacheParams } from './helpers/batch3-replay.js';
 import { DEEPSEEK_ORIGIN, MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
 import {
     addGroupInPopup, closeEditorWithEscape, closeExtensionPages, openEditorWith, openPopup, openPopupGroupList,
@@ -56,7 +55,6 @@ test.describe('managing prompt groups in the popup', { tag: '@offline' }, () => 
     });
 
     test('pinning a group preselects it on new conversations only, one group at a time, and unpinning restores the blank option', async ({ context, settings, extensionId, deepseekReplay }) => {
-        await serveHistoryWithoutCacheParams(context);
         const first = createTestPreset('pin-first');
         const second = createTestPreset('pin-second');
         await seedOnlyPresets(settings, context, [first, second]);

@@ -1,19 +1,8 @@
-// Kept conversations on the logged-in test account and a loader that waits until messages render.
+// Loader that opens a conversation by uuid and waits until messages render.
 
 import { DSSelectors } from './selectors.js';
 
 export const DEEPSEEK_ORIGIN = 'https://chat.deepseek.com';
-
-export const CONVERSATIONS = Object.freeze({
-    /** One reply with a thinking block and web-search references. */
-    thinkingWithSearch: 'f14d2d7b-f860-4175-a989-f1990a296561',
-    /** Five replies, each with a thinking block. */
-    fiveThinkingReplies: '8176d3c0-ab31-451d-b913-1599192b6b0c',
-    /** Long conversation with code blocks (too slow to export). */
-    longWithCode: '992fe9b3-9d38-46c1-8eb5-109193fc300d',
-    /** Very long conversation (bottom scrollTop about 45800 at 1280x720) whose first mounted message still reaches into the viewport at the bottom; never delete it, go-top-native.e2e.js depends on it. */
-    veryLongThread: '0ecaa661-fdb2-4d41-9f87-41d8262af32d',
-});
 
 export const MESSAGE_IN_VIEW_SELECTOR = `${DSSelectors.VISIBLE_ITEMS_SELECTOR} ${DSSelectors.MESSAGE_SELECTOR}`;
 
@@ -25,4 +14,23 @@ function conversationUrl(uuid) {
 export async function openConversation(page, uuid) {
     await page.goto(conversationUrl(uuid));
     await page.locator(MESSAGE_IN_VIEW_SELECTOR).first().waitFor({ state: 'attached', timeout: 30_000 });
+}
+
+// 在小型錄製上 `requireConversation` 的每個角色都會解析成同一個對話；需要第二個不同的對話或最短對話的 spec，從錄製自己的清單（`deepseekReplay.conversations`）挑選。
+
+/** The first recorded conversation whose id differs from `excludedId`; throws, naming the need, when the recording holds only that one. */
+export function conversationOtherThan(replay, excludedId) {
+    const other = replay.conversations.find((conversation) => conversation.id !== excludedId);
+    if (!other) throw new Error('The recording holds no second conversation, which this spec needs to compare with the first. Re-record a session that opens at least two conversations.');
+    return other;
+}
+
+/** The recorded conversation with the fewest messages (the first listed wins a tie); throws when the recording holds none. */
+export function shortestConversation(replay) {
+    let shortest = null;
+    for (const conversation of replay.conversations) {
+        if (shortest === null || conversation.messageCount < shortest.messageCount) shortest = conversation;
+    }
+    if (shortest === null) throw new Error('The recording holds no conversation. Re-record a session that opens one.');
+    return shortest;
 }

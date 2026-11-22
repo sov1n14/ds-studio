@@ -2,7 +2,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from './fixtures.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
 import { startMarkdownExport } from './helpers/export.js';
 import { runUnpaced } from './helpers/human.js';
 import {
@@ -88,11 +87,11 @@ function parseCapturedCount(text, capturingTemplate) {
 }
 
 /** 開啟保留的長對話並等它停在穩定的捲動位置，回傳匯出前的 scrollTop。 */
-async function openLongThread(page, settings, openConversation) {
+async function openLongThread(page, settings, openPurpose) {
     await page.setViewportSize(VIEWPORT);
     await page.bringToFront();
     await settings.set({ isEnabled: true });
-    await openConversation(CONVERSATIONS.veryLongThread);
+    await openPurpose('longThread');
     await waitForListScrollToSettle(page);
     return (await readListScroll(page)).top;
 }
@@ -135,10 +134,10 @@ function lastNonBlankLine(content) {
     return content.split(/\r?\n/).filter((line) => line.trim() !== '').at(-1) ?? '';
 }
 
-test.describe('export progress toast and cancel', () => {
-    test('the progress toast shows a cancel button and a captured count that grows while the export runs', async ({ page, context, extensionId, settings, openConversation }) => {
+test.describe('export progress toast and cancel', { tag: '@offline' }, () => {
+    test('the progress toast shows a cancel button and a captured count that grows while the export runs', async ({ page, context, extensionId, settings, openPurpose }) => {
         const { capturingTemplate } = await readLocalizedToastTexts(context, extensionId);
-        await openLongThread(page, settings, openConversation);
+        await openLongThread(page, settings, openPurpose);
 
         const { download } = await startMarkdownExport(page, EXPORT_OPTIONS);
         await expect(page.locator(HARVEST_TOAST_SELECTOR), 'the progress toast appears').toBeVisible();
@@ -152,9 +151,9 @@ test.describe('export progress toast and cancel', () => {
         expectOutsideRepo(filePath);
     });
 
-    test('cancelling mid-run disables the button, still downloads the captured turns with a cancelled footer, warns on the page and restores the scroll position', async ({ page, context, extensionId, settings, openConversation }) => {
+    test('cancelling mid-run disables the button, still downloads the captured turns with a cancelled footer, warns on the page and restores the scroll position', async ({ page, context, extensionId, settings, openPurpose }) => {
         const { capturingTemplate, cancellingLabel } = await readLocalizedToastTexts(context, extensionId);
-        const scrollTopBefore = await openLongThread(page, settings, openConversation);
+        const scrollTopBefore = await openLongThread(page, settings, openPurpose);
 
         const { download } = await startMarkdownExport(page, EXPORT_OPTIONS);
         await waitForFirstCount(page, capturingTemplate);

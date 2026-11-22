@@ -1,7 +1,5 @@
-import { conversationOtherThan } from './helpers/batch2-conversations.js';
-import { test, expect } from './helpers/batch2-fixtures.js';
-import { serveConversationAs } from './helpers/batch2-session-replay.js';
-import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { test, expect } from './fixtures.js';
+import { conversationOtherThan, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { closeExtensionPages, openPopup, openPopupGroupList, pickGroupInPopup, popupBlankLabel, popupPickedGroup } from './helpers/popup.js';
 import { createTestPreset, expectOverlayNeverShows, pickPreset, pickPresetOption, presetOverlay, seedOnlyPreset, seedOnlyPresets } from './helpers/presets.js';
 import { documentedPrompt, gotoWithOverlay, openBlockingSends, sendAndCapturePrompt } from './helpers/prompt-capture.js';
@@ -22,6 +20,9 @@ const CHAT_URL_PATTERN = /\/a\/chat\/s\/([0-9a-f-]{36})(?:[/?#]|$)/;
 // 兩個新對話分頁的網址標記，讓彈出視窗能指定位於哪個分頁之上。
 const TAB_A_MARKER = 'dss-e2e-tab=a';
 const TAB_B_MARKER = 'dss-e2e-tab=b';
+
+// 回放的 history 答覆延遲 400 毫秒（真實伺服器的延遲）：即時答覆會讓擴充功能的浮層早於所開啟對話的綁定解析而出現。
+test.use({ replayLatency: { history: 400 } });
 
 test.describe('conversation-bound prompt groups', { tag: '@offline' }, () => {
     test.beforeEach(async ({ settings, deepseekReplay }) => {
@@ -168,7 +169,7 @@ test.describe('conversation-bound prompt groups', { tag: '@offline' }, () => {
         // 錄製裡沒有這個對話：以錄製中另一個對話的訊息代為提供它的頁面與歷史。
         const reopened = await context.newPage();
         try {
-            await serveConversationAs(reopened, deepseekReplay, chatId, deepseekReplay.requireConversation('mostMessages'));
+            await deepseekReplay.serveConversationAs(reopened, chatId, 'mostMessages');
             const blocked = await openBlockingSends(reopened, `${DEEPSEEK_ORIGIN}/a/chat/s/${chatId}`);
             await expect(presetOverlay(reopened), 'reopening the new conversation shows the group picked before its first message').toContainText(group.name);
             expect(await sendAndCapturePrompt(reopened, blocked, USER_TEXT), 'a message sent in the reopened conversation carries the bound group content').toBe(documentedPrompt({ reminder: group.content, text: USER_TEXT }));

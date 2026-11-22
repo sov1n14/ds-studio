@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/batch1-recorded.js';
+import { test, expect } from './fixtures.js';
 import { DSSelectors } from './helpers/selectors.js';
 
 // "Hide Thinking Process" (`dsHideThinking`) collapses every mounted thinking block through DeepSeek's own toggle, which unmounts the thinking body (`.ds-think-content`); turning it off expands them again.

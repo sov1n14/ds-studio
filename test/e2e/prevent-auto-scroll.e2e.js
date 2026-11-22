@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/batch2-fixtures.js';
+import { test, expect } from './fixtures.js';
 import { pacedTimeout } from './helpers/human.js';
 import { readListScroll, scrollListFromPage, waitForListScrollToSettle, wheelOverList } from './helpers/scroll.js';
 
@@ -19,6 +19,9 @@ async function scrollUpByWheel(page) {
     await waitForListScrollToSettle(page);
     return readListScroll(page);
 }
+
+// 回放的 history 答覆延遲 400 毫秒（真實伺服器的延遲）：即時答覆會讓擴充功能的浮層早於所開啟對話的綁定解析而出現。
+test.use({ replayLatency: { history: 400 } });
 
 test.describe('prevent auto-scroll', { tag: '@offline' }, () => {
     test('on: page scripts cannot scroll the list down while the wheel and upward page scrolls still work; off: page scripts scroll down again', async ({ page, settings, openConversation, deepseekReplay }) => {

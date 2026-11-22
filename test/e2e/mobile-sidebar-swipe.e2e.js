@@ -1,4 +1,4 @@
-import { test as base, expect } from './helpers/batch1-recorded.js';
+import { test as base, expect } from './fixtures.js';
 import { PRESET_OVERLAY_SELECTOR } from './helpers/extension-ui.js';
 import { humanPause, pacedTimeout } from './helpers/human.js';
 import { expectNeverWithin } from './helpers/observation.js';

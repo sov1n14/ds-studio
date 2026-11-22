@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/batch1-recorded.js';
+import { test, expect } from './fixtures.js';
 import { MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
 import { DSSelectors } from './helpers/selectors.js';
 

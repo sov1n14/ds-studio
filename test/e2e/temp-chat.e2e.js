@@ -1,8 +1,6 @@
-import { conversationOtherThan } from './helpers/batch2-conversations.js';
-import { test as base, expect } from './helpers/batch2-fixtures.js';
-import { serveConversationAs } from './helpers/batch2-session-replay.js';
+import { test as base, expect } from './fixtures.js';
 import { blockSendRequests, composer } from './helpers/composer.js';
-import { DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
+import { conversationOtherThan, DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
 import { evaluateInWorker } from './helpers/extension.js';
 import { runUnpaced } from './helpers/human.js';
 import { TEMP_CHAT_ROW_SELECTOR } from './helpers/extension-ui.js';
@@ -128,7 +126,7 @@ async function armDeleteGuard(context, keptIds) {
 }
 
 const test = base.extend({
-    deleteGuard: async ({ context, deepseekReplay, createLatency }, use) => {
+    deleteGuard: async ({ context, deepseekReplay }, use) => {
         const guard = await armDeleteGuard(context, new Set(deepseekReplay.conversations.map(({ id }) => id)));
         await use(guard);
         await guard.dispose();
@@ -216,10 +214,10 @@ async function sendFirstMessageFromHome(page, deleteGuard) {
 /**
  * 重新整理後讓對話 `id` 以「已有訊息」的狀態載入。
  * 替身回覆沒有寫入伺服器，DeepSeek 重新載入沒有訊息的對話時會導回首頁（2026-11-12 實測：history_messages 回傳 `is_empty: true` 後頁面轉到 `/`），那是一次離開；真實送出後的對話不會如此。
- * 錄製裡也沒有 `id` 這個對話，因此它的頁面與 history_messages 改以錄製中一個對話的訊息提供（helpers/batch2-session-replay.js），並把其中的對話 id 換成 `id`。
+ * 錄製裡也沒有 `id` 這個對話，因此它的頁面與 history_messages 改以錄製中一個對話的訊息提供（`deepseekReplay.serveConversationAs`，helpers/har-replay.js），並把其中的對話 id 換成 `id`。
  */
 function serveHistoryWithMessages(page, replay, id) {
-    return serveConversationAs(page, replay, id, replay.requireConversation('withSearch'));
+    return replay.serveConversationAs(page, id, 'withSearch');
 }
 
 /** 以 `reload()` 重新整理已標記的對話 `id`，斷言重新整理不送出刪除請求，對話仍被追蹤且仍在待刪佇列中。 */
@@ -249,6 +247,9 @@ async function expectNoFurtherDeletes(page, deleteGuard, message) {
     const after = deleteGuard.ownedDeleteIds().length + deleteGuard.refused().length;
     expect(after - before, `${message} (owned: ${JSON.stringify(deleteGuard.ownedDeleteIds())}, refused: ${JSON.stringify(deleteGuard.refused())})`).toBe(0);
 }
+
+// 回放的 history 與 chat_session/create 答覆各延遲 400 毫秒（真實伺服器的延遲）：即時的 create 答覆早於擴充功能頁面世界掛鉤的安裝，掛鉤便看不到該次 create，第一次送出也就不會配對到任何對話。
+test.use({ replayLatency: { history: 400, create: 400 } });
 
 test.describe('temporary conversation', { tag: '@offline' }, () => {
     test('the switch shows its off and on state, follows a change made in another tab, and keeps its state while leaving and returning to the home page', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {

@@ -1,5 +1,4 @@
 import { test, expect } from './fixtures.js';
-import { openRecordedConversation } from './helpers/batch3-replay.js';
 import { MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
 import { exportMarkdown, withoutExportTimestamp } from './helpers/export.js';
 import { DSSelectors } from './helpers/selectors.js';
@@ -34,9 +33,9 @@ function mountedThinkingBodies(page) {
 }
 
 test.describe('markdown export', { tag: '@offline' }, () => {
-    test('downloads deepseek-chat-YYYYMMDD-HHMMSS.md stamped with the export time', async ({ page, settings, deepseekReplay }) => {
+    test('downloads deepseek-chat-YYYYMMDD-HHMMSS.md stamped with the export time', async ({ page, settings, openRecorded }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openRecordedConversation(page, deepseekReplay, 'withThinking');
+        await openRecorded('withThinking');
 
         const before = new Date();
         before.setMilliseconds(0);
@@ -51,9 +50,9 @@ test.describe('markdown export', { tag: '@offline' }, () => {
         expect(stamped.getTime(), 'file name time is not after the download arrived').toBeLessThanOrEqual(after.getTime());
     });
 
-    test('includeThinking adds one thinking section per reply and leaving it off drops them', async ({ page, settings, deepseekReplay }) => {
+    test('includeThinking adds one thinking section per reply and leaving it off drops them', async ({ page, settings, deepseekReplay, openRecorded }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openRecordedConversation(page, deepseekReplay, 'withThinking');
+        await openRecorded('withThinking');
         const fragment = await firstThinkingFragment(page);
         expect(fragment.length, 'a mounted thinking body has text to look for').toBeGreaterThan(10);
 
@@ -66,9 +65,9 @@ test.describe('markdown export', { tag: '@offline' }, () => {
         expect(withoutThinking.content, 'thinking text is not exported').not.toContain(fragment);
     });
 
-    test('thinking collapsed by "Hide Thinking Process" exports identically to expanded thinking (U3 regression)', async ({ page, settings, deepseekReplay }) => {
+    test('thinking collapsed by "Hide Thinking Process" exports identically to expanded thinking (U3 regression)', async ({ page, settings, deepseekReplay, openRecorded }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openRecordedConversation(page, deepseekReplay, 'withThinking');
+        await openRecorded('withThinking');
         await expect.poll(() => mountedThinkingBodies(page), { message: 'thinking bodies are mounted while the feature is off' }).toBeGreaterThan(0);
         const expanded = await exportMarkdown(page, { includeThinking: true, includeReferences: true });
 
@@ -80,9 +79,9 @@ test.describe('markdown export', { tag: '@offline' }, () => {
         expect(withoutExportTimestamp(collapsed.content), 'export with collapsed thinking equals export with expanded thinking').toBe(withoutExportTimestamp(expanded.content));
     });
 
-    test('includeReferences keeps cite links and leaving it off drops them', async ({ page, settings, deepseekReplay }) => {
+    test('includeReferences keeps cite links and leaving it off drops them', async ({ page, settings, openRecorded }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openRecordedConversation(page, deepseekReplay, 'withSearch');
+        await openRecorded('withSearch');
         await expect(page.locator(DSSelectors.MARKDOWN_CITE_SELECTOR).first(), 'the reply shows cite markers (precondition)').toBeAttached();
 
         const withReferences = await exportMarkdown(page, { includeThinking: true, includeReferences: true });

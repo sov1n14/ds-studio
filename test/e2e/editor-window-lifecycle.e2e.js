@@ -1,7 +1,4 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { test as base, expect } from './fixtures.js';
-import { launchHeadedOfflineLane } from './helpers/batch3-headed-lane.js';
+import { test, expect } from './fixtures.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { evaluateInWorker, listWindows } from './helpers/extension.js';
 import { humanPause, humanTypeAtFocus, runUnpaced } from './helpers/human.js';
@@ -9,7 +6,6 @@ import { expectNoPageWithin, expectPageStaysOpenWithin } from './helpers/observa
 import {
     closeExtensionPages, listEditorWindows, openEditorWith, openPopup, openPopupGroupList, pickGroupInPopup, popupGroupRow,
 } from './helpers/popup.js';
-import { LANE_ENV, OFFLINE_LANE } from './helpers/pacing.js';
 import { createTestPreset, seedOnlyPresets } from './helpers/presets.js';
 import { inNewHomeTab } from './helpers/prompt-capture.js';
 import { readBothAreas } from './helpers/settings.js';
@@ -18,25 +14,11 @@ import { readBothAreas } from './helpers/settings.js';
 // 依據 docs/FEATURES.md:49、docs/spec/01-prompt-system.md:12 與 :22、docs/spec/02-popup-ui.md:11、docs/architecture/POPUP.md:15、:317 與 :333。
 // 本檔不送出任何對話；需要 DeepSeek 分頁的測試只開新的首頁分頁，且不輸入、不送出。每個寫入的儲存鍵都在測試後還原。
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EDITOR_PATH = '/popup/editor/editor.html';
 const DEEPSEEK_HOST = new URL(DEEPSEEK_ORIGIN).host;
 
 // 這個檔案在可見視窗的離線瀏覽器中執行：無頭 Chromium 把每個視窗都回報為有焦點，「編輯器視窗失去焦點後再取得焦點」因此無法觀察。
-const test = base.extend({
-    offlineLane: [async ({}, use) => {
-        if (process.env[LANE_ENV] !== OFFLINE_LANE) {
-            await use(null);
-            return;
-        }
-        const lane = await launchHeadedOfflineLane(REPO_ROOT);
-        try {
-            await use(lane);
-        } finally {
-            await lane.close();
-        }
-    }, { scope: 'worker' }],
-});
+test.use({ offlineHeadless: false });
 
 // 「不會發生」的觀察窗：涵蓋編輯器回覆存檔請求的上限（docs/spec/01-prompt-system.md:22 的 1 秒）再加上餘裕。
 const NO_SECOND_WINDOW_MS = 2_000;

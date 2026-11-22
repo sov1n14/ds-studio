@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/batch1-recorded.js';
+import { test, expect } from './fixtures.js';
 import { GO_TOP_SELECTOR as GO_TOP, PRESET_OVERLAY_SELECTOR as PRESET_OVERLAY } from './helpers/extension-ui.js';
 
 // The master switch (`isEnabled`) gates every feature live, without a reload.
