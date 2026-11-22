@@ -26,13 +26,38 @@ function harOf(...entries) {
 }
 
 describe('selectNewestHar(files)', () => {
-    it('answers the path with the latest modification time', () => {
-        const files = [{ path: 'a.har', mtimeMs: 1_000 }, { path: 'b.har', mtimeMs: 3_000 }, { path: 'c.har', mtimeMs: 2_000 }];
-        expect(selectNewestHar(files)).toBe('b.har');
-    });
-
     it('answers null when there is no file', () => {
         expect(selectNewestHar([])).toBeNull();
+    });
+
+    it('answers the main recording over a newer purpose recording', () => {
+        const files = [
+            { path: path.join('rec', 'deepseek-2026-11-23.har'), mtimeMs: 1_000 },
+            { path: path.join('rec', 'deepseek-2026-11-23-scroll-chat-list.har'), mtimeMs: 3_000 },
+            { path: path.join('rec', 'deepseek-2026-11-23-single-long-chat.har'), mtimeMs: 2_000 },
+        ];
+        expect(selectNewestHar(files), 'a purpose recording must never be picked as the main recording').toBe(path.join('rec', 'deepseek-2026-11-23.har'));
+    });
+
+    it('answers the main recording with the latest date in its name, whatever the modification times', () => {
+        const files = [
+            { path: path.join('rec', 'deepseek-2026-11-23.har'), mtimeMs: 1_000 },
+            { path: path.join('rec', 'deepseek-2026-11-20.har'), mtimeMs: 3_000 },
+        ];
+        expect(selectNewestHar(files), 'the name date decides, not the modification time').toBe(path.join('rec', 'deepseek-2026-11-23.har'));
+    });
+
+    it('breaks a tie of name dates by the latest modification time', () => {
+        const files = [
+            { path: path.join('a', 'deepseek-2026-11-23.har'), mtimeMs: 1_000 },
+            { path: path.join('b', 'deepseek-2026-11-23.har'), mtimeMs: 2_000 },
+        ];
+        expect(selectNewestHar(files), 'the later file wins a date tie').toBe(path.join('b', 'deepseek-2026-11-23.har'));
+    });
+
+    it('answers null when only purpose recordings exist', () => {
+        const files = [{ path: path.join('rec', 'deepseek-2026-11-23-scroll-chat-list.har'), mtimeMs: 1_000 }, { path: path.join('rec', 'other.har'), mtimeMs: 2_000 }];
+        expect(selectNewestHar(files)).toBeNull();
     });
 });
 
@@ -57,9 +82,20 @@ describe('locateNewestHar(repoRoot)', () => {
         return root;
     }
 
-    it('answers the newest .har of tools/recordings and ignores other files', () => {
-        const root = repoWith({ 'older.har': 1_700_000_000, 'newer.har': 1_800_000_000, 'notes.txt': 1_900_000_000 });
-        expect(locateNewestHar(root)).toBe(path.join(root, 'tools', 'recordings', 'newer.har'));
+    it('answers the .har of tools/recordings with the latest name date and ignores other files', () => {
+        const root = repoWith({ 'deepseek-2026-11-20.har': 1_900_000_000, 'deepseek-2026-11-23.har': 1_700_000_000, 'notes.txt': 2_000_000_000 });
+        expect(locateNewestHar(root)).toBe(path.join(root, 'tools', 'recordings', 'deepseek-2026-11-23.har'));
+    });
+
+    it('answers the main recording when a newer purpose recording sits next to it', () => {
+        const root = repoWith({ 'deepseek-2026-11-23.har': 1_700_000_000, 'deepseek-2026-11-23-scroll-chat-list.har': 1_800_000_000 });
+        expect(locateNewestHar(root)).toBe(path.join(root, 'tools', 'recordings', 'deepseek-2026-11-23.har'));
+    });
+
+    it('fails when tools/recordings holds only purpose recordings, naming the directory and the re-record procedure', () => {
+        const root = repoWith({ 'deepseek-2026-11-23-scroll-chat-list.har': 1_800_000_000 });
+        expect(() => locateNewestHar(root)).toThrowError(/tools\/recordings/);
+        expect(() => locateNewestHar(root)).toThrowError(/release-har-freshness-check/);
     });
 
     it('fails when tools/recordings does not exist, naming the directory and the re-record procedure', () => {

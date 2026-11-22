@@ -1,4 +1,4 @@
-// Reads the recorded DeepSeek HAR (tools/recordings/*.har) for the offline lane: finds the newest recording, filters it for Playwright's replay and parses what specs choose from it.
+// Reads the recorded DeepSeek HAR (tools/recordings/*.har) for the offline lane: finds the main recording (the newest `deepseek-YYYY-MM-DD.har`, purpose recordings with a name suffix excluded), filters it for Playwright's replay and parses what specs choose from it.
 // The recording is the user's own session: nothing in it is copied into a spec; specs read it at run time, so a re-record needs no spec change.
 
 import { readdirSync, statSync } from 'node:fs';
@@ -9,16 +9,23 @@ const RE_RECORD_PROCEDURE = '.claude/skills/version-bump/SKILL.md#release-har-fr
 const SETTINGS_PATH = '/api/v0/client/settings';
 const HISTORY_PATH = '/api/v0/chat/history_messages';
 
-/** The path with the latest modification time among `files` (`{ path, mtimeMs }`), or null when there is none. */
+// 主錄檔名稱固定為 deepseek-YYYY-MM-DD.har；帶用途後綴的檔案（如 deepseek-2026-11-23-scroll-chat-list.har）是專用錄檔，不當主錄檔
+const MAIN_HAR_NAME = /^deepseek-(\d{4}-\d{2}-\d{2})\.har$/i;
+
+/** The main recording among `files` (`{ path, mtimeMs }`): the file named `deepseek-YYYY-MM-DD.har` with the latest date, a date tie going to the latest modification time; null when none is named that way. */
 export function selectNewestHar(files) {
     let newest = null;
     for (const file of files) {
-        if (newest === null || file.mtimeMs > newest.mtimeMs) newest = file;
+        const match = MAIN_HAR_NAME.exec(path.basename(file.path));
+        if (match === null) continue;
+        const candidate = { file, date: match[1] };
+        // 日期字串為 ISO 格式，字典序即時間序；同日才比修改時間
+        if (newest === null || candidate.date > newest.date || (candidate.date === newest.date && file.mtimeMs > newest.file.mtimeMs)) newest = candidate;
     }
-    return newest?.path ?? null;
+    return newest?.file.path ?? null;
 }
 
-/** The newest `.har` under `tools/recordings` of `repoRoot`; throws, naming the directory and the re-record procedure, when there is none. */
+/** The main recording (`selectNewestHar`) under `tools/recordings` of `repoRoot`; throws, naming the directory and the re-record procedure, when there is none. */
 export function locateNewestHar(repoRoot) {
     const directory = path.join(repoRoot, RECORDINGS_DIR);
     let names = [];
