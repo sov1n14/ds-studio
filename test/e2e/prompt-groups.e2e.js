@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures.js';
-import { CONVERSATIONS, DEEPSEEK_ORIGIN } from './helpers/conversations.js';
+import { serveHistoryWithoutCacheParams } from './helpers/batch3-replay.js';
+import { DEEPSEEK_ORIGIN, MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
 import {
     addGroupInPopup, closeEditorWithEscape, closeExtensionPages, openEditorWith, openPopup, openPopupGroupList,
     popupGroupNames, popupGroupRow, popupPickedGroup, popupPinButton,
@@ -13,8 +14,9 @@ import { documentedPrompt, gotoWithOverlay, inNewHomeTab, openBlockingSends, sen
 
 const USER_TEXT = 'e2e prompt group probe (aborted before it leaves the browser)';
 
-test.describe('managing prompt groups in the popup', () => {
-    test.beforeEach(async ({ settings }) => {
+test.describe('managing prompt groups in the popup', { tag: '@offline' }, () => {
+    // The replay serves the DeepSeek tabs these tests open with `context.newPage()`; the worker fixture installs it only for a test that asks for it.
+    test.beforeEach(async ({ settings, deepseekReplay }) => {
         await settings.set({ isEnabled: true, globalPromptEnabled: false });
         await settings.setInBothAreas({ dsShowSystemTime: false });
     });
@@ -53,7 +55,8 @@ test.describe('managing prompt groups in the popup', () => {
         expect(prompt, 'the sent prompt carries the content written in the editor window, then the typed text').toBe(documentedPrompt({ reminder: addedContent, text: USER_TEXT }));
     });
 
-    test('pinning a group preselects it on new conversations only, one group at a time, and unpinning restores the blank option', async ({ context, settings, extensionId }) => {
+    test('pinning a group preselects it on new conversations only, one group at a time, and unpinning restores the blank option', async ({ context, settings, extensionId, deepseekReplay }) => {
+        await serveHistoryWithoutCacheParams(context);
         const first = createTestPreset('pin-first');
         const second = createTestPreset('pin-second');
         await seedOnlyPresets(settings, context, [first, second]);
@@ -65,7 +68,8 @@ test.describe('managing prompt groups in the popup', () => {
 
         await inNewHomeTab(context, async (tab) => {
             await expect(presetOverlay(tab), 'a new conversation opens with the pinned group').toContainText(first.name);
-            await gotoWithOverlay(tab, `${DEEPSEEK_ORIGIN}/a/chat/s/${CONVERSATIONS.fiveThinkingReplies}`);
+            await gotoWithOverlay(tab, `${DEEPSEEK_ORIGIN}/a/chat/s/${deepseekReplay.requireConversation('withThinking').id}`);
+            await expect(tab.locator(MESSAGE_IN_VIEW_SELECTOR).first(), 'the recorded conversation has rendered its messages, so it is an existing conversation (precondition)').toBeAttached();
             await expectOverlayNeverShows(tab, first.name, 'an existing unbound conversation never takes the pinned group');
         });
 
@@ -84,7 +88,7 @@ test.describe('managing prompt groups in the popup', () => {
         });
     });
 
-    test('dragging a group by its handle reorders the popup list, and the order is kept after reopening the popup', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
+    test('dragging a group by its handle reorders the popup list, and the order is kept after reopening the popup', async ({ context, settings, extensionId }) => {
         const groups = ['drag-a', 'drag-b', 'drag-c'].map((label) => createTestPreset(label));
         const [first, middle, last] = groups;
         await seedOnlyPresets(settings, context, groups);
@@ -113,12 +117,12 @@ test.describe('managing prompt groups in the popup', () => {
     });
 });
 
-test.describe('prompt group editor window', () => {
+test.describe('prompt group editor window', { tag: '@offline' }, () => {
     test.afterEach(async ({ context }) => {
         await closeExtensionPages(context);
     });
 
-    test('Esc pressed right after typing saves the typed name and content before the editor window closes', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
+    test('Esc pressed right after typing saves the typed name and content before the editor window closes', async ({ context, settings, extensionId }) => {
         const stamp = Date.now();
         const addedName = 'E2E esc ' + stamp;
         const renamed = addedName + ' renamed';

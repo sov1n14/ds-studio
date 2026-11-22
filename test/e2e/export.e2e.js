@@ -1,17 +1,23 @@
 import { test, expect } from './fixtures.js';
-import { CONVERSATIONS, MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
+import { openRecordedConversation } from './helpers/batch3-replay.js';
+import { MESSAGE_IN_VIEW_SELECTOR } from './helpers/conversations.js';
 import { exportMarkdown, withoutExportTimestamp } from './helpers/export.js';
 import { DSSelectors } from './helpers/selectors.js';
 
 // Markdown export, triggered with the popup's EXPORT_MARKDOWN message and captured as a real download.
 // Spec: docs/spec/04-features.md section 3 (file name, "> **Thinking Process:**" blockquote, cite links).
+// The offline lane exports recorded conversations: the one with the most thinking replies (`withThinking`) and the one with the most search replies (`withSearch`); the expected thinking-section count is the recording's own count of replies with a thinking block.
 
 test.setTimeout(180_000);
 
 const THINKING_HEADING = '> **Thinking Process:**';
 const FILE_NAME_PATTERN = /^deepseek-chat-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.md$/;
 const CITE_LINK_PATTERN = /\[\[link-\d+\]\]\(https?:\/\/[^)]+\)/;
-const REPLIES_WITH_THINKING = 5;
+
+/** The number of replies with a thinking block in the recorded conversation the thinking tests export. */
+function repliesWithThinking(deepseekReplay) {
+    return deepseekReplay.requireConversation('withThinking').thinkingReplyCount;
+}
 
 function countOccurrences(text, needle) {
     return text.split(needle).length - 1;
@@ -27,10 +33,10 @@ function mountedThinkingBodies(page) {
     return page.locator(`${MESSAGE_IN_VIEW_SELECTOR} ${DSSelectors.THINK_CONTENT_SELECTOR}`).count();
 }
 
-test.describe('markdown export', () => {
-    test('downloads deepseek-chat-YYYYMMDD-HHMMSS.md stamped with the export time', async ({ page, settings, openConversation }) => {
+test.describe('markdown export', { tag: '@offline' }, () => {
+    test('downloads deepseek-chat-YYYYMMDD-HHMMSS.md stamped with the export time', async ({ page, settings, deepseekReplay }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecordedConversation(page, deepseekReplay, 'withThinking');
 
         const before = new Date();
         before.setMilliseconds(0);
@@ -45,14 +51,14 @@ test.describe('markdown export', () => {
         expect(stamped.getTime(), 'file name time is not after the download arrived').toBeLessThanOrEqual(after.getTime());
     });
 
-    test('includeThinking adds one thinking section per reply and leaving it off drops them', async ({ page, settings, openConversation }) => {
+    test('includeThinking adds one thinking section per reply and leaving it off drops them', async ({ page, settings, deepseekReplay }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecordedConversation(page, deepseekReplay, 'withThinking');
         const fragment = await firstThinkingFragment(page);
         expect(fragment.length, 'a mounted thinking body has text to look for').toBeGreaterThan(10);
 
         const withThinking = await exportMarkdown(page, { includeThinking: true, includeReferences: true });
-        expect(countOccurrences(withThinking.content, THINKING_HEADING), 'one thinking section per reply').toBe(REPLIES_WITH_THINKING);
+        expect(countOccurrences(withThinking.content, THINKING_HEADING), 'one thinking section per reply').toBe(repliesWithThinking(deepseekReplay));
         expect(withThinking.content, 'thinking text shown on the page is exported').toContain(fragment);
 
         const withoutThinking = await exportMarkdown(page, { includeThinking: false, includeReferences: true });
@@ -60,9 +66,9 @@ test.describe('markdown export', () => {
         expect(withoutThinking.content, 'thinking text is not exported').not.toContain(fragment);
     });
 
-    test('thinking collapsed by "Hide Thinking Process" exports identically to expanded thinking (U3 regression)', async ({ page, settings, openConversation }) => {
+    test('thinking collapsed by "Hide Thinking Process" exports identically to expanded thinking (U3 regression)', async ({ page, settings, deepseekReplay }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecordedConversation(page, deepseekReplay, 'withThinking');
         await expect.poll(() => mountedThinkingBodies(page), { message: 'thinking bodies are mounted while the feature is off' }).toBeGreaterThan(0);
         const expanded = await exportMarkdown(page, { includeThinking: true, includeReferences: true });
 
@@ -70,13 +76,13 @@ test.describe('markdown export', () => {
         await expect.poll(() => mountedThinkingBodies(page), { message: 'the feature has collapsed every thinking block before exporting' }).toBe(0);
         const collapsed = await exportMarkdown(page, { includeThinking: true, includeReferences: true });
 
-        expect(countOccurrences(collapsed.content, THINKING_HEADING), 'collapsed thinking is still exported for every reply').toBe(REPLIES_WITH_THINKING);
+        expect(countOccurrences(collapsed.content, THINKING_HEADING), 'collapsed thinking is still exported for every reply').toBe(repliesWithThinking(deepseekReplay));
         expect(withoutExportTimestamp(collapsed.content), 'export with collapsed thinking equals export with expanded thinking').toBe(withoutExportTimestamp(expanded.content));
     });
 
-    test('includeReferences keeps cite links and leaving it off drops them', async ({ page, settings, openConversation }) => {
+    test('includeReferences keeps cite links and leaving it off drops them', async ({ page, settings, deepseekReplay }) => {
         await settings.set({ isEnabled: true, dsHideThinking: false });
-        await openConversation(CONVERSATIONS.thinkingWithSearch);
+        await openRecordedConversation(page, deepseekReplay, 'withSearch');
         await expect(page.locator(DSSelectors.MARKDOWN_CITE_SELECTOR).first(), 'the reply shows cite markers (precondition)').toBeAttached();
 
         const withReferences = await exportMarkdown(page, { includeThinking: true, includeReferences: true });

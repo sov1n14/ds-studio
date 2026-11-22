@@ -1,5 +1,5 @@
 import { test as base, expect } from './fixtures.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
+import { openRecordedConversation } from './helpers/batch3-replay.js';
 import { evaluateInExtensionOrigin } from './helpers/extension.js';
 import { QUOTE_BUTTON_SELECTOR } from './helpers/extension-ui.js';
 import { closeExtensionPages, openPopup } from './helpers/popup.js';
@@ -10,7 +10,7 @@ import { readBothAreas, setSync } from './helpers/settings.js';
 // The choice persists (docs/architecture/POPUP.md:300, docs/spec/05-data-storage.md:112): the extension keeps it in chrome.storage.sync under ds_studio_locale and mirrors it into the localStorage of each origin that loads i18n.js (the extension origin and the DeepSeek page), so a reopened popup shows the same language.
 // Open DeepSeek pages follow without a reload (docs/architecture/POPUP.md:303, docs/architecture/content-interaction.md:55): the Quote Reply button label (docs/FEATURES.md:280) changes live.
 // Every test snapshots the sync key, the extension-origin localStorage entry and, when a DeepSeek page is open, the DeepSeek-origin localStorage entry the content script mirrors into, and puts all of them back in fixture teardown, which runs even when the test fails or times out.
-// The kept chat is only read (a text selection), never sent to, renamed or deleted.
+// The offline lane opens the recorded conversation with the most thinking replies (`withThinking`); it is only read (a text selection), never sent to, renamed or deleted.
 
 const LOCALE_KEY = 'ds_studio_locale';
 const RESTORE_ATTEMPTS = 5;
@@ -164,11 +164,11 @@ test.describe('popup language switcher', { tag: '@offline' }, () => {
     }
 });
 
-test.describe('DeepSeek page follows the popup language', () => {
-    test('switching the popup from zh_TW to en relabels the Quote Reply button on an open DeepSeek chat without reloading the page', async ({ page, context, extensionId, settings, openConversation, deepSeekLocale }) => {
+test.describe('DeepSeek page follows the popup language', { tag: '@offline' }, () => {
+    test('switching the popup from zh_TW to en relabels the Quote Reply button on an open DeepSeek chat without reloading the page', async ({ page, context, extensionId, settings, deepseekReplay, deepSeekLocale }) => {
         await settings.set({ isEnabled: true });
         await setSync(context, { [LOCALE_KEY]: 'zh_TW' });
-        await openConversation(CONVERSATIONS.fiveThinkingReplies);
+        await openRecordedConversation(page, deepseekReplay, 'withThinking');
         await page.evaluate(() => { window.__dssE2eSamePage = true; });
         const quoteButton = page.locator(QUOTE_BUTTON_SELECTOR);
         const selected = await dragSelectTwoReplyParagraphs(page);

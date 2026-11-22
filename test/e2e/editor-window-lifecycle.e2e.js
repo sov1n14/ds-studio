@@ -1,4 +1,7 @@
-import { test, expect } from './fixtures.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test as base, expect } from './fixtures.js';
+import { launchHeadedOfflineLane } from './helpers/batch3-headed-lane.js';
 import { DEEPSEEK_ORIGIN } from './helpers/conversations.js';
 import { evaluateInWorker, listWindows } from './helpers/extension.js';
 import { humanPause, humanTypeAtFocus, runUnpaced } from './helpers/human.js';
@@ -6,6 +9,7 @@ import { expectNoPageWithin, expectPageStaysOpenWithin } from './helpers/observa
 import {
     closeExtensionPages, listEditorWindows, openEditorWith, openPopup, openPopupGroupList, pickGroupInPopup, popupGroupRow,
 } from './helpers/popup.js';
+import { LANE_ENV, OFFLINE_LANE } from './helpers/pacing.js';
 import { createTestPreset, seedOnlyPresets } from './helpers/presets.js';
 import { inNewHomeTab } from './helpers/prompt-capture.js';
 import { readBothAreas } from './helpers/settings.js';
@@ -14,8 +18,25 @@ import { readBothAreas } from './helpers/settings.js';
 // 依據 docs/FEATURES.md:49、docs/spec/01-prompt-system.md:12 與 :22、docs/spec/02-popup-ui.md:11、docs/architecture/POPUP.md:15、:317 與 :333。
 // 本檔不送出任何對話；需要 DeepSeek 分頁的測試只開新的首頁分頁，且不輸入、不送出。每個寫入的儲存鍵都在測試後還原。
 
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EDITOR_PATH = '/popup/editor/editor.html';
 const DEEPSEEK_HOST = new URL(DEEPSEEK_ORIGIN).host;
+
+// 這個檔案在可見視窗的離線瀏覽器中執行：無頭 Chromium 把每個視窗都回報為有焦點，「編輯器視窗失去焦點後再取得焦點」因此無法觀察。
+const test = base.extend({
+    offlineLane: [async ({}, use) => {
+        if (process.env[LANE_ENV] !== OFFLINE_LANE) {
+            await use(null);
+            return;
+        }
+        const lane = await launchHeadedOfflineLane(REPO_ROOT);
+        try {
+            await use(lane);
+        } finally {
+            await lane.close();
+        }
+    }, { scope: 'worker' }],
+});
 
 // 「不會發生」的觀察窗：涵蓋編輯器回覆存檔請求的上限（docs/spec/01-prompt-system.md:22 的 1 秒）再加上餘裕。
 const NO_SECOND_WINDOW_MS = 2_000;
@@ -43,8 +64,9 @@ async function pickGroupAndCloseList(popup, name) {
     await expect(popup.locator('#presetSelectPanel'), 'the popup group list closes after picking (precondition)').toBeHidden();
 }
 
-test.describe('prompt group editor window lifecycle', () => {
-    test.beforeEach(async ({ settings }) => {
+test.describe('prompt group editor window lifecycle', { tag: '@offline' }, () => {
+    // The replay serves the DeepSeek tabs these tests open with `context.newPage()`; the worker fixture installs it only for a test that asks for it.
+    test.beforeEach(async ({ settings, deepseekReplay }) => {
         await settings.set({ isEnabled: true });
     });
 
@@ -54,7 +76,7 @@ test.describe('prompt group editor window lifecycle', () => {
 
     // docs/FEATURES.md:49「name input ... auto-focused with its text left unselected ... the caret sits at the end of the existing name, so typing appends instead of replacing it」
     // docs/spec/01-prompt-system.md:12「focused but not fully selected ... cursor placed at the end of the name」；docs/architecture/POPUP.md:15「a focused name input ... whose text is not selected」
-    test('opening the editor from the pencil focuses the name field with a collapsed caret at the end, so typing appends to the name', { tag: '@offline' }, async ({ context, settings, extensionId }) => {
+    test('opening the editor from the pencil focuses the name field with a collapsed caret at the end, so typing appends to the name', async ({ context, settings, extensionId }) => {
         const group = createTestPreset('lifecycle-caret');
         const suffix = ' appended';
         await seedOnlyPresets(settings, context, [group]);

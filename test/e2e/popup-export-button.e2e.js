@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures.js';
-import { CONVERSATIONS } from './helpers/conversations.js';
+import { openRecordedConversation, recordedReplyShapes } from './helpers/batch3-replay.js';
 import { evaluateInWorker } from './helpers/extension.js';
 import { humanPause, runUnpaced } from './helpers/human.js';
 import { expectNoDownloadWithin } from './helpers/observation.js';
@@ -9,13 +9,13 @@ import { closeExtensionPages, openPopup, waitForPopupFullyBound } from './helper
 // The popup Export button (docs/spec/02-popup-ui.md:19 "triggers Markdown export on the active chat.deepseek.com tab"), clicked in the popup the way a user does.
 // Expected output: docs/spec/04-features.md:37-46 (title, turns, "## User" / "## DeepSeek" headings, "> **Thinking Process:**" blockquote, file name) and docs/FEATURES.md:271-276 (export options).
 // export.e2e.js covers the content-script side by sending EXPORT_MARKDOWN itself; this spec covers the popup side: its button, its tab lookup and its two export checkboxes.
-// The kept chat is only read (exported), never sent to, renamed or deleted.
+// The offline lane exports the recorded conversation with the most thinking replies (`withThinking`); the expected turn and thinking counts come from that recording, not from a fixed number.
+// The conversation is only read (exported), never sent to, renamed or deleted.
 
 test.setTimeout(180_000);
 
 const EXPORT_DOWNLOAD_TIMEOUT_MS = 120_000;
 const NO_DOWNLOAD_WINDOW_MS = 5_000;
-const REPLIES = 5;
 const TITLE_LINE = /^# DeepSeek Chat Export$/m;
 const USER_HEADING = /^## User[ \t]*$/gm;
 const DEEPSEEK_HEADING = /^## DeepSeek[ \t]*$/gm;
@@ -58,12 +58,12 @@ async function clickExportAndDownload(popup, deepSeekPage) {
     return { fileName: download.suggestedFilename(), content: await readFile(await download.path(), 'utf8'), clickedAt, arrivedAt };
 }
 
-/** Pins both export options in sync and local (the popup reads synced settings sync-first), then opens the popup over the kept chat. */
-async function openPopupOverKeptChat({ context, extensionId, settings, openConversation }, { includeThinking, includeReferences }) {
+/** Pins both export options in sync and local (the popup reads synced settings sync-first), then opens the popup over the recorded chat; resolves the popup and that conversation's reply shapes. */
+async function openPopupOverRecordedChat({ page, context, extensionId, settings, deepseekReplay }, { includeThinking, includeReferences }) {
     await settings.set({ isEnabled: true });
     await settings.setInBothAreas({ includeThinking, includeReferences });
-    await openConversation(CONVERSATIONS.fiveThinkingReplies);
-    const popup = await openPopup(context, extensionId, { activeTabUrlPart: CONVERSATIONS.fiveThinkingReplies });
+    const conversation = await openRecordedConversation(page, deepseekReplay, 'withThinking');
+    const popup = await openPopup(context, extensionId, { activeTabUrlPart: conversation.id });
     await waitForPopupFullyBound(popup);
     const thinkingBox = popup.locator('#includeThinkingToggle');
     const referencesBox = popup.locator('#includeReferencesToggle');
@@ -71,16 +71,17 @@ async function openPopupOverKeptChat({ context, extensionId, settings, openConve
     else await expect(thinkingBox, 'the popup shows "Include Thinking Process" off (precondition)').not.toBeChecked();
     if (includeReferences) await expect(referencesBox, 'the popup shows "Include Reference Links" on (precondition)').toBeChecked();
     else await expect(referencesBox, 'the popup shows "Include Reference Links" off (precondition)').not.toBeChecked();
-    return popup;
+    return { popup, replies: recordedReplyShapes(deepseekReplay, conversation.id) };
 }
 
-test.describe('popup export button', () => {
+test.describe('popup export button', { tag: '@offline' }, () => {
     test.afterEach(async ({ context }) => {
         await closeExtensionPages(context);
     });
 
-    test('Export in the popup over a DeepSeek chat downloads deepseek-chat-YYYYMMDD-HHmmss.md holding five User/DeepSeek turns, each reply with its thinking blockquote before its answer', async ({ page, context, extensionId, settings, openConversation }) => {
-        const popup = await openPopupOverKeptChat({ context, extensionId, settings, openConversation }, { includeThinking: true, includeReferences: true });
+    test('Export in the popup over a DeepSeek chat downloads deepseek-chat-YYYYMMDD-HHmmss.md holding one User/DeepSeek turn per recorded turn, each reply that has thinking showing its thinking blockquote before its answer', async ({ page, context, extensionId, settings, deepseekReplay }) => {
+        const { popup, replies } = await openPopupOverRecordedChat({ page, context, extensionId, settings, deepseekReplay }, { includeThinking: true, includeReferences: true });
+        expect(replies.some((reply) => reply.hasThinking), 'the recording holds a reply with thinking (precondition)').toBe(true);
 
         const { fileName, content, clickedAt, arrivedAt } = await clickExportAndDownload(popup, page);
 
@@ -92,33 +93,40 @@ test.describe('popup export button', () => {
         expect(stampedAt, 'file name time is not after the download arrived').toBeLessThanOrEqual(arrivedAt.getTime());
 
         expect(content, 'the file carries the "# DeepSeek Chat Export" title line').toMatch(TITLE_LINE);
-        expect(countMatches(content, USER_HEADING), 'one "## User" heading per turn').toBe(REPLIES);
-        expect(countMatches(content, DEEPSEEK_HEADING), 'one "## DeepSeek" heading per reply').toBe(REPLIES);
-        expect(countMatches(content, TURN_SEPARATOR), 'turns are separated by "---" rules').toBeGreaterThanOrEqual(REPLIES - 1);
+        expect(countMatches(content, USER_HEADING), 'one "## User" heading per turn').toBe(replies.length);
+        expect(countMatches(content, DEEPSEEK_HEADING), 'one "## DeepSeek" heading per reply').toBe(replies.length);
+        expect(countMatches(content, TURN_SEPARATOR), 'turns are separated by "---" rules').toBeGreaterThanOrEqual(replies.length - 1);
 
-        replySections(content).forEach((section, index) => {
+        const sections = replySections(content);
+        expect(sections, 'one section per recorded reply').toHaveLength(replies.length);
+        sections.forEach((section, index) => {
             const { heading, thinkingText, answer } = replyLayout(section);
-            const reply = `reply ${index + 1} of ${REPLIES}`;
-            expect(heading, `${reply} has a "${THINKING_HEADING}" heading`).toBeGreaterThanOrEqual(0);
-            expect(thinkingText, `${reply} has quoted thinking text under the heading`).toBeGreaterThan(heading);
-            expect(answer, `${reply} has answer text after its thinking`).toBeGreaterThan(thinkingText);
+            const reply = `reply ${index + 1} of ${replies.length}`;
+            if (replies[index].hasThinking) {
+                expect(heading, `${reply} has a "${THINKING_HEADING}" heading`).toBeGreaterThanOrEqual(0);
+                expect(thinkingText, `${reply} has quoted thinking text under the heading`).toBeGreaterThan(heading);
+                expect(answer, `${reply} has answer text after its thinking`).toBeGreaterThan(thinkingText);
+            } else {
+                expect(heading, `${reply} recorded no thinking, so it has no "${THINKING_HEADING}" heading`).toBe(-1);
+            }
+            if (replies[index].hasAnswer) expect(answer, `${reply} has answer text`).toBeGreaterThanOrEqual(0);
         });
     });
 
-    test('Export with "Include Thinking Process" off in the popup downloads the five replies without any thinking section', async ({ page, context, extensionId, settings, openConversation }) => {
-        const popup = await openPopupOverKeptChat({ context, extensionId, settings, openConversation }, { includeThinking: false, includeReferences: true });
+    test('Export with "Include Thinking Process" off in the popup downloads every recorded reply without any thinking section', async ({ page, context, extensionId, settings, deepseekReplay }) => {
+        const { popup, replies } = await openPopupOverRecordedChat({ page, context, extensionId, settings, deepseekReplay }, { includeThinking: false, includeReferences: true });
 
         const { fileName, content } = await clickExportAndDownload(popup, page);
 
         expect(fileName, 'file name follows deepseek-chat-YYYYMMDD-HHmmss.md').toMatch(FILE_NAME_PATTERN);
-        expect(countMatches(content, DEEPSEEK_HEADING), 'one "## DeepSeek" heading per reply').toBe(REPLIES);
+        expect(countMatches(content, DEEPSEEK_HEADING), 'one "## DeepSeek" heading per reply').toBe(replies.length);
         expect(content, 'no thinking section is exported').not.toContain(THINKING_HEADING);
         replySections(content).forEach((section, index) => {
-            expect(replyLayout(section).answer, `reply ${index + 1} of ${REPLIES} still has answer text`).toBeGreaterThanOrEqual(0);
+            if (replies[index].hasAnswer) expect(replyLayout(section).answer, `reply ${index + 1} of ${replies.length} still has answer text`).toBeGreaterThanOrEqual(0);
         });
     });
 
-    test('Export in the popup with no DeepSeek tab open shows the notice to use the feature on chat.deepseek.com and downloads nothing', { tag: '@offline' }, async ({ context, extensionId }) => {
+    test('Export in the popup with no DeepSeek tab open shows the notice to use the feature on chat.deepseek.com and downloads nothing', async ({ context, extensionId }) => {
         const deepSeekTabs = await evaluateInWorker(context, (pattern) => chrome.tabs.query({ url: pattern }).then((tabs) => tabs.length), DEEPSEEK_TAB_PATTERN);
         expect(deepSeekTabs, 'no DeepSeek tab is open (precondition)').toBe(0);
         const popup = await openPopup(context, extensionId);
