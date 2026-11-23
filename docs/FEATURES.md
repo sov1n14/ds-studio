@@ -372,7 +372,7 @@ This ensures one-click disabling of all extension behaviors.
 
 ## Legacy Data Migration
 
-When upgrading from v1.6.x, each existing prompt group is migrated automatically with its own name and content, and settings are kept, requiring no manual action. The migration runs when the popup menu or the prompt editor opens; see [Storage Architecture](architecture/STORAGE.md#data-migration).
+When upgrading from v1.6.x, each existing prompt group is migrated automatically with its own name and content, and settings are kept, requiring no manual action. The migration runs when the popup menu or the prompt editor opens; see [Storage Architecture](architecture/STORAGE.md#data-migration). When old-format prompt groups show up again on a device that already uses the current format, the extension adds only the groups it lacks and never removes or re-adds a deleted group, so current prompt groups and their chat bindings stay intact on every device.
 
 ---
 

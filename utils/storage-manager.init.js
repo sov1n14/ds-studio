@@ -22,10 +22,11 @@
             const updates = {};
 
             // 1. Migration from v1.6.x (single promptPresets key) to v1.7.0 (per-preset keys)
+            // 舊版裝置可能在新佈局建立後又寫回舊金鑰，故以合併取代整批覆寫，避免誤刪目前的群組
             if (data[this.KEYS.PROMPT_PRESETS] !== undefined) {
                 const oldPresets = data[this.KEYS.PROMPT_PRESETS] || [];
                 if (oldPresets.length > 0) {
-                    await this.savePromptPresets(oldPresets);
+                    await this._importLegacyPresets(oldPresets, data);
                 }
                 // Remove the old key from both storages
                 await this._safeRemove('sync', this.KEYS.PROMPT_PRESETS);
@@ -140,6 +141,33 @@
                 } catch (err) {
                     globalThis.__DS_Logger?.warn('init:prune-orphans-failed', { error: err?.message ?? String(err) });
                 }
+            }
+        },
+
+        /**
+         * 將舊版 promptPresets 陣列併入目前佈局：只新增或更新群組，絕不刪除、不寫入刪除墓碑。
+         * 首次升級（目前無群組）時依舊陣列順序整批匯入。
+         * @param {Array} legacyPresets - 舊版 promptPresets 陣列
+         * @param {Object} data - initialize() 讀到的目前資料（含索引與墓碑）
+         */
+        async _importLegacyPresets(legacyPresets, data) {
+            const currentIds = data[this.KEYS.PRESET_INDEX] || [];
+            const presetKeys = currentIds.map(id => this._presetKey(id));
+            const presetData = await this._get(presetKeys);
+            const currentPresets = presetKeys.map(key => presetData[key]).filter(Boolean);
+            const tombstones = data[this.KEYS.PRESET_TOMBSTONES] || {};
+
+            const { ids, presetsToWrite } = this.mergeLegacyPresets(currentIds, currentPresets, legacyPresets, tombstones);
+
+            // 先寫入群組內容再寫索引，確保索引不會指向尚未寫入的群組
+            for (const preset of presetsToWrite) {
+                await this.saveOnePromptPreset(preset);
+            }
+            if (JSON.stringify(ids) !== JSON.stringify(currentIds)) {
+                await this._set({
+                    [this.KEYS.PRESET_INDEX]: ids,
+                    [this.KEYS.PRESET_ORDER_META]: { order: ids, orderUpdatedAt: Date.now() },
+                });
             }
         },
     };

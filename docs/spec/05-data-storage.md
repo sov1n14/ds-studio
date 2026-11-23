@@ -6,8 +6,8 @@
 
 ## 8. Data Migration
 
-- On first run after upgrading from v1.2.x, if `promptPrefix` (old key) contains content but `promptPresets` (new key) does not exist, the old content is migrated into a prompt group named "My Prompts" and set as active.
-- If `promptPrefix` is empty or does not exist, `promptPresets` starts with an empty array and `activePresetId` is set to an empty string.
+- On the first run after upgrading from v1.6.x, `initialize()` merges the legacy `promptPresets` array into the per-group keys, then removes the legacy key from sync and local storage. Every current prompt group and its order stay, each legacy-only group that no deletion tombstone covers is appended, a tombstoned legacy-only group stays deleted, and a current group is replaced only by a legacy copy that is newer under the `mergePresets()` rule. The merge never deletes a group or writes a tombstone, because an older extension version can write the legacy key again after the per-group layout exists. See [Data Migration](../architecture/STORAGE.md#data-migration).
+- If `dsPresetIndex` is missing, `initialize()` sets it to an empty array and sets `activePresetId` to an empty string.
 
 ## 12. Toast Notification System and Storage State
 
@@ -121,7 +121,7 @@
 | `dsPresetTombstones` | `Object<id, { ts: number, deleted: boolean }>` | `{}` | (v4.8.3) Prompt group deletion tombstones, synced on both local and cloud. Used during merge to determine if an id has been deleted, preventing stale data from resurrecting it. (v4.10.1) `clearPresetTombstones()` is called after JSON import to clear tombstones for imported IDs, preventing re-deletion on the next sync. (v4.10.2) Entry shape changed from bare number to `{ ts, deleted }`: `deleted: true` means deleted, `deleted: false` means cleared (restored). On merge, the side with the newer `ts` wins entirely. Legacy bare-number entries are auto-normalized to `{ ts, deleted: true }` on read. |
 | `dsOversizedKeys` | `string[]` | `[]` | (v4.8.2) List of keys permanently exceeding the 8KB sync quota (local only). Self-healing: automatically removed when the next write's size falls below the limit. |
 | `dsPresetOrderMeta` | `{ order: string[], orderUpdatedAt: number }` | `{ order:[], orderUpdatedAt:0 }` | (v4.6.2) Authoritative timestamp for prompt group ordering, used to determine which side's order is newer during cross-device merge. |
-| `promptPresets` | `PromptPreset[]` | — | *Migration detection only*: the v1.6.x single-array format; `initialize()` converts it to `dsPresetIndex` + `dsPreset_<id>` and deletes the key when found. |
+| `promptPresets` | `PromptPreset[]` | — | *Migration detection only*: the v1.6.x single-array format; `initialize()` merges it into `dsPresetIndex` + `dsPreset_<id>` without deleting or tombstoning any current group, then deletes the key when found. |
 | `restored_messages` | object | {} | Restored censor reply records, containing message_id, fragments, etc. (local only, max 200 entries). |
 | `dsRestoredMessagesClearGeneration` | number | 0 | Clear generation of `restored_messages`; a missing key reads as 0 (local only, never synced; outside `StorageManager.KEYS`). See Clear All Restored Records in [JSON Backup and Restore](#13-json-backup-and-restore). |
 | `dsPermissionIntent_<name>` | boolean | — | (v4.39.3) Pending permission intent for `autoCopyReply`, `autoCopyCode`, or `replyNotification` (local only, never synced; outside `StorageManager.KEYS`). Written by the popup before an optional-permission prompt and cleared by the service worker after it turns the setting on; see [Feature Spec §26](04-features.md#26-auto-copy-reply-and-code-blocks-auto-copy--v4370). |
