@@ -52,6 +52,7 @@ DS studio 是一個 Chrome 擴充功能，專為優化 `chat.deepseek.com` 的�
 | [技術規格書](SPEC.md) | 英文 | 技術規格與模組索引 |
 | [技術架構](ARCHITECTURE.md) | 英文 | 架構設計與資料流程 |
 | [版本記錄](CHANGELOG.md) | 英文 | 版本更新歷程 |
+| [線上冒煙檢查清單](LIVE_SMOKE_CHECKLIST.md) | 英文 | 發版前在真實網站手動執行的檢查 |
 
 ## 開發技術
 

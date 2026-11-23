@@ -52,6 +52,7 @@ For detailed usage instructions, see the [Feature Guide](docs/FEATURES.md).
 | [Specification](docs/SPEC.md) | Technical specification and module index |
 | [Architecture](docs/ARCHITECTURE.md) | Architecture design and data flow |
 | [Changelog](docs/CHANGELOG.md) | Version history |
+| [Live Smoke Checklist](docs/LIVE_SMOKE_CHECKLIST.md) | Manual pre-release check on the live site |
 
 ## Development Technologies
 
