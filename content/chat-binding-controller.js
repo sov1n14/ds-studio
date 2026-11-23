@@ -1,4 +1,4 @@
-// 350 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 362 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -158,12 +158,24 @@
             }, NEW_CHAT_UUID_WAIT_MS);
         }
 
-        // 每次呼叫遞增；await 後若已有較新的呼叫，捨棄本次結果，確保「最後一次呼叫勝出」。
-        let promptPrefixGeneration = 0;
+        // 每次前綴寫入（立即套用）都換成一個全新的識別 token；重新讀取設定後若 token 已換，代表期間已有較新的寫入，捨棄本次結果，確保「最後一次寫入勝出」。
+        let promptPrefixToken = {};
+
+        /** 純查詢：指定 settings 中該 preset 的提示詞內容；找不到（含尚未讀取過 settings）時為空字串。 */
+        function presetContentFrom(settings, presetId) {
+            return settings?.promptPresets.find(p => p.id === presetId)?.content ?? '';
+        }
+
+        // 以最近讀取的 settings 快照立即把前綴設為指定 preset 的內容（無綁定或找不到則清空），並回傳本次寫入的 token。完整讀取含 chatPresetMap，會排在未完成的 chat-map 寫入（例如仍被持有的綁定）之後；期間按 Enter 送出的前綴仍須跟隨畫面此刻顯示的提示詞組，之後再由重新讀取的設定收斂。
+        function applySnapshotPromptPrefix(presetId) {
+            const token = {};
+            promptPrefixToken = token;
+            state.promptPrefix = presetContentFrom(lastReadSettings, presetId);
+            return token;
+        }
 
         // 根據當前聊天 UUID 綁定重新計算 promptPrefix；無綁定則清空。
         async function updatePromptPrefixFromBinding() {
-            const generation = ++promptPrefixGeneration;
             // pendingPresetId 僅適用於「尚無 currentChatUuid」的情境（新對話尚未取得 UUID 前的暫存選擇）。
             // 一旦已綁定至具體對話，該對話的綁定狀態必須完全由 chatPresetMap 決定，
             // 避免因其他管道（例如 ACTIVE_PRESET_CHANGED 訊息）殘留的過期 pendingPresetId
@@ -175,15 +187,13 @@
                 presetId = state.pendingPresetId;
             }
 
-            if (!presetId) {
-                state.promptPrefix = '';
-                return;
-            }
+            const token = applySnapshotPromptPrefix(presetId);
+            // Stryker disable next-line ConditionalExpression: 等價變異 — 無綁定時上一行已清空前綴，若照常重新讀取，token 未換時也只會再寫入同一個空字串，差別僅多一次讀取
+            if (!presetId) return;
 
             const settings = await readSettings();
-            if (generation !== promptPrefixGeneration) return;
-            const preset = settings.promptPresets.find(p => p.id === presetId);
-            state.promptPrefix = preset?.content ?? '';
+            if (token !== promptPrefixToken) return;
+            state.promptPrefix = presetContentFrom(settings, presetId);
         }
 
         async function handleChatChange() {
@@ -231,11 +241,13 @@
             const isAutoBindCandidate = hadNoUuid && state.awaitingNewChatUuid;
             if (isAutoBindCandidate) autoBindingChatUuid = newUuid;
 
-            // 偵測到導覽當下即以記憶體中的綁定同步浮動選單，避免下方 await 期間仍顯示上一個對話的 preset；
-            // 新對話剛取得 UUID（等待自動綁定）時保留使用者在新對話頁面的選擇，不在此覆寫。
+            // 偵測到導覽當下即以記憶體中的綁定同步浮動選單與送出前綴，避免下方 await（可能排在其他對話未完成的 chat-map 寫入之後）期間仍顯示或送出上一個畫面的 preset；
+            // 新對話剛取得 UUID（等待自動綁定）時保留使用者在新對話頁面的選擇（浮動選單與前綴皆為該選擇），不在此覆寫。
             // 返回仍等待自動綁定的新建對話時須以最近讀取的 settings 確認 pending preset 仍存在，否則解析結果為空白選項。
             if (!isAutoBindCandidate) {
-                getPresetOverlay().updateActiveId(resolvePresetIdFor(newUuid, lastReadSettings));
+                const shownPresetId = resolvePresetIdFor(newUuid, lastReadSettings);
+                getPresetOverlay().updateActiveId(shownPresetId);
+                applySnapshotPromptPrefix(shownPresetId);
             }
 
             const settings = await bindChatFromStorage(newUuid, hadNoUuid);
