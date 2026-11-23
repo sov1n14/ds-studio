@@ -56,6 +56,8 @@ const PHONE = { userAgent: devices['Pixel 7'].userAgent, viewport: devices['Pixe
 // 40 行文字遠高於 DeepSeek 收合使用者泡泡的高度上限（192px），泡泡會帶展開切換鈕。
 const LONG_PROMPT = Array.from({ length: 40 }, (_, index) => `e2e selector health line ${index + 1}`).join('\n');
 const COMPLETION_ROUTE = '**/api/v0/chat/completion';
+// DeepSeek 記住側欄收合狀態（"siderCollapsed"）的 localStorage 鍵；設定檔在同一個 worker 的測試之間沿用。
+const LAST_SESSION_KEY = '__appKit_@deepseek/chat_lastSessionValue';
 
 /** 一次完成、狀態為 INCOMPLETE 的 completion 串流（回覆因長度上限中斷），DeepSeek 會在回覆下方掛上「繼續生成」按鈕。 */
 function incompleteReplyBody() {
@@ -176,13 +178,22 @@ test.describe('selector health on the HAR replay', { tag: '@offline' }, () => {
 
     test('home page on a phone', async ({ page }) => {
         // 模擬只作用在這個 page，測試結束時 page fixture 會關閉它。
-        const cdp = await page.context().newCDPSession(page);
-        await page.setViewportSize(PHONE.viewport);
-        await cdp.send('Emulation.setUserAgentOverride', { userAgent: PHONE.userAgent, platform: PHONE.platform });
-        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: PHONE.maxTouchPoints });
-        await page.reload();
-        expect(await page.evaluate(() => navigator.userAgent), 'the page sees the phone User-Agent (precondition)').toBe(PHONE.userAgent);
-        await expectStateSelectorsMatch(page, 'phoneHome');
+        // 手機寬度下 DeepSeek 會把 "siderCollapsed":true 寫進 LAST_SESSION_KEY；測試前存下原值、結束前寫回，同一個 worker 之後的規格才看得到測試前的側欄狀態。
+        const savedSession = await page.evaluate((key) => localStorage.getItem(key), LAST_SESSION_KEY);
+        try {
+            const cdp = await page.context().newCDPSession(page);
+            await page.setViewportSize(PHONE.viewport);
+            await cdp.send('Emulation.setUserAgentOverride', { userAgent: PHONE.userAgent, platform: PHONE.platform });
+            await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: PHONE.maxTouchPoints });
+            await page.reload();
+            expect(await page.evaluate(() => navigator.userAgent), 'the page sees the phone User-Agent (precondition)').toBe(PHONE.userAgent);
+            await expectStateSelectorsMatch(page, 'phoneHome');
+        } finally {
+            await page.evaluate(({ key, value }) => {
+                if (value === null) localStorage.removeItem(key);
+                else localStorage.setItem(key, value);
+            }, { key: LAST_SESSION_KEY, value: savedSession });
+        }
     });
 
     test('long prompt whose reply ends incomplete', async ({ page }) => {

@@ -5,6 +5,7 @@ import { runUnpaced } from './helpers/human.js';
 import { TEMP_CHAT_ROW_SELECTOR } from './helpers/extension-ui.js';
 import { openHome } from './helpers/reply-stub.js';
 import { readBothAreas } from './helpers/settings.js';
+import { setNativeSidebar } from './helpers/sidebar.js';
 import { DEVICE_ID_KEY, ENABLED_KEY, expectNoFurtherDeletes, hasOpenUuidKey, pinTempChatSettings, PROBE_PROMPT, queueEntry, sendFirstMessageFromHome, withDeleteGuard } from './helpers/temp-chat-delete.js';
 
 // 臨時對話的建立與刪除（docs/FEATURES.md 的 Temporary Conversation；docs/spec/04-features.md 第 21 節）。
@@ -68,6 +69,8 @@ async function expectRefreshKeepsConversation(page, context, deleteGuard, replay
 
 /** 點按 DeepSeek 側欄中保留對話的連結（站內 SPA 導覽）。 */
 async function openKeptFromSidebar(page, uuid) {
+    // 前提：側欄展開、連結可見。同一個 worker 先前的測試可能讓 DeepSeek 在設定檔中記住收合狀態（例如手機視窗寬度下載入頁面），因此點按前先展開側欄。
+    await setNativeSidebar(page, false);
     await page.locator(`a[href="/a/chat/s/${uuid}"]`).first().click();
     await expect(page, 'the sidebar link opens the kept conversation (precondition)').toHaveURL(`${DEEPSEEK_ORIGIN}/a/chat/s/${uuid}`);
 }

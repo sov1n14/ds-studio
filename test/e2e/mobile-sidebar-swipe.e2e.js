@@ -11,7 +11,7 @@ import { SIDEBAR_STATE_ARG, isPanelHiddenInPage, isPanelShownInPage } from './he
 // - 跟隨總開關，沒有獨立開關（FEATURES.md:195），切換即時生效（03-ui-adjustments.md:114）。
 // 瀏覽器是桌機 Chromium，所以用 CDP 模擬一支真實的 Android 手機（Pixel 8 的 User-Agent、platform、觸控點數與 412×915 視窗），
 // 再以 CDP `Input.dispatchTouchEvent` 送出真的觸控事件。觀察的是使用者看得到的結果：DeepSeek 的側邊欄面板是否顯示在畫面內。
-// 只開啟錄製中的對話並滑動（離線通道，沒有任何請求抵達 DeepSeek）；每個測試結束時還原視窗大小與模擬設定，寫入的儲存鍵由 settings fixture 還原。
+// 只開啟錄製中的對話並滑動（離線通道，沒有任何請求抵達 DeepSeek）；每個測試結束時還原視窗大小、模擬設定與 DeepSeek 記住的側欄收合狀態，寫入的儲存鍵由 settings fixture 還原。
 
 // 真實 Android 手機（Pixel 8，Chrome）回報的完整裝置資料。
 const ANDROID_PHONE = Object.freeze({
@@ -27,6 +27,8 @@ const TOUCH_DESKTOP = Object.freeze({
 });
 // Pixel 8 的 CSS 視窗大小。中央 80% 區域為 x ∈ [41.2, 370.8]、y ∈ [91.5, 823.5]（03-ui-adjustments.md:100-101）。
 const PHONE_VIEWPORT = Object.freeze({ width: 412, height: 915 });
+// DeepSeek 記住側欄收合狀態（"siderCollapsed"）的 localStorage 鍵；設定檔在同一個 worker 的測試之間沿用。
+const LAST_SESSION_KEY = '__appKit_@deepseek/chat_lastSessionValue';
 
 // 手勢座標：觸控起點都在中央區域內、避開頂端標題列與底端輸入框；左滑從遮罩區（側邊欄右側）開始。
 const MID_Y = 450;
@@ -52,9 +54,11 @@ const DESKTOP_SWIPE_ROUNDS = 3;
 
 const test = base.extend({
     // 手機視窗與 CDP 工作階段；拆除時（早於 page 關閉）關閉觸控模擬、還原 User-Agent 與視窗大小。
+    // 手機寬度下 DeepSeek 會把 "siderCollapsed":true 寫進 LAST_SESSION_KEY；模擬前存下原值，拆除時最後寫回（原本沒有就刪除），同一個 worker 之後的測試與規格才看得到原本的側欄狀態。
     touch: async ({ page }, use) => {
         const originalViewport = page.viewportSize();
         const originalUserAgent = await page.evaluate(() => navigator.userAgent);
+        const savedSession = await page.evaluate((key) => localStorage.getItem(key), LAST_SESSION_KEY);
         const cdp = await page.context().newCDPSession(page);
         await page.setViewportSize(PHONE_VIEWPORT);
         try {
@@ -65,6 +69,10 @@ const test = base.extend({
                 await cdp.send('Emulation.setUserAgentOverride', { userAgent: originalUserAgent });
                 await cdp.detach();
                 if (originalViewport) await page.setViewportSize(originalViewport);
+                await page.evaluate(({ key, value }) => {
+                    if (value === null) localStorage.removeItem(key);
+                    else localStorage.setItem(key, value);
+                }, { key: LAST_SESSION_KEY, value: savedSession });
             }
         }
     },
