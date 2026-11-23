@@ -1,4 +1,4 @@
-// 326 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 333 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -131,6 +131,12 @@
         async function refreshGlobalPromptEnabled() {
             const settings = await readSettings();
             state.isGlobalPromptEnabled = resolveDisplayedGlobalPromptEnabled(settings);
+        }
+
+        // 裝置層級全域提示詞旗標變更時，以最近讀取的 settings 套上新值立即重算生效值：refreshGlobalPromptEnabled 的完整讀取含 chatPresetMap，會排在未完成的 chat-map 寫入（例如仍被持有的自動綁定）之後，期間未顯示提示詞組的對話送出時仍須依新旗標；之後由 refreshGlobalPromptEnabled 以重新讀取的設定收斂。
+        function applyDeviceGlobalPromptEnabled(isDeviceGlobalPromptEnabled) {
+            if (!lastReadSettings) return;
+            state.isGlobalPromptEnabled = resolveDisplayedGlobalPromptEnabled({ ...lastReadSettings, globalPromptEnabled: isDeviceGlobalPromptEnabled });
         }
 
         // 標記使用者在新對話頁面送出訊息，允許後續 auto-bind；逾時後自動清除。
@@ -308,6 +314,7 @@
             resolveActivePresetIdFrom,
             resolvePresetIdForPageUrl,
             refreshGlobalPromptEnabled,
+            applyDeviceGlobalPromptEnabled,
             markChatCreationAttempt,
             updatePromptPrefixFromBinding,
             handleChatChange,

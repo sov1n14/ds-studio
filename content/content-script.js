@@ -1,4 +1,4 @@
-// 287 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 292 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -168,6 +168,11 @@ async function applySettingsChanged(changes) {
 
     if (changes[KEYS.SHOW_SYSTEM_TIME]) {
         bindingState.isShowSystemTime = changes[KEYS.SHOW_SYSTEM_TIME].newValue ?? false;
+    }
+
+    // 裝置層級旗標以廣播帶來的新值立即重算，不等下方可能排在 chat-map 寫入之後的完整重讀
+    if (changes[KEYS.GLOBAL_PROMPT_ENABLED]) {
+        ChatBinding.applyDeviceGlobalPromptEnabled(changes[KEYS.GLOBAL_PROMPT_ENABLED].newValue);
     }
 
     const changedKeys = Object.keys(changes);

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.33](changelog/v4.md#43933---2026-11-23) | Fixes the global prompt toggle of a chat with no prompt group displayed taking effect only after a held auto-bind of another chat finished: the content script applies the changed device-level `globalPromptEnabled` value at once from its last-read settings, then re-reads settings to correct it |
 | [4.39.32](changelog/v4.md#43932---2026-11-23) | Logs a content-script initialization failure to the console as `[DSS] init:failed` with the error, except the expected `Extension context invalidated` error on an already open page after the extension reloads |
 | [4.39.31](changelog/v4.md#43931---2026-11-23) | Fixes settings changes never reaching the open page after the content script's initialization failed partway (for example a rejected storage write): every later change, such as a global prompt edit, stayed buffered; the buffered changes are replayed and later ones apply immediately even when initialization fails. |
 | [4.39.30](changelog/v4.md#43930---2026-11-23) | Fixes three sync conflict defects: resolution now repeats until local and cloud converge, so the next sync no longer finds the conflict again; a local edit still queued for retry is no longer overwritten by the older cloud copy; and the popup's Merge Sync flow reports a read failure (sync-failed toast, nothing written, conflict kept for the next sync) instead of merging with missing data |
