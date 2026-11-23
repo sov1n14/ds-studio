@@ -345,7 +345,7 @@ All setting changes (switching prompt groups, editing content, toggling switches
 If multiple devices edit prompt groups simultaneously:
 
 1. The next time you open the popup menu, a **Cloud Sync Conflict** dialog will appear.
-2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp).
+2. Click **Merge Sync**, and the system will merge prompt groups from both sides by ID, retaining the latest modification (based on the `updatedAt` timestamp). When the cloud cannot be read, a sync-failed message appears, nothing changes, and the dialog returns the next time you open the popup.
 3. Interface settings are overwritten by the cloud version (except device-local toggles like `isEnabled`, the legacy device-level `globalPromptEnabled` fallback, and `isReplyNotificationEnabled`, which are excluded from sync conflict resolution). Each prompt group's own `globalPromptEnabled` field (v4.20.0) lives on the prompt group data itself and therefore syncs and merges along with it.
 4. The popup menu title bar displays real-time sync status (green **Cloud Synced**, red **Not Synced**, or **Too Large — Local Only** when total prompt group data exceeds the `chrome.storage.sync` capacity limit, in which case data is kept locally only and cloud sync is skipped).
 

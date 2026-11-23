@@ -118,7 +118,12 @@
                 if (conflictType === 'manual') {
                     await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
                 } else if (conflictType === 'auto') {
-                    await this.resolveSyncConflict();
+                    // 合併讀取失敗時僅告警並維持未初始化，留待下次同步再合併，初始化其餘步驟照常執行
+                    try {
+                        await this.resolveSyncConflict();
+                    } catch (err) {
+                        console.warn('[DSS] storage-manager initialize: resolveSyncConflict failed:', err);
+                    }
                 } else {
                     await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
                 }

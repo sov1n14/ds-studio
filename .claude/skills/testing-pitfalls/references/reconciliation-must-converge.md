@@ -1,0 +1,13 @@
+# Reconciliation: Repeat It Until Both Sides Converge
+
+**Cause** (non-convergence): `resolveSyncConflict()` in `utils/storage-manager.sync.js` wrote the merge result through `savePromptPresets()`, a save path that compared against the sync-wins read and skipped writes, so local kept a stale or missing preset, sync kept dropped presets, and every later `syncNow()` detected the same divergence and wrote again. The sync tests checked only the result of the first resolution and never called `syncNow()` repeatedly, so no test saw the second pass.
+
+**Solution** (non-convergence): `resolveSyncConflict()` writes the merged index, order meta and presets to both areas, removes dropped presets from both areas, and rejects without writing when the strict sync read fails. `test/unit/storage-manager.sync-conflict-convergence.scenario.spec.js` runs `syncNow()` three times against real module instances and asserts both areas, the absence of sync writes once converged, and the read-failure case. On pre-fix code 8 of 8 tests failed, for example "local dsPreset_p2 equals the sync copy after syncNow x3: expected undefined to deeply equal {…}" and "sync.set key lists during the 2nd syncNow(): expected [ [ 'dsPresetTombstones' ], … ] to deeply equal []".
+
+**Cause** (queued-key overwrite): `resolveSyncConflict()` copied cloud values over local for every owned key, including keys queued in `dsLocalAuth` whose newer local write had not yet reached sync, so the resolution discarded that write before `retrySync()` could push it. No test queued a local write in `dsLocalAuth` before a conflict resolution.
+
+**Solution** (queued-key overwrite): `resolveSyncConflict()` drops every key queued in `dsLocalAuth` from its cloud-to-local updates, and `retrySync()` pushes it later. `test/unit/storage-manager.sync-conflict-queued-key.scenario.spec.js` seeds the queue with a pending local write, then resolves a conflict and asserts the local value survives and later reaches sync. On pre-fix code 4 of 8 tests failed.
+
+**Prevention**: a test of any reconciliation (sync conflict resolution, merge, retry drain) MUST run it repeatedly and assert that both sides converge and that a converged state makes no further writes, MUST include a case where reading one side fails, and MUST seed every pending-write queue (such as `dsLocalAuth`) with a queued key before running the reconcile path.
+
+**Check**: before trusting such a test, confirm it calls the reconcile entry point at least twice and asserts the write calls of the second pass, that it asserts the stored values of both areas rather than the return value, that one case makes the read of one side fail, and that one case starts with a non-empty pending-write queue.

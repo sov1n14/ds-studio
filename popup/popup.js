@@ -174,10 +174,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         if (isResolved) {
-            await StorageManager.resolveSyncConflict();
-            Toast.show(dsI18n.t('syncMergedSuccessToast'));
-            setTimeout(() => window.location.reload(), 1000);
-            return;
+            try {
+                await StorageManager.resolveSyncConflict();
+                Toast.show(dsI18n.t('syncMergedSuccessToast'));
+                setTimeout(() => window.location.reload(), 1000);
+                return;
+            } catch (err) {
+                // 雲端讀取失敗時合併未寫入任何資料、衝突旗標仍保留：提示同步失敗後照常載入本機設定，下次開啟再詢問
+                console.warn('[DSS] popup: resolveSyncConflict failed:', err);
+                Toast.show(dsI18n.t('syncFailedToast'));
+            }
         }
     }
 

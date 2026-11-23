@@ -21,6 +21,17 @@
         });
     },
 
+    // 嚴格讀取：讀取失敗（lastError 或同步拋出）時 reject，供必須區分「空資料」與「讀取失敗」的呼叫端使用；_safeGet 維持 resolve({}) 的既有契約
+    _strictGet(area, keys) {
+        return new Promise((resolve, reject) => {
+            chrome.storage[area].get(keys, (data) => {
+                const readError = chrome.runtime.lastError;
+                if (readError) { reject(new Error(`chrome.storage.${area}.get failed: ${readError.message ?? readError}`)); return; }
+                resolve(data || {});
+            });
+        });
+    },
+
     _safeSet(area, items) {
         return new Promise((resolve, reject) => {
             try {
