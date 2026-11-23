@@ -1,4 +1,4 @@
-// 268 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 283 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -80,8 +80,17 @@ function startBodyObserver(onBodyMutation) {
     return bodyObserver;
 }
 
+// 初始化完成前送達的設定變更廣播暫存於此，待初始狀態全部套用後依序重播；
+// 否則落在初始化讀取設定快照之後、監聽器可處理之前的寫入（例如 popup 關閉總開關）會遺失。
+// Stryker disable next-line ArrayDeclaration: 等價變異 — 初始化結束時暫存內容逐一交給 handleSettingsChangedMessage 重播，非訊息元素的 type 為 undefined，於首道守衛即返回而不動任何狀態；初始化期間送達的訊息附加其後，重播順序不變
+const settingsMessagesDuringInit = [];
+let isSettingsInitDone = false;
+
 // 設定初始化
 async function initSettings() {
+    // 設定變更廣播的接收註冊（由 background/settings-routes.js 送達）：須早於任何設定讀取，初始化期間的廣播先暫存
+    chrome.runtime.onMessage.addListener(handleSettingsChangedMessage);
+
     // i18n 由本檔明確初始化（utils/i18n.js 載入期不做任何事）
     await dsI18n.init();
 
@@ -93,7 +102,8 @@ async function initSettings() {
     // 啟動 overlay preset 選單（受主開關控制顯示/隱藏）
     // Must be started before handleChatChange so that updateActiveId() has a
     // valid selectEl to write into when resolving bound-preset lookups.
-    PresetOverlay.start(settings.promptPresets, settings.activePresetId ?? '', settings.isEnabled);
+    // 初始選中值依網址中的對話解析（已綁定對話只看 chatPresetMap），不得沿用其他情境存下的全域 activePresetId
+    PresetOverlay.start(settings.promptPresets, ChatBinding.resolvePresetIdForPageUrl(settings), settings.isEnabled);
 
     // 處理初始對話（可能自動選取已綁定的 preset）；失敗僅記錄，不得阻斷下方導覽偵測與監聽器接線
     try {
@@ -110,8 +120,9 @@ async function initSettings() {
         PresetOverlay.scheduleFindAndMount?.();
     });
 
-    // 設定變更廣播的接收註冊（由 background/settings-routes.js 送達）
-    chrome.runtime.onMessage.addListener(handleSettingsChangedMessage);
+    // 初始狀態已套用完畢：開放即時處理，並依送達順序重播初始化期間暫存的廣播
+    isSettingsInitDone = true;
+    settingsMessagesDuringInit.splice(0).forEach(handleSettingsChangedMessage);
 }
 
 /**
@@ -123,6 +134,10 @@ function handleSettingsChangedMessage(message) {
     if (message.area !== 'local' && message.area !== 'sync') return;
     if (!message.changes) return;
     if (!isExtensionContextValid()) return;
+    if (!isSettingsInitDone) {
+        settingsMessagesDuringInit.push(message);
+        return;
+    }
 
     // 訊息監聽器邊界：無人可接手的失敗一律在此收斂
     applySettingsChanged(message.changes).catch((err) => {

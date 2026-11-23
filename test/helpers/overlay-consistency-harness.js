@@ -11,6 +11,7 @@ import contentScript from '../../content/content-script.js';
 import { setPathname } from './set-pathname.js';
 import { writeChatMapLayout, NO_RECEIVER, PORT_CLOSED, CONTEXT_INVALIDATED } from './chat-map-writer-harness.js';
 import { relaySettingsChanged, silenceUnchangedWrites } from './chrome-storage-change-events.js';
+import { waitForContentScriptInit } from './content-script-init-probe.js';
 
 export { contentScript };
 export const overlay = contentScript.PresetOverlay;
@@ -28,14 +29,8 @@ export async function settle() {
     await flush();
 }
 
-// content-script.js starts initSettings() un-awaited at import; its last step registers the second onMessage listener. Await this before touching state, or the bootstrap's handleChatChange() lands mid-test and supersedes the test's promptPrefix write.
-export async function waitForContentScriptBootstrap() {
-    for (let i = 0; i < 500; i++) {
-        if (chrome.runtime.onMessage.listenerCount() >= 2) return;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
-}
+// content-script.js 於 import 時啟動且未被等待的 initSettings()；動到 state 前須等它完成，否則其尾端的 handleChatChange() 會在案例中途落地並覆寫案例寫入的 promptPrefix
+export const waitForContentScriptBootstrap = () => waitForContentScriptInit(contentScript);
 
 export async function seedPresets(presets) {
     const item = { dsPresetIndex: presets.map((p) => p.id) };

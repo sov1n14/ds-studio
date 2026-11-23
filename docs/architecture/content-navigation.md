@@ -9,11 +9,12 @@
 DeepSeek's chat interface is a single-page application (SPA). When the user switches conversations or starts a new one, the URL path changes without a full page reload. A `MutationObserver` on `document.body` watches for DOM changes and compares `window.location.pathname` against the last known value. When a path change is detected, `handleChatChange()` is called to:
 
 1. Extract the new UUID from the URL path (`/a/chat/s/{uuid}`).
-2. Re-load `chatPresetMap` from storage.
-3. If the UUID has a bound preset → set `promptPrefix` to that preset's content (verify the preset still exists via `StorageManager.getSettings()` using the new per-key schema; if stale, clean up the binding).
-4. If the UUID is unknown but we transitioned from a no-UUID state **and** the per-tab `awaitingNewChatUuid` flag is set (indicating the user actually triggered a send on the new-conversation page) → auto-bind the per-tab `pendingPresetId` to the new UUID. Without the flag (e.g., user manually clicked an existing conversation from the new-chat page), the transition is treated as ordinary navigation and no binding is created. This ensures every conversation maintains an independent binding relationship.
-5. For no-UUID pages: unconditionally clear `promptPrefix`, `pendingPresetId`, and `awaitingNewChatUuid` to prevent stale preset inheritance across tabs.
-6. Back/forward browser navigation is additionally handled via the `popstate` event.
+2. Update the overlay through `updateActiveId()` right after setting `currentChatUuid`, resolving the id from the in-memory `chatPresetMap` binding, so the overlay never shows the previous conversation's preset while the storage read below is pending. When the page had no UUID and `awaitingNewChatUuid` is set, skip this update so the preset picked on the new conversation stays displayed.
+3. Re-load `chatPresetMap` from storage.
+4. If the UUID has a bound preset → set `promptPrefix` to that preset's content (verify the preset still exists via `StorageManager.getSettings()` using the new per-key schema; if stale, clean up the binding).
+5. If the UUID is unknown but we transitioned from a no-UUID state **and** the per-tab `awaitingNewChatUuid` flag is set (indicating the user actually triggered a send on the new-conversation page) → auto-bind the per-tab `pendingPresetId` to the new UUID. Without the flag (e.g., user manually clicked an existing conversation from the new-chat page), the transition is treated as ordinary navigation and no binding is created. This ensures every conversation maintains an independent binding relationship.
+6. For no-UUID pages: unconditionally clear `promptPrefix`, `pendingPresetId`, and `awaitingNewChatUuid` to prevent stale preset inheritance across tabs.
+7. Back/forward browser navigation is additionally handled via the `popstate` event.
 
 ### `awaitingNewChatUuid` Flag Mechanism
 
@@ -55,7 +56,7 @@ Because `getNaturalWidth()` sits on the placement path that the settle loop runs
 > Measuring every candidate gives the custom combobox the same content-hugging a native `<select>` gets from its widest `<option>` (`min-width: 80px; max-width: 200px`), so the trigger width stays the same whichever option is selected.
 
 **Lifecycle**:
-1. `start(presets, activeId, enable)` — called from `initSettings()` after `setupNavigationDetection()`. Injects overlay styles, sets up the DOM observer, finds and mounts to the title bar, renders the preset list, and sets initial visibility based on the `enable` parameter (tied to the master switch `isEnabled`).
+1. `start(presets, activeId, enable)` — called from `initSettings()` before `handleChatChange()` and `setupNavigationDetection()`. `activeId` is `ChatBinding.resolvePresetIdForPageUrl(settings)`: the preset `resolveOverlayPresetId()` resolves for the chat in the page URL (see [Which Preset Id the Overlay Displays](#which-preset-id-the-overlay-displays-v4181)), not the stored `activePresetId`. Injects overlay styles, sets up the DOM observer, finds and mounts to the title bar, renders the preset list, and sets initial visibility based on the `enable` parameter (tied to the master switch `isEnabled`).
 2. `findAndMount()` — queries `CHAT_HEADER_SELECTOR`. If found and different from the current target, calls `mountTo()` which builds the DOM and appends it to the title bar, then syncs visibility from `isEnabled` and reads storage to render the current state.
 3. `mountTo()` applies placement **synchronously in the same task as the `appendChild`**, via `_applyPlacementSync()`, before the settle loop starts (v4.18.1). Appending first and waiting for an animation frame let the browser paint one frame at the element's unsized default geometry, and the jump from that frame to the first measured placement read as an "expand" animation on page load. There is no CSS transition on the overlay at all — the only transition in `preset-dropdown.css` is on `.dss-preset-arrow` for the open/close rotation — so the fix is purely one of ordering, not of masking. The settle loop still runs afterwards, because the DeepSeek host page's own layout genuinely keeps moving during load.
 4. `scheduleFindAndMount()` — a 150 ms debounced re-mount (`FIND_AND_MOUNT_DEBOUNCE_MS`), re-triggering `findAndMount()` when SPA navigation replaces the title bar. The controller owns no `MutationObserver` of its own: `content/content-script.js` holds the single `document.body` `childList + subtree` observer for the whole content layer and fans its callback out to the navigation check and to this method, each keeping its own debounce semantics. New body-level detection needs attach to that fan-out — a second body observer is not permitted.
@@ -85,7 +86,7 @@ The controller reads the live pending id through an optional `ctx.getPendingPres
 
 **SPA Resilience**:
 - The DOM observer detects title bar replacement during conversation switching.
-- `handleChatChange()` calls `PresetOverlay.updateActiveId(resolvedId)` at both the early return (no-UUID → clear) and the main return (UUID → show bound preset).
+- `handleChatChange()` calls `PresetOverlay.updateActiveId(resolvedId)` right after setting `currentChatUuid` (step 2 of [SPA Navigation Detection](#spa-navigation-detection)), at the early return (no-UUID → clear), and at the main return (UUID → show bound preset).
 - `findAndMount()` avoids redundant mounts by comparing `this.targetEl` with the found element.
 
 **ARIA and Accessibility**:

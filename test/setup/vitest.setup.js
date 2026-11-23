@@ -144,9 +144,7 @@ function createMockEvent() {
         removeListener: (fn) => listeners.delete(fn),
         hasListener: (fn) => listeners.has(fn),
         callListeners: (...args) => listeners.forEach((fn) => fn(...args)),
-        // Test helper: how many listeners are currently registered. Lets a spec
-        // await a module's load-time bootstrap by polling for the listener that
-        // the bootstrap registers as its last step, instead of guessing a tick budget.
+        // Test helper: how many listeners are currently registered. The count says only which listeners exist, not that a module's load-time bootstrap has finished; to wait for content-script.js init to finish, use waitForContentScriptInit() in test/helpers/content-script-init-probe.js.
         listenerCount: () => listeners.size,
     };
 }

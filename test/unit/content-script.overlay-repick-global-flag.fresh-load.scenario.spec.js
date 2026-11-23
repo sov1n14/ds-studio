@@ -12,6 +12,7 @@ import '../../utils/storage-manager.js';
 import { setPathname } from '../helpers/set-pathname.js';
 import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
 import { relaySettingsChanged, silenceUnchangedWrites } from '../helpers/chrome-storage-change-events.js';
+import { waitForContentScriptInit } from '../helpers/content-script-init-probe.js';
 
 const NEW_CHAT = '/a/chat/s';
 const GLOBAL = 'GLOBAL-INSTRUCTION';
@@ -29,14 +30,6 @@ async function seedStorage() {
     await chrome.storage.local.set(items);
     await chrome.storage.sync.set(items);
     await writeChatMapLayout([chrome.storage.sync, chrome.storage.local], StorageManager.KEYS, [{}]);
-}
-
-async function waitForBootstrap() {
-    for (let i = 0; i < 500; i++) {
-        if (chrome.runtime.onMessage.listenerCount() >= 2) return;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
 }
 
 describe('through the content-script wiring: a re-pick of the stored group on a new chat injects its global prompt', () => {
@@ -68,7 +61,8 @@ describe('through the content-script wiring: a re-pick of the stored group on a 
         // Evaluated here, not at import, so the ctx wiring content-script.js builds at load is part of this test.
         vi.resetModules();
         contentScript = (await import('../../content/content-script.js')).default;
-        await waitForBootstrap();
+        // 須等初始化完成，否則其尾端的初始設定與對話綁定會覆寫下方掛載與導覽後的 state
+        await waitForContentScriptInit(contentScript);
         overlay = contentScript.PresetOverlay;
         target = document.createElement('div');
         document.body.appendChild(target);

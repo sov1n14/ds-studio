@@ -14,6 +14,7 @@ import '../../utils/storage-manager.js';
 import { setPathname } from '../helpers/set-pathname.js';
 import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
 import { relaySettingsChanged, silenceUnchangedWrites } from '../helpers/chrome-storage-change-events.js';
+import { waitForContentScriptInit } from '../helpers/content-script-init-probe.js';
 
 const HEADER_HTML = fs.readFileSync(path.resolve(__dirname, '../fixtures/ds-snapshots/conversation-header.html'), 'utf8');
 const NEW_CHAT = '/a/chat/s';
@@ -62,7 +63,7 @@ function appendHeader() {
 
 let cs;
 let addedListeners;
-/** Evaluates content-script.js on `pathname` and waits until initSettings() has registered its settings listener. */
+/** Evaluates content-script.js on `pathname` and waits until initSettings() has finished. */
 async function loadContentScript(pathname) {
     setPathname(pathname);
     const event = chrome.runtime.onMessage;
@@ -71,11 +72,11 @@ async function loadContentScript(pathname) {
     try {
         vi.resetModules();
         cs = (await import('../../content/content-script.js')).default;
-        for (let i = 0; i < 500 && addedListeners.length < 2; i++) await wait(0);
+        // 以可觀察的初始化完成為準（監聽數只代表初始化已開始）；等待期間保持攔截，afterEach 才能移除本實例註冊的所有監聽
+        await waitForContentScriptInit(cs);
     } finally {
         event.addListener = originalAdd;
     }
-    if (addedListeners.length < 2) throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
     await settle();
     return cs.PresetOverlay;
 }

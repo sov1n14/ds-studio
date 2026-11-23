@@ -12,6 +12,7 @@ import '../../utils/storage-manager.js';
 import '../../background/settings-routes.js';
 import { setPathname } from '../helpers/set-pathname.js';
 import { silenceUnchangedWrites } from '../helpers/chrome-storage-change-events.js';
+import { waitForContentScriptInit } from '../helpers/content-script-init-probe.js';
 
 const NEW_CHAT = '/a/chat/s';
 const TAB = { id: 41, url: 'https://chat.deepseek.com/a/chat/s' };
@@ -34,7 +35,7 @@ let cs;
 let contentListeners;
 let swListeners;
 
-/** Evaluates content-script.js on `pathname` and waits until initSettings() has registered its settings listener; records the listeners it adds. */
+/** Evaluates content-script.js on `pathname` and waits until initSettings() has finished; records the listeners it adds. */
 async function loadContentScript(pathname) {
     setPathname(pathname);
     const event = chrome.runtime.onMessage;
@@ -43,12 +44,11 @@ async function loadContentScript(pathname) {
     try {
         vi.resetModules();
         cs = (await import('../../content/content-script.js')).default;
-        for (let i = 0; i < 500 && contentListeners.length < 2; i++) await wait(0);
+        // The listener count only says init has started; the recording stays in place during the wait so afterEach removes every listener this instance adds.
+        await waitForContentScriptInit(cs);
     } finally {
         event.addListener = originalAdd;
     }
-    if (contentListeners.length < 2) throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
-    await settle();
 }
 
 /** Installs the real settings routes as the service worker does, recording the listeners so afterEach can remove them. */

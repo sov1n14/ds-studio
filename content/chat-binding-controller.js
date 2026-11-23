@@ -1,4 +1,4 @@
-// 273 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 291 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -73,15 +73,26 @@
             return __chatSessionIdModule.extractChatSessionId();
         }
 
-        /** 以目前狀態 + 一份完整 settings 解析浮動選單應顯示的 preset id。 */
-        function resolveActivePresetIdFrom(settings) {
+        // 以指定對話 uuid + 目前記憶體狀態解析浮動選單應顯示的 preset id；
+        // 有 uuid 時僅依 chatPresetMap 決定，settings（釘選與 preset 清單）只在新對話時參與。
+        function resolvePresetIdFor(chatUuid, settings) {
             return resolveOverlayPresetId({
-                chatUuid: state.currentChatUuid,
+                chatUuid,
                 chatPresetMap: state.chatPresetMap,
                 pendingPresetId: state.pendingPresetId,
-                pinnedPresetId: settings.pinnedPresetId,
-                presets: settings.promptPresets,
+                pinnedPresetId: settings?.pinnedPresetId,
+                presets: settings?.promptPresets,
             });
+        }
+
+        /** 以目前狀態 + 一份完整 settings 解析浮動選單應顯示的 preset id。 */
+        function resolveActivePresetIdFrom(settings) {
+            return resolvePresetIdFor(state.currentChatUuid, settings);
+        }
+
+        /** 以網址中的對話 uuid 解析首次載入時浮動選單應顯示的 preset id（此時 currentChatUuid 尚未由 handleChatChange 設定）。 */
+        function resolvePresetIdForPageUrl(settings) {
+            return resolvePresetIdFor(extractUuidFromUrl(), settings);
         }
 
         /** 由 initSettings 於啟動時套用首次讀取到的設定。 */
@@ -179,6 +190,12 @@
             const hadNoUuid = state.currentChatUuid === null;
             state.currentChatUuid = newUuid;
 
+            // 偵測到導覽當下即以記憶體中的綁定同步浮動選單，避免下方 await 期間仍顯示上一個對話的 preset；
+            // 新對話剛取得 UUID（等待自動綁定）時保留使用者在新對話頁面的選擇，不在此覆寫。
+            if (!(hadNoUuid && state.awaitingNewChatUuid)) {
+                getPresetOverlay().updateActiveId(resolvePresetIdFor(newUuid));
+            }
+
             // 從分塊儲存重新載入 chatPresetMap
             state.chatPresetMap = await StorageManager.getChatPresetMap();
 
@@ -254,6 +271,7 @@
             applyInitialSettings,
             extractUuidFromUrl,
             resolveActivePresetIdFrom,
+            resolvePresetIdForPageUrl,
             refreshGlobalPromptEnabled,
             markChatCreationAttempt,
             updatePromptPrefixFromBinding,
