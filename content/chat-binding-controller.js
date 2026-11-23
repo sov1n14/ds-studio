@@ -1,4 +1,4 @@
-// 333 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 350 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -78,6 +78,15 @@
 
         // 本控制器最近一次讀取到的完整 settings；導覽當下（重新讀取儲存區之前）的重繪以此解析等待自動綁定對話的 pending preset，不另插入儲存區讀取，否則該讀取本身即留下空白期。
         let lastReadSettings = null;
+
+        // 使用者每次選取新對話頁面的 pending preset（浮動選單或 popup）即換成一個全新的識別 token；新對話導覽流程以 token 是否相同判斷讀取設定期間是否已有選取，而非比對值 —— 重選與過期 pending 相同的值仍須算作選取。
+        let pendingPickToken = {};
+
+        /** 記錄使用者在新對話頁面的 pending preset 選取；浮動選單與 popup 兩個寫入者皆須經此寫入。 */
+        function setPendingPresetId(presetId) {
+            pendingPickToken = {};
+            state.pendingPresetId = presetId ?? null;
+        }
 
         /** 讀取完整 settings，並記下最近一次的快照。 */
         async function readSettings() {
@@ -185,16 +194,23 @@
                 state.awaitingNewChatUuid = false;
                 clearTimeout(state.awaitingNewChatUuidTimer);
 
+                // 讀取設定可能排在未完成的 chat-map 寫入之後；期間使用者已選取的 pending preset 優先，本流程不得以釘選預選或空白覆蓋。
+                const pickTokenAtStart = pendingPickToken;
+                const hasPickSinceStart = () => pendingPickToken !== pickTokenAtStart;
+
                 // 新對話：若有已釘選的預設提示詞組且該組仍存在，預先選中它
                 const settings = await readSettings();
                 const pinnedId = settings.pinnedPresetId;
                 const pinnedPreset = pinnedId && settings.promptPresets.find(p => p.id === pinnedId);
 
-                if (pinnedPreset) {
+                if (hasPickSinceStart()) {
+                    // 使用者的選取已自行更新 pending、前綴與浮動選單，此處不覆寫
+                } else if (pinnedPreset) {
                     state.pendingPresetId = pinnedId;
                     await StorageManager.saveActivePresetId(pinnedId);
                     await updatePromptPrefixFromBinding();
-                    getPresetOverlay().updateActiveId(pinnedId);
+                    // 儲存期間使用者才選取時，浮動選單保留其選取
+                    if (!hasPickSinceStart()) getPresetOverlay().updateActiveId(pinnedId);
                 } else {
                     state.promptPrefix = '';
                     state.pendingPresetId = null;
@@ -315,6 +331,7 @@
             resolvePresetIdForPageUrl,
             refreshGlobalPromptEnabled,
             applyDeviceGlobalPromptEnabled,
+            setPendingPresetId,
             markChatCreationAttempt,
             updatePromptPrefixFromBinding,
             handleChatChange,

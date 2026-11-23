@@ -56,7 +56,7 @@ const PresetOverlay = __overlayFactory.createPresetOverlay({
     getCurrentChatUuid:        () => bindingState.currentChatUuid,
     getChatPresetMap:          () => bindingState.chatPresetMap,
     setChatPresetMap:          (v) => { bindingState.chatPresetMap = v; },
-    setPendingPresetId:        (v) => { bindingState.pendingPresetId = v; },
+    setPendingPresetId:        (v) => ChatBinding.setPendingPresetId(v),
     getPendingPresetId:        () => bindingState.pendingPresetId,
     updatePromptPrefixFromBinding: (...a) => ChatBinding.updatePromptPrefixFromBinding(...a),
     refreshGlobalPromptEnabled:    () => ChatBinding.refreshGlobalPromptEnabled(),
@@ -258,7 +258,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // 同步回覆 ack，讓 popup 能區分「內容腳本未注入」與「已收下匯出指令」
         sendResponse({ received: true });
     } else if (request.action === DSS_CONTENT_MSG.ACTIVE_PRESET_CHANGED) {
-        bindingState.pendingPresetId = request.presetId ?? null;
+        ChatBinding.setPendingPresetId(request.presetId ?? null);
         ChatBinding.updatePromptPrefixFromBinding()
             .catch(err => console.error('[DSS] content-script ACTIVE_PRESET_CHANGED 前綴重算失敗:', err));
         PresetOverlay.updateActiveId(request.presetId || '');
