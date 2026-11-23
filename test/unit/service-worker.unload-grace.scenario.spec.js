@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
     createWorld, bootWorker, advanceTo, tabUnloading, trackForDeletion, heartbeat, relayToken, fireStartup,
-    setTabs, tab, chatUrl, ORIGIN, readQueue, queueEntry, readOpenUuids, deleteRequestsFor, retryAlarm, readWorkerBinding, sendToWorker, unloadType,
+    setTabs, tab, chatUrl, ORIGIN, readQueue, queueEntry, readOpenUuids, deleteRequestsFor, retryAlarm, readWorkerBinding, sendToWorker, unloadType, queueFromAnotherDevice,
 } from '../helpers/unload-grace-harness.js';
 
 const GRACE_MS = 10000; // 使用者裁示的寬限期
@@ -214,9 +214,7 @@ describe('service worker terminated during the grace period', () => {
 
         await fireStartup(world);
 
-        const deletesForS = deleteRequestsFor(world, S);
-        expect(deletesForS.length, 'the browser startup remediation must delete the leftover S').toBeGreaterThan(0);
-        deletesForS.forEach((request) => expect(request, 'every startup delete for S uses the extension delete body and the stored token').toEqual(expectedDelete(S)));
+        expect(deleteRequestsFor(world, S), 'the browser startup remediation must delete the leftover S with exactly one request using the extension delete body and the stored token').toEqual([expectedDelete(S)]);
         expect(await queueEntry(world, S), 'S must leave the pending-delete queue after the startup delete').toBeUndefined();
         expectNoEscapedErrors();
     });
@@ -227,13 +225,6 @@ describe('grace expiry and the sync-change scan share one in-flight queue guard'
     const A = '0b1f6d0e-55aa-4c1e-9d3f-7a2b3c4d5e6f'; // 其他裝置寫入、lease 已釋放的對話
     const N = '9c8b7a65-4321-4fed-8cba-0123456789ab'; // 另一個分頁新登記的臨時對話
 
-    /** 其他裝置經 chrome.storage.sync 把 lease 已釋放（lastActiveAt 0）的 uuid 加進待刪佇列。 */
-    async function anotherDeviceQueues(uuid) {
-        const key = readWorkerBinding(world, 'DSS_TEMP_CHAT').DSS_PENDING_DELETES_SYNC_KEY;
-        const queue = await readQueue(world);
-        await world.chrome.storage.sync.set({ [key]: [...queue, { chatUuid: uuid, attemptCount: 0, lastActiveAt: 0 }] });
-    }
-
     it('after an unload grace delete has finished, a later queue change from another device is still swept and its released entry deleted once', async () => {
         await setup();
         const unloadAt = now();
@@ -241,7 +232,7 @@ describe('grace expiry and the sync-change scan share one in-flight queue guard'
         await advanceTo(world, unloadAt + GRACE_MS + 1000);
         expect(deleteRequestsFor(world, S), 'precondition: the unload grace deleted S').toEqual([expectedDelete(S)]);
 
-        await anotherDeviceQueues(A);
+        await queueFromAnotherDevice(world, A);
         await advanceTo(world, now() + 1000);
 
         expect(deleteRequestsFor(world, A), 'the sync-change scan must still run after a grace job and delete the released entry A exactly once').toEqual([expectedDelete(A)]);
@@ -255,7 +246,7 @@ describe('grace expiry and the sync-change scan share one in-flight queue guard'
         const fetchA = new Promise((resolve) => { releaseA = resolve; });
         world.fetch.mockImplementation(async (_url, init) => (JSON.parse(init.body).chat_session_id === A ? fetchA : { ok: true }));
 
-        await anotherDeviceQueues(A); // 掃描開始，A 的刪除請求尚未回應
+        await queueFromAnotherDevice(world, A); // 掃描開始，A 的刪除請求尚未回應
         await advanceTo(world, now() + 1000);
         expect(deleteRequestsFor(world, A), 'precondition: the sync-change scan is deleting A').toEqual([expectedDelete(A)]);
 

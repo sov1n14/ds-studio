@@ -57,9 +57,13 @@ DSSUnloadGrace.install({ runGuardedQueueJob, scheduleRetryAlarm });
 
 // 指數退避上限（分鐘）
 const BACKOFF_CAP_MINUTES = 30;
-// onChanged 掃描重入防護（記憶體內）
-// SW 終止時本旗標歸零；補救流程幂等，代價僅為最多多跑一次結果相同的補救
+// onChanged 掃描重入防護（記憶體內）：自佇列工作開始設起，直到該工作的結尾廣播結束才清除。SW 終止時本旗標歸零；補救流程幂等，代價僅為最多多跑一次結果相同的補救
 let isRemediationInFlight = false;
+// 佇列工作鏈的尾端（成敗皆 resolve）：每個新工作接在其後，前一個工作連同結尾廣播結束後才開始
+let queueTail = Promise.resolve();
+// 在進行中工作內執行的巢狀工作（卸載寬限到期）：外層工作等它們全部結束才廣播並清除旗標。加入次數只增不減，外層比較廣播前後的次數，察覺等候或廣播期間加入（即使已結束）的巢狀工作；結算 promise 在所有已加入者結束（成敗皆可）時 resolve，尚無加入者時為 undefined
+let nestedJoinCount = 0;
+let nestedJobsSettled;
 
 // 雲端同步重試週期（分鐘）
 const SYNC_RETRY_PERIOD_MINUTES = 5;
@@ -176,7 +180,8 @@ async function retryParkedSync() {
 // Service Worker 啟動時嘗試補推先前停駐的同步內容，並補救待刪佇列
 chrome.runtime.onStartup.addListener(() => {
     retryParkedSync(); // 既有：cloud-preset 補推
-    (async () => {
+    // 釋放租約與掃描同在防護內：釋放寫入觸發的 onChanged 安全網因此略過，不與本次掃描並行
+    runQueuedSweep(async () => {
         // 全新工作階段：先釋放仍在待刪佇列中的本機開啟對話租約，使其立即可刪
         const openUuids = await TemporaryChatPendingStore.getOpenUuids();
         const pending = await TemporaryChatPendingStore.getPendingDeletes();
@@ -186,14 +191,14 @@ chrome.runtime.onStartup.addListener(() => {
         }
         await TemporaryChatPendingStore.clearOpenUuids(); // 全新工作階段，尚無活動分頁
         await remediatePendingDeletes();
-    })();
+    }, 'startup');
 });
 
 // 安裝／更新時建立定期重試 alarm、補救待刪佇列，並立即嘗試一次補推
 chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create(SYNC_RETRY_ALARM_NAME, { periodInMinutes: SYNC_RETRY_PERIOD_MINUTES });
     retryParkedSync();
-    remediatePendingDeletes(); // 重建 alarm 並處理待刪佇列（Chrome 重載/更新會清除所有 alarm）
+    runQueuedSweep(remediatePendingDeletes, 'install'); // 重建 alarm 並處理待刪佇列（Chrome 重載/更新會清除所有 alarm）
 });
 
 // 監聯來自 content script 的排程要求：僅排程重試 alarm，不進行即時刪除
@@ -211,7 +216,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             retryParkedSync();
             return;
         case RETRY_ALARM_NAME:
-            remediatePendingDeletes();
+            runQueuedSweep(remediatePendingDeletes, 'retry alarm');
             return;
     }
 });
@@ -236,16 +241,49 @@ async function broadcastPendingUuids() {
     }
 }
 
-// 在補救重入防護下執行佇列工作後廣播給各分頁側邊欄：期間佇列寫入觸發的掃描一律略過，避免同一項目重複刪除；已有掃描進行中時直接執行，旗標與廣播交由該掃描收尾
-async function runGuardedQueueJob(job) {
-    if (isRemediationInFlight) return job();
+// 在補救重入防護下獨佔執行一個佇列工作：旗標自工作開始設起，等巢狀工作結束並廣播給各分頁側邊欄後才清除，期間佇列寫入觸發的掃描一律略過。等候或廣播期間又有巢狀工作加入（即使已結束）時，再等候並廣播一次，確保清除旗標前最後一次廣播涵蓋所有佇列寫入；每輪都含廣播的 storage 讀取，不會只靠 microtask 空轉。工作失敗也照樣廣播，讓各分頁的隱藏集合對齊佇列的實際內容，錯誤再交還呼叫端；廣播本身失敗只記錄，不蓋掉工作結果。
+async function runExclusiveQueueJob(job) {
     isRemediationInFlight = true;
-    try { await job(); } finally { isRemediationInFlight = false; }
-    await broadcastPendingUuids();
+    try {
+        await job();
+    } finally {
+        let seenJoinCount;
+        do {
+            seenJoinCount = nestedJoinCount;
+            await nestedJobsSettled;
+            await broadcastPendingUuids().catch((err) => console.error('[DSS] broadcastPendingUuids:', err));
+        } while (nestedJoinCount > seenJoinCount);
+        isRemediationInFlight = false;
+    }
 }
 
-// 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救（補救進行中則略過）
+// 將佇列工作接到工作鏈尾端：依呼叫順序逐一執行、絕不並行；等待靠 promise 鏈而非輪詢旗標，旗標卡住時不會空轉
+function enqueueQueueJob(job) {
+    const run = queueTail.then(() => runExclusiveQueueJob(job));
+    queueTail = run.catch(() => {});
+    return run;
+}
+
+// 卸載寬限到期的單筆處理（DSSUnloadGrace 注入）：無工作進行中時接到工作鏈尾端；另一工作進行中時立即在其內執行、不等候，外層工作等它結束後才廣播並清除旗標，因此它不會與外層之後排隊的工作並行，其佇列寫入也包含在外層的廣播內
+async function runGuardedQueueJob(job) {
+    if (!isRemediationInFlight) return enqueueQueueJob(job);
+    const run = Promise.resolve().then(job);
+    nestedJobsSettled = Promise.all([nestedJobsSettled, run.catch(() => {})]);
+    nestedJoinCount += 1;
+    return run;
+}
+
+// 佇列補救（啟動、安裝更新、重試 alarm、同步變更）：接到工作鏈尾端，掃描依序進行、不並行且請求不遺失；錯誤以觸發來源記錄，不成為未處理的 rejection
+async function runQueuedSweep(job, context) {
+    try {
+        await enqueueQueueJob(job);
+    } catch (err) {
+        console.error(`[DSS] ${context} remediation:`, err);
+    }
+}
+
+// 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救（佇列工作連同其結尾廣播進行中則略過）
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync' || !(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes) || isRemediationInFlight) return;
-    runGuardedQueueJob(remediatePendingDeletes);
+    runQueuedSweep(remediatePendingDeletes, 'sync change');
 });

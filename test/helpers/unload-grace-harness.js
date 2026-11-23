@@ -8,13 +8,16 @@
  * 重新啟動：bootWorker(world) 會清掉前一個 worker 的計時器與監聽器（模擬 worker 被終止），再以同一份 storage、alarms 與分頁表載入新的 worker 實例。
  */
 import fs from 'fs';
+import { isDeepStrictEqual } from 'node:util';
 import path from 'path';
 import vm from 'vm';
 import { vi } from 'vitest';
 import { InMemoryStorageMock } from '../fixtures/chrome-storage-mock.js';
 import { installFakeTabs } from './fake-chrome-tabs.js';
 
-const BACKGROUND_DIR = path.resolve(__dirname, '../../background');
+const REPO_ROOT = path.resolve(__dirname, '../..');
+const BACKGROUND_DIR = path.join(REPO_ROOT, 'background');
+const SERVICE_WORKER_FILE = 'background/service-worker.js'; // repo 相對路徑字面值：限定範圍突變測試靠 test/ 內檔案出現它，才會選取載入真實 worker 的 spec
 const EXTENSION_ID = 'test-extension-id';
 // @stryker-mutator/api INSTRUMENTER_CONSTANTS.NAMESPACE：插樁程式碼與 vitest-runner 共用的全域命名空間
 const STRYKER_NAMESPACE = '__stryker__';
@@ -127,7 +130,7 @@ export function bootWorker(world) {
         vm.runInContext(fs.readFileSync(file, 'utf-8'), ctx, { filename: file });
     };
     ctx.importScripts = (...urls) => urls.forEach((url) => runScript(path.resolve(BACKGROUND_DIR, url)));
-    runScript(path.join(BACKGROUND_DIR, 'service-worker.js'));
+    runScript(path.join(REPO_ROOT, SERVICE_WORKER_FILE));
     world.worker = ctx;
     world.bootCount += 1;
     return ctx;
@@ -232,4 +235,65 @@ export const deleteRequestsFor = (world, uuid) => deleteRequests(world).filter((
 /** 目前排定的刪除重試 alarm（名稱取自 worker 的 RETRY_ALARM_NAME）。 */
 export function retryAlarm(world) {
     return world.alarms.get(readWorkerBinding(world, 'RETRY_ALARM_NAME'));
+}
+
+/** 讓 world 的各 storage area 依真實 Chrome 派送 onChanged（Chrome 156 驗證，見 testing-pitfalls boundary-doubles-must-copy）：寫入完成後才非同步派送、只列出值確實改變的 key、完全沒改變的寫入不派送。此模式只會減少或延後事件，不會多出事件。 */
+export function useRealChromeChangeEvents(world) {
+    Object.values(world.chrome.storage)
+        .filter((area) => typeof area?._notify === 'function')
+        .forEach((area) => {
+            const original = area._notify.bind(area);
+            area._notify = (changes, areaName) => {
+                const changed = Object.fromEntries(Object.entries(changes).filter(([, c]) => !isDeepStrictEqual(c.oldValue, c.newValue)));
+                if (Object.keys(changed).length > 0) setTimeout(() => original(changed, areaName), 0);
+            };
+        });
+}
+
+/** 另一台裝置經 chrome.storage.sync 把 lease 已釋放（lastActiveAt 0）的 uuid 加到待刪佇列尾端。 */
+export async function queueFromAnotherDevice(world, uuid) {
+    const key = temp(world).DSS_PENDING_DELETES_SYNC_KEY;
+    await world.chrome.storage.sync.set({ [key]: [...(await readQueue(world)), { chatUuid: uuid, attemptCount: 0, lastActiveAt: 0 }] });
+}
+
+/** 送往各分頁的待刪佇列廣播（依序），取其目標分頁與 uuid 清單。 */
+export function pendingBroadcasts(world) {
+    const type = temp(world).DSS_MSG_PENDING_UUIDS_CHANGED;
+    return world.chrome.tabs.sendMessage.mock.calls.filter(([, message]) => message?.type === type).map(([tabId, message]) => ({ tabId, uuids: message.uuids }));
+}
+
+/** 讓 heldUuids 各自的刪除請求懸置到 release(uuid) 為止（網路回應未到），其餘刪除請求立即成功。 */
+export function holdDeleteResponses(world, heldUuids) {
+    const resolvers = new Map();
+    const held = new Map(heldUuids.map((uuid) => [uuid, new Promise((resolve) => resolvers.set(uuid, resolve))]));
+    world.fetch = vi.fn(async (url, init) => held.get(JSON.parse(init.body).chat_session_id) ?? { ok: true });
+    return (uuid) => resolvers.get(uuid)({ ok: true });
+}
+
+/** 查詢條件是否為空物件 {}：只有待刪佇列廣播以 {} 查詢全部分頁，分頁防護與 unload grace 都帶 url 過濾。 */
+const isUnfilteredQuery = (queryInfo) => queryInfo !== null && typeof queryInfo === 'object' && Object.keys(queryInfo).length === 0;
+
+/** 讓第一筆查詢條件為 {} 的 chrome.tabs.query（待刪佇列廣播的分頁查詢）懸置到 release 為止，再回傳分頁表的真實查詢結果；帶 url 過濾的查詢立即回應。回傳 { state, release }，state 記錄 {} 查詢次數與懸置中與否。 */
+export function holdFirstBroadcastTabsQuery(world) {
+    const realQuery = world.chrome.tabs.query.getMockImplementation();
+    let resolveHeld;
+    const held = new Promise((resolve) => { resolveHeld = resolve; });
+    const state = { unfilteredCalls: 0, isHeldPending: false };
+    world.chrome.tabs.query = vi.fn(async (queryInfo) => {
+        if (!isUnfilteredQuery(queryInfo)) return realQuery(queryInfo);
+        state.unfilteredCalls += 1;
+        if (state.unfilteredCalls > 1) return realQuery(queryInfo);
+        state.isHeldPending = true;
+        await held;
+        state.isHeldPending = false;
+        return realQuery(queryInfo);
+    });
+    return { state, release: () => resolveHeld() };
+}
+
+/** 觸發刪除重試 alarm（名稱取自 worker 的 RETRY_ALARM_NAME）。 */
+export function fireRetryAlarm(world) {
+    const name = readWorkerBinding(world, 'RETRY_ALARM_NAME');
+    if (typeof name !== 'string') throw new Error('precondition failed: the worker names its delete retry alarm (RETRY_ALARM_NAME), observed ' + String(name));
+    world.events.onAlarm.listeners.forEach((fn) => fn({ name, scheduledTime: world.clock.now() }));
 }
