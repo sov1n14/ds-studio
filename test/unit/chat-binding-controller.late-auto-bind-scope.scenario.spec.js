@@ -13,7 +13,7 @@
  *
  * Sampling (testing-pitfalls "Transient UI State"): chrome.storage.local.get and chrome.storage.sync.get deliver every read after a fixed latency and record what the overlay shows and the prefix a send would carry (buildInjectionPrefix), with location.pathname, right before each delivery; a tracked flow also records one sample at the first microtask after it settles.
  *
- * Why the harness is copied: the ctx wiring is built once, when content-script.js loads, so every test loads it itself; the seed, appendHeader, shownValue, pressEnter, held-BIND and sampled-latency helpers copy chat-binding-controller.blank-flash-mutant-killers.spec.js, which keeps them private.
+ * Why the harness is copied: the ctx wiring is built once, when content-script.js loads, so every test loads it itself; the seed, appendHeader, shownValue, pressEnter, held-BIND and sampled-latency helpers copy test/helpers/awaiting-bind-overlay-harness.js, which samples only the overlay and not the injection prefix.
  *
  * Mocked trust boundaries only: in-memory chrome.storage with real Chrome onChanged semantics and controlled read latency, the SW settings relay, the SW chat-map writer (promise-form sendMessage) and navigator (device profile). Every content module is real.
  */
