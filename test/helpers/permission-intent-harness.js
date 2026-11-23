@@ -7,6 +7,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import vm from 'vm';
 import { vi, expect } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 import { evalPopupScript, readProjectFile } from './popup-script-loader.js';
@@ -42,10 +43,24 @@ function popupHtmlScripts() {
     return srcs.map((src) => path.posix.normalize(path.posix.join('popup', src)));
 }
 
+const WORKER_REL = 'background/service-worker.js';
+const STRYKER_NAMESPACE = '__stryker__';
+
+/** 在全新 vm context 以 classic script 執行 background/service-worker.js，用記錄用的 importScripts 取得它請求的檔案（repo 根目錄相對路徑）；記錄後拋出哨兵值中止，其餘頂層程式不執行。清單來自執行而非解析原始碼文字，因此 Stryker 插樁後的副本也得到同一份清單。 */
 function workerScripts() {
-    const call = readProjectFile('background/service-worker.js').match(/importScripts\(([\s\S]*?)\);/);
-    if (!call) throw new Error('could not locate the importScripts(...) call in background/service-worker.js');
-    return [...call[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => path.posix.normalize(path.posix.join('background', m[1])));
+    const stop = { reason: 'importScripts recorded' };
+    let requested = null;
+    const ctx = { importScripts: (...urls) => { requested = urls; throw stop; } };
+    // Stryker 的變異切換與覆蓋記錄讀寫插樁程式碼所在 realm 的 globalThis.__stryker__；vm context 有自己的 globalThis，不轉交時 worker 內看不到啟用中的變異體。有值（Stryker 執行中）才轉交同一個物件，一般 vitest 執行不受影響。
+    if (globalThis[STRYKER_NAMESPACE]) ctx[STRYKER_NAMESPACE] = globalThis[STRYKER_NAMESPACE];
+    vm.createContext(ctx);
+    try {
+        vm.runInContext(readProjectFile(WORKER_REL), ctx, { filename: path.join(PROJECT_ROOT, WORKER_REL) });
+    } catch (err) {
+        if (err !== stop) throw err;
+    }
+    if (!requested) throw new Error(WORKER_REL + ' finished its top level without calling importScripts(...)');
+    return requested.map((url) => path.posix.normalize(path.posix.join('background', url)));
 }
 
 const isNewScript = (known) => (rel) => !known.has(rel) && !isStorageManagerPart(rel);

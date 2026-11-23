@@ -16,6 +16,7 @@ import { CLIPBOARD, createPermissionWorld, loadPopupModules, openPopup, settle, 
 
 const BACKGROUND_DIR = path.resolve(__dirname, '../../background');
 const ROUTES_FILE = 'permission-intent-routes.js';
+const STRYKER_NAMESPACE = '__stryker__';
 
 function createEvent() {
     const listeners = [];
@@ -73,6 +74,8 @@ function bootServiceWorker() {
         // A real Chrome service worker global has TextEncoder / TextDecoder; StorageManager measures item bytes with TextEncoder.
         setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask, structuredClone, crypto, TextEncoder, TextDecoder,
     };
+    // Stryker 的變異切換與覆蓋記錄讀寫插樁程式碼所在 realm 的 globalThis.__stryker__；vm context 有自己的 globalThis，不轉交時 worker 內看不到啟用中的變異體，覆蓋也記不回測試執行器。有值（Stryker 執行中）才轉交同一個物件，一般 vitest 執行不受影響。
+    if (globalThis[STRYKER_NAMESPACE]) worker[STRYKER_NAMESPACE] = globalThis[STRYKER_NAMESPACE];
     vm.createContext(worker);
     worker.self = vm.runInContext('globalThis', worker);
     const runScript = (file) => {
