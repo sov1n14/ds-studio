@@ -39,7 +39,7 @@ HTML-to-Markdown conversion (`parseHtmlToMarkdown`) handles:
 - **Tables**: `<table>` → Markdown table format with header row and separator line
 - **Blockquotes**: `<blockquote>` → `>` prefixed lines
 - **Lists**: `<ul>` → `- ` items; `<ol>` → numbered items
-- **Code**: `<div class="md-code-block">` → extracts `<pre><span>` content into fenced code blocks with language; standalone `<pre>` → fenced code blocks; inline `<code>` → backtick-wrapped
+- **Code**: a DeepSeek code block is a `<div class="md-code-block">` holding a banner (`.md-code-block-banner`, the language label plus the copy and download buttons) and a class-less `<pre>` whose line spans hold token spans, with bare `\n` text nodes between lines. The exporter writes a fenced code block whose info string is the banner label (the first span outside a button with non-empty text, trimmed) and whose body is `pre.textContent`, so each line appears once with its line breaks and indentation; the banner text and buttons stay out of the output. The label `text` exports as an empty info string, because DeepSeek shows `text` both for a block without a language and for an explicit `text` block. A standalone `<pre class="language-*">` takes its language from the class; inline `<code>` → backtick-wrapped
 - **Inline formatting**: `<strong>`/`<b>` → `**bold**`; `<em>`/`<i>` → `*italic*`
 - **Links**: `<a>` with `.ds-markdown-cite` children → `[[link-N]](url)` (gated by `includeReferences`); ordinary links → `[text]` immediately followed by `(url)`
 - **Text nodes**: Collapsed whitespace normalization

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.34](changelog/v4.md#43934---2026-11-23) | Fixes Markdown export of DeepSeek code blocks, which lost the language, duplicated every line and dropped the line breaks between lines: the exporter takes the language from the code block banner label and the code from the block's `pre` text |
 | [4.39.33](changelog/v4.md#43933---2026-11-23) | Fixes the global prompt toggle of a chat with no prompt group displayed taking effect only after a held auto-bind of another chat finished: the content script applies the changed device-level `globalPromptEnabled` value at once from its last-read settings, then re-reads settings to correct it |
 | [4.39.32](changelog/v4.md#43932---2026-11-23) | Logs a content-script initialization failure to the console as `[DSS] init:failed` with the error, except the expected `Extension context invalidated` error on an already open page after the extension reloads |
 | [4.39.31](changelog/v4.md#43931---2026-11-23) | Fixes settings changes never reaching the open page after the content script's initialization failed partway (for example a rejected storage write): every later change, such as a global prompt edit, stayed buffered; the buffered changes are replayed and later ones apply immediately even when initialization fails. |

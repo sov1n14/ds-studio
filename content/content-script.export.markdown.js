@@ -68,12 +68,22 @@
         return text + '\n';
     }
 
+    // 程式碼區塊 banner（語言標籤與複製、下載按鈕的容器），由既有常數組合，不依賴雜湊 class
+    var CODE_BLOCK_BANNER_SELECTOR = '.' + selectors.CODE_BLOCK_CLASS + '-banner';
+
+    // 沒有指定語言的程式碼區塊，banner 顯示的佔位標籤
+    var PLAIN_TEXT_LANGUAGE_LABEL = 'text';
+
+    function _formatFencedCode(language, code) {
+        return '\n\n```' + language + '\n' + code + '\n```\n\n';
+    }
+
     function _readCodeLanguage(el) {
         return (el.getAttribute('class') || '').replace('language-', '') || '';
     }
 
     function _renderPre(n) {
-        return '\n\n```' + _readCodeLanguage(n) + '\n' + n.textContent + '\n```\n\n';
+        return _formatFencedCode(_readCodeLanguage(n), n.textContent);
     }
 
     function _renderHeading(n, ctx) {
@@ -104,14 +114,25 @@
         return n.tagName === 'DIV' && n.classList && Array.from(n.classList).some(function (c) { return c.includes(selectors.CODE_BLOCK_CLASS); });
     }
 
-    /** <p> / <div>：一般區塊；DeepSeek 程式碼區塊容器改以 span 拼接輸出圍欄式程式碼。 */
+    /** 讀取程式碼區塊 banner 的語言標籤：略過按鈕內的文字，佔位標籤 text 視為無語言。 */
+    function _readBannerLanguage(codeBlock) {
+        var banner = codeBlock.querySelector(CODE_BLOCK_BANNER_SELECTOR);
+        // Guard: 沒有 banner 的區塊沒有語言標籤
+        if (!banner) return '';
+
+        var labelSpan = Array.from(banner.querySelectorAll('span')).find(function (s) {
+            return !s.closest(selectors.ROLE_BUTTON_DIV_SELECTOR) && s.textContent.trim() !== '';
+        });
+        var label = labelSpan ? labelSpan.textContent.trim() : '';
+        return label === PLAIN_TEXT_LANGUAGE_LABEL ? '' : label;
+    }
+
+    /** <p> / <div>：一般區塊；DeepSeek 程式碼區塊容器輸出圍欄式程式碼，banner 與裝飾圖示不輸出。 */
     function _renderBlock(n, ctx) {
         if (_isCodeBlockContainer(n)) {
             var pre = n.querySelector('pre');
-            if (pre) {
-                var codeContent = Array.from(pre.querySelectorAll('span')).map(function (s) { return s.textContent; }).join('');
-                return '\n\n```' + _readCodeLanguage(pre) + '\n' + codeContent + '\n```\n\n';
-            }
+            // pre 的 textContent 即逐行原始碼（行間換行為 pre 下的裸文字節點）
+            if (pre) return _formatFencedCode(_readBannerLanguage(n), pre.textContent);
         }
         var inner = ctx.parseChildren(n, n.tagName).trim();
         return inner ? '\n' + inner + '\n' : '';
