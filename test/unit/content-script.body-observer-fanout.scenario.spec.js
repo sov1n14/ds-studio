@@ -6,8 +6,8 @@
  * - 重掛：React 換掉對話標題列時，浮動選單在 150ms 去抖動後重新掛進新的標題列。
  *
  * 只模擬信任邊界：記憶體內 chrome.storage（setup 提供）。所有 content 模組與 StorageManager 都是真的；DOM 由 happy-dom 提供。
- * happy-dom 只以 WeakRef 持有 MutationObserver 回呼，沒人引用的 body 觀察器可能在測試中途被回收而不再觸發；真實瀏覽器在節點仍被觀察時保留觀察器。
- * 因此本檔把 MutationObserver 換成真實實作的子類別，只多做一件事：強參考每個觀察器與回呼（等同瀏覽器行為），並在 afterEach 中斷所有觀察器，讓前一個實例不會回應下一個測試的 DOM 變動。
+ * happy-dom 16 在 observe() 內以 WeakRef 包住一個沒有其他參考的箭頭函式，GC 一跑 body 觀察器就不再觸發；強參考觀察器與回呼本身留不住這個箭頭函式。真實瀏覽器在節點仍被觀察時保留觀察器。
+ * 因此本檔把 MutationObserver 換成真實實作的子類別：observe() 期間以強參考代替 WeakRef（等同瀏覽器行為），並記錄每個觀察器，在 afterEach 中斷，讓前一個實例不會回應下一個測試的 DOM 變動。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
@@ -58,16 +58,25 @@ function appendHeader() {
 let cs;
 let addedListeners;
 let originalAddListener;
-let retainedObservers;
+let createdObservers;
 
-/** 真實 MutationObserver 的子類別：強參考觀察器與回呼，如同瀏覽器在節點仍被觀察時保留觀察器。 */
+/** 只在 observe() 期間代替 WeakRef 的強參考。 */
+class StrongRef { constructor(value) { this.value = value; } deref() { return this.value; } }
+
+/** 真實 MutationObserver 的子類別：observe() 期間以強參考代替 WeakRef，如同瀏覽器在節點仍被觀察時保留觀察器；並記錄每個觀察器供 afterEach 中斷。 */
 function installRetainingMutationObserver() {
-    retainedObservers = [];
+    createdObservers = [];
     const RealMutationObserver = globalThis.MutationObserver;
     class RetainingMutationObserver extends RealMutationObserver {
         constructor(callback) {
             super(callback);
-            retainedObservers.push({ observer: this, callback });
+            createdObservers.push(this);
+        }
+
+        observe(target, options) {
+            const OriginalWeakRef = globalThis.WeakRef;
+            globalThis.WeakRef = StrongRef;
+            try { super.observe(target, options); } finally { globalThis.WeakRef = OriginalWeakRef; }
         }
     }
     vi.stubGlobal('MutationObserver', RetainingMutationObserver);
@@ -95,7 +104,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-    retainedObservers.forEach(({ observer }) => observer.disconnect());
+    createdObservers.forEach((observer) => observer.disconnect());
     if (cs) {
         // 停用本實例的 document 層注入監聽、卸載覆蓋層，並讓尚未觸發的去抖動重掛變成 no-op。
         Object.assign(cs.state, { isEnabled: false, isInjecting: true });
