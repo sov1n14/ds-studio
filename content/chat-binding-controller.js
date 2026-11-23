@@ -1,4 +1,4 @@
-// 325 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
+// 326 lines: single chat-binding state machine — URL extraction, navigation detection, preset resolution, and prompt-prefix derivation share one mutable state object; splitting would scatter closely coupled state transitions across files
 /**
  * DS Studio — Chat Binding Controller
  * 單一職責：維護「目前對話 ↔ 提示詞組」的綁定狀態機 —— 對話狀態、SPA 導覽偵測、
@@ -73,7 +73,7 @@
             return __chatSessionIdModule.extractChatSessionId();
         }
 
-        // 新對話送出訊息後 DeepSeek 配發、正等待自動綁定的對話 uuid；任一對話的綁定流程清除 pendingPresetId 時一併清回 null（自動綁定的機會隨之消失），本對話的流程失敗時亦清回 null。
+        // 新對話送出訊息後 DeepSeek 配發、正等待自動綁定的對話 uuid；任一對話的綁定流程清除 pendingPresetId 時一併清回 null（自動綁定的機會隨之消失），本對話的綁定流程每次結束時（成功、失敗或因使用者已離開本對話而提前結束）亦清回 null。
         let autoBindingChatUuid = null;
 
         // 本控制器最近一次讀取到的完整 settings；導覽當下（重新讀取儲存區之前）的重繪以此解析等待自動綁定對話的 pending preset，不另插入儲存區讀取，否則該讀取本身即留下空白期。
@@ -217,6 +217,8 @@
             }
 
             const settings = await bindChatFromStorage(newUuid, hadNoUuid);
+            // 使用者已在流程 await 期間離開本對話：開關與浮動選單交由目前對話自己的流程決定。
+            if (state.currentChatUuid !== newUuid) return;
 
             // 生效 preset id 解析同上（既有對話規則等同「完全依 chatPresetMap 決定」）。
             const resolvedActiveId = resolveActivePresetIdFrom(settings);
@@ -228,6 +230,7 @@
         }
 
         // 導覽至具體對話後：重新載入 chatPresetMap、驗證既有綁定或執行新對話自動綁定，並結束等待狀態；回傳本次讀取的 settings。
+        // 儲存區寫入（綁定、解除綁定）一律執行；驅動目前畫面的狀態（promptPrefix、等待旗標、pendingPresetId、自動綁定標記）只在 await 結束後目前對話仍為 newUuid 時寫入，否則晚完成的流程會把本對話的提示詞組寫成使用者已切換到的對話的注入前綴。
         async function bindChatFromStorage(newUuid, hadNoUuid) {
             try {
                 // 從分塊儲存重新載入 chatPresetMap
@@ -235,17 +238,17 @@
 
                 const settings = await readSettings();
 
+                let chatPromptPrefix = '';
                 if (state.chatPresetMap[newUuid]) {
                     // 確認已綁定的 preset 仍然存在
                     const presets = settings.promptPresets;
                     if (presets.some(p => p.id === state.chatPresetMap[newUuid])) {
                         await StorageManager.saveActivePresetId(state.chatPresetMap[newUuid]);
-                        state.promptPrefix = await StorageManager.getActivePromptContent();
+                        chatPromptPrefix = await StorageManager.getActivePromptContent();
                     } else {
                         // 綁定已失效 — 交由 service worker 清除後重新讀取
                         await StorageManager.unbindChat(newUuid);
                         state.chatPresetMap = await StorageManager.getChatPresetMap();
-                        state.promptPrefix = '';
                     }
                 } else if (hadNoUuid && state.awaitingNewChatUuid) {
                     // 真的是「新對話送出訊息 → DeepSeek 配 UUID」場景，才自動綁定
@@ -254,23 +257,21 @@
                         await StorageManager.bindChatToPreset(newUuid, boundPresetId);
                         state.chatPresetMap = await StorageManager.getChatPresetMap();
                         const preset = settings.promptPresets.find(p => p.id === boundPresetId);
-                        state.promptPrefix = preset?.content ?? '';
-                    } else {
-                        state.promptPrefix = '';
+                        chatPromptPrefix = preset?.content ?? '';
                     }
-                } else {
-                    // 從新對話手動切到既有對話 / 既有對話間導航：不綁定。
-                    state.promptPrefix = '';
                 }
+                // 其餘情境（從新對話手動切到既有對話 / 既有對話間導航）不綁定，前綴維持空字串。
+                if (state.currentChatUuid !== newUuid) return settings;
+                state.promptPrefix = chatPromptPrefix;
                 state.awaitingNewChatUuid = false;
                 // Stryker disable next-line CallExpression: 等價變異 — 該計時器只會把 awaitingNewChatUuid 設為 false，上一行已設為 false；唯一把旗標設為 true 的 markChatCreationAttempt 在同一同步區段內先清除舊計時器，殘留計時器只會以 false 覆寫 false
                 clearTimeout(state.awaitingNewChatUuidTimer);
                 state.pendingPresetId = null;
-                // 自動綁定只綁 pendingPresetId，清除後被標記的新建對話已不可能再自動綁定，故無論本流程屬於哪個對話都一併清除標記；與上一行同步執行，中間不留可重繪的空檔，否則返回該對話時重繪會沿用新對話頁面的解析而短暫顯示釘選的提示詞組
+                // 自動綁定只綁 pendingPresetId，清除後被標記的新建對話已不可能再自動綁定，故無論被標記的是哪個對話都一併清除標記；與上一行同步執行，中間不留可重繪的空檔，否則返回該對話時重繪會沿用新對話頁面的解析而短暫顯示釘選的提示詞組
                 autoBindingChatUuid = null;
                 return settings;
             } finally {
-                // 本對話的綁定流程失敗時同樣停止沿用新對話頁面的選擇，之後一律依 chatPresetMap 解析；其他對話的流程失敗時未清除 pendingPresetId，被標記對話的自動綁定仍可能完成，故保留標記
+                // 本對話的綁定流程失敗、或因使用者已離開本對話而提前結束時，同樣停止沿用新對話頁面的選擇，之後一律依 chatPresetMap 解析；其他對話的流程失敗或提前結束時未清除 pendingPresetId，被標記對話的自動綁定仍可能完成，故保留標記
                 if (autoBindingChatUuid === newUuid) autoBindingChatUuid = null;
             }
         }
