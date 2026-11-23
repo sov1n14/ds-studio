@@ -22,12 +22,15 @@ const X = 'aaaaaaaa-1111-1111-1111-111111111111';
 const CHAT_X = `/a/chat/s/${X}`;
 const A = { id: 'preset-A', name: 'preset-A', content: 'PREFIX-A', createdAt: 1, updatedAt: 1 };
 const IS_ENABLED = StorageManager.KEYS.IS_ENABLED;
+const SYNC_INITIALIZED = StorageManager.KEYS.SYNC_INITIALIZED;
+const A_REMOTE_CONTENT = 'PREFIX-A-REMOTE';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function seed() {
     // isEnabled 只存在 local（與 popup 的寫入位置一致）；群組與聊天綁定兩區都放，讓同步流程不改動任何設定。
-    await chrome.storage.local.set({ [IS_ENABLED]: true, globalPromptEnabled: false });
+    // syncInitialized 為 true：這台裝置已完成首次合併，雲端較新的版本才會在讀取時回寫本機。
+    await chrome.storage.local.set({ [IS_ENABLED]: true, globalPromptEnabled: false, [SYNC_INITIALIZED]: true });
     const presets = { dsPresetIndex: [A.id], [`dsPreset_${A.id}`]: A };
     await chrome.storage.local.set(presets);
     await chrome.storage.sync.set(presets);
@@ -195,15 +198,16 @@ const editGlobalPrompt = () => chrome.storage.local.set({ [GLOBAL_DEFAULT_PROMPT
 
 /**
  * 讓 chrome.storage.local.set 對含 `key` 的寫入失敗且不存入資料，如同真實 Chrome 的配額失敗：callback 形式只在該次 callback 執行期間設定 chrome.runtime.lastError，promise 形式直接 reject。
- * 回傳 { hits, restore }；hits 記錄失敗次數，供前置條件確認注入的失敗確實發生。
+ * 回傳 { hits, failedItems, restore }；hits 記錄失敗次數、failedItems 記錄每次失敗寫入的內容，供前置條件確認注入的失敗確實發生在預期的寫入上。
  */
 function failLocalWritesOf(key) {
     const area = chrome.storage.local;
     const original = area.set;
-    const failure = { hits: 0 };
+    const failure = { hits: 0, failedItems: [] };
     area.set = function (items, callback) {
         if (!(items && key in items)) return original.call(this, items, callback);
         failure.hits++;
+        failure.failedItems.push(structuredClone(items));
         const message = 'QUOTA_BYTES quota exceeded';
         if (!callback) return new Promise((_, reject) => setTimeout(() => reject(new Error(message)), 0));
         setTimeout(() => {
@@ -276,14 +280,16 @@ describe('content-script: a settings broadcast after init failed partway takes e
     }
 
     it('init aborted by a rejected storage write (chrome.storage.local.set reports lastError): a later global prompt edit is applied', async () => {
-        // 雲端的 preset-A 較新：初始化讀取設定時會把它回寫本機，而這筆本機寫入失敗。
-        await chrome.storage.sync.set({ [`dsPreset_${A.id}`]: { ...A, content: 'PREFIX-A-REMOTE', updatedAt: 2 } });
+        // 已同步過的裝置上，雲端的 preset-A 較新：初始化讀取設定時會把雲端版回寫本機，而這筆本機寫入失敗。
+        await chrome.storage.sync.set({ [`dsPreset_${A.id}`]: { ...A, content: A_REMOTE_CONTENT, updatedAt: 2 } });
         failure = failLocalWritesOf(`dsPreset_${A.id}`);
         probe = instrumentReads();
         await loadContentScript();
         await waitForFailedInitSettled(failure);
 
         expect(failure.hits, 'precondition: init attempted the failing local write').toBeGreaterThan(0);
+        const failedContents = failure.failedItems.map((items) => items[`dsPreset_${A.id}`]?.content);
+        expect(failedContents, 'precondition: a failed local write carries the cloud-newer preset-A, i.e. it is a cloud-wins write-back').toContain(A_REMOTE_CONTENT);
         expect(cs.PresetOverlay.wrapperEl, 'precondition: the failure aborted init before it started the overlay').toBeFalsy();
         await expectGlobalPromptEditApplied();
     });

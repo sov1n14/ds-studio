@@ -166,7 +166,7 @@ ds-studio/
 ├── utils/                   ─  Shared utilities loaded by both popup and content scripts
 │   ├── storage-manager.js   ─  Entry: StorageManager object, chat-map writer flag, per-context FIFO write queue, bundle mixin
 │   ├── storage-manager.keys.js          ─  Storage key names, defaults, ChatMapDispatchError, _buildNextMeta
-│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write, remote-wins write-back to local
+│   ├── storage-manager.rw.js            ─  Safe wrappers, sync/local dual-layer read/write, remote-wins write-back to local after the first merge
 │   ├── storage-manager.sync.js          ─  Sync conflict detection / resolveSyncConflict (skips chat-map keys), sync status, syncNow() entry point
 │   ├── storage-manager.sync.retry.js    ─  retrySync(): per-key guarded re-push of dsLocalAuth; parked chat-map keys go to the service worker as one REPUBLISH_PARKED op
 │   ├── storage-manager.restore.js       ─  Backup restore logic (extracted from sync.js)
@@ -250,6 +250,7 @@ The capture tool reuses the same pacing: `tools/human-pacing.mjs` installs the P
 - `go-top.e2e.js`: clicking, or pressing Enter on, the button scrolls the message list to the very top.
 - `go-top-native.e2e.js`: on the recorded conversation with the most messages, opened by `openPurpose('longThread')`, a trusted native scroll-to-bottom click during Go Top leaves the list at the bottom; a native scroll-to-bottom click from the top shows the Go Top button at the bottom; a native click during the export's scroll-to-top does not stop the export, and its output equals an undisturbed export.
 - `hide-thinking.e2e.js`: "Hide Thinking Process" on collapses every thinking block and off expands them.
+- `legacy-migration.e2e.js`: an upgrade from the v1.6.x `promptPresets` list shows every group in the popup in the stored order with its content, keeps the settings stored beside the list, and a second popup opening, also after an older device writes the same legacy list to sync again, never duplicates a group.
 - `master-off-injection.e2e.js`: with the master switch off the sent prompt is exactly the typed text although a group is picked and the global prompt and system time are on; switching it back on restores injection.
 - `master-switch.e2e.js`: master switch off removes go-top and hides the preset overlay; on brings both back.
 - `mobile-sidebar-swipe.e2e.js`: on an emulated phone, a right swipe in the central area opens the sidebar and a left swipe closes it; short, slow, mostly vertical or edge swipes, a left swipe on a closed sidebar, a desktop browser and the master switch off change nothing.
@@ -272,6 +273,7 @@ The capture tool reuses the same pacing: `tools/human-pacing.mjs` installs the P
 - `temp-chat.e2e.js`: with every delete request intercepted and answered only for conversations the test created, the temporary-chat switch state shows and syncs across tabs; the first send marks a new conversation as temporary and queues it with a lease; leaving it (home or another conversation) deletes exactly that conversation and dequeues it; a history conversation is never marked or deleted; F5 keeps it, its history served for an id the recording never held by `serveConversationAs` in `helpers/har-replay.js`; the browser refresh button keeping it is asserted too.
 - `temp-chat-toggle.e2e.js`: the temporary-chat row shows on the home page while the master switch is on and is removed when it turns off.
 - `websearch-toggle.e2e.js`: web-search start state off releases DeepSeek's Search toggle and on presses it; it applies once, so a manual flip is not undone.
+- `sync-conflict.e2e.js`: simultaneous edits on two devices show the Cloud Sync Conflict dialog and Merge Sync keeps every group of both sides by id with the newer `updatedAt` in both areas; Merge Sync while the cloud cannot be read changes nothing and the dialog returns on the next popup open; the title bar shows Cloud Synced, Not Synced, or Too Large — Local Only per the pending sync state.
 - `width.e2e.js`: chat width and input width apply and restore; input width is clamped to an enabled chat width.
 
 ### Modular Load Order (v4.0.0)

@@ -204,7 +204,7 @@
          *
          * 流程：
          *   1. retrySync()：推送因先前暫時性失敗而擱置於 dsLocalAuth 的本機較新項目（依 _shouldPushPreset / orderUpdatedAt 逐項判斷，並尊重既有的同步寫入配額守衛）；推送後若偵測到可自動解決的分歧，由 resolveSyncConflict() 將合併結果寫入兩側，仍排在 dsLocalAuth 的金鑰保留本機值。
-         *   2. 從雲端拉取最新設定（getSettings() → _get()，sync-wins 合併後逐項依 updatedAt 收斂，遠端較新的 preset 與排序回寫本機）。
+         *   2. 從雲端拉取最新設定（getSettings() → _get()，sync-wins 合併後逐項依 updatedAt 收斂，已完成首次合併的裝置上，遠端較新的 preset 與排序回寫本機；從未合併過的裝置不回寫，留待衝突偵測與合併）。
          *
          * 每個項目的決策彼此獨立：同一次呼叫中，項目 A 可能判定為「遠端較新」，項目 B 可能同時判定為「本機較新並已推送」。
          *

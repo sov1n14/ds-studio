@@ -15,7 +15,7 @@
  *   - savePromptPresets() writing tombstones to both local + sync on delete
  *   - resolveSyncConflict() end-to-end tombstone resolution
  *   - Regression: original cross-device resurrection bug scenario
- *   - _get() persisting a sync-wins PRESET_INDEX/PRESET_ORDER_META to local storage
+ *   - _get() persisting a sync-wins PRESET_INDEX/PRESET_ORDER_META to local storage on an already-synced device
  *   - Delete-vs-newer-edit race: genuine conflict must not be auto-resolved as a safe deletion
  *   - clearPresetTombstones() BUG FIX: writes { ts, deleted: false } instead of
  *     deleting the map key, so a newer "cleared" intent can beat a stale "deleted"
@@ -590,6 +590,7 @@ describe('StorageManager.clearPresetTombstones() — BUG FIX: writes {ts, delete
 });
 
 describe('StorageManager._get() — sync-wins PRESET_INDEX/PRESET_ORDER_META persisted to local', () => {
+    // 兩例皆模擬已完成首次合併的裝置（本機 syncInitialized 為 true）；從未合併的裝置在首次合併前不得把雲端勝出的排序寫入本機
     beforeEach(() => {
         delete chrome.runtime.lastError;
     });
@@ -597,6 +598,7 @@ describe('StorageManager._get() — sync-wins PRESET_INDEX/PRESET_ORDER_META per
     it('persists the winning sync index+meta to chrome.storage.local, not just in-memory', async () => {
         const now = Date.now();
         await chrome.storage.local.set({
+            [K.SYNC_INITIALIZED]: true,
             [K.PRESET_INDEX]: ['a', 'b'],
             [K.PRESET_ORDER_META]: { order: ['a', 'b'], orderUpdatedAt: now - (1 * DAY_MS) },
         });
@@ -618,6 +620,7 @@ describe('StorageManager._get() — sync-wins PRESET_INDEX/PRESET_ORDER_META per
     it('does NOT persist to local when local already wins (no unnecessary write)', async () => {
         const now = Date.now();
         await chrome.storage.local.set({
+            [K.SYNC_INITIALIZED]: true,
             [K.PRESET_INDEX]: ['a'],
             [K.PRESET_ORDER_META]: { order: ['a'], orderUpdatedAt: now },
         });
