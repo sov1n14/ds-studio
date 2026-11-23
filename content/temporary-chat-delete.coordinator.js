@@ -97,17 +97,11 @@
             const FIBER_REQ = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_MESSAGE_TYPE;
             const FIBER_RES = globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_RESULT_TYPE;
 
-            let hasFallbackTriggered = false;
             let timeoutId = null;
 
             const fallbackToApi = async () => {
-                // Stryker disable next-line ConditionalExpression: 等效突變——兩條觸發路徑進入後都在第一個 await 前同步移除監聽器並清除計時器，第二條路徑無從再觸發，旗標防護屬多餘
-                if (hasFallbackTriggered) return;
-                // Stryker disable next-line BooleanLiteral: 等效突變——其後同步移除監聽器並清除計時器，旗標防護屬多餘
-                hasFallbackTriggered = true;
                 window.removeEventListener('message', resultListener);
-                // Stryker disable next-line ConditionalExpression,CallExpression: 等效突變——timeoutId 必於任何訊息抵達前設定；未清除的計時器稍後觸發時開頭的旗標防護立即返回，只多留一個待執行計時器
-                if (timeoutId) clearTimeout(timeoutId);
+                clearTimeout(timeoutId);
                 const isOk = await TemporaryChatDeleteApi.deleteChatSessionWithRetry(uuidToDelete, tokenSnapshot);
                 if (isOk) {
                     removePendingDeleteRoute(uuidToDelete);

@@ -371,19 +371,30 @@ describe('coordinator — fiber result listener filters', () => {
         expect(global.TemporaryChatDeleteApi.deleteChatSessionWithRetry).toHaveBeenCalled();
     });
 
-    it('hasFallbackTriggered prevents double API call — timeout after failure does not re-trigger', () => {
-        Object.assign(TemporaryChatDelete.state, { trackedTemporaryUuid: UUID_A, capturedAuthToken: 'Bearer tok' });
+    // Own UUID: earlier tests in this file leave Fiber result listeners (and a real timer) for UUID_A attached,
+    // so these exactly-once counts consider only API deletes for UUID_FALLBACK.
+    const UUID_FALLBACK = 'cccc3333-dddd-eeee-ffff-000000000003';
+    const apiDeletesFor = (uuid) => global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mock.calls.filter(([id]) => id === uuid);
+
+    it('a Fiber failure message runs the API delete once — the 3000 ms timer passing later adds no second delete', () => {
+        Object.assign(TemporaryChatDelete.state, { trackedTemporaryUuid: UUID_FALLBACK, capturedAuthToken: 'Bearer tok' });
         TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
-        // Simulate failure result — triggers fallbackToApi
         window.dispatchEvent(new MessageEvent('message', {
-            data: { type: globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_RESULT_TYPE, sessionId: UUID_A, success: false },
+            data: { type: globalThis.DSS_TEMP_CHAT.DSS_FIBER_DELETE_RESULT_TYPE, sessionId: UUID_FALLBACK, success: false },
             source: window,
         }));
-        const countAfterFailure = global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mock.calls.length;
-        // Timeout fires after failure — hasFallbackTriggered should prevent second API call
-        vi.advanceTimersByTime(3000);
-        const countAfterTimeout = global.TemporaryChatDeleteApi.deleteChatSessionWithRetry.mock.calls.length;
-        expect(countAfterTimeout).toBe(countAfterFailure);
+        vi.advanceTimersByTime(10000);
+        expect(apiDeletesFor(UUID_FALLBACK), 'the failure message must start the API delete, and the timer must not repeat it')
+            .toEqual([[UUID_FALLBACK, 'Bearer tok']]);
+    });
+
+    it('with no Fiber result message, the 3000 ms timer runs the API delete once', () => {
+        Object.assign(TemporaryChatDelete.state, { trackedTemporaryUuid: UUID_FALLBACK, capturedAuthToken: 'Bearer tok' });
+        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: false });
+        vi.advanceTimersByTime(2999);
+        expect(apiDeletesFor(UUID_FALLBACK), 'no API delete before the 3000 ms timeout').toEqual([]);
+        vi.advanceTimersByTime(10000);
+        expect(apiDeletesFor(UUID_FALLBACK)).toEqual([[UUID_FALLBACK, 'Bearer tok']]);
     });
 });
 
