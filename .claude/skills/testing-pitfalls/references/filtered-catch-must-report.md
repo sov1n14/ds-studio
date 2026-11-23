@@ -1,0 +1,9 @@
+# Filtered Catch: Test the Error It Must Report
+
+**Cause**: `content/content-script.js` ended with `initSettings().catch(e => { if (e?.message?.includes('Extension context invalidated')) return; });`, so every other init error was swallowed with no log, although the `chrome-extension-coding-guidelines` skill requires `console.error('[DSS] …')` for a failure nothing else can catch. The existing init specs only checked state after a failure; no test drove an error to the top-level catch and asserted what that catch did with it, so a catch that drops every error looked the same as one that reports it.
+
+**Solution**: the catch logs every error other than an invalidated context with `console.error('[DSS] init:failed', e)` and keeps the invalidated case silent. `test/unit/content-script.init-failure-logging.scenario.spec.js` runs two failure modes through `describe.each` (a rejected `chrome.storage.local.set` during the init write-back, and a synchronous throw from `chrome.storage.onChanged.addListener`), each with an `Extension context invalidated` control that asserts no log. On pre-fix code it failed with "exactly one console.error call has first argument \"[DSS] init:failed\" (first arguments seen: []): expected [] to have a length of 1 but got +0".
+
+**Prevention**: for every top-level `.catch` or `catch` that filters some errors, a test MUST drive both an error the catch must ignore and one it must report through the real call path, and MUST assert the observable log (the `console.error` call and its `[DSS]` first argument), not only the state left after the failure.
+
+**Check**: list each filtering top-level catch in the code under test and confirm it has one case with an unfiltered error asserting the log line and one case with the ignored error asserting no log; then delete the log call and confirm a test goes red.

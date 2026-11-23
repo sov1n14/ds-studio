@@ -1,4 +1,4 @@
-// 285 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 287 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -224,7 +224,9 @@ var injectPrefix = PromptInjector.injectPrefix;
 
 // 初始化：入口檔的刻意啟動點
 initSettings().catch(e => {
+    // 擴充功能重新載入後舊頁面必然遇到情境失效錯誤，屬預期狀況不記錄；其餘初始化失敗須留下可診斷的記錄
     if (e?.message?.includes('Extension context invalidated')) return;
+    console.error('[DSS] init:failed', e);
 });
 
 // 臨時對話側邊欄隱藏：無條件啟動（模組本身無載入期副作用，
