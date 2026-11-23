@@ -1,150 +1,29 @@
 import { test as base, expect } from './fixtures.js';
 import { blockSendRequests, composer } from './helpers/composer.js';
 import { conversationOtherThan, DEEPSEEK_ORIGIN, openConversation } from './helpers/conversations.js';
-import { evaluateInWorker } from './helpers/extension.js';
 import { runUnpaced } from './helpers/human.js';
 import { TEMP_CHAT_ROW_SELECTOR } from './helpers/extension-ui.js';
-import { armReplyStub, openHome, sendStubbedPrompt } from './helpers/reply-stub.js';
+import { openHome } from './helpers/reply-stub.js';
 import { readBothAreas } from './helpers/settings.js';
+import { DEVICE_ID_KEY, ENABLED_KEY, expectNoFurtherDeletes, hasOpenUuidKey, pinTempChatSettings, PROBE_PROMPT, queueEntry, sendFirstMessageFromHome, withDeleteGuard } from './helpers/temp-chat-delete.js';
 
 // 臨時對話的建立與刪除（docs/FEATURES.md 的 Temporary Conversation；docs/spec/04-features.md 第 21 節）。
-// 首頁開關的列是否出現已由 temp-chat-toggle.e2e.js 涵蓋；這裡驗證開關本身的開／關狀態、首次送出時的標記、離開時的刪除，以及歷史對話與重新整理不會刪除。
+// 首頁開關的列是否出現已由 temp-chat-toggle.e2e.js 涵蓋；這裡驗證開關本身的開／關狀態、首次送出時的標記、離開與關閉分頁時的刪除（docs/FEATURES.md 的 Privacy Guarantee），以及歷史對話與重新整理不會刪除。
 // 安全規則：
-// - 每一次 `chat_session/delete` 請求（頁面、content script、DeepSeek 自身的刪除，以及擴充功能 service worker 發出的）都在瀏覽器內攔截：只有本次測試自己建立的對話（本次測試中 `chat_session/create` 回應的 id）回覆替身 200，其餘一律中止並讓測試失敗；沒有任何真實的刪除抵達 DeepSeek。
+// - 每一次 `chat_session/delete` 請求都經過 helpers/temp-chat-delete.js 的刪除攔截；沒有任何真實的刪除抵達 DeepSeek。
 // - 新對話中的送出由瀏覽器內替身回覆（helpers/reply-stub.js），歷史對話中的送出在瀏覽器內中止；沒有任何訊息抵達 DeepSeek。
 // - 錄製中的對話（helpers/har-replay.js 的 `deepseekReplay.conversations`）只開啟、從不刪除。
 // - 測試中觸及的儲存鍵（開關、刪除佇列、權杖快取、裝置 id、開啟中對話與租約觀察鍵）在測試後還原；權杖值從不讀出或印出。
 
 const ROW_LABEL = '臨時對話';
-const ENABLED_KEY = 'dss-temporary-chat-enabled';
 const TRACKED_UUID_SESSION_KEY = 'dss-temporary-chat-uuid';
-const QUEUE_KEY = 'dss-pending-deletes-sync';
-const DEVICE_ID_KEY = 'dss-device-id';
-const OPEN_UUID_PREFIX = 'dss-open-temp-uuid:';
-const LAST_SEEN_PREFIX = 'dss-last-seen-change:';
-const AUTH_TOKEN_KEY = 'dss-last-auth-token';
 
-const DELETE_PATH = '/api/v0/chat_session/delete';
-const CREATE_PATH = '/api/v0/chat_session/create';
-const COMPLETION_PATH = '/api/v0/chat/completion';
-// 只用來證明 context.route 也攔得到擴充功能 service worker 發出的請求；這個路徑由測試自行回覆，從不離開瀏覽器。
-const GUARD_PROBE_PATH = '/api/v0/dss-e2e-delete-guard-probe';
-// 刪除成功的替身回應：沿用 DeepSeek API 的回應外殼（code 與 data.biz_code 為 0）。
-const DELETE_OK_BODY = JSON.stringify({ code: 0, msg: '', data: { biz_code: 0, biz_msg: '', biz_data: null } });
-
-const PROMPT = 'e2e temporary chat probe (answered by the in-browser stub, never sent)';
-// 證明「沒有發生」的觀察窗長度；觀察窗本身就是斷言。
-const NEVER_WINDOW_MS = 3_000;
 // docs/spec/04-features.md:125 的開關顏色：文字關閉 #f9fafb、開啟 #679efe；開啟時軌道 #4d6bfe。
 const LABEL_OFF_COLOR = 'rgb(249, 250, 251)';
 const LABEL_ON_COLOR = 'rgb(103, 158, 254)';
 const TRACK_ON_COLOR = 'rgb(77, 107, 254)';
 
-/**
- * 刪除請求本文中的對話 id。擴充功能自己的 API 刪除帶 `{ chat_session_id }`（docs/spec/04-features.md:99）；經由 DeepSeek 自身刪除函式（Fiber 刪除）發出的請求帶 `{ chat_session_ids: [...] }`（2026-11-12 實測）。
- * 無法解析時回傳空陣列，視同不屬於本次測試。
- */
-function deleteRequestIds(request) {
-    let body = null;
-    try {
-        body = request.postDataJSON();
-    } catch {
-        return [];
-    }
-    if (typeof body?.chat_session_id === 'string') return [body.chat_session_id];
-    if (Array.isArray(body?.chat_session_ids) && body.chat_session_ids.every((id) => typeof id === 'string')) return [...body.chat_session_ids];
-    return [];
-}
-
-/**
- * 攔截整個 context 的 `chat_session/delete`（含擴充功能 service worker）：本次測試建立的 id 回覆 200，其餘中止並記錄。
- * 頁面上另裝了攔截全部 API 的替身時，須對該頁呼叫 `attach(page)`，讓刪除請求先經過這裡（後註冊的 page.route 優先）。
- */
-async function armDeleteGuard(context, keptIds) {
-    const owned = new Set();
-    const parsing = new Set();
-    const ownedDeletes = [];
-    const refused = [];
-
-    function onResponse(response) {
-        if (new URL(response.url()).pathname !== CREATE_PATH) return;
-        const job = response.json()
-            .then((body) => {
-                const id = body?.data?.biz_data?.chat_session?.id;
-                if (typeof id === 'string' && !keptIds.has(id)) owned.add(id);
-            })
-            .catch(() => {})
-            .finally(() => parsing.delete(job));
-        parsing.add(job);
-    }
-
-    async function handleDelete(route) {
-        const request = route.request();
-        const ids = deleteRequestIds(request);
-        await Promise.allSettled([...parsing]);
-        const source = request.serviceWorker() ? 'service worker' : 'page';
-        if (ids.length > 0 && ids.every((id) => owned.has(id))) {
-            ids.forEach((id) => ownedDeletes.push({ id, source }));
-            return route.fulfill({ status: 200, contentType: 'application/json', body: DELETE_OK_BODY });
-        }
-        refused.push({ ids, source });
-        return route.abort();
-    }
-
-    const isDelete = (url) => url.pathname === DELETE_PATH;
-    const isProbe = (url) => url.pathname === GUARD_PROBE_PATH;
-    context.on('response', onResponse);
-    await context.route(isDelete, handleDelete);
-
-    // 安全前提：service worker 的請求也必須經過 context.route，否則補救刪除可能繞過攔截。
-    // 探測失敗（狀態不符，或 evaluateInWorker 拋出例如 fetch 被拒）時，finally 拆除探測路由、刪除攔截與回應監聽，不殘留在共用的持久 context 上；錯誤照樣拋出，測試失敗。
-    let armed = false;
-    try {
-        await context.route(isProbe, (route) => route.fulfill({ status: 204 }));
-        const probeStatus = await evaluateInWorker(context, (url) => fetch(url, { method: 'POST' }).then((response) => response.status), DEEPSEEK_ORIGIN + GUARD_PROBE_PATH);
-        if (probeStatus !== 204) throw new Error(`Delete guard precondition failed: a service-worker request was not intercepted by context.route (status ${probeStatus})`);
-        armed = true;
-    } finally {
-        await context.unroute(isProbe);
-        if (!armed) {
-            await context.unroute(isDelete, handleDelete);
-            context.off('response', onResponse);
-        }
-    }
-
-    return {
-        attach: (page) => page.route(isDelete, handleDelete),
-        isOwned: (id) => owned.has(id),
-        ownedDeleteIds: () => ownedDeletes.map((entry) => entry.id),
-        refused: () => [...refused],
-        async dispose() {
-            await context.unroute(isDelete, handleDelete);
-            context.off('response', onResponse);
-            if (refused.length > 0) throw new Error(`Delete requests for uuids this test did not create were aborted: ${JSON.stringify(refused)}`);
-        },
-    };
-}
-
-const test = base.extend({
-    deleteGuard: async ({ context, deepseekReplay }, use) => {
-        const guard = await armDeleteGuard(context, new Set(deepseekReplay.conversations.map(({ id }) => id)));
-        await use(guard);
-        await guard.dispose();
-    },
-    // `settings` 依賴 deleteGuard：攔截在儲存還原（會改寫 sync 佇列並觸發補救掃描）之後才拆除；`page` 依賴 `settings`，因此頁面也先於攔截關閉。
-    settings: async ({ deleteGuard, settings }, use) => {
-        await use(settings);
-    },
-});
-
-/** 一次寫一個鍵：先寫臨時對話開關，總開關最後寫；並記錄擴充功能在測試中會寫入的鍵，供測試後還原。 */
-async function pinSettings(settings, { tempChat }) {
-    await settings.track([QUEUE_KEY, DEVICE_ID_KEY, AUTH_TOKEN_KEY]);
-    await settings.trackNewKeys(OPEN_UUID_PREFIX);
-    await settings.trackNewKeys(LAST_SEEN_PREFIX);
-    await settings.set({ [ENABLED_KEY]: tempChat });
-    await settings.set({ isEnabled: true });
-}
+const test = withDeleteGuard(base);
 
 function row(page) {
     return page.locator(TEMP_CHAT_ROW_SELECTOR);
@@ -162,53 +41,6 @@ async function clickSwitch(page) {
 /** 這個分頁 sessionStorage 中記錄的臨時對話 uuid。 */
 function trackedUuid(page) {
     return page.evaluate((key) => sessionStorage.getItem(key), TRACKED_UUID_SESSION_KEY);
-}
-
-/** 刪除佇列中 `id` 的項目（只取非敏感欄位）；不存在時為 null。 */
-async function queueEntry(context, id) {
-    const { sync } = await readBothAreas(context, [QUEUE_KEY]);
-    const queue = Array.isArray(sync[QUEUE_KEY]) ? sync[QUEUE_KEY] : [];
-    const entry = queue.find((item) => item?.chatUuid === id);
-    return entry ? { chatUuid: entry.chatUuid, lastActiveAt: entry.lastActiveAt, ownerDeviceId: entry.ownerDeviceId } : null;
-}
-
-async function hasOpenUuidKey(context, id) {
-    const key = OPEN_UUID_PREFIX + id;
-    const { local } = await readBothAreas(context, [key]);
-    return key in local;
-}
-
-/** 記錄 `page` 每一次 completion 請求本文中的 `chat_session_id`（請求由替身回覆，從不離開瀏覽器）。 */
-function recordCompletionSessions(page) {
-    const ids = [];
-    page.on('request', (request) => {
-        if (new URL(request.url()).pathname !== COMPLETION_PATH) return;
-        try {
-            ids.push(request.postDataJSON()?.chat_session_id ?? null);
-        } catch {
-            ids.push(null);
-        }
-    });
-    return () => [...ids];
-}
-
-/** 等待第一次送出的 completion 請求，回傳其 `chat_session_id`。 */
-async function firstSentSession(completionSessions) {
-    await expect.poll(() => completionSessions().length, { message: 'the send went out as a completion request (precondition)' }).toBeGreaterThan(0);
-    return completionSessions()[0];
-}
-
-/** 裝好替身回覆與刪除攔截，載入首頁並送出第一則訊息；回傳這個新對話的 uuid（本次測試建立的對話）。 */
-async function sendFirstMessageFromHome(page, deleteGuard) {
-    await armReplyStub(page);
-    await deleteGuard.attach(page);
-    const completionSessions = recordCompletionSessions(page);
-    await openHome(page);
-    await sendStubbedPrompt(page, PROMPT);
-    const id = await firstSentSession(completionSessions);
-    expect(deleteGuard.isOwned(id), 'the first send went into a session created by a create response in this page load (precondition)').toBe(true);
-    await expect(page, 'DeepSeek moves to the new conversation (precondition)').toHaveURL(`${DEEPSEEK_ORIGIN}/a/chat/s/${id}`);
-    return id;
 }
 
 /**
@@ -240,20 +72,12 @@ async function openKeptFromSidebar(page, uuid) {
     await expect(page, 'the sidebar link opens the kept conversation (precondition)').toHaveURL(`${DEEPSEEK_ORIGIN}/a/chat/s/${uuid}`);
 }
 
-/** 觀察窗內不得再出現任何刪除請求；觀察窗本身就是斷言。 */
-async function expectNoFurtherDeletes(page, deleteGuard, message) {
-    const before = deleteGuard.ownedDeleteIds().length + deleteGuard.refused().length;
-    await page.waitForTimeout(NEVER_WINDOW_MS);
-    const after = deleteGuard.ownedDeleteIds().length + deleteGuard.refused().length;
-    expect(after - before, `${message} (owned: ${JSON.stringify(deleteGuard.ownedDeleteIds())}, refused: ${JSON.stringify(deleteGuard.refused())})`).toBe(0);
-}
-
 // 回放的 history 與 chat_session/create 答覆各延遲 400 毫秒（真實伺服器的延遲）：即時的 create 答覆早於擴充功能頁面世界掛鉤的安裝，掛鉤便看不到該次 create，第一次送出也就不會配對到任何對話。
 test.use({ replayLatency: { history: 400, create: 400 } });
 
 test.describe('temporary conversation', { tag: '@offline' }, () => {
     test('the switch shows its off and on state, follows a change made in another tab, and keeps its state while leaving and returning to the home page', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {
-        await pinSettings(settings, { tempChat: false });
+        await pinTempChatSettings(settings, { tempChat: false });
         await openHome(page);
         const label = row(page).getByText(ROW_LABEL, { exact: true });
 
@@ -293,7 +117,7 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
     });
 
     test('with the switch on, the first send in a new conversation marks it as temporary', async ({ page, context, settings, deleteGuard }) => {
-        await pinSettings(settings, { tempChat: true });
+        await pinTempChatSettings(settings, { tempChat: true });
         const sendStartedAt = Date.now();
         const id = await sendFirstMessageFromHome(page, deleteGuard);
 
@@ -316,7 +140,7 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
     });
 
     test('leaving a temporary conversation for the home page deletes exactly that conversation and dequeues it', async ({ page, context, settings, deleteGuard }) => {
-        await pinSettings(settings, { tempChat: true });
+        await pinTempChatSettings(settings, { tempChat: true });
         const id = await sendFirstMessageFromHome(page, deleteGuard);
         await expect.poll(() => trackedUuid(page), { message: 'the new conversation is tracked before leaving (precondition)' }).toBe(id);
 
@@ -334,7 +158,7 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
     });
 
     test('leaving a temporary conversation for another conversation deletes exactly that conversation and never the one opened', async ({ page, settings, deleteGuard, deepseekReplay }) => {
-        await pinSettings(settings, { tempChat: true });
+        await pinTempChatSettings(settings, { tempChat: true });
         const id = await sendFirstMessageFromHome(page, deleteGuard);
         await expect.poll(() => trackedUuid(page), { message: 'the new conversation is tracked before leaving (precondition)' }).toBe(id);
 
@@ -348,7 +172,7 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
     test('with the switch on, a history conversation opened and sent to right after loading is never marked and leaving it deletes nothing', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {
         const kept = deepseekReplay.requireConversation('withSearch').id;
         const other = conversationOtherThan(deepseekReplay, kept).id;
-        await pinSettings(settings, { tempChat: true });
+        await pinTempChatSettings(settings, { tempChat: true });
         // 替身回覆的訊息 id 會與既有對話的訊息樹衝突，使頁面停止回應（2026-11-12 實測）；歷史對話中的送出改為在瀏覽器內中止，請求本文照樣可讀。
         const blocked = await blockSendRequests(page);
 
@@ -356,7 +180,7 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
         await openConversation(page, kept);
         // The send must follow the load at once (that race is under test), so it is neither typed key by key nor paused.
         await runUnpaced(async () => {
-            await composer(page).fill(PROMPT);
+            await composer(page).fill(PROBE_PROMPT);
             await composer(page).press('Enter');
         });
         await expect.poll(() => blocked.requests().length, { message: 'the send went out as a completion request and was aborted (precondition)' }).toBeGreaterThan(0);
@@ -372,7 +196,7 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
     });
 
     test('refreshing a temporary conversation with F5 deletes nothing and keeps it tracked', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {
-        await pinSettings(settings, { tempChat: true });
+        await pinTempChatSettings(settings, { tempChat: true });
         const id = await sendFirstMessageFromHome(page, deleteGuard);
 
         // docs/FEATURES.md:113：按 F5 重新整理不觸發刪除；docs/FEATURES.md:108：追蹤在重新整理後仍有效。
@@ -384,11 +208,79 @@ test.describe('temporary conversation', { tag: '@offline' }, () => {
     });
 
     test('refreshing a temporary conversation with the browser refresh button deletes nothing and keeps it tracked', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {
-        await pinSettings(settings, { tempChat: true });
+        await pinTempChatSettings(settings, { tempChat: true });
         const id = await sendFirstMessageFromHome(page, deleteGuard);
 
         // docs/FEATURES.md:113：按瀏覽器的重新整理按鈕不觸發刪除；docs/FEATURES.md:108：追蹤在重新整理後仍有效。
         // page.reload() 與重新整理按鈕同為瀏覽器發起的重新載入：頁面收不到按鍵，也不觸發 Navigation API 的 navigate 事件（2026-11-12 實測）。
         await expectRefreshKeepsConversation(page, context, deleteGuard, deepseekReplay, id, () => page.reload());
+    });
+});
+
+/** 開啟分頁並等待新對話被追蹤與排入待刪佇列；回傳分頁與 uuid。 */
+async function openTrackedTemporaryTab(context, deleteGuard) {
+    const tab = await context.newPage();
+    const id = await sendFirstMessageFromHome(tab, deleteGuard);
+    await expect.poll(() => trackedUuid(tab), { message: 'the new conversation is tracked before the close (precondition)' }).toBe(id);
+    await expect.poll(() => queueEntry(context, id).then((entry) => entry?.chatUuid ?? null), { message: 'the new conversation is queued before the close (precondition)' }).toBe(id);
+    return { tab, id };
+}
+
+/** 使用者關閉分頁：瀏覽器執行 beforeunload 後關閉（頁面若跳出離開確認則接受）；回傳關閉完成的時間。 */
+async function closeTabLikeUser(tab) {
+    tab.on('dialog', (dialog) => dialog.accept());
+    const closed = tab.waitForEvent('close');
+    await tab.close({ runBeforeUnload: true });
+    await closed;
+    return Date.now();
+}
+
+// docs/FEATURES.md 的 Privacy Guarantee：瀏覽器仍開著時關閉分頁，對話約在 10 秒後刪除；在那之前不刪，以免把重新整理誤當成離開。
+// 每個案例另留著 fixture 的首頁分頁，代表瀏覽器仍開著；觀察窗在這個分頁上計時。
+test.describe('temporary conversation: closing the tab', { tag: '@offline' }, () => {
+    test('closing the tab of a temporary conversation deletes exactly that conversation about 10 seconds later and dequeues it', async ({ page, context, settings, deleteGuard }) => {
+        await pinTempChatSettings(settings, { tempChat: true });
+        const { tab, id } = await openTrackedTemporaryTab(context, deleteGuard);
+        expect(await hasOpenUuidKey(context, id), 'the conversation is in the local open set before the close (precondition)').toBe(true);
+
+        const closedAt = await closeTabLikeUser(tab);
+        await expect.poll(() => deleteGuard.ownedDeleteIds(), { message: 'one delete request for the closed conversation follows the close', timeout: 20_000 }).toEqual([id]);
+        const waitedMs = deleteGuard.ownedDeletes()[0].at - closedAt;
+        expect(waitedMs, 'the delete waits for the grace period after the close instead of firing at once').toBeGreaterThanOrEqual(8_000);
+        expect(waitedMs, 'the delete follows within about 10 seconds of the close').toBeLessThanOrEqual(15_000);
+        await expectNoFurtherDeletes(page, deleteGuard, 'no second delete request follows');
+
+        await expect.poll(() => queueEntry(context, id), { message: 'the deleted conversation is removed from dss-pending-deletes-sync' }).toBe(null);
+        await expect.poll(() => hasOpenUuidKey(context, id), { message: 'the deleted conversation is removed from the local open set' }).toBe(false);
+        expect(deleteGuard.refused(), 'no delete request for any conversation the test did not create').toEqual([]);
+    });
+
+    test('closing one tab of a temporary conversation that another tab still shows deletes nothing and keeps it queued', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {
+        await pinTempChatSettings(settings, { tempChat: true });
+        const { tab, id } = await openTrackedTemporaryTab(context, deleteGuard);
+        const second = await context.newPage();
+        try {
+            // docs/FEATURES.md 的 Cross-Device Protection（Tab guard）：還有分頁顯示這個對話時保留它。
+            await serveHistoryWithMessages(second, deepseekReplay, id);
+            await openConversation(second, id);
+            await closeTabLikeUser(tab);
+            await expectNoFurtherDeletes(page, deleteGuard, 'no delete request while another tab still shows the conversation', 12_000);
+            expect(await queueEntry(context, id).then((entry) => entry?.chatUuid ?? null), 'the conversation stays queued while another tab shows it').toBe(id);
+        } finally {
+            await second.close();
+        }
+    });
+
+    test('closing the tab of a history conversation deletes nothing', async ({ page, context, settings, deleteGuard, deepseekReplay }) => {
+        const kept = deepseekReplay.requireConversation('withSearch').id;
+        await pinTempChatSettings(settings, { tempChat: true });
+        const tab = await context.newPage();
+        await openConversation(tab, kept);
+
+        // docs/FEATURES.md：進入或離開非臨時的歷史對話不觸發刪除。
+        await closeTabLikeUser(tab);
+        await expectNoFurtherDeletes(page, deleteGuard, 'closing the history conversation tab sends no delete request', 12_000);
+        expect(deleteGuard.refused(), 'no delete request for the history conversation').toEqual([]);
+        expect(await queueEntry(context, kept), 'the history conversation is never queued for deletion').toBe(null);
     });
 });
