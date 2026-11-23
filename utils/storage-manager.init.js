@@ -34,21 +34,6 @@
                 return this.initialize();
             }
 
-            // 2. Detect Sync Conflict on first sync run
-            if (!syncInitialized) {
-                const syncRaw = await this._safeGet('sync', null);
-                const localRaw = await this._safeGet('local', null);
-                const conflictType = this._detectSyncConflict(syncRaw, localRaw);
-
-                if (conflictType === 'manual') {
-                    await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
-                } else if (conflictType === 'auto') {
-                    await this.resolveSyncConflict();
-                } else {
-                    await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
-                }
-            }
-
             // 2.5. Migration: legacy chatPresetMap → 分塊式佈局，交由 service worker 單一寫入者執行；僅在任一側仍有 legacy 金鑰時分派，失敗僅告警，不中斷初始化。
             const legacyKey = this.KEYS.CHAT_PRESET_MAP;
             const hasLegacy = (await this._safeGet('sync', [legacyKey]))[legacyKey] !== undefined
@@ -121,6 +106,21 @@
 
                 if (Object.keys(missingInSync).length > 0) {
                     await this._set(missingInSync);
+                }
+            }
+
+            // 4.5. 首次同步衝突偵測：須排在預設值補齊之後。補齊依據的 data 讀於本步驟之前，首次執行時兩旗標金鑰皆為 undefined，若先偵測，補齊會以預設值 false 覆寫本步驟剛寫入的 syncConflictPending / syncInitialized（以及 resolveSyncConflict() 寫入的排序 meta 等）。
+            if (!syncInitialized) {
+                const syncRaw = await this._safeGet('sync', null);
+                const localRaw = await this._safeGet('local', null);
+                const conflictType = this._detectSyncConflict(syncRaw, localRaw);
+
+                if (conflictType === 'manual') {
+                    await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
+                } else if (conflictType === 'auto') {
+                    await this.resolveSyncConflict();
+                } else {
+                    await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
                 }
             }
 
