@@ -1,4 +1,4 @@
-// 283 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
+// 285 lines: content-script entry and wiring layer — assembles ChatBinding, PresetOverlay, and PromptInjector instances with shared closure state and hosts the single body MutationObserver; splitting would require externalizing tightly coupled instance cross-references
 /**
  * DS studio v4.0.0 — Content Script（入口／接線層）
  * 職責：解析同層協作模組、建立 PresetOverlay / PromptInjector / ChatBinding 實例、
@@ -91,38 +91,40 @@ async function initSettings() {
     // 設定變更廣播的接收註冊（由 background/settings-routes.js 送達）：須早於任何設定讀取，初始化期間的廣播先暫存
     chrome.runtime.onMessage.addListener(handleSettingsChangedMessage);
 
-    // i18n 由本檔明確初始化（utils/i18n.js 載入期不做任何事）
-    await dsI18n.init();
-
-    // StorageManager 由 manifest.json 在本腳本之前注入
-    // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
-    const settings = await StorageManager.syncNow();
-    ChatBinding.applyInitialSettings(settings);
-
-    // 啟動 overlay preset 選單（受主開關控制顯示/隱藏）
-    // Must be started before handleChatChange so that updateActiveId() has a
-    // valid selectEl to write into when resolving bound-preset lookups.
-    // 初始選中值依網址中的對話解析（已綁定對話只看 chatPresetMap），不得沿用其他情境存下的全域 activePresetId
-    PresetOverlay.start(settings.promptPresets, ChatBinding.resolvePresetIdForPageUrl(settings), settings.isEnabled);
-
-    // 處理初始對話（可能自動選取已綁定的 preset）；失敗僅記錄，不得阻斷下方導覽偵測與監聽器接線
     try {
-        await ChatBinding.handleChatChange();
-    } catch (err) {
-        console.error('[DSS] content-script 初始對話綁定失敗:', err);
+        // i18n 由本檔明確初始化（utils/i18n.js 載入期不做任何事）
+        await dsI18n.init();
+
+        // StorageManager 由 manifest.json 在本腳本之前注入
+        // 統一同步進入點：先重試推送擱置項目，再拉取雲端收斂後的最新設定
+        const settings = await StorageManager.syncNow();
+        ChatBinding.applyInitialSettings(settings);
+
+        // 啟動 overlay preset 選單（受主開關控制顯示/隱藏）
+        // Must be started before handleChatChange so that updateActiveId() has a valid selectEl to write into when resolving bound-preset lookups.
+        // 初始選中值依網址中的對話解析（已綁定對話只看 chatPresetMap），不得沿用其他情境存下的全域 activePresetId
+        PresetOverlay.start(settings.promptPresets, ChatBinding.resolvePresetIdForPageUrl(settings), settings.isEnabled);
+
+        // 處理初始對話（可能自動選取已綁定的 preset）；失敗僅記錄，不得阻斷下方導覽偵測與監聽器接線
+        try {
+            await ChatBinding.handleChatChange();
+        } catch (err) {
+            console.error('[DSS] content-script 初始對話綁定失敗:', err);
+        }
+
+        // SPA 導航偵測：popstate 由狀態機自行掛載，DOM 變動由本檔的單一觀察器扇出。
+        // 扇出目標：導覽檢查 + 浮動選單重掛（各自持有自己的去抖動語意）。
+        const checkForNavigation = ChatBinding.setupNavigationDetection();
+        startBodyObserver(() => {
+            checkForNavigation();
+            // Stryker disable next-line OptionalChaining: 等價變異 — PresetOverlay 為 createPresetOverlay 回傳的物件，其字面值必定定義 scheduleFindAndMount，生產程式碼無任何重新指派或刪除；manifest 先載入 preset-overlay.controller.js，工廠缺席時本檔於載入期即拋錯、回呼不會存在，故 ?.() 與 () 行為一致
+            PresetOverlay.scheduleFindAndMount?.();
+        });
+    } finally {
+        // 初始化結束（成功或中途拋錯）皆開放即時處理，並依送達順序重播初始化期間暫存的廣播；置於 finally，因為初始化中途拋錯時仍須解除暫存並重播設定廣播，否則之後送達的廣播會永久暫存
+        isSettingsInitDone = true;
+        settingsMessagesDuringInit.splice(0).forEach(handleSettingsChangedMessage);
     }
-
-    // SPA 導航偵測：popstate 由狀態機自行掛載，DOM 變動由本檔的單一觀察器扇出。
-    // 扇出目標：導覽檢查 + 浮動選單重掛（各自持有自己的去抖動語意）。
-    const checkForNavigation = ChatBinding.setupNavigationDetection();
-    startBodyObserver(() => {
-        checkForNavigation();
-        PresetOverlay.scheduleFindAndMount?.();
-    });
-
-    // 初始狀態已套用完畢：開放即時處理，並依送達順序重播初始化期間暫存的廣播
-    isSettingsInitDone = true;
-    settingsMessagesDuringInit.splice(0).forEach(handleSettingsChangedMessage);
 }
 
 /**

@@ -3,6 +3,8 @@
  *
  * 需求：使用者在 popup 關閉總開關（只寫入 chrome.storage.local 的 isEnabled），背景以 DSS_SETTINGS_CHANGED 廣播；不論這筆寫入落在初始化的哪個時間點，初始化完成後 content script 的狀態都必須是關閉，覆蓋層也必須隱藏，不需重新載入頁面。
  *
+ * 需求（初始化中途失敗）：初始化開始後因信任邊界失敗而中止（chrome.storage 寫入回報 lastError、chrome.storage.onChanged.addListener 同步拋錯）時，之後送達的設定變更廣播仍必須生效，不得永久暫存。可觀察效果取自 docs/spec/01-prompt-system.md：全域提示詞的編輯即時套用到已開啟的頁面。
+ *
  * 每個測試自行載入 content-script.js：初始化只在載入時跑一次，靜態匯入會讓初始化在測試注入寫入之前就跑完。afterEach 讓前一個實例失效（移除訊息監聽、卸載覆蓋層），因為新載入會留下它們。
  *
  * 只模擬信任邊界：記憶體內 chrome.storage（真實 Chrome 的 onChanged 語意）、SW 的設定轉播（relaySettingsChanged）。所有 content 模組與 StorageManager 都是真的。
@@ -101,10 +103,11 @@ async function loadContentScript() {
     return cs;
 }
 
-describe('content-script: a master-switch-off broadcast during init takes effect once init completes', () => {
-    let restoreNotify;
-    let originalAddListener;
+let restoreNotify;
+let originalAddListener;
 
+/** 每個測試全新載入 content-script.js 所需的前置與清理；兩個 describe 共用。 */
+function useFreshContentScriptLoad() {
     beforeEach(async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -138,6 +141,10 @@ describe('content-script: a master-switch-off broadcast during init takes effect
         vi.restoreAllMocks();
         setPathname('/');
     });
+}
+
+describe('content-script: a master-switch-off broadcast during init takes effect once init completes', () => {
+    useFreshContentScriptLoad();
 
     async function expectMasterSwitchOffApplied() {
         const stored = await chrome.storage.local.get(IS_ENABLED);
@@ -177,5 +184,126 @@ describe('content-script: a master-switch-off broadcast during init takes effect
         await waitForInitSettled();
 
         await expectMasterSwitchOffApplied();
+    });
+});
+
+const GLOBAL_DEFAULT_PROMPT = StorageManager.KEYS.GLOBAL_DEFAULT_PROMPT;
+const EDITED_GLOBAL_PROMPT = 'GLOBAL-EDITED-AFTER-INIT';
+
+/** 編輯器視窗儲存全域提示詞時的寫入：寫入 chrome.storage.local，經 relaySettingsChanged 以 DSS_SETTINGS_CHANGED 送達。 */
+const editGlobalPrompt = () => chrome.storage.local.set({ [GLOBAL_DEFAULT_PROMPT]: EDITED_GLOBAL_PROMPT });
+
+/**
+ * 讓 chrome.storage.local.set 對含 `key` 的寫入失敗且不存入資料，如同真實 Chrome 的配額失敗：callback 形式只在該次 callback 執行期間設定 chrome.runtime.lastError，promise 形式直接 reject。
+ * 回傳 { hits, restore }；hits 記錄失敗次數，供前置條件確認注入的失敗確實發生。
+ */
+function failLocalWritesOf(key) {
+    const area = chrome.storage.local;
+    const original = area.set;
+    const failure = { hits: 0 };
+    area.set = function (items, callback) {
+        if (!(items && key in items)) return original.call(this, items, callback);
+        failure.hits++;
+        const message = 'QUOTA_BYTES quota exceeded';
+        if (!callback) return new Promise((_, reject) => setTimeout(() => reject(new Error(message)), 0));
+        setTimeout(() => {
+            chrome.runtime.lastError = { message };
+            try { callback(); } finally { delete chrome.runtime.lastError; }
+        }, 0);
+        return undefined;
+    };
+    failure.restore = () => { area.set = original; };
+    return failure;
+}
+
+/** 讓 chrome.storage.onChanged.addListener 註冊 `listener` 時同步拋錯；其他註冊照常。回傳 { hits, restore }。 */
+function throwOnStorageListenerRegistration(listener) {
+    const original = chrome.storage.onChanged.addListener;
+    const failure = { hits: 0 };
+    chrome.storage.onChanged.addListener = (fn) => {
+        if (fn === listener) {
+            failure.hits++;
+            throw new Error('chrome.storage.onChanged.addListener failed');
+        }
+        return original(fn);
+    };
+    failure.restore = () => { chrome.storage.onChanged.addListener = original; };
+    return failure;
+}
+
+/** 等到注入的失敗已發生、沒有進行中的 storage 讀取，且連續維持 150ms（初始化已中止並靜止）；超過 3 秒拋出 Setup 錯誤。 */
+async function waitForFailedInitSettled(failure) {
+    const deadline = Date.now() + 3000;
+    let quietSince = null;
+    while (Date.now() < deadline) {
+        const isQuiet = failure.hits > 0 && probe.inFlight === 0;
+        if (!isQuiet) quietSince = null;
+        else if (quietSince === null) quietSince = Date.now();
+        else if (Date.now() - quietSince >= 150) return;
+        await wait(5);
+    }
+    throw new Error(`Setup: the injected init failure did not settle within 3s (failure hits=${failure.hits}, reads in flight=${probe.inFlight}).`);
+}
+
+/** 輪詢至條件成立或逾時；不拋錯，由呼叫端的斷言判定結果。 */
+async function pollUntil(condition, timeoutMs = 1000) {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition() && Date.now() < deadline) await wait(5);
+}
+
+describe('content-script: a settings broadcast after init failed partway takes effect', () => {
+    useFreshContentScriptLoad();
+    let failure;
+
+    beforeEach(() => {
+        // 真實頁面每次載入都是全新的 dsI18n；重設後初始化才會像新頁面一樣註冊它的 storage 監聽。
+        globalThis.dsI18n._reset();
+        failure = null;
+    });
+
+    afterEach(() => {
+        failure?.restore();
+        globalThis.dsI18n._reset();
+    });
+
+    async function expectGlobalPromptEditApplied() {
+        expect(cs.state.globalDefaultPrompt, 'precondition: the page does not hold the edited global prompt before the edit').not.toBe(EDITED_GLOBAL_PROMPT);
+        await editGlobalPrompt();
+        const stored = await chrome.storage.local.get(GLOBAL_DEFAULT_PROMPT);
+        expect(stored[GLOBAL_DEFAULT_PROMPT], 'precondition: the global prompt edit is committed to chrome.storage.local').toBe(EDITED_GLOBAL_PROMPT);
+        await pollUntil(() => cs.state.globalDefaultPrompt === EDITED_GLOBAL_PROMPT);
+        expect(cs.state.globalDefaultPrompt, 'a global prompt edit broadcast after init settled replaces the page global prompt instead of being buffered forever').toBe(EDITED_GLOBAL_PROMPT);
+    }
+
+    it('init aborted by a rejected storage write (chrome.storage.local.set reports lastError): a later global prompt edit is applied', async () => {
+        // 雲端的 preset-A 較新：初始化讀取設定時會把它回寫本機，而這筆本機寫入失敗。
+        await chrome.storage.sync.set({ [`dsPreset_${A.id}`]: { ...A, content: 'PREFIX-A-REMOTE', updatedAt: 2 } });
+        failure = failLocalWritesOf(`dsPreset_${A.id}`);
+        probe = instrumentReads();
+        await loadContentScript();
+        await waitForFailedInitSettled(failure);
+
+        expect(failure.hits, 'precondition: init attempted the failing local write').toBeGreaterThan(0);
+        expect(cs.PresetOverlay.wrapperEl, 'precondition: the failure aborted init before it started the overlay').toBeFalsy();
+        await expectGlobalPromptEditApplied();
+    });
+
+    it('init aborted by a synchronous throw (chrome.storage.onChanged.addListener throws): a later global prompt edit is applied', async () => {
+        failure = throwOnStorageListenerRegistration(globalThis.dsI18n._handleStorageChanged);
+        probe = instrumentReads();
+        await loadContentScript();
+        await waitForFailedInitSettled(failure);
+
+        expect(failure.hits, 'precondition: init attempted the throwing listener registration').toBeGreaterThan(0);
+        expect(cs.PresetOverlay.wrapperEl, 'precondition: the throw aborted init before it started the overlay').toBeFalsy();
+        await expectGlobalPromptEditApplied();
+    });
+
+    it('control: with init succeeding, a later global prompt edit is applied', async () => {
+        probe = instrumentReads();
+        await loadContentScript();
+        await waitForInitSettled();
+
+        await expectGlobalPromptEditApplied();
     });
 });
