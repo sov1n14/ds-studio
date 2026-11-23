@@ -1,6 +1,6 @@
 # Live Smoke Checklist
 
-The checklist is a manual check of DS studio against the live DeepSeek site, run by hand in your own browser before each release, and it takes about 5 minutes. Only you run it: no automation drives the live site, as [Testing Policy](../CLAUDE.md#testing-policy) states. The release flow asks for it in step 3 of [Release HAR Freshness Check](../.claude/skills/version-bump/SKILL.md#release-har-freshness-check). Each step is one action followed by the result you must see or, for an action that produces no check, what appears next. The last column links to the section of the [Feature Guide](FEATURES.md) that describes the behavior.
+The checklist is a manual check of DS studio against the live DeepSeek site, run by hand in your own browser before each release, and it takes about 5 minutes. Only you run it: no automation drives the live site, as [Testing Policy](../CLAUDE.md#testing-policy) states. The release flow asks for it in step 4 of [Release HAR Freshness Check](../.claude/skills/version-bump/SKILL.md#release-har-freshness-check). Each step is one action followed by the result you must see or, for an action that produces no check, what appears next. The last column links to the section of the [Feature Guide](FEATURES.md) that describes the behavior.
 
 ## Before You Start
 

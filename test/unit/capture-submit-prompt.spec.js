@@ -1,5 +1,5 @@
 /**
- * tools/scenario-helpers.mjs submitPrompt — the capture sweep types a prompt the way the E2E suite does (decision: pacing wired into tools/capture.mjs).
+ * tools/scenario-helpers.mjs submitPrompt — the tools scripts type a prompt the way the E2E suite does.
  *
  * Requirement (user ruling, 「送出文字改成逐字輸入（原本是一次 fill）」; expected values come from that text and from DSS_E2E_PACE, not from the implementation):
  *   - Pacing on: the prompt reaches the composer as separate key presses in order, a line break as Shift+Enter, and Enter presses once, after the whole text is in.

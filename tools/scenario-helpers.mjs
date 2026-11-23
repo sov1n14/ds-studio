@@ -1,6 +1,5 @@
 /**
- * Reusable helpers for scenario definitions.
- * Extracted to keep scenarios.mjs under 250 lines.
+ * Helpers that drive the DeepSeek page from the tools scripts.
  */
 
 import { createRequire } from 'node:module';

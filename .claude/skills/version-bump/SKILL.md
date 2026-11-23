@@ -76,7 +76,8 @@ Before each release, the offline E2E recordings and the live site get one check 
 
 1. Find the main recording under `tools/recordings/` and its date: the file named exactly `deepseek-YYYY-MM-DD.har` with the latest date in the name, a same-date tie going to the latest modification time. A file named `deepseek-YYYY-MM-DD-<purpose>.har` is a purpose recording and never counts as the main recording; with no main recording the offline lane fails with the missing-HAR error.
 2. If the main recording is older than 14 days, or none exists, ask the user to re-record before the release: export a sanitized HAR of `chat.deepseek.com` from Chrome DevTools in their normal browser, with the extension disabled, and save it under `tools/recordings/` as `deepseek-YYYY-MM-DD.har` with the recording date.
-3. Ask the user to run the [live smoke checklist](../../../docs/LIVE_SMOKE_CHECKLIST.md) (about 5 minutes) by hand in their own browser, then wait for their result before the release.
+3. Run `cd test && npx playwright test -c playwright.offline.config.js e2e/selector-health.e2e.js` on the new HAR; on a failure, the failing message names each selector that matches nothing, so fix those selectors in `content/ds-selectors.js` before the release.
+4. Ask the user to run the [live smoke checklist](../../../docs/LIVE_SMOKE_CHECKLIST.md) (about 5 minutes) by hand in their own browser, then wait for their result before the release.
 
 ## Verification Checklist
 

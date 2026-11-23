@@ -1,5 +1,5 @@
 /**
- * Human-like pacing for the capture sweep (tools/capture.mjs, tools/scenario-helpers.mjs), the same rhythm as the E2E suite.
+ * Human-like pacing for the tools scripts (tools/poc-login.mjs, tools/scenario-helpers.mjs), the same rhythm as the E2E suite.
  * Reuses the pacing logic of test/helpers/pacing.js: a random pause before every Page and Locator action, and key-by-key typing.
  * DSS_E2E_PACE: unset → full pacing; "off" → no pacing; a positive number scales every wait (for example 0.5).
  */
