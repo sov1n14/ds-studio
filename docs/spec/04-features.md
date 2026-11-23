@@ -42,7 +42,7 @@
   - AI responses under a `## DeepSeek` heading.
 - **Thinking Process Handling**: If present, the AI's thinking process is rendered as a blockquote (`> `) under a `> **Thinking Process:**` heading. Internal links within the thinking process are always preserved. The thinking process is exported whether or not the on-screen thinking blocks are collapsed (see [Export Architecture](../architecture/EXPORT.md)).
 - **Reference Link Handling**: Citation links (e.g., `[link-1]`) are extracted from `.ds-markdown-cite` elements; when enabled, they are rendered in `[[link-N]](url)` format.
-- **HTML-to-Markdown Conversion**: The exporter must correctly convert headings, tables, blockquotes, ordered/unordered lists, code blocks (DeepSeek `<div class="md-code-block">` blocks keep their banner language and every code line once, as [EXPORT.md](../architecture/EXPORT.md) describes), inline formatting, and links.
+- **HTML-to-Markdown Conversion**: The exporter must correctly convert headings, tables, blockquotes, ordered/unordered lists, code blocks (`<div class="md-code-block">` blocks keep their language, from the DeepSeek banner or a restored reply's header, and every code line once, as [EXPORT.md](../architecture/EXPORT.md) describes), inline formatting, and links.
 - **File Name**: `deepseek-chat-YYYYMMDD-HHmmss.md` (timestamp at the moment of export).
 
 ## 16. Quote Reply

@@ -198,6 +198,27 @@ describe('export markdown: DeepSeek md-code-block', () => {
         expect(blocks, 'one fenced block with an empty info string and the restored code, line breaks and indentation kept').toEqual([{ info: '', body: PY_CODE }]);
     });
 
+    it('exports a restored-reply code block with a language as a fence whose info string is the language shown in its header', () => {
+        const html = restoredReplyHtml(['Intro.', '', '```python', PY_CODE, '```'].join('\n'));
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        expect(doc.querySelector('.md-code-block-banner'), 'fixture self-check: a restored block has no banner').toBeNull();
+        expect(doc.querySelector('.md-code-block-header .md-code-lang')?.textContent, 'fixture self-check: the restored block shows its language in its header').toBe('python');
+
+        const { blocks, isUnclosed } = splitFences(toMarkdown(html));
+
+        expect(isUnclosed, 'every opened fence is closed').toBe(false);
+        expect(blocks, 'one fenced block whose info string is the restored language and whose body is the code exactly').toEqual([{ info: 'python', body: PY_CODE }]);
+    });
+
+    // 防護測試：復原區塊的語言為 text 時，與 banner 標籤 text 相同，匯出空的 info string（docs/architecture/EXPORT.md 的 text 佔位規則）；現行程式碼已通過，防止讀取復原區塊語言時把 text 原樣寫進圍欄。
+    it('guard: exports a restored-reply code block whose language is text as a fence with an empty info string', () => {
+        const html = restoredReplyHtml(['```text', PLAIN_CODE, '```'].join('\n'));
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        expect(doc.querySelector('.md-code-block-header .md-code-lang')?.textContent, 'fixture self-check: the restored block shows text in its header').toBe('text');
+
+        expect(splitFences(toMarkdown(html)).blocks, 'one fenced block with an empty info string and the code exactly').toEqual([{ info: '', body: PLAIN_CODE }]);
+    });
+
     // 以下三則測試涵蓋 docs/architecture/EXPORT.md 記載的 banner 標籤規則（按鈕外第一個文字非空的 span，去除前後空白），作為 DeepSeek 版面變動時的防禦行為；夾具由實際 banner 夾具最小改動而來，並非在 DeepSeek 上觀察到的結構。
     it('exports a banner without a language label as an empty info string, without the button labels', () => {
         const markdown = toMarkdown(replyHtml([codeBlockHtml('', PY_LINES, '')]));

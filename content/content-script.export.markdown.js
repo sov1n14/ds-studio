@@ -71,6 +71,9 @@
     // 程式碼區塊 banner（語言標籤與複製、下載按鈕的容器），由既有常數組合，不依賴雜湊 class
     var CODE_BLOCK_BANNER_SELECTOR = '.' + selectors.CODE_BLOCK_CLASS + '-banner';
 
+    // 擴充功能復原回覆渲染的程式碼區塊沒有 banner，語言標籤位於此 header 內（擴充功能自身注入的標記，選擇器留在本檔）
+    var RESTORED_CODE_LANGUAGE_SELECTOR = '.md-code-block-header .md-code-lang';
+
     // 沒有指定語言的程式碼區塊，banner 顯示的佔位標籤
     var PLAIN_TEXT_LANGUAGE_LABEL = 'text';
 
@@ -114,7 +117,13 @@
         return n.tagName === 'DIV' && n.classList && Array.from(n.classList).some(function (c) { return c.includes(selectors.CODE_BLOCK_CLASS); });
     }
 
-    /** 讀取程式碼區塊 banner 的語言標籤：略過按鈕內的文字，佔位標籤 text 視為無語言。 */
+    /** 將語言標籤轉為圍欄 info string：去除前後空白，佔位標籤 text 視為無語言。 */
+    function _toFenceLanguage(label) {
+        var trimmed = label.trim();
+        return trimmed === PLAIN_TEXT_LANGUAGE_LABEL ? '' : trimmed;
+    }
+
+    /** 讀取程式碼區塊 banner 的語言標籤：略過按鈕內的文字。 */
     function _readBannerLanguage(codeBlock) {
         var banner = codeBlock.querySelector(CODE_BLOCK_BANNER_SELECTOR);
         // Guard: 沒有 banner 的區塊沒有語言標籤
@@ -123,8 +132,20 @@
         var labelSpan = Array.from(banner.querySelectorAll('span')).find(function (s) {
             return !s.closest(selectors.ROLE_BUTTON_DIV_SELECTOR) && s.textContent.trim() !== '';
         });
-        var label = labelSpan ? labelSpan.textContent.trim() : '';
-        return label === PLAIN_TEXT_LANGUAGE_LABEL ? '' : label;
+        return labelSpan ? _toFenceLanguage(labelSpan.textContent) : '';
+    }
+
+    /** 讀取復原回覆程式碼區塊 header 的語言標籤。 */
+    function _readRestoredHeaderLanguage(codeBlock) {
+        var langSpan = codeBlock.querySelector(RESTORED_CODE_LANGUAGE_SELECTOR);
+        // Guard: 沒有 header 的區塊沒有語言標籤
+        if (!langSpan) return '';
+        return _toFenceLanguage(langSpan.textContent);
+    }
+
+    /** 程式碼區塊的語言：優先取 banner 標籤，沒有時改取復原回覆的 header 標籤。 */
+    function _readCodeBlockLanguage(codeBlock) {
+        return _readBannerLanguage(codeBlock) || _readRestoredHeaderLanguage(codeBlock);
     }
 
     /** <p> / <div>：一般區塊；DeepSeek 程式碼區塊容器輸出圍欄式程式碼，banner 與裝飾圖示不輸出。 */
@@ -132,7 +153,7 @@
         if (_isCodeBlockContainer(n)) {
             var pre = n.querySelector('pre');
             // pre 的 textContent 即逐行原始碼（行間換行為 pre 下的裸文字節點）
-            if (pre) return _formatFencedCode(_readBannerLanguage(n), pre.textContent);
+            if (pre) return _formatFencedCode(_readCodeBlockLanguage(n), pre.textContent);
         }
         var inner = ctx.parseChildren(n, n.tagName).trim();
         return inner ? '\n' + inner + '\n' : '';
