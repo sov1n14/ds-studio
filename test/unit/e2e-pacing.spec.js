@@ -1,5 +1,5 @@
 /**
- * test/helpers/pacing.js — human-like pacing for the E2E suite (decision D-105, ruled 2026-11-12).
+ * test/helpers/pacing.js — E2E 測試組的擬人節奏。
  *
  * Requirement (user ruling plus lead design; every expected value below comes from that text, not from the implementation):
  *   - DSS_E2E_PACE: unset or blank → pacing on at scale 1; "off" in any letter case → pacing off; a positive number → that scale; anything else → an error naming the variable and the allowed values.

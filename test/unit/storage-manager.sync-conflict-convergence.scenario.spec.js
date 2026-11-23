@@ -209,7 +209,7 @@ describe('tombstone guard on the convergence write', () => {
 /**
  * Scenario: resolveSyncConflict() called directly (popup merge button) while the sync read fails.
  *
- * Requirement (lead ruling on the D-156/D-157 regression): when resolveSyncConflict() runs and the sync read fails, it must not overwrite cloud data from the partial (local-only) view — neither by a sync write during the call nor by keys parked in dsLocalAuth for a later retry — and once reads work again a normal resolution converges with the cloud-only group in local.
+ * 需求：resolveSyncConflict() 執行時若同步讀取失敗，不得以不完整（只有本機）的資料覆寫雲端資料：呼叫期間不寫入 sync，也不把鍵暫存進 dsLocalAuth 留待之後重試；讀取恢復後，一次正常的衝突解決會收斂，本機也取得只存在雲端的群組。
  *
  * Fixture: S1 (sync index ['p1','p2'] with both bodies and a newer order meta; local holds only p1). The sync read fails only during the resolveSyncConflict() call, then works again.
  */
@@ -316,7 +316,7 @@ describe('resolveSyncConflict() while the sync read throws synchronously', () =>
 /**
  * Scenario: the merge that retrySync() (inside syncNow()) or a first-run initialize() starts hits a failing sync read after their own conflict check succeeded.
  *
- * Requirement (lead ruling 2 on D-156/D-157): resolveSyncConflict() rejects on a failed sync read, and its callers must contain that rejection: syncNow() and initialize() resolve, nothing from the partial (local-only) view reaches sync or is parked in dsLocalAuth, and the conflict stays pending, so a later syncNow() with reads working converges with p2 in both areas.
+ * 需求：同步讀取失敗時 resolveSyncConflict() 以 reject 結束，呼叫端必須攔住這個 reject：syncNow() 與 initialize() 正常 resolve，不完整（只有本機）的資料既不寫入 sync，也不暫存進 dsLocalAuth，衝突維持待處理；之後讀取恢復時再呼叫 syncNow()，兩個儲存區都收斂到含有 p2。
  *
  * Fixture: S1 (an auto-resolvable divergence). The conflict check and the merge each read the whole sync area (chrome.storage.sync.get(null)), so the double lets the 1st full-area read through (the caller's conflict check) and fails the 2nd (the merge's read) the way Chrome reports a read failure; every other sync read works. The stub records whether its failing call was hit.
  */

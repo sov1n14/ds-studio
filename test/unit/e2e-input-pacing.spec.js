@@ -1,5 +1,5 @@
 /**
- * test/helpers/pacing.js — pacing of the Keyboard, Mouse and Touchscreen primitives of a Page (decision D-105 extension, user ruling: "keyboard／mouse 動作前加隨機停頓；量時序的 runUnpaced 例外維持不動").
+ * test/helpers/pacing.js — 把擬人節奏延伸到 Page 的 Keyboard、Mouse 與 Touchscreen 基本動作（使用者裁定：「keyboard／mouse 動作前加隨機停頓；量時序的 runUnpaced 例外維持不動」）。
  *
  * Requirement (every expected value below comes from that text, not from the implementation):
  *   - A pause of 0.3–1.5 s comes before each call of keyboard press/type/down/up/insertText, mouse click/dblclick/down/up/move/wheel and touchscreen tap.

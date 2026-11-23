@@ -91,7 +91,7 @@ async function loadConversationAs(page, cdp, device, openRecorded) {
     await expect.poll(() => panelShown(page), { message: 'the sidebar panel starts hidden in the phone layout (precondition)' }).toBe(false);
 }
 
-/** 從 `start` 以 `durationMs` 滑動 (`dx`, `dy`) 後放開手指，全程是真的觸控事件；手指落下前先停頓一次（D-105），同一次滑動的觸控事件之間不停頓。 */
+/** 從 `start` 以 `durationMs` 滑動 (`dx`, `dy`) 後放開手指，全程是真的觸控事件；手指落下前先擬人停頓一次，同一次滑動的觸控事件之間不停頓。 */
 async function swipe(cdp, start, { dx, dy = 0, durationMs = FAST_MS }) {
     await humanPause();
     const at = (fraction) => ({ x: start.x + dx * fraction, y: start.y + dy * fraction });

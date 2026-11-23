@@ -2,7 +2,7 @@
  * DS studio — Popup Editor Window 模組
  * 封裝全域/提示詞組編輯器視窗的開啟（singleton per target）與追蹤邏輯，
  * 並綁定「編輯提示詞組」「編輯全域提示詞」兩顆按鈕的點擊事件。
- * 視窗單例狀態由 utils/window-control.js 保存於 chrome.storage.session（決策 D5），
+ * 視窗單例狀態由 utils/window-control.js 保存於 chrome.storage.session，
  * popup 關閉後再次點擊仍會聚焦既有視窗，切換提示詞組時則導向該組的 URL。
  * 使用 factory 模式接收 ctx 上下文物件，以保持與 popup.js 的共享狀態同步。
  * 此檔案以 classic script 載入，無 ES import/export。

@@ -137,7 +137,7 @@ test.describe('prompt group editor window lifecycle', { tag: '@offline' }, () =>
             await expect(editor.locator('#editorNameInput'), 'the editor shows the picked group name (precondition)').toHaveValue(group.name);
 
             // 名稱最後輸入且不讓輸入框失焦，觸發 focus 時它仍在 500 ms 防抖內、尚未存檔。
-            // Both entries are pasted with no pause between them (D-105 exemption): a pause would let the content save on its own once its debounce ends.
+            // 兩個欄位以貼上方式連續填入，中間不停頓（擬人停頓的例外）：一旦停頓，防抖結束後內容會自行存檔。
             await runUnpaced(async () => {
                 await editor.locator('#editorTextarea').fill(content);
                 await editor.locator('#editorNameInput').fill(renamed);
@@ -174,7 +174,7 @@ test.describe('prompt group editor window lifecycle', { tag: '@offline' }, () =>
             await expect(nameInput, 'the editor shows the picked group name (precondition)').toHaveValue(edited.name);
             const [editorWindow] = await listEditorWindows(context);
 
-            // Pasted in one step, not typed (D-105 exemption): typed key by key, a partial name would auto-save during a pause and replace the original name this test asserts unchanged.
+            // 一次貼上而非逐字輸入（擬人停頓的例外）：逐字輸入時，未打完的名稱會在停頓中自動存檔，取代本測試斷言不變的原名稱。
             await nameInput.fill(other.name);
             await focusDeepSeekPage(home);
             await expectPageStaysOpenWithin(editor, STAYS_OPEN_MS, 'a duplicate name keeps the editor window open after the DeepSeek tab gets focus');

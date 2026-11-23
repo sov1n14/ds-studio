@@ -2,7 +2,7 @@
  * DS studio — 視窗控制共用工具（utils/window-control.js）
  *
  * 單一職責：以 chrome.storage.session 保存視窗 ID，維持「同一 storageKey 只有一個視窗」
- * 的真正單例（決策 D5）。視窗 ID 存在 popup 閉包之外，popup 關閉後再次點擊仍能聚焦既有視窗；
+ * 的真正單例。視窗 ID 存在 popup 閉包之外，popup 關閉後再次點擊仍能聚焦既有視窗；
  * 目標 URL 不同時直接導向新 URL，避免顯示前一組內容；編輯視窗導向前先請它存檔（最多約 1 秒），名稱重複時取消導向。
  * 相依：utils/message-constants.js 與 utils/editor-flush-channel.js（存檔請求的共用請求端）需先載入。
  * 無載入期副作用：載入僅完成全域指派。

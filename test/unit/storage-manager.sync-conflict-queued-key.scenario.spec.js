@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 
 /**
- * Sync conflict resolution versus the dsLocalAuth retry queue (ISSUES I-43, DECISIONS D-157). Real StorageManager modules share the in-memory chrome.storage double from test/setup/vitest.setup.js; only chrome.storage is stubbed, and only to fail a sync write.
+ * 同步衝突解決與 dsLocalAuth 重試佇列的互動：衝突解決不得覆蓋佇列中尚待重試的本機編輯。真實的 StorageManager 模組共用 test/setup/vitest.setup.js 的記憶體版 chrome.storage 替身；只替換 chrome.storage，且只用來讓 sync 寫入失敗。
  *
  * docs/architecture/STORAGE.md: dsLocalAuth is the write-failure retry queue of keys whose sync write failed and fell back to local, and retrySync() pushes such a plain setting unconditionally, because the parked local value is the newer edit of the user. The lead ruled that resolveSyncConflict() keeps the local value of a queued key for every caller (first-run initialize(), syncNow() on an installed profile, the popup "Merge Sync" call), and that an unqueued owned setting still takes the cloud value.
  *

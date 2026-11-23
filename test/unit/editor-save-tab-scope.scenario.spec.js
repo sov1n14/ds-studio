@@ -1,7 +1,7 @@
 /**
  * 情境：在編輯器視窗儲存提示組內容，只更新內容，不改變任何 DeepSeek 分頁選用的群組。
  *
- * 需求（使用者裁定 I-25「拿掉編輯器的廣播」）：編輯器儲存群組 P 之後，開著新對話、自行選了群組 B 的分頁，仍須顯示 B 並在下一則訊息注入 B 的內容；已顯示 P 的分頁則經由儲存變更轉送（chrome.storage.onChanged → DSS_SETTINGS_CHANGED）在下一則訊息注入 P 編輯後的內容。
+ * 需求（使用者裁定「拿掉編輯器的廣播」）：編輯器儲存群組 P 之後，開著新對話、自行選了群組 B 的分頁，仍須顯示 B 並在下一則訊息注入 B 的內容；已顯示 P 的分頁則經由儲存變更轉送（chrome.storage.onChanged → DSS_SETTINGS_CHANGED）在下一則訊息注入 P 編輯後的內容。
  *
  * 跨模組可變狀態：編輯器端（popup/editor/editor.storage.js 的 saveContent）寫入儲存；另一個分頁的 content-script.js 據此決定其新對話顯示與注入的群組。編輯器端的腳本組成取自 popup/editor/editor.html 本身：test/setup/vitest.setup.js 前置載入與 test/helpers/editor-window-harness.js 已提供的腳本之外，editor.html 宣告的其餘 <script src> 皆在 saveContent 執行前依宣告順序載入（harness 的 importNewEditorScripts），因此 editor.html 載入哪些 utils/ 包裝（例如分頁訊息工具），編輯器端就有哪些全域；本檔不自行列舉、也不排除任何腳本。頁面進入點 editor.js 不載入，由本檔直接呼叫 saveContent 代替。
  *

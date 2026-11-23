@@ -1,7 +1,7 @@
 /**
- * utils/debounce.js — the single shared trailing-edge debounce (backlog B5 / D3).
+ * utils/debounce.js — 全專案共用的唯一 trailing-edge 防抖。
  *
- * Requirement (from the D3 decision + the shared semantics of the three popup
+ * Requirement (from the shared semantics of the three popup
  * copies being merged — popup/popup.width-sliders.js, popup/editor/editor.js,
  * popup/custom-select.js — not from any implementation; no production file
  * exists yet):

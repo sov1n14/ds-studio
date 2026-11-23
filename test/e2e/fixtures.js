@@ -42,7 +42,7 @@ export const test = base.extend({
     // Observed: with an instant history answer the overlay of the extension shows before the binding of the opened conversation is resolved; an instant create answer arrives before the page-world hook of the extension is installed.
     replayLatency: [{ history: 0, create: 0 }, { option: true }],
 
-    // Human-like pause before each test (D-105; the first test of the worker starts at once). Auto with no dependencies, so it runs before `settings` and `page`; its own timeout is off, and the pause extends the test budget.
+    // 每個測試開始前先擬人停頓（worker 的第一個測試立即開始）。此 fixture 為 auto 且無相依，因此在 `settings` 與 `page` 之前執行；它本身不設逾時，停頓時間會加進測試的時間預算。
     humanPacing: [async ({}, use) => {
         await pauseBetweenTests();
         await use();
@@ -124,7 +124,7 @@ export const test = base.extend({
             if (runningVersion !== diskVersion) {
                 throw new Error(`Extension version mismatch: service worker reports ${runningVersion}, manifest.json on disk is ${diskVersion}. Reload the unpacked extension from this repo in .browser-profile, then rerun.`);
             }
-            // Every Page and Locator action of this worker now pauses like a person first (D-105).
+            // 此 worker 的每個 Page 與 Locator 動作執行前都先擬人停頓。
             await installHumanPacing(context);
         } catch (error) {
             await context.close();

@@ -1,4 +1,4 @@
-// Playwright wiring of the human-like pacing in test/helpers/pacing.js (D-105): one pacer per worker, a pause before every Page, Locator, Keyboard, Mouse and Touchscreen action, and character-by-character typing.
+// 將 test/helpers/pacing.js 的擬人節奏接上 Playwright：每個 worker 一個 pacer，每個 Page、Locator、Keyboard、Mouse 與 Touchscreen 動作前停頓一次，文字逐字輸入。
 // DSS_E2E_PACE: unset → full pacing (the two full-suite runs); "off" → no pacing, for debugging one spec locally; a positive number scales every wait (for example 0.5).
 
 import { test } from '@playwright/test';

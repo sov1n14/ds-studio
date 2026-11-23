@@ -134,7 +134,7 @@ test.describe('prompt group editor window', { tag: '@offline' }, () => {
         await expect(editor.locator('#editorNameInput'), 'the editor shows the added group name (precondition)').toHaveValue(addedName);
         await humanType(editor.locator('#editorTextarea'), 'E2E-ESC-CONTENT-' + stamp);
         await humanType(editor.locator('#editorNameInput'), renamed);
-        // Esc must follow the last key at once (D-105 exemption): a pause longer than the 500 ms auto-save debounce would let the name save by itself and the Esc save path would go untested.
+        // 最後一個按鍵後必須立刻按 Esc（擬人停頓的例外）：停頓若超過 500 ms 的自動存檔防抖，名稱會自行存檔，Esc 的存檔路徑就測不到。
         await runUnpaced(() => closeEditorWithEscape(editor));
 
         await openPopupGroupList(popup);

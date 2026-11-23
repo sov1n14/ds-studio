@@ -1,4 +1,4 @@
-// Human-like pacing for the E2E suite (D-105): random waits between tests, between actions and between typed keys, all scaled by DSS_E2E_PACE.
+// E2E 測試組的擬人節奏：測試之間、動作之間與輸入的按鍵之間隨機等待，等待時間皆依 DSS_E2E_PACE 縮放。
 // Pure logic with every effect injected (rng, delay, budget extension), so test/unit/e2e-pacing.spec.js drives it without a browser; test/e2e/helpers/human.js wires it to Playwright.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
