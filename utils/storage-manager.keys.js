@@ -28,6 +28,33 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
     };
 }
 
+// === 選用權限種類與查詢表 ===
+
+/** 選用權限種類：PERMISSION_INTENT_PERMISSIONS 的值與 buildHasPermissionOfKind() 的鍵。 */
+const PERMISSION_KINDS = Object.freeze({
+    CLIPBOARD: 'clipboard',
+    NOTIFICATION: 'notification',
+});
+
+/** 查詢權限包裝是否回報已取得權限；包裝缺失視為未取得，僅回答嚴格等於 true 時算已取得。 */
+async function _hasWrapperPermission(permissionModule, hasMethodName) {
+    if (!permissionModule) return false;
+    return (await permissionModule[hasMethodName]()) === true;
+}
+
+/**
+ * 建立權限種類 → 權限查詢函式的對照表，popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程共用此表。
+ * 每次呼叫查詢函式都重新詢問包裝，建表後才取得的權限也能被下一次查詢看見。
+ * @param {{ clipboardPermission?: Object, notificationPermission?: Object }} permissionModules - utils/clipboard-permission.js 與 utils/notification-permission.js 的包裝；缺失者該種類一律回報 false
+ * @returns {Object<string, () => Promise<boolean>>}
+ */
+function buildHasPermissionOfKind({ clipboardPermission, notificationPermission } = {}) {
+    return {
+        [PERMISSION_KINDS.CLIPBOARD]: () => _hasWrapperPermission(clipboardPermission, 'hasClipboardPermission'),
+        [PERMISSION_KINDS.NOTIFICATION]: () => _hasWrapperPermission(notificationPermission, 'hasNotificationPermission'),
+    };
+}
+
     const bundle = {
     /**
      * Keys used in the extension
@@ -145,15 +172,19 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         REPLY_NOTIFICATION: 'replyNotification',
     },
 
+    PERMISSION_KINDS,
+
     /**
-     * 每個待完成意圖需要的選用權限包裝：'clipboard' 對應 utils/clipboard-permission.js，'notification' 對應 utils/notification-permission.js。
-     * popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程皆以此表決定查詢哪個包裝，意圖與權限的對應僅此一處定義。
+     * 每個待完成意圖需要的選用權限種類：CLIPBOARD 對應 utils/clipboard-permission.js，NOTIFICATION 對應 utils/notification-permission.js。
+     * popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程皆以此表從 buildHasPermissionOfKind() 的表中取出查詢函式，意圖與權限的對應僅此一處定義。
      */
     PERMISSION_INTENT_PERMISSIONS: {
-        autoCopyReply: 'clipboard',
-        autoCopyCode: 'clipboard',
-        replyNotification: 'notification',
+        autoCopyReply: PERMISSION_KINDS.CLIPBOARD,
+        autoCopyCode: PERMISSION_KINDS.CLIPBOARD,
+        replyNotification: PERMISSION_KINDS.NOTIFICATION,
     },
+
+    buildHasPermissionOfKind,
 
     /**
      * 已還原訊息「清除全部」的世代值，存於 chrome.storage.local，每次 clearRestoredMessages() 遞增。分頁存檔以此判斷讀取記錄之後是否有其他情境清除過，避免把清除前的記錄寫回。

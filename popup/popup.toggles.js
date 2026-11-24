@@ -1,4 +1,4 @@
-// 275 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
+// 270 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
 /**
  * DS studio — Popup Feature Toggles 模組
  * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、自動複製回覆與程式碼區塊、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
@@ -46,18 +46,13 @@ function createToggleManager(ctx) {
     const ensureNotificationPermission = (intentName) => ensurePermission(notificationPermission, 'hasNotificationPermission', 'requestNotificationPermission', intentName);
     const ensureClipboardPermission = (intentName) => ensurePermission(clipboardPermission, 'hasClipboardPermission', 'requestClipboardPermission', intentName);
 
-    /** 查詢權限包裝模組是否回報已取得權限；包裝模組缺失視為未取得。 */
-    const hasModulePermission = async (permissionModule, hasMethodName) => !!permissionModule && (await permissionModule[hasMethodName]()) === true;
-
     /**
      * 清除遭拒的待完成意圖：Chrome 顯示提示時已關閉 popup，按下拒絕不會執行 popup 程式碼，故於下次開啟時清除權限仍未取得的意圖；權限已取得者留給 background/permission-intent-routes.js 完成。
      * 移除前同步檢查本次開啟後記下的意圖並跳過；storage 操作依發出順序套用，故不會刪掉使用者在清理期間建立的意圖。
      */
     async function clearRefusedPermissionIntents() {
-        const hasPermissionOfKind = {
-            clipboard: () => hasModulePermission(clipboardPermission, 'hasClipboardPermission'),
-            notification: () => hasModulePermission(notificationPermission, 'hasNotificationPermission'),
-        };
+        // 包裝模組缺失時，建表函式讓該種類一律回報未取得
+        const hasPermissionOfKind = StorageManager.buildHasPermissionOfKind({ clipboardPermission, notificationPermission });
         for (const intentName of await StorageManager.getPendingPermissionIntents()) {
             const hasPermission = hasPermissionOfKind[StorageManager.PERMISSION_INTENT_PERMISSIONS[intentName]];
             if (hasPermission && (await hasPermission())) continue;

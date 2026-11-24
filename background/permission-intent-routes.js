@@ -13,7 +13,7 @@
         const storageManager = typeof StorageManager !== 'undefined' ? StorageManager : undefined;
         const clipboardPermission = globalThis.DSSClipboardPermission;
         const notificationPermission = globalThis.DSSNotificationPermission;
-        if (!storageManager?.PERMISSION_INTENTS || !storageManager.PERMISSION_INTENT_PERMISSIONS) throw new Error('[DSS] permission-intent-routes 需要 utils/storage-manager*.js 先行載入');
+        if (!storageManager?.PERMISSION_INTENTS || !storageManager.PERMISSION_INTENT_PERMISSIONS || typeof storageManager.buildHasPermissionOfKind !== 'function') throw new Error('[DSS] permission-intent-routes 需要 utils/storage-manager*.js 先行載入');
         if (!clipboardPermission || !notificationPermission) throw new Error('[DSS] permission-intent-routes 需要 utils/clipboard-permission.js 與 utils/notification-permission.js 先行載入');
         return { storageManager, clipboardPermission, notificationPermission };
     }
@@ -24,10 +24,8 @@
      */
     function buildIntentTable({ storageManager, clipboardPermission, notificationPermission }) {
         const { AUTO_COPY_REPLY, AUTO_COPY_CODE, REPLY_NOTIFICATION } = storageManager.PERMISSION_INTENTS;
-        const hasPermissionOfKind = {
-            clipboard: () => clipboardPermission.hasClipboardPermission(),
-            notification: () => notificationPermission.hasNotificationPermission(),
-        };
+        // 權限種類 → 查詢函式的對照表與 popup 共用 StorageManager 的單一定義
+        const hasPermissionOfKind = storageManager.buildHasPermissionOfKind({ clipboardPermission, notificationPermission });
         const enableOf = {
             [AUTO_COPY_REPLY]: () => storageManager.saveAutoCopyReply(true),
             [AUTO_COPY_CODE]: () => storageManager.saveAutoCopyCode(true),
