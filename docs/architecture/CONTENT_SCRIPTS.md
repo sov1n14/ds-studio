@@ -47,7 +47,7 @@
 
 > **Prompt injection module** (v4.11.15): `content-script.js` carries settings initialization and wiring (`initSettings()`, settings-change handling), while prompt injection lives in `prompt-injector.controller.js`, keeping the entry file under `coding-guidelines` §8's 450-line threshold.
 >
-> `initSettings()` stays in `content-script.js`: `test/unit/storage-manager.sync-now.spec.js` uses regex matching against the **source text literal** of `content-script.js` to capture the `async function initSettings()` block and asserts that it calls `StorageManager.syncNow()`; moving that function would break the assertion.
+> `initSettings()` stays in `content-script.js`: `test/unit/storage-manager.sync-now.call-site-source.spec.js` uses regex matching against the **source text literal** of `content-script.js` to capture the `async function initSettings()` block and asserts that it calls `StorageManager.syncNow()`; moving that function would break the assertion.
 >
 > `prompt-injector.controller.js` uses the `createPromptInjector(ctx)` factory convention (same as `preset-overlay.controller.js`), reading and writing `ChatBinding` state via getter/setter closures; `isInjecting` is the only state written by the injection module, passed in as the paired `getIsInjecting`/`setIsInjecting`.
 
