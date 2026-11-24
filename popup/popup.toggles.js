@@ -1,4 +1,4 @@
-// 270 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
+// 269 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
 /**
  * DS studio — Popup Feature Toggles 模組
  * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、自動複製回覆與程式碼區塊、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
