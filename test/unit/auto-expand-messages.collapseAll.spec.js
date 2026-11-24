@@ -1,39 +1,70 @@
 /**
- * content/auto-expand-messages.js — _collapseAll() and disable() behavior.
+ * content/auto-expand-messages.js — _collapseAll(), disable(), and the added-node observer.
  *
- * DOM-adapter layer tests: the module manipulates DeepSeek expand-button
- * containers via class-based selectors and click events.
+ * DOM-adapter layer tests. Fixture: test/fixtures/ds-snapshots/conv2-finished-visible-items-collapsible.html,
+ * the visible virtual-list items of a finished conversation captured from the live page (message text
+ * replaced by placeholders). The user item (key "-2") is a long message: its .fbb737a4 holds the
+ * .ds-collapsible-text and the .ds-collapsible-text-toggle-button, whose second child div wraps the
+ * .ds-icon chevron. The capture shows the collapsed state (icon inline `transform: rotate(180deg)`).
+ *
+ * No live capture of the expanded state exists, so an expanded message is the captured one with only
+ * the icon's inline transform removed (minimal mutation). Multiple messages are clones of the captured
+ * user/assistant pair. Clicks are observed as dispatched click events at document level, so the
+ * assertions also prove no other element (assistant toolbar icon buttons) is clicked.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import '../../utils/storage-manager.js';
-const DSSelectors = require('../../content/ds-selectors.js');
 
-const CONTAINER_CLASS = DSSelectors.EXPAND_BUTTON_CONTAINER_CLASS;
-const ICON_CLASS = DSSelectors.EXPAND_BUTTON_ICON_CLASS;
 const OWN_KEY = 'dsAutoExpandMessages';
+const FIXTURE = path.resolve(__dirname, '../fixtures/ds-snapshots/conv2-finished-visible-items-collapsible.html');
+const FIXTURE_HTML = fs.readFileSync(FIXTURE, 'utf8');
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  DOM helpers
+//  DOM helpers (real markup)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function createContainer({ isCollapsed = false, hasAutoExpanded = false } = {}) {
-    const container = document.createElement('div');
-    container.classList.add(CONTAINER_CLASS);
-    container.click = vi.fn();
+function parseCapturedList() {
+    const host = document.createElement('div');
+    host.innerHTML = FIXTURE_HTML;
+    return host.firstElementChild;
+}
 
-    const icon = document.createElement('span');
-    icon.classList.add(ICON_CLASS);
-    if (isCollapsed) {
-        icon.style.transform = 'rotate(180deg)';
-    }
-    container.appendChild(icon);
+/** Clone the captured long user-message item; expanded = captured markup minus the icon's rotate. */
+function makeLongUserItem({ collapsed }) {
+    const item = parseCapturedList().querySelector('[data-virtual-list-item-key="-2"]');
+    const toggle = item.querySelector('.ds-collapsible-text-toggle-button');
+    const icon = toggle.querySelector('.ds-icon');
+    const container = icon.parentElement;
+    if (!collapsed) icon.style.removeProperty('transform');
+    return { item, toggle, container, icon };
+}
 
-    if (hasAutoExpanded) {
-        container.dataset.dssAutoExpanded = '1';
-    }
+function makeAssistantItem() {
+    return parseCapturedList().querySelector('[data-virtual-list-item-key="2"]');
+}
 
-    document.body.appendChild(container);
-    return container;
+/**
+ * Mount a conversation with one long user message per entry of `states` (true = collapsed),
+ * each followed by the captured assistant reply. Returns the list and the toggle containers.
+ */
+function mountConversation(states) {
+    const list = parseCapturedList();
+    list.replaceChildren();
+    const containers = states.map((collapsed) => {
+        const { item, container } = makeLongUserItem({ collapsed });
+        list.appendChild(item);
+        list.appendChild(makeAssistantItem());
+        return container;
+    });
+    document.body.appendChild(list);
+    return { list, containers };
+}
+
+let clickedTargets;
+function recordClick(event) {
+    clickedTargets.push(event.target);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,11 +108,23 @@ async function loadModule(values = { isEnabled: false }) {
     return AutoExpandMessages;
 }
 
+async function setup(values) {
+    document.body.innerHTML = '';
+    clickedTargets = [];
+    document.addEventListener('click', recordClick, true);
+    onMessage = createOnMessageStub();
+    sendMessage = vi.fn();
+    chrome.runtime.onMessage = onMessage;
+    chrome.runtime.sendMessage = sendMessage;
+    await loadModule(values);
+}
+
 function cleanup() {
     if (AutoExpandMessages) {
         AutoExpandMessages._stopObserver();
         AutoExpandMessages.enabled = false;
     }
+    document.removeEventListener('click', recordClick, true);
     document.body.innerHTML = '';
 }
 
@@ -89,34 +132,36 @@ function cleanup() {
 //  Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('AutoExpandMessages._collapseAll()', () => {
-    beforeEach(async () => {
-        document.body.innerHTML = '';
-        onMessage = createOnMessageStub();
-        sendMessage = vi.fn();
-        chrome.runtime.onMessage = onMessage;
-        chrome.runtime.sendMessage = sendMessage;
-        await loadModule();
+describe('fixture sanity — captured long user message', () => {
+    it('captured toggle icon is collapsed; the expanded variant differs only by its transform', () => {
+        const collapsed = makeLongUserItem({ collapsed: true });
+        const expanded = makeLongUserItem({ collapsed: false });
+        expect(collapsed.icon.style.transform).toBe('rotate(180deg)');
+        expect(expanded.icon.style.transform).toBe('');
+        expect(collapsed.container.parentElement).toBe(collapsed.toggle);
+        expect(expanded.icon.getAttribute('style')).toBe(
+            collapsed.icon.getAttribute('style').replace(/\s*transform: rotate\(180deg\);/, ''),
+        );
     });
+});
 
+describe('AutoExpandMessages._collapseAll()', () => {
+    beforeEach(() => setup({ isEnabled: false }));
     afterEach(cleanup);
 
-    it('clicks only expanded containers, not collapsed ones', () => {
-        const expanded1 = createContainer({ isCollapsed: false });
-        const expanded2 = createContainer({ isCollapsed: false });
-        const collapsed = createContainer({ isCollapsed: true });
+    it('clicks only expanded containers, not collapsed ones nor any other element', () => {
+        const { containers: [expanded1, expanded2, collapsed] } = mountConversation([false, false, true]);
 
         AutoExpandMessages._collapseAll();
 
-        expect(expanded1.click).toHaveBeenCalledTimes(1);
-        expect(expanded2.click).toHaveBeenCalledTimes(1);
-        expect(collapsed.click).not.toHaveBeenCalled();
+        expect(clickedTargets).toEqual([expanded1, expanded2]);
+        expect(clickedTargets).not.toContain(collapsed);
     });
 
     it('removes data-dssAutoExpanded from ALL containers regardless of state', () => {
-        const expanded = createContainer({ isCollapsed: false, hasAutoExpanded: true });
-        const collapsed = createContainer({ isCollapsed: true, hasAutoExpanded: true });
-        const noAttr = createContainer({ isCollapsed: false, hasAutoExpanded: false });
+        const { containers: [expanded, collapsed, noAttr] } = mountConversation([false, true, false]);
+        expanded.dataset.dssAutoExpanded = '1';
+        collapsed.dataset.dssAutoExpanded = '1';
 
         AutoExpandMessages._collapseAll();
 
@@ -127,32 +172,70 @@ describe('AutoExpandMessages._collapseAll()', () => {
 });
 
 describe('AutoExpandMessages.disable()', () => {
-    beforeEach(async () => {
-        document.body.innerHTML = '';
-        onMessage = createOnMessageStub();
-        sendMessage = vi.fn();
-        chrome.runtime.onMessage = onMessage;
-        chrome.runtime.sendMessage = sendMessage;
-        await loadModule({ isEnabled: true, [OWN_KEY]: true });
-    });
-
+    beforeEach(() => setup({ isEnabled: true, [OWN_KEY]: true }));
     afterEach(cleanup);
 
-    it('collapses expanded containers, stops observer, and sets enabled to false', () => {
+    it('collapses expanded containers, clears markers, stops reacting to new messages, and sets enabled to false', async () => {
         AutoExpandMessages.enable();
-
-        const expanded = createContainer({ isCollapsed: false, hasAutoExpanded: true });
-        const collapsed = createContainer({ isCollapsed: true, hasAutoExpanded: true });
-
-        expect(AutoExpandMessages._observer).not.toBeNull();
+        const { list, containers: [expanded, collapsed] } = mountConversation([false, true]);
+        expanded.dataset.dssAutoExpanded = '1';
+        collapsed.dataset.dssAutoExpanded = '1';
 
         AutoExpandMessages.disable();
 
-        expect(expanded.click).toHaveBeenCalledTimes(1);
-        expect(collapsed.click).not.toHaveBeenCalled();
+        expect(clickedTargets).toEqual([expanded]);
         expect(expanded.dataset.dssAutoExpanded).toBeUndefined();
         expect(collapsed.dataset.dssAutoExpanded).toBeUndefined();
-        expect(AutoExpandMessages._observer).toBeNull();
         expect(AutoExpandMessages.enabled).toBe(false);
+
+        const late = makeLongUserItem({ collapsed: true });
+        list.appendChild(late.item);
+        await flush();
+
+        expect(clickedTargets).toEqual([expanded]);
+        expect(late.container.dataset.dssAutoExpanded).toBeUndefined();
+    });
+});
+
+describe('AutoExpandMessages observer — messages added after enable()', () => {
+    beforeEach(() => setup({ isEnabled: true, [OWN_KEY]: true }));
+    afterEach(cleanup);
+
+    it('expands a newly added collapsed long message exactly once, even when its icon re-renders later', async () => {
+        const { list } = mountConversation([]);
+        AutoExpandMessages.enable();
+
+        const added = makeLongUserItem({ collapsed: true });
+        list.appendChild(added.item);
+        list.appendChild(makeAssistantItem());
+        await flush();
+
+        expect(clickedTargets).toEqual([added.container]);
+        expect(added.container.dataset.dssAutoExpanded).toBe('1');
+
+        // The icon's svg is re-rendered while the icon still reads collapsed (no React here to flip it).
+        added.icon.replaceChildren(added.icon.firstElementChild.cloneNode(true));
+        await flush();
+
+        expect(clickedTargets).toEqual([added.container]);
+    });
+
+    it('expands a toggle whose icon is inserted after its container', async () => {
+        const { list } = mountConversation([]);
+        AutoExpandMessages.enable();
+
+        const added = makeLongUserItem({ collapsed: true });
+        added.icon.remove();
+        list.appendChild(added.item);
+        await flush();
+
+        expect(clickedTargets).toEqual([]);
+        expect(added.container.dataset.dssAutoExpanded).toBeUndefined();
+
+        added.container.appendChild(added.icon);
+        await flush();
+
+        expect(clickedTargets).toEqual([added.container]);
+        expect(added.container.dataset.dssAutoExpanded).toBe('1');
     });
 });

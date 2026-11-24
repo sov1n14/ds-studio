@@ -70,6 +70,33 @@
 
             return finalIds.map(id => mergedMap.get(id));
         },
+
+        /**
+         * 純函式：將舊版單一金鑰的 preset 陣列併入目前每組一鍵的佈局。
+         * 目前的群組一律保留且維持原順序；舊陣列缺少的群組不視為刪除。
+         * 僅存在於舊陣列、且未被墓碑判定為已刪除的群組接在目前順序之後。
+         * 同 id 的內容沿用 mergePresets 的新舊規則，較舊的舊版內容不會覆蓋目前內容。
+         *
+         * @param {string[]} currentIds - 目前索引中的群組 id（依順序）
+         * @param {Array} currentPresets - 目前已存在的群組內容
+         * @param {Array} legacyPresets - 舊版 promptPresets 陣列
+         * @param {Object} [tombstones] - 刪除墓碑記錄
+         * @returns {{ ids: string[], presetsToWrite: Array }} 新索引與需寫入的群組
+         */
+        mergeLegacyPresets(currentIds, currentPresets, legacyPresets, tombstones) {
+            const currentIdSet = new Set(currentIds);
+            // 墓碑只用來擋下僅存在於舊陣列的群組，目前的群組不受影響
+            const legacyOnlyTombstones = Object.fromEntries(
+                Object.entries(tombstones || {}).filter(([id]) => !currentIdSet.has(id))
+            );
+            const validLegacy = legacyPresets.filter(p => p && p.id !== undefined);
+            const merged = this.mergePresets(currentPresets, validLegacy, undefined, undefined, legacyOnlyTombstones);
+
+            const currentById = new Map(currentPresets.map(p => [p.id, p]));
+            const presetsToWrite = merged.filter(p => JSON.stringify(p) !== JSON.stringify(currentById.get(p.id)));
+            const appendedIds = merged.map(p => p.id).filter(id => !currentIdSet.has(id));
+            return { ids: [...currentIds, ...appendedIds], presetsToWrite };
+        },
     };
 
     root.__DS_StorageManager_preset_merge = bundle;

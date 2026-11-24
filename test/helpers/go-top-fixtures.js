@@ -1,4 +1,6 @@
 import { vi } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 // The storage-manager side-effect import MUST stay above the go-top import.
 // content/go-top.js has no imports of its own: it reads the bare global
 // `StorageManager`, and its module tail calls `GoToTop.init()`, which
@@ -8,67 +10,92 @@ import { vi } from 'vitest';
 // before this line produces `ReferenceError: StorageManager is not defined`
 // at collection time.
 import '../../utils/storage-manager.js';
-import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 
 // ─── Shared fixture helpers ───────────────────────────────────────────────
 
 /**
- * Creates the live-site DOM structure:
- *   ._871cbca > .aaff8b8f > (optional nativeBtn)
+ * Live DeepSeek message-list root (`.ds-virtual-list.ds-scroll-area`) captured from the
+ * conv2-finished snapshot: scroll gutters, the virtual list with one user and one assistant
+ * message (text replaced by placeholders), a spacer, and the centred content column. The column
+ * holds the floating button bar, whose children are the native go-bottom button followed by the
+ * composer card that wraps `textarea[name="search"]` three levels down.
+ */
+const MESSAGE_LIST_FIXTURE = path.resolve(__dirname, '../fixtures/ds-snapshots/conv2-finished-message-list.html');
+
+/** Parses the captured message-list root into a detached element. */
+function parseMessageList() {
+    const host = document.createElement('div');
+    host.innerHTML = fs.readFileSync(MESSAGE_LIST_FIXTURE, 'utf8');
+    return host.firstElementChild;
+}
+
+/** The floating-bar child that holds `textarea[name="search"]` (the composer card), found by real nesting. */
+function findComposer(injectParent) {
+    return Array.from(injectParent.children).find((child) => child.querySelector('textarea[name="search"]')) || null;
+}
+
+/**
+ * Mounts the captured message-list root into document.body and returns handles located by the
+ * real nesting (textarea → composer chain → floating bar → content column), never by the
+ * selectors under test.
+ */
+function mountMessageList() {
+    const listRoot = parseMessageList();
+    document.body.appendChild(listRoot);
+    const textarea = listRoot.querySelector('textarea[name="search"]');
+    const composer = textarea.parentElement.parentElement.parentElement;
+    const injectParent = composer.parentElement;
+    const outerWrapper = injectParent.parentElement;
+    const nativeBtn = injectParent.firstElementChild;
+    return { listRoot, outerWrapper, injectParent, composer, nativeBtn };
+}
+
+/**
+ * Live page state with the conversation scrolled to the bottom: the native go-bottom button is
+ * not rendered, so the floating bar holds only the composer card (as captured in the
+ * conv-reopened and stream-* snapshots). Built from the conv2-finished capture by removing the
+ * native button only.
  * Returns { outerWrapper, injectParent }.
  */
 export function createWrapperWithoutNativeButton() {
-    const outerWrapper = document.createElement('div');
-    outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
-    const injectParent = document.createElement('div');
-    injectParent.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
-    const inputArea = document.createElement('div');
-    injectParent.appendChild(inputArea);
-    outerWrapper.appendChild(injectParent);
-    document.body.appendChild(outerWrapper);
+    const { outerWrapper, injectParent, nativeBtn } = mountMessageList();
+    nativeBtn.remove();
     return { outerWrapper, injectParent };
 }
 
 /**
- * Creates a native go-bottom button matching the live-site fixture
- * (go-bottom.html ground truth).
+ * Detached copy of the live native go-bottom button, verbatim from the conv2-finished capture. It
+ * keeps both real DOM levels: the positioning wrapper carrying GO_TOP_NATIVE_BUTTON_CLASS
+ * (`_0706cde`), whose only child is the `div[role="button"].ds-button--floating.ds-button--circle`
+ * control with its background, border and icon layers.
  */
 export function createNativeButton() {
-    const nativeBtn = document.createElement('div');
-    nativeBtn.setAttribute('role', 'button');
-    nativeBtn.className =
-        'ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ' +
-        'ds-button--m ds-button--icon-relative-m ds-button--floating _0706cde';
-    nativeBtn.setAttribute('tabindex', '0');
-    nativeBtn.setAttribute('style',
-        '--dsl-button-color: var(--dsw-alias-button-floating-fill); ' +
-        '--dsl-button-height: 34px; ' +
-        '--dsl-button-hover-color: var(--dsw-alias-button-floating-hover); ' +
-        '--dsl-button-icon-size: 14px;');
-
-    const bg = document.createElement('div');
-    bg.className = 'ds-button__background';
-    const border = document.createElement('div');
-    border.className = 'ds-button__border';
-    const icon = document.createElement('div');
-    icon.className = 'ds-button__icon ds-button__icon--last-child';
-    icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" ' +
-        'xmlns="http://www.w3.org/2000/svg"><path d="M11.8486 5.5" fill="currentColor"></path></svg>';
-    nativeBtn.appendChild(bg);
-    nativeBtn.appendChild(border);
-    nativeBtn.appendChild(icon);
+    const textarea = parseMessageList().querySelector('textarea[name="search"]');
+    const injectParent = textarea.parentElement.parentElement.parentElement.parentElement;
+    const nativeBtn = injectParent.firstElementChild;
+    nativeBtn.remove();
     return nativeBtn;
 }
 
 /**
- * Creates the full live-site context:
- *   ._871cbca > .aaff8b8f > nativeBtn
+ * Live page transition where the conversation scrolls up and React mounts the native go-bottom
+ * button: inserts a createNativeButton() copy into the floating bar directly before the composer
+ * card, where the capture places it. Returns the inserted native button.
+ */
+export function insertNativeButton(injectParent) {
+    const nativeBtn = createNativeButton();
+    injectParent.insertBefore(nativeBtn, findComposer(injectParent));
+    return nativeBtn;
+}
+
+/**
+ * Live page state with the conversation scrolled up: the captured floating bar holds the native
+ * go-bottom button (first child) followed by the composer card, verbatim from conv2-finished.
+ * Returns { outerWrapper, injectParent, nativeBtn }.
  */
 export function createFullWrapperWithNativeButton() {
-    const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
-    const nativeBtn = createNativeButton();
-    injectParent.appendChild(nativeBtn);
+    const { outerWrapper, injectParent, nativeBtn } = mountMessageList();
     return { outerWrapper, injectParent, nativeBtn };
 }
 
@@ -101,9 +128,12 @@ export function resetGoToTopState() {
     GoToTop._observer = null;
     if (GoToTop._wrapperObserver) GoToTop._wrapperObserver.disconnect();
     GoToTop._wrapperObserver = null;
+    // Clear, not just drop, the debounce timer: disable() is a no-op when the test never enabled the feature, and an armed timer would fire into the next test or after teardown.
+    clearTimeout(GoToTop._wrapperObserverTimer);
     GoToTop._wrapperObserverTimer = null;
     GoToTop._scrollListener = null;
     GoToTop._popstateHandler = null;
+    clearTimeout(GoToTop._observerTimer);
     GoToTop._observerTimer = null;
     GoToTop._lastPath = '';
     clearTimeout(GoToTop._routeChangeTimer);

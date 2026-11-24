@@ -22,31 +22,17 @@
             const updates = {};
 
             // 1. Migration from v1.6.x (single promptPresets key) to v1.7.0 (per-preset keys)
+            // 舊版裝置可能在新佈局建立後又寫回舊金鑰，故以合併取代整批覆寫，避免誤刪目前的群組
             if (data[this.KEYS.PROMPT_PRESETS] !== undefined) {
                 const oldPresets = data[this.KEYS.PROMPT_PRESETS] || [];
                 if (oldPresets.length > 0) {
-                    await this.savePromptPresets(oldPresets);
+                    await this._importLegacyPresets(oldPresets, data);
                 }
                 // Remove the old key from both storages
                 await this._safeRemove('sync', this.KEYS.PROMPT_PRESETS);
                 await this._safeRemove('local', this.KEYS.PROMPT_PRESETS);
                 // Refresh data after migration
                 return this.initialize();
-            }
-
-            // 2. Detect Sync Conflict on first sync run
-            if (!syncInitialized) {
-                const syncRaw = await this._safeGet('sync', null);
-                const localRaw = await this._safeGet('local', null);
-                const conflictType = this._detectSyncConflict(syncRaw, localRaw);
-
-                if (conflictType === 'manual') {
-                    await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
-                } else if (conflictType === 'auto') {
-                    await this.resolveSyncConflict();
-                } else {
-                    await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
-                }
             }
 
             // 2.5. Migration: legacy chatPresetMap → 分塊式佈局，交由 service worker 單一寫入者執行；僅在任一側仍有 legacy 金鑰時分派，失敗僅告警，不中斷初始化。
@@ -68,11 +54,12 @@
             }
 
             // 4. Fill other defaults
-            // isEnabled / globalPromptEnabled 為 local-only 金鑰，需另外以本機資料補齊預設值，
+            // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 與 SYNC_EXCLUDED_KEYS 為 local-only 金鑰，需另外以本機資料補齊預設值，
             // 不可併入 updates（updates 會經 _set 推送至 sync）。
             const localOnlyUpdates = {};
-            const localOnlyData = await this._safeGet('local', [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED]);
-            for (const key of [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED]) {
+            const localOnlyKeys = [this.KEYS.IS_ENABLED, this.KEYS.GLOBAL_PROMPT_ENABLED, this.KEYS.REPLY_NOTIFICATION, ...this.SYNC_EXCLUDED_KEYS];
+            const localOnlyData = await this._safeGet('local', localOnlyKeys);
+            for (const key of localOnlyKeys) {
                 if (localOnlyData[key] === undefined && this.DEFAULTS[key] !== undefined) {
                     localOnlyUpdates[key] = this.DEFAULTS[key];
                 }
@@ -84,7 +71,7 @@
             for (const key of keysToFetch) {
                 if (key === this.KEYS.PROMPT_PRESETS) continue; // 跳過已退役的金鑰
                 if (key === this.KEYS.CHAT_PRESET_MAP) continue; // 跳過已分塊處理的金鑰
-                if (key === this.KEYS.IS_ENABLED || key === this.KEYS.GLOBAL_PROMPT_ENABLED) continue; // local-only，已於上方處理
+                if (localOnlyKeys.includes(key)) continue; // local-only，已於上方處理
                 if (data[key] === undefined && this.DEFAULTS[key] !== undefined) {
                     updates[key] = this.DEFAULTS[key];
                 }
@@ -94,31 +81,52 @@
                 await this._set(updates);
             } else if (syncInitialized) {
                 // Ensure sync has what local has (migration push)
-                const syncData = await this._safeGet('sync', keysToFetch);
+                // 一併讀取各 preset 的雲端版本，供下方推送守衛比對新舊（同 savePromptPresets 的單次目標讀取）
+                // Stryker disable next-line ArrayDeclaration: 等價變異 — 索引為 undefined 時已由步驟 3 走 _set 分支，此 fallback 僅於索引為 null 等假值時觸發；替換成非空陣列只多讀一個本機不存在的 preset 金鑰，localPreset 為 undefined 而不推送，儲存結果相同
+                const localIds = data[this.KEYS.PRESET_INDEX] || [];
+                const presetKeys = localIds.map(id => this._presetKey(id));
+                const syncData = await this._safeGet('sync', [...keysToFetch, ...presetKeys]);
                 const missingInSync = {};
                 for (const key of keysToFetch) {
                     if (this._isChatMapKey(key)) continue; // chat-map 金鑰僅由 service worker 單一寫入者寫入
                     if (key === this.KEYS.PROMPT_PRESETS
-                     || key === this.KEYS.RESTORED_MESSAGES
-                     || key === this.KEYS.IS_ENABLED
-                     || key === this.KEYS.GLOBAL_PROMPT_ENABLED) continue; // local-only，不推送至 sync
+                     || localOnlyKeys.includes(key)) continue; // local-only，不推送至 sync
                     if (syncData[key] === undefined && data[key] !== undefined) {
                         missingInSync[key] = data[key];
                     }
                 }
 
-                // Also check individual presets
-                const localIds = data[this.KEYS.PRESET_INDEX] || [];
-                for (const id of localIds) {
-                    const pKey = this._presetKey(id);
-                    if (syncData[pKey] === undefined) {
-                        const pData = await this._safeGet('local', pKey);
-                        if (pData[pKey]) missingInSync[pKey] = pData[pKey];
+                // Also check individual presets：僅在雲端缺少或本機較新時推送，不覆蓋較新的雲端版本
+                for (const pKey of presetKeys) {
+                    const pData = await this._safeGet('local', pKey);
+                    const localPreset = pData[pKey];
+                    if (localPreset && this._shouldPushPreset(localPreset, syncData[pKey])) {
+                        missingInSync[pKey] = localPreset;
                     }
                 }
 
                 if (Object.keys(missingInSync).length > 0) {
                     await this._set(missingInSync);
+                }
+            }
+
+            // 4.5. 首次同步衝突偵測：須排在預設值補齊之後。補齊依據的 data 讀於本步驟之前，首次執行時兩旗標金鑰皆為 undefined，若先偵測，補齊會以預設值 false 覆寫本步驟剛寫入的 syncConflictPending / syncInitialized（以及 resolveSyncConflict() 寫入的排序 meta 等）。
+            if (!syncInitialized) {
+                const syncRaw = await this._safeGet('sync', null);
+                const localRaw = await this._safeGet('local', null);
+                const conflictType = this._detectSyncConflict(syncRaw, localRaw);
+
+                if (conflictType === 'manual') {
+                    await this._safeSet('local', { [this.KEYS.SYNC_CONFLICT_PENDING]: true });
+                } else if (conflictType === 'auto') {
+                    // 合併讀取失敗時僅告警並維持未初始化，留待下次同步再合併，初始化其餘步驟照常執行
+                    try {
+                        await this.resolveSyncConflict();
+                    } catch (err) {
+                        console.warn('[DSS] storage-manager initialize: resolveSyncConflict failed:', err);
+                    }
+                } else {
+                    await this._safeSet('local', { [this.KEYS.SYNC_INITIALIZED]: true });
                 }
             }
 
@@ -133,6 +141,33 @@
                 } catch (err) {
                     globalThis.__DS_Logger?.warn('init:prune-orphans-failed', { error: err?.message ?? String(err) });
                 }
+            }
+        },
+
+        /**
+         * 將舊版 promptPresets 陣列併入目前佈局：只新增或更新群組，絕不刪除、不寫入刪除墓碑。
+         * 首次升級（目前無群組）時依舊陣列順序整批匯入。
+         * @param {Array} legacyPresets - 舊版 promptPresets 陣列
+         * @param {Object} data - initialize() 讀到的目前資料（含索引與墓碑）
+         */
+        async _importLegacyPresets(legacyPresets, data) {
+            const currentIds = data[this.KEYS.PRESET_INDEX] || [];
+            const presetKeys = currentIds.map(id => this._presetKey(id));
+            const presetData = await this._get(presetKeys);
+            const currentPresets = presetKeys.map(key => presetData[key]).filter(Boolean);
+            const tombstones = data[this.KEYS.PRESET_TOMBSTONES] || {};
+
+            const { ids, presetsToWrite } = this.mergeLegacyPresets(currentIds, currentPresets, legacyPresets, tombstones);
+
+            // 先寫入群組內容再寫索引，確保索引不會指向尚未寫入的群組
+            for (const preset of presetsToWrite) {
+                await this.saveOnePromptPreset(preset);
+            }
+            if (JSON.stringify(ids) !== JSON.stringify(currentIds)) {
+                await this._set({
+                    [this.KEYS.PRESET_INDEX]: ids,
+                    [this.KEYS.PRESET_ORDER_META]: { order: ids, orderUpdatedAt: Date.now() },
+                });
             }
         },
     };

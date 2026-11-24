@@ -8,13 +8,18 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "test:mutation": "cd .. && npx --prefix test stryker run test/stryker.config.json"
+    "test:e2e": "playwright test -c playwright.config.js",
+    "test:e2e:offline": "playwright test -c playwright.offline.config.js",
+    "test:mutation": "cd .. && npx --prefix test stryker run test/stryker.config.json",
+    "test:mutation:scoped": "node scripts/stryker-scoped.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@vitest/ui": "^3.2.4",
     "happy-dom": "^16.0.0",
+    "jsdom": "^31.0.0",
     "vitest": "^3.2.4"
   }
 }

@@ -1,4 +1,4 @@
-// 359 lines: three render concerns (button, inject, observer) for go-top unified per CA7
+// 379 lines: three render concerns (button, inject, observer) of go-top that share one button element and one injection state
 /**
  * DS studio — Go To Top Render Combined
  * 按鈕建構、注入策略、包裝容器 Observer 三合一。
@@ -10,6 +10,7 @@
     const __DSSelectorsButton = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectorsButton.GO_TOP_NATIVE_BUTTON_CLASS;
+    const GO_TOP_CLONE_CLASS = __DSSelectorsButton.GO_TOP_CLONE_CLASS;
 
     const bundle = {
         // ── Button ──────────────────────────────────────────────
@@ -40,7 +41,7 @@
         /**
          * 建立 GoTop 按鈕 DOM 元素（不附加到文件）。
          *
-         * 主路徑：直接 clone 原生按鈕，移除雜湊 class _0706cde 後複用；
+         * 主路徑：直接 clone 原生按鈕，移除定位用雜湊 class（GO_TOP_NATIVE_BUTTON_CLASS）後複用；
          * 降級路徑：依 NATIVE_BTN_TAG / NATIVE_BTN_CLASSES / NATIVE_BTN_INLINE_STYLE
          *           手工建構與原生按鈕結構相同的 div 元素。
          *
@@ -56,8 +57,11 @@
             let btn;
 
             if (nativeBtn) {
-                // 主路徑：clone 原生按鈕，移除定位雜湊 class，保留所有 ds-* class
-                btn = nativeBtn.cloneNode(true);
+                // 主路徑：clone 原生按鈕本體而非外層包裝 div（實測頁面中定位 class 在包裝 div 上，role="button" 為其子節點），避免 GoTop 內含巢狀的原生按鈕副本；移除定位雜湊 class，保留所有 ds-* class
+                const cloneSource = nativeBtn.matches('[role="button"]')
+                    ? nativeBtn
+                    : (nativeBtn.querySelector('[role="button"]') || nativeBtn);
+                btn = cloneSource.cloneNode(true);
                 btn.classList.remove(GO_TOP_NATIVE_BUTTON_CLASS);
             } else {
                 // 降級路徑：手工建構與原生相同結構的按鈕元素
@@ -78,7 +82,7 @@
             }
 
             // 兩條路徑共用：識別 class + 語意屬性
-            btn.classList.add('dsw-gotop');
+            btn.classList.add(GO_TOP_CLONE_CLASS);
             btn.setAttribute('role', 'button');
             btn.setAttribute('tabindex', '0');
             btn.setAttribute('aria-disabled', 'false');
@@ -96,18 +100,32 @@
 
             // 點擊：滾動到頂部（scrollToTopAndWait 由 go-top.scroll.js 合併進來）
             btn.addEventListener('click', () => {
-                this.scrollToTopAndWait();
+                this._startGoTopFromButton();
             });
 
             // 鍵盤支援：Enter / Space
             btn.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this.scrollToTopAndWait();
+                    this._startGoTopFromButton();
                 }
             });
 
             return btn;
+        },
+
+        /**
+         * 由 GoTop 按鈕啟動（或切換中止）Go Top，並處理回傳的 promise。
+         * 使用者中止（再次點擊或按下原生「到底部」）屬預期結果，靜默處理；其他中止原因以 [DSS] 前綴警告。
+         */
+        _startGoTopFromButton() {
+            const goTop = this.scrollToTopAndWait({ cancelOnNativePress: true });
+            // 切換中止時 scrollToTopAndWait 不回傳 promise
+            if (!goTop || typeof goTop.then !== 'function') return;
+            goTop.catch((result) => {
+                if (result?.reason === 'stopped-by-user') return;
+                console.warn('[DSS] Go Top stopped:', result);
+            });
         },
 
         // ── Inject ──────────────────────────────────────────────
@@ -136,7 +154,7 @@
 
         /**
          * 主路徑：將 GoTop 按鈕注入原生按鈕包裝容器，以 insertBefore 定位在原生按鈕上方。
-         * 注入位置：nativeBtn.parentElement（aaff8b8f，full-page.html line 1015），
+         * 注入位置：nativeBtn.parentElement（浮動按鈕列，FLOATING_BUTTON_BAR_SELECTOR 所指元素），
          * 使用 insertBefore(btn, nativeBtn) 使 GoTop 出現在原生按鈕前面（視覺上方）。
          *
          * 去重保護：注入前先檢查容器內是否已有 .dsw-gotop，避免重複注入。
@@ -153,7 +171,7 @@
             const { injectParent, outerWrapper } = wrapperInfo;
 
             // 去重保護：若已有按鈕就不重複注入；若為 solo 殘留，升級為 stacked 模式（複用元素，不移除）
-            const existingBtn = injectParent.querySelector('.dsw-gotop');
+            const existingBtn = injectParent.querySelector('.' + GO_TOP_CLONE_CLASS);
             if (existingBtn) {
                 if (existingBtn.classList.contains('dsw-gotop--solo')) {
                     // solo → stacked 升級：複用現有元素（不 remove）以避免閃爍
@@ -194,7 +212,7 @@
 
             const { injectParent, outerWrapper } = wrapperInfo;
 
-            if (injectParent.querySelector('.dsw-gotop')) {
+            if (injectParent.querySelector('.' + GO_TOP_CLONE_CLASS)) {
                 return true;
             }
 
@@ -286,9 +304,9 @@
         },
 
         /**
-         * 監控外層包裝容器（_871cbca），偵測 React re-render 移除 GoTop 節點後重新注入。
+         * 監控外層包裝容器（內容欄，CONTENT_COLUMN_SELECTOR 所指元素），偵測 React re-render 移除 GoTop 節點後重新注入。
          * 去抖動延遲 WRAPPER_OBSERVER_DEBOUNCE ms，避免在同一批 mutation 中多次注入。
-         * @param {Element} outerWrapper - full-page.html line 1013 的 _871cbca 元素
+         * @param {Element} outerWrapper - 內容欄元素（訊息列表根節點底下含主輸入框的直接子層）
          */
         _startWrapperObserver(outerWrapper) {
             // 若已在監控相同元素，不重複啟動

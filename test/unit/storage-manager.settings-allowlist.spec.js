@@ -39,6 +39,9 @@ const EXPECTED_SETTINGS_KEYS = [
     'autoRetry',
     'autoContinue',
     'autoOpenSidebar',
+    'autoCopyReply',
+    'autoCopyCode',
+    'replyNotification',
     'preventAutoScroll',
     'websearchToggle',
     'isShowSystemTime',
@@ -87,6 +90,8 @@ async function seedEveryKey() {
         [K.AUTO_RETRY]: false,
         [K.AUTO_CONTINUE]: false,
         isAutoOpenSidebarEnabled: false,
+        isAutoCopyReplyEnabled: false,
+        isAutoCopyCodeEnabled: false,
         [K.PREVENT_AUTO_SCROLL]: false,
         [K.WEBSEARCH_TOGGLE]: 'on',
         [K.SHOW_SYSTEM_TIME]: false,
@@ -104,6 +109,7 @@ async function seedEveryKey() {
         ...payload,
         [K.IS_ENABLED]: true,
         [K.GLOBAL_PROMPT_ENABLED]: true,
+        isReplyNotificationEnabled: true,
         [K.RESTORED_MESSAGES]: { 'msg-1': 'restored' },
     });
 }

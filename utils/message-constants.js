@@ -12,6 +12,16 @@
     // 編輯器視窗常數
     globalThis.DSS_EDITOR_WINDOW = {
         CLOSE_MESSAGE_TYPE: 'DSS_CLOSE_EDITOR_WINDOWS',
+        // 關窗或導覽前請編輯視窗先存檔：請求 { type, slot }（slot 為 STORAGE_KEYS 的屬性名稱），回應 { status }
+        FLUSH_MESSAGE_TYPE: 'DSS_FLUSH_EDITOR_WINDOW',
+        // 存檔請求的回應狀態；只有 DUPLICATE（名稱重複）會讓呼叫端取消關窗或導覽
+        FLUSH_STATUS: {
+            CLEAN: 'clean',
+            SAVED: 'saved',
+            DUPLICATE: 'duplicate',
+            FAILED: 'failed',
+            TIMEOUT: 'timeout',
+        },
         STORAGE_KEYS: {
             global: 'dss-editor-window-id-global',
             preset: 'dss-editor-window-id-preset',
@@ -44,6 +54,15 @@
         EXPORT_MARKDOWN: 'EXPORT_MARKDOWN',
     };
 
+    // 內容腳本請 background 顯示桌面通知的訊息型別
+    globalThis.DSS_SHOW_NOTIFICATION = 'DSS_SHOW_NOTIFICATION';
+
+    // 內容腳本請 background 寫入剪貼簿的訊息型別
+    globalThis.DSS_COPY_TO_CLIPBOARD = 'DSS_COPY_TO_CLIPBOARD';
+
+    // background 請 offscreen 文件寫入剪貼簿的訊息型別（offscreen/clipboard-offscreen.html 載入本檔，由 offscreen/clipboard-offscreen.js 讀取）
+    globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD = 'DSS_OFFSCREEN_WRITE_CLIPBOARD';
+
     // === 測試匯出（瀏覽器情境為 no-op） ===
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
@@ -52,6 +71,9 @@
             DSS_SETTINGS_MSG: globalThis.DSS_SETTINGS_MSG,
             DSS_CHAT_MAP_MSG: globalThis.DSS_CHAT_MAP_MSG,
             DSS_CONTENT_MSG: globalThis.DSS_CONTENT_MSG,
+            DSS_SHOW_NOTIFICATION: globalThis.DSS_SHOW_NOTIFICATION,
+            DSS_COPY_TO_CLIPBOARD: globalThis.DSS_COPY_TO_CLIPBOARD,
+            DSS_OFFSCREEN_WRITE_CLIPBOARD: globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD,
         };
     }
 })();

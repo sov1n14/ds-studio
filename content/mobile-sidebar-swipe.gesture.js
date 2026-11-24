@@ -5,6 +5,12 @@
 (function (root) {
     'use strict';
 
+    /** 元素是否已渲染（版面寬與高皆大於 0）。 */
+    function isRendered(el) {
+        const { width, height } = el.getBoundingClientRect();
+        return width > 0 && height > 0;
+    }
+
     const bundle = {
     _onTouchStart(e) {
         if (!this.enabled) return;
@@ -99,9 +105,10 @@
         // 所有條件滿足：依方向選擇對應按鈕並點擊
         const isRightSwipe = deltaX > 0;
         const button = isRightSwipe ? this._findButton() : this._findCloseButton();
-        if (button) {
-            button.click();
-        }
+        if (!button) return;
+        // 左滑僅在關閉鈕已渲染（側邊欄開啟）時點擊：DeepSeek 的側邊欄切換鈕在側邊欄關閉時仍掛載但為 0×0，點擊它反而會開啟側邊欄
+        if (!isRightSwipe && !isRendered(button)) return;
+        button.click();
     },
     };
 

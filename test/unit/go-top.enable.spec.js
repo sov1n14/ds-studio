@@ -1,10 +1,10 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — enable/disable and storage-listener unit tests.
  * Shared fixtures: test/helpers/go-top-fixtures.js
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
-import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import { resetGoToTopState, createWrapperWithoutNativeButton } from '../helpers/go-top-fixtures.js';
 
@@ -43,7 +43,8 @@ function broadcast(changes, area = 'local') {
 
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     // ─────────────────────────────────────
     //  enable / disable
@@ -60,14 +61,9 @@ describe('GoToTop', () => {
             container.removeEventListener = vi.fn();
             document.body.appendChild(container);
 
-            // Add .aaff8b8f wrapper so _tryConnectDom sees the DOM as ready
-            // (Change A: gating now requires INJECT_PARENT_SELECTOR or native button)
-            const outerWrapper = document.createElement('div');
-            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
-            const injectParent = document.createElement('div');
-            injectParent.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
-            outerWrapper.appendChild(injectParent);
-            document.body.appendChild(outerWrapper);
+            // Mount the live floating button bar so _tryConnectDom sees the DOM as ready
+            // (gating requires the floating button bar or the native button)
+            createWrapperWithoutNativeButton();
 
             // Mock _findScrollContainer to return a cached container
             vi.spyOn(GoToTop, '_findScrollContainer').mockImplementation(function() {
@@ -233,13 +229,8 @@ describe('GoToTop', () => {
             container.removeEventListener = vi.fn();
             document.body.appendChild(container);
 
-            // Add .aaff8b8f wrapper so _tryConnectDom gates injection correctly (Change A)
-            const outerWrapper = document.createElement('div');
-            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
-            const injectParent = document.createElement('div');
-            injectParent.className = DSSelectors.FLOATING_BUTTON_BAR_SELECTOR.slice(1);
-            outerWrapper.appendChild(injectParent);
-            document.body.appendChild(outerWrapper);
+            // Mount the live floating button bar so _tryConnectDom gates injection correctly
+            createWrapperWithoutNativeButton();
 
             // Mock _findScrollContainer to return a cached container
             vi.spyOn(GoToTop, '_findScrollContainer').mockImplementation(function() {

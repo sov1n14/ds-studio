@@ -1,175 +1,203 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 /**
- * Unit tests for the chat_session/create detection logic in censor-xhr-hook.js.
+ * Session messages posted by the REAL main-world hook (content/censor-xhr-hook.js).
  *
- * censor-xhr-hook.js is an IIFE injected into the page's main world and cannot be
- * imported directly in Node.js (it depends on SseParser global and real XHR/fetch).
- * We replicate the exact maybeNotifyCreate logic inline — the same pattern used by
- * censor-xhr-hook.auth-capture.spec.js for the setRequestHeader logic.
+ * Contract (utils/temporary-chat-constants.js):
+ *   - DSS_CHAT_CREATE_DETECTED { createdSessionId } is posted when a /api/v0/chat_session/create
+ *     response arrives; createdSessionId is data.biz_data.chat_session.id of the response. A response
+ *     the hook cannot read posts nothing and logs one [DSS] warning, so the session is never marked.
+ *   - DSS_CHAT_COMPLETION_DETECTED { chatSessionId } is posted for a /api/v0/chat/completion request;
+ *     chatSessionId is the chat_session_id of the request body.
+ *   - Reading a fetch response or Request body must not consume the body the page itself reads.
+ *
+ * The hook runs through test/helpers/deepseek-page-harness.js: the only fakes are the network
+ * (FakeXHR, the page fetch supplied per test) and the cross-world postMessage bridge, which delivers
+ * each post to this window asynchronously with source: window. Assertions read the messages this
+ * window receives, the way the content script sees them.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+    bootDeepSeekPage,
+    CREATE_URL,
+    COMPLETION_URL,
+    createResponseBody,
+    completionRequestBody,
+} from '../helpers/deepseek-page-harness.js';
 
-const CREATE_ENDPOINT = '/api/v0/chat_session/create';
+const N = '26c81320-1ce0-4172-bd5e-cb5b7a55f332';
+const X = 'da794fe0-243a-4ba5-817a-b88ff327e634';
+const CREATE_TYPE = 'DSS_CHAT_CREATE_DETECTED';
+const COMPLETION_TYPE = 'DSS_CHAT_COMPLETION_DETECTED';
 
-/** Replicates the maybeNotifyCreate function from censor-xhr-hook.js */
-function createMaybeNotifyCreate(mockWindow) {
-    return function maybeNotifyCreate(url) {
-        if (!url) { return; }
-        if (url.includes(CREATE_ENDPOINT)) {
-            mockWindow.postMessage({ type: 'DSS_CHAT_CREATE_DETECTED' }, '*');
-        }
-    };
+let received;
+let warnSpy;
+
+function onMessage(event) {
+    received.push(event.data);
 }
 
-/** Replicates the XHR open override from censor-xhr-hook.js (create detection part) */
-function createXhrOpenOverride(maybeNotifyCreate) {
-    return function xhrOpenOverride(method, url) {
-        const dssUrl = typeof url === 'string' ? url : (url ? url.toString() : '');
-        maybeNotifyCreate(dssUrl);
-        // (original XHR open call omitted — testing logic only)
-    };
+/** Messages of one type this window has received so far. */
+function receivedOfType(type) {
+    return received.filter((data) => data?.type === type);
 }
 
-/** Replicates the fetch override from censor-xhr-hook.js */
-function createFetchOverride(maybeNotifyCreate) {
-    return function fetchOverride(resource, init) {
-        const url = typeof resource === 'string'
-            ? resource
-            : (resource && typeof resource.url === 'string' ? resource.url : '');
-        maybeNotifyCreate(url);
-        // (original fetch call omitted — testing logic only)
-    };
+/** [DSS] warnings logged so far. */
+function dssWarnings() {
+    return warnSpy.mock.calls.filter(([first]) => String(first).startsWith('[DSS]'));
 }
 
-describe('censor-xhr-hook: DSS_CHAT_CREATE_DETECTED via XHR open', () => {
-    let mockWindow;
-    let xhrOpen;
+/** Let the bridge task, fetch promise chains and body reads settle. */
+async function settle() {
+    for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
-    beforeEach(() => {
-        mockWindow = { postMessage: vi.fn() };
-        const notify = createMaybeNotifyCreate(mockWindow);
-        xhrOpen = createXhrOpenOverride(notify);
+function jsonResponse(text) {
+    return new Response(text, { status: 200, headers: { 'content-type': 'application/json' } });
+}
+
+beforeEach(() => {
+    received = [];
+    window.addEventListener('message', onMessage);
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+
+afterEach(() => {
+    window.removeEventListener('message', onMessage);
+    vi.restoreAllMocks();
+});
+
+describe('censor-xhr-hook: create over XHR posts the created session id', () => {
+    it.each([
+        ['responseType "" (read as responseText)', ''],
+        ['responseType "json" (read as response)', 'json'],
+    ])('%s: posts nothing at send, then { createdSessionId } from the response', async (_label, responseType) => {
+        const page = bootDeepSeekPage(window);
+
+        const create = page.createSession(N, { responseType });
+        await settle();
+        expect(receivedOfType(CREATE_TYPE), 'the session id exists only in the response, so nothing is posted before it arrives').toEqual([]);
+
+        create.respond();
+        await settle();
+
+        expect(receivedOfType(CREATE_TYPE)).toEqual([{ type: CREATE_TYPE, createdSessionId: N }]);
+        expect(dssWarnings()).toEqual([]);
     });
 
-    it('posts DSS_CHAT_CREATE_DETECTED when URL contains /api/v0/chat_session/create', () => {
-        xhrOpen('POST', 'https://chat.deepseek.com/api/v0/chat_session/create');
+    it('leaves the read of the response by the page intact', async () => {
+        const page = bootDeepSeekPage(window);
 
-        expect(mockWindow.postMessage).toHaveBeenCalledTimes(1);
-        expect(mockWindow.postMessage).toHaveBeenCalledWith(
-            { type: 'DSS_CHAT_CREATE_DETECTED' },
-            '*'
-        );
+        const create = page.createSession(N, { responseType: 'json' });
+        create.respond();
+        await settle();
+
+        expect(create.xhr.response.data.biz_data.chat_session.id).toBe(N);
     });
 
-    it('posts DSS_CHAT_CREATE_DETECTED when URL has query string after the endpoint', () => {
-        xhrOpen('POST', 'https://chat.deepseek.com/api/v0/chat_session/create?v=1');
+    it('posts no create message for another chat_session endpoint or a completion', async () => {
+        const page = bootDeepSeekPage(window, { fetch: async () => jsonResponse('{"code":0}') });
 
-        expect(mockWindow.postMessage).toHaveBeenCalledTimes(1);
-        expect(mockWindow.postMessage).toHaveBeenCalledWith(
-            { type: 'DSS_CHAT_CREATE_DETECTED' },
-            '*'
-        );
-    });
+        await page.fetch('https://chat.deepseek.com/api/v0/chat_session/delete', { method: 'POST', body: JSON.stringify({ chat_session_id: X }) });
+        page.sendCompletion(X);
+        await settle();
 
-    it('does NOT post DSS_CHAT_CREATE_DETECTED for completion endpoint', () => {
-        xhrOpen('POST', 'https://chat.deepseek.com/api/v0/chat/completion');
-
-        expect(mockWindow.postMessage).not.toHaveBeenCalled();
-    });
-
-    it('does NOT post DSS_CHAT_CREATE_DETECTED for delete endpoint', () => {
-        xhrOpen('POST', 'https://chat.deepseek.com/api/v0/chat_session/delete');
-
-        expect(mockWindow.postMessage).not.toHaveBeenCalled();
-    });
-
-    it('does NOT post when URL is empty string', () => {
-        xhrOpen('GET', '');
-
-        expect(mockWindow.postMessage).not.toHaveBeenCalled();
-    });
-
-    it('does NOT post when URL is null/falsy', () => {
-        xhrOpen('GET', null);
-
-        expect(mockWindow.postMessage).not.toHaveBeenCalled();
+        expect(receivedOfType(CREATE_TYPE)).toEqual([]);
     });
 });
 
-describe('censor-xhr-hook: DSS_CHAT_CREATE_DETECTED via fetch', () => {
-    let mockWindow;
-    let fetchOverride;
+describe('censor-xhr-hook: create over fetch posts the created session id', () => {
+    it('posts { createdSessionId } and the page still reads the same response body', async () => {
+        const page = bootDeepSeekPage(window, { fetch: async () => jsonResponse(createResponseBody(N)) });
 
-    beforeEach(() => {
-        mockWindow = { postMessage: vi.fn() };
-        const notify = createMaybeNotifyCreate(mockWindow);
-        fetchOverride = createFetchOverride(notify);
+        const response = await page.fetch(CREATE_URL, { method: 'POST', body: '{}' });
+        const pageBody = await response.json();
+        await settle();
+
+        expect(pageBody.data.biz_data.chat_session.id, 'the page must still be able to read its create response').toBe(N);
+        expect(receivedOfType(CREATE_TYPE)).toEqual([{ type: CREATE_TYPE, createdSessionId: N }]);
     });
 
-    it('posts DSS_CHAT_CREATE_DETECTED when fetch URL string contains the create endpoint', () => {
-        fetchOverride('https://chat.deepseek.com/api/v0/chat_session/create', {});
+    it('a create sent as a Request object is observed too', async () => {
+        const page = bootDeepSeekPage(window, { fetch: async () => jsonResponse(createResponseBody(N)) });
 
-        expect(mockWindow.postMessage).toHaveBeenCalledTimes(1);
-        expect(mockWindow.postMessage).toHaveBeenCalledWith(
-            { type: 'DSS_CHAT_CREATE_DETECTED' },
-            '*'
-        );
-    });
+        const response = await page.fetch(new Request(CREATE_URL, { method: 'POST', body: '{}' }));
+        await response.json();
+        await settle();
 
-    it('posts DSS_CHAT_CREATE_DETECTED when resource is a Request-like object with .url property', () => {
-        const requestLike = { url: 'https://chat.deepseek.com/api/v0/chat_session/create' };
-        fetchOverride(requestLike, {});
-
-        expect(mockWindow.postMessage).toHaveBeenCalledTimes(1);
-        expect(mockWindow.postMessage).toHaveBeenCalledWith(
-            { type: 'DSS_CHAT_CREATE_DETECTED' },
-            '*'
-        );
-    });
-
-    it('does NOT post for history_messages fetch (non-create URL)', () => {
-        fetchOverride('https://chat.deepseek.com/api/v0/chat/history_messages', {});
-
-        expect(mockWindow.postMessage).not.toHaveBeenCalled();
-    });
-
-    it('does NOT post when resource is an object without a .url string', () => {
-        fetchOverride({ noUrl: true }, {});
-
-        expect(mockWindow.postMessage).not.toHaveBeenCalled();
+        expect(receivedOfType(CREATE_TYPE)).toEqual([{ type: CREATE_TYPE, createdSessionId: N }]);
     });
 });
 
-describe('censor-xhr-hook: DSS_AUTH_CAPTURED still fires independently of create detection', () => {
-    /**
-     * Verifies that create-URL detection and auth-header capture are orthogonal:
-     * a create request posted via XHR open posts DSS_CHAT_CREATE_DETECTED, while
-     * setRequestHeader('authorization', ...) posts DSS_AUTH_CAPTURED.
-     * Both can fire on the same XHR without interfering.
-     */
-    it('open() on create URL posts create message; setRequestHeader posts auth message independently', () => {
-        const postMessages = [];
-        const mockWindow = { postMessage: vi.fn((msg) => postMessages.push(msg)) };
+describe('censor-xhr-hook: an unreadable create response posts nothing and warns once', () => {
+    const UNREADABLE = [
+        ['a non-JSON body', 'upstream gateway error'],
+        ['JSON without data.biz_data.chat_session.id', JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: {} } })],
+        ['an empty chat_session.id', JSON.stringify({ code: 0, data: { biz_data: { chat_session: { id: '' } } } })],
+    ];
 
-        const notify = createMaybeNotifyCreate(mockWindow);
-        const xhrOpen = createXhrOpenOverride(notify);
+    it.each(UNREADABLE)('XHR with %s', async (_label, text) => {
+        const page = bootDeepSeekPage(window);
 
-        // Simulate setRequestHeader override (inline from auth-capture logic)
-        let lastCapturedAuth = null;
-        function setRequestHeaderOverride(name, value) {
-            if (name.toLowerCase() === 'authorization' && value !== lastCapturedAuth) {
-                lastCapturedAuth = value;
-                mockWindow.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization: value }, '*');
-            }
-        }
+        page.createSession(N).respond(text);
+        await settle();
 
-        // open() triggers create detection
-        xhrOpen('POST', 'https://chat.deepseek.com/api/v0/chat_session/create');
-        // setRequestHeader captures auth
-        setRequestHeaderOverride('authorization', 'Bearer token-xyz');
+        expect(receivedOfType(CREATE_TYPE)).toEqual([]);
+        expect(dssWarnings()).toHaveLength(1);
+    });
 
-        expect(postMessages).toHaveLength(2);
-        expect(postMessages[0]).toEqual({ type: 'DSS_CHAT_CREATE_DETECTED' });
-        expect(postMessages[1]).toEqual({ type: 'DSS_AUTH_CAPTURED', authorization: 'Bearer token-xyz' });
+    it('XHR with responseType "json" and a non-JSON body', async () => {
+        const page = bootDeepSeekPage(window);
+
+        page.createSession(N, { responseType: 'json' }).respond('not json');
+        await settle();
+
+        expect(receivedOfType(CREATE_TYPE)).toEqual([]);
+        expect(dssWarnings()).toHaveLength(1);
+    });
+
+    it.each(UNREADABLE)('fetch with %s', async (_label, text) => {
+        const page = bootDeepSeekPage(window, { fetch: async () => jsonResponse(text) });
+
+        const response = await page.fetch(CREATE_URL, { method: 'POST', body: '{}' });
+        await response.text();
+        await settle();
+
+        expect(receivedOfType(CREATE_TYPE)).toEqual([]);
+        expect(dssWarnings()).toHaveLength(1);
+    });
+});
+
+describe('censor-xhr-hook: completion posts the chat_session_id it was sent for', () => {
+    it('XHR: chatSessionId comes from the send() body', async () => {
+        const page = bootDeepSeekPage(window);
+
+        page.sendCompletion(X);
+        await settle();
+
+        expect(receivedOfType(COMPLETION_TYPE)).toEqual([{ type: COMPLETION_TYPE, chatSessionId: X }]);
+    });
+
+    it('fetch: chatSessionId comes from init.body', async () => {
+        const page = bootDeepSeekPage(window, { fetch: async () => new Response('', { status: 200 }) });
+
+        await page.fetch(COMPLETION_URL, { method: 'POST', body: completionRequestBody(X) });
+        await settle();
+
+        expect(receivedOfType(COMPLETION_TYPE)).toEqual([{ type: COMPLETION_TYPE, chatSessionId: X }]);
+    });
+
+    it('fetch with a Request: chatSessionId comes from the Request body, which still reaches the network unread', async () => {
+        const networkBodies = [];
+        const page = bootDeepSeekPage(window, {
+            fetch: async (request) => {
+                networkBodies.push(await request.text());
+                return new Response('', { status: 200 });
+            },
+        });
+
+        await page.fetch(new Request(COMPLETION_URL, { method: 'POST', body: completionRequestBody(X) }));
+        await settle();
+
+        expect(receivedOfType(COMPLETION_TYPE)).toEqual([{ type: COMPLETION_TYPE, chatSessionId: X }]);
+        expect(networkBodies, 'the hook must not consume the body the page sends').toEqual([completionRequestBody(X)]);
     });
 });

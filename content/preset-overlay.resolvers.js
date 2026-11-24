@@ -13,80 +13,53 @@
     var selectors = (globalThis).DSstudio && (globalThis).DSstudio.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
-    // ── Selector / Hash 常數（僅限解析器使用） ───────────────────────────────
+    // ── Selector 常數（僅限解析器使用） ──────────────────────────────────────
 
-    // DeepSeek 建置產出的 hash class；隨版本可能改名，語意路徑為主要解析路徑，hash 僅作後備。
-    var HEADER_WRAPPER_HASH  = selectors.CHAT_HEADER_TITLE_ROW_SELECTOR;   // 容器內的標題列 wrapper div
-    var TITLE_HASH_FALLBACK  = selectors.CHAT_TITLE_FALLBACK_SELECTOR;   // 聊天標題節點（hash 後備）
+    // 皆為結構選擇器（不依賴 DeepSeek 建置產出的 hash class），由 ds-selectors.js 集中定義。
+    var TITLE_ROW_SELECTOR = selectors.CHAT_HEADER_TITLE_ROW_SELECTOR;   // 標題列：直接含按鈕子層的 .the-header
+    var TITLE_SELECTOR     = selectors.CHAT_TITLE_FALLBACK_SELECTOR;     // 聊天標題：標題列內緊接在按鈕之後的 div
 
     // ── DOM 解析器：title ────────────────────────────────────────────────────
 
     /**
-     * 在 container（._2be88ba）內解析聊天標題元素。
-     * 語意主路徑：header wrapper 內第一個非 role="button" 的子元素（即標題 div）。
-     * hash 後備：._9986c0c。
+     * 在 container（直接包住 .the-header 的標題列容器）內解析聊天標題元素。
+     * 結構路徑：.the-header 內緊接在 role="button" 直接子層之後的 div。
      * @param {Element} container
-     * @returns {{ el: Element|null, path: 'semantic'|'hash-fallback'|'none' }}
+     * @returns {{ el: Element|null, path: 'semantic'|'none' }}
      */
     function resolveTitleEl(container) {
-        var wrapper = container.querySelector(HEADER_WRAPPER_HASH);
-        if (wrapper) {
-            // 語意路徑：標題是 wrapper 直接子元素中，第一個非按鈕的 div
-            var children = wrapper.children;
-            for (var i = 0; i < children.length; i++) {
-                if (children[i].getAttribute('role') !== 'button') {
-                    return { el: children[i], path: 'semantic' };
-                }
-            }
-        }
-        // hash 後備路徑
-        var hashEl = container.querySelector(TITLE_HASH_FALLBACK);
-        if (hashEl) return { el: hashEl, path: 'hash-fallback' };
+        var titleEl = container.querySelector(TITLE_SELECTOR);
+        if (titleEl) return { el: titleEl, path: 'semantic' };
         return { el: null, path: 'none' };
     }
 
     // ── DOM 解析器：new-chat button ──────────────────────────────────────────
 
     /**
-     * 在 container（._2be88ba）內解析「新建對話」按鈕元素。
-     * 語意主路徑：header wrapper 內，帶有 style*="min-width: 44px" 的 role="button" div；
-     *            若無則取標題之後的第一個 role="button" div（即 new-chat 按鈕在標題右側）。
-     * 後備路徑：wrapper 內最後一個 role="button" div。
-     * 刻意不使用已確認錯誤的 ._57370c5（位於 wrapper 外部）。
+     * 回傳 parent 的直接子元素中，最後一個符合 selector 的元素。
+     * @param {Element} parent
+     * @param {string} selector
+     * @returns {Element|null}
+     */
+    function findLastDirectChild(parent, selector) {
+        for (var child = parent.lastElementChild; child; child = child.previousElementSibling) {
+            if (child.matches(selector)) return child;
+        }
+        return null;
+    }
+
+    /**
+     * 在 container（直接包住 .the-header 的標題列容器）內解析「新建對話」按鈕元素。
+     * 結構路徑：標題列直接子層中最後一個 role="button" div（new-chat 按鈕位於標題列最右側）。只看直接子層：「下载应用」等按鈕包在子層 wrapper 內，標題列之外的 role="button" 也不在範圍內；不依賴 inline style（例如 min-width），樣式數值變動不影響解析。
      * @param {Element} container
-     * @returns {{ el: Element|null, path: 'semantic'|'structural-fallback'|'none' }}
+     * @returns {{ el: Element|null, path: 'semantic'|'none' }}
      */
     function resolveNewChatButtonEl(container) {
-        var wrapper = container.querySelector(HEADER_WRAPPER_HASH);
-        if (!wrapper) return { el: null, path: 'none' };
+        var titleRow = container.querySelector(TITLE_ROW_SELECTOR);
+        if (!titleRow) return { el: null, path: 'none' };
 
-        var roleButtons = wrapper.querySelectorAll(selectors.ROLE_BUTTON_DIV_SELECTOR);
-
-        // 語意主路徑：帶 inline min-width: 44px 的按鈕為 new-chat 按鈕
-        for (var j = 0; j < roleButtons.length; j++) {
-            var styleAttr = roleButtons[j].getAttribute('style') || '';
-            if (styleAttr.indexOf('min-width: 44px') !== -1) {
-                return { el: roleButtons[j], path: 'semantic' };
-            }
-        }
-
-        // 結構後備路徑：取標題之後出現的第一個 role="button"（即 new-chat 按鈕）
-        var titleResult = resolveTitleEl(container);
-        if (titleResult.el) {
-            var titleEl = titleResult.el;
-            for (var k = 0; k < roleButtons.length; k++) {
-                // compareDocumentPosition bit 4 = 前者在後者之後
-                if (titleEl.compareDocumentPosition(roleButtons[k]) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                    return { el: roleButtons[k], path: 'structural-fallback' };
-                }
-            }
-        }
-
-        // 最終後備：wrapper 內最後一個 role="button"
-        if (roleButtons.length > 0) {
-            return { el: roleButtons[roleButtons.length - 1], path: 'structural-fallback' };
-        }
-
+        var buttonEl = findLastDirectChild(titleRow, selectors.ROLE_BUTTON_DIV_SELECTOR);
+        if (buttonEl) return { el: buttonEl, path: 'semantic' };
         return { el: null, path: 'none' };
     }
 

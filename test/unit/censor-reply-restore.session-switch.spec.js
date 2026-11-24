@@ -39,7 +39,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
         it('_tryRestoreFromStoredRecords does not inject when current URL has no session id', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/some/other/path');
             document.body.innerHTML = '';
-            buildChatPair('asst-ns2', 'a prompt');
+            const msgEl = buildChatPair('asst-ns2', 'a prompt');
             CensorReplyRestore._restoredMessages = {
                 'nosession::20': {
                     message_id: 20, censored: true,
@@ -52,7 +52,6 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
 
             const result = CensorReplyRestore._tryRestoreFromStoredRecords();
             expect(result).toBe(false);
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).toBeNull();
         });
     });
@@ -169,10 +168,9 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
 
             // Step 3: Build chat B DOM with same virtual-item-key "2" and a different prompt
             document.body.innerHTML = '';
-            buildChatPair('2', 'chat B question');
+            const msgEl = buildChatPair('2', 'chat B question');
 
             // Step 4: Attempt restore — chat B record does NOT exist, so nothing should be injected
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             CensorReplyRestore.enabled = true;
             CensorReplyRestore._tryRestoreMessage(msgEl);
 
@@ -196,9 +194,8 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
 
             document.body.innerHTML = '';
             // In chat B, we have a censored element with a prompt that matches chat A's prompt
-            buildChatPair('asst-chatb', 'only in A');
+            const msgEl = buildChatPair('asst-chatb', 'only in A');
 
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             CensorReplyRestore.enabled = true;
             CensorReplyRestore._tryRestoreMessage(msgEl);
 
@@ -346,8 +343,7 @@ describe('CensorReplyRestore — session switching and fragment intake', () => {
 
             // Build censored DOM element and restore it
             document.body.innerHTML = '';
-            buildChatPair('asst-live', 'live question');
-            const msgEl = document.querySelector('.ds-message._63c77b1');
+            const msgEl = buildChatPair('asst-live', 'live question');
 
             // _pendingQueue has [300] from _onFragmentComplete
             expect(CensorReplyRestore._pendingQueue).toContain(300);

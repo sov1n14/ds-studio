@@ -1,51 +1,46 @@
+// @vitest-environment jsdom
 /**
  * content/hide-thinking.js — collapse behavior plus toggle gating.
  *
- * Settings surface: the module reads no storage. Master switch + its own key
- * (dsHideThinking) are gated by content/feature-toggle.js, which fetches the
- * initial values with DSS_GET_SETTINGS and reacts to DSS_SETTINGS_CHANGED
- * broadcasts from background. Tests drive both through chrome.runtime stubs.
+ * Runs under jsdom: the think-block selectors are structural (multi-level `:has()` anchored at .ds-message), which happy-dom mis-evaluates; jsdom matched Chrome on the captured DeepSeek snapshots.
  *
- * feature-toggle holds its registry and shared onMessage listener in module
- * scope, so each test loads a fresh module graph (vi.resetModules + dynamic
- * import) bound to that test's stubs -- same pattern as width-feature.spec.js.
+ * DOM: think-block messages copied from live snapshots (test/helpers/think-block-fixtures.js). DeepSeek's own header toggle is modelled by installNativeThinkToggle: a header click detaches or re-inserts the think body nodes, exactly the difference between the captured expanded and collapsed blocks. Success is the page-level outcome (the block no longer shows a .ds-think-content), not only that a click happened.
+ *
+ * Settings surface: the module reads no storage. Master switch + its own key (dsHideThinking) are gated by content/feature-toggle.js, which fetches the initial values with DSS_GET_SETTINGS and reacts to DSS_SETTINGS_CHANGED broadcasts from background. Tests drive both through chrome.runtime stubs.
+ *
+ * feature-toggle holds its registry and shared onMessage listener in module scope, so each test loads a fresh module graph (vi.resetModules + dynamic import) bound to that test's stubs -- same pattern as width-feature.spec.js.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/message-constants.js';
 import '../../content/ds-selectors.js';
-const { THINK_BLOCK_CLASS, THINK_HEADER_TOGGLE_CLASS } = require('../../content/ds-selectors.js');
 import '../../utils/storage-manager.js';
 import StorageManager from '../../utils/storage-manager.js';
+import {
+    loadThinkMessage, loadMessagesWithoutThinkBlock, thinkParts, thinkBodyNodes, installNativeThinkToggle, stripHashedClasses,
+} from '../helpers/think-block-fixtures.js';
 
 const MASTER_KEY = 'isEnabled';
 const OWN_KEY = StorageManager.KEYS.HIDE_THINKING;
 
-function createExpandedContainer() {
-    const container = document.createElement('div');
-    container.className = THINK_BLOCK_CLASS;
-    const header = document.createElement('div');
-    header.className = THINK_HEADER_TOGGLE_CLASS;
-    header.click = vi.fn(() => {
-        // simulate DeepSeek toggling: remove think-content child to mark collapsed
-        const content = container.querySelector('.ds-think-content');
-        if (content) content.remove();
-    });
-    const content = document.createElement('div');
-    content.className = 'ds-think-content';
-    container.appendChild(header);
-    container.appendChild(content);
-    return container;
+/** True when the block shows its think body the way the captured expanded snapshot does. */
+function showsThinking(block) {
+    return block.querySelector('.ds-think-content') !== null;
 }
 
-function createCollapsedContainer() {
-    const container = document.createElement('div');
-    container.className = THINK_BLOCK_CLASS;
-    const header = document.createElement('div');
-    header.className = THINK_HEADER_TOGGLE_CLASS;
-    header.click = vi.fn();
-    container.appendChild(header);
-    // No .ds-think-content child = collapsed
-    return container;
+/** Real finished reply with its think block expanded; DeepSeek's header toggle modelled. Mounted unless `mount: false`. */
+function createExpandedMessage({ mount = true } = {}) {
+    const parts = thinkParts(loadThinkMessage('open'));
+    const clicks = installNativeThinkToggle(parts.block);
+    if (mount) document.body.appendChild(parts.msg);
+    return { ...parts, clicks };
+}
+
+/** Real finished reply whose think block the user collapsed natively; expanding it re-inserts the captured think body. */
+function createCollapsedMessage({ mount = true } = {}) {
+    const parts = thinkParts(loadThinkMessage('closed'));
+    const clicks = installNativeThinkToggle(parts.block, thinkBodyNodes(thinkParts(loadThinkMessage('open')).block));
+    if (mount) document.body.appendChild(parts.msg);
+    return { ...parts, clicks };
 }
 
 /** Fresh chrome.runtime.onMessage stub with a fireable listener set. */
@@ -73,7 +68,7 @@ function respondWith(values) {
     });
 }
 
-/** Let the pending sendMessage promise chains settle. */
+/** Let the pending sendMessage promise chains and MutationObserver deliveries settle. */
 function flush() {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -118,6 +113,20 @@ describe('HideThinking', () => {
         vi.restoreAllMocks();
     });
 
+    it('fixture sanity: the expanded capture shows think steps, the collapsed one does not, and the toggle model flips between them', () => {
+        const expanded = createExpandedMessage();
+        const collapsed = createCollapsedMessage();
+        expect(showsThinking(expanded.block)).toBe(true);
+        expect(showsThinking(collapsed.block)).toBe(false);
+        expect(expanded.statusSpan.textContent).toBe('已思考（用时 3 秒）');
+
+        expanded.header.click();
+        expect(showsThinking(expanded.block)).toBe(false);
+        expect(Array.from(expanded.block.children)).toEqual([expanded.header, expanded.spacer, expanded.footer]);
+        expanded.header.click();
+        expect(showsThinking(expanded.block)).toBe(true);
+    });
+
     describe('isExpanded()', () => {
         it('returns false for null input', () => {
             expect(HideThinking.isExpanded(null)).toBe(false);
@@ -127,96 +136,108 @@ describe('HideThinking', () => {
             expect(HideThinking.isExpanded(undefined)).toBe(false);
         });
 
-        it('returns a strict boolean true (not merely truthy) for an expanded container', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            const result = HideThinking.isExpanded(container);
-            expect(result).toBe(true);
+        it('returns a strict boolean true (not merely truthy) for an expanded think block', () => {
+            const { block } = createExpandedMessage();
+            expect(HideThinking.isExpanded(block)).toBe(true);
         });
 
-        it('returns a strict boolean false (not merely falsy) for a collapsed container', () => {
-            const container = createCollapsedContainer();
-            document.body.appendChild(container);
-            const result = HideThinking.isExpanded(container);
-            expect(result).toBe(false);
+        it('returns a strict boolean false (not merely falsy) for a natively collapsed think block', () => {
+            const { block } = createCollapsedMessage();
+            expect(HideThinking.isExpanded(block)).toBe(false);
         });
     });
 
     describe('tryCollapseButton()', () => {
-        it('clicks an expanded button that is connected to the DOM', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            HideThinking.tryCollapseButton(container);
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            expect(header.click).toHaveBeenCalledOnce();
+        it('collapses a connected expanded block by clicking its header once', () => {
+            const { block, clicks } = createExpandedMessage();
+            HideThinking.tryCollapseButton(block);
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block), 'the page did not collapse the block, so the click missed the header').toBe(false);
         });
 
-        it('does not click an already collapsed button', () => {
-            const container = createCollapsedContainer();
-            document.body.appendChild(container);
-            HideThinking.tryCollapseButton(container);
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            expect(header.click).not.toHaveBeenCalled();
+        it('does not click an already collapsed block', () => {
+            const { block, clicks } = createCollapsedMessage();
+            HideThinking.tryCollapseButton(block);
+            expect(clicks).not.toHaveBeenCalled();
         });
 
-        it('does not click when element is disconnected from DOM', () => {
-            const container = createExpandedContainer();
-            HideThinking.tryCollapseButton(container);
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            expect(header.click).not.toHaveBeenCalled();
+        it('does not click when the block is disconnected from the DOM', () => {
+            const { block, clicks } = createExpandedMessage({ mount: false });
+            HideThinking.tryCollapseButton(block);
+            expect(clicks).not.toHaveBeenCalled();
+            expect(showsThinking(block)).toBe(true);
         });
 
-        it('does not click when already marked data-ht-collapsed', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            container.dataset.htCollapsed = '1';
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            HideThinking.tryCollapseButton(container);
-            expect(header.click).not.toHaveBeenCalled();
+        it('does not click when the block is already marked data-ht-collapsed', () => {
+            const { block, clicks } = createExpandedMessage();
+            block.dataset.htCollapsed = '1';
+            HideThinking.tryCollapseButton(block);
+            expect(clicks).not.toHaveBeenCalled();
+            expect(showsThinking(block)).toBe(true);
         });
 
-        it('does not click when container has no header element', () => {
-            const container = document.createElement('div');
-            container.className = THINK_BLOCK_CLASS;
-            const content = document.createElement('div');
-            content.className = 'ds-think-content';
-            container.appendChild(content);
-            document.body.appendChild(container);
-            // No crash expected, no click expected
-            expect(() => HideThinking.tryCollapseButton(container)).not.toThrow();
+        it('leaves the block untouched and unmarked when its header is gone', () => {
+            const { block, header } = createExpandedMessage();
+            header.remove();
+            expect(() => HideThinking.tryCollapseButton(block)).not.toThrow();
+            expect(block.hasAttribute('data-ht-collapsed')).toBe(false);
+            expect(showsThinking(block)).toBe(true);
         });
 
         it('sets dataset.htCollapsed to exactly the string "1" after collapsing', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            HideThinking.tryCollapseButton(container);
-            expect(container.dataset.htCollapsed).toBe('1');
+            const { block } = createExpandedMessage();
+            HideThinking.tryCollapseButton(block);
+            expect(block.dataset.htCollapsed).toBe('1');
         });
     });
 
     describe('applyToExisting()', () => {
-        it('collapses every expanded thinking button on the page', () => {
-            const expanded1 = createExpandedContainer();
-            const expanded2 = createExpandedContainer();
-            const collapsed = createCollapsedContainer();
-            document.body.append(expanded1, expanded2, collapsed);
+        it('collapses every expanded think block on the page and skips collapsed ones', () => {
+            const expanded1 = createExpandedMessage();
+            const expanded2 = createExpandedMessage();
+            const collapsed = createCollapsedMessage();
 
             HideThinking.applyToExisting();
 
-            expect(expanded1.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
-            expect(expanded2.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
-            expect(collapsed.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).not.toHaveBeenCalled();
+            expect(expanded1.clicks).toHaveBeenCalledOnce();
+            expect(expanded2.clicks).toHaveBeenCalledOnce();
+            expect(collapsed.clicks).not.toHaveBeenCalled();
+            expect(showsThinking(expanded1.block)).toBe(false);
+            expect(showsThinking(expanded2.block)).toBe(false);
+        });
+
+        it('marks only the think block, never the user message or a reply without thinking', () => {
+            const { userMessage, assistantMessage } = loadMessagesWithoutThinkBlock();
+            document.body.appendChild(userMessage);
+            const expanded = createExpandedMessage();
+            document.body.appendChild(assistantMessage);
+
+            HideThinking.applyToExisting();
+
+            expect(Array.from(document.querySelectorAll('[data-ht-collapsed]'))).toEqual([expanded.block]);
+        });
+
+        it('still collapses the block after DeepSeek rotates every hashed class', () => {
+            const { msg, block, clicks } = createExpandedMessage();
+            stripHashedClasses(msg);
+            expect(block.className, 'fixture: the block kept no hashed class').toBe('');
+
+            HideThinking.applyToExisting();
+
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(false);
         });
     });
 
     describe('scanRoot()', () => {
-        it('finds expanded buttons inside a newly added subtree', () => {
+        it('collapses an expanded block inside a newly added subtree', () => {
             const wrapper = document.createElement('div');
-            const container = createExpandedContainer();
-            wrapper.appendChild(container);
+            const { msg, block, clicks } = createExpandedMessage({ mount: false });
+            wrapper.appendChild(msg);
             document.body.appendChild(wrapper);
             HideThinking.scanRoot(wrapper);
-            expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(false);
         });
 
         it('does not crash when passed a text node (non-Element)', () => {
@@ -225,66 +246,52 @@ describe('HideThinking', () => {
             expect(() => HideThinking.scanRoot(textNode)).not.toThrow();
         });
 
-        it('collapses an expanded container passed directly as root (self-match)', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            HideThinking.scanRoot(container);
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            expect(header.click).toHaveBeenCalledOnce();
+        it('collapses an expanded block passed directly as root (self-match)', () => {
+            const { block, clicks } = createExpandedMessage();
+            HideThinking.scanRoot(block);
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(false);
         });
 
-        it('does not treat root as a container when root lacks the container class', () => {
-            const root = document.createElement('div');
-            const thinkContent = document.createElement('div');
-            thinkContent.className = 'ds-think-content';
-            const header = document.createElement('div');
-            header.className = THINK_HEADER_TOGGLE_CLASS;
-            header.click = vi.fn();
-            root.appendChild(header);
-            root.appendChild(thinkContent);
-            document.body.appendChild(root);
+        it('leaves blocks outside the scanned root alone', () => {
+            const expanded = createExpandedMessage();
+            const { userMessage } = loadMessagesWithoutThinkBlock();
+            document.body.appendChild(userMessage);
 
-            HideThinking.scanRoot(root);
+            HideThinking.scanRoot(userMessage);
 
-            expect(header.click).not.toHaveBeenCalled();
-            expect(root.dataset.htCollapsed).toBeUndefined();
+            expect(expanded.clicks).not.toHaveBeenCalled();
+            expect(document.querySelector('[data-ht-collapsed]')).toBeNull();
         });
     });
 
     describe('restoreAll()', () => {
-        it('removes the data-ht-collapsed attribute from elements', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            HideThinking.tryCollapseButton(container);
-            expect(container.hasAttribute('data-ht-collapsed')).toBe(true);
-
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            header.click.mockClear();
+        it('removes the data-ht-collapsed attribute and re-expands the block', () => {
+            const { block, clicks } = createExpandedMessage();
+            HideThinking.tryCollapseButton(block);
+            expect(block.hasAttribute('data-ht-collapsed')).toBe(true);
+            clicks.mockClear();
 
             HideThinking.restoreAll();
-            expect(container.hasAttribute('data-ht-collapsed')).toBe(false);
+
+            expect(block.hasAttribute('data-ht-collapsed')).toBe(false);
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(true);
         });
 
-        it('does not click header for elements disconnected during iteration', () => {
-            const container1 = createExpandedContainer();
-            const container2 = createExpandedContainer();
-            document.body.appendChild(container1);
-            document.body.appendChild(container2);
-
-            HideThinking.tryCollapseButton(container1);
-            HideThinking.tryCollapseButton(container2);
-
-            const header1 = container1.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            const header2 = container2.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            header1.click.mockClear();
-            header2.click.mockClear();
-
-            header1.click.mockImplementation(() => container2.remove());
+        it('does not click the header of a block disconnected during iteration', () => {
+            const first = createExpandedMessage();
+            const second = createExpandedMessage();
+            HideThinking.tryCollapseButton(first.block);
+            HideThinking.tryCollapseButton(second.block);
+            first.clicks.mockClear();
+            second.clicks.mockClear();
+            first.header.addEventListener('click', () => second.msg.remove());
 
             HideThinking.restoreAll();
 
-            expect(header1.click).toHaveBeenCalledOnce();
-            expect(header2.click).not.toHaveBeenCalled();
+            expect(first.clicks).toHaveBeenCalledOnce();
+            expect(second.clicks).not.toHaveBeenCalled();
         });
 
         it('does not throw when a marked container has no header child', () => {
@@ -299,38 +306,51 @@ describe('HideThinking', () => {
 
     describe('enable() / disable()', () => {
         it('enable() collapses existing blocks and starts observer', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
+            const { block, clicks } = createExpandedMessage();
 
             HideThinking.enable();
 
             expect(HideThinking.enabled).toBe(true);
             expect(HideThinking._observer).not.toBeNull();
-            expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(false);
         });
 
         it('disable() re-expands all blocks that were collapsed by enable()', () => {
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            const { block, clicks } = createExpandedMessage();
 
             HideThinking.enable();
-            expect(header.click).toHaveBeenCalledTimes(1); // collapsed by enable
-
-            header.click.mockClear();
+            expect(clicks).toHaveBeenCalledTimes(1);
+            clicks.mockClear();
 
             HideThinking.disable();
             expect(HideThinking.enabled).toBe(false);
             expect(HideThinking._observer).toBeNull();
-            expect(header.click).toHaveBeenCalledTimes(1); // re-expanded by disable
+            expect(clicks).toHaveBeenCalledTimes(1);
+            expect(showsThinking(block)).toBe(true);
         });
 
-        it('observer collapses buttons added after enable()', async () => {
+        it('observer collapses a think-block message added after enable()', async () => {
             HideThinking.enable();
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            expect(container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+            const { block, clicks } = createExpandedMessage();
+            await flush();
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(false);
+        });
+
+        it('observer collapses a block whose header and think step render after the empty block mounted', async () => {
+            const { msg, block, clicks } = createExpandedMessage({ mount: false });
+            const children = Array.from(block.children);
+            children.forEach((child) => child.remove());
+            HideThinking.enable();
+            document.body.appendChild(msg);
+            await flush();
+
+            children.forEach((child) => block.appendChild(child));
+            await flush();
+
+            expect(clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(block)).toBe(false);
         });
 
         it('does not double-enable when enable() is called twice', () => {
@@ -340,40 +360,35 @@ describe('HideThinking', () => {
             expect(HideThinking._observer).toBe(observer);
         });
 
-        it('observer ignores mutations that do not add container elements', async () => {
-            const expandedContainer = createExpandedContainer();
-            const newContainer = createExpandedContainer();
-            document.body.appendChild(expandedContainer);
-            document.body.appendChild(newContainer);
-
+        it('observer does not re-collapse a block the user re-expands after enable() collapsed it', async () => {
+            const collapsedByEnable = createExpandedMessage();
             HideThinking.enable();
+            collapsedByEnable.clicks.mockClear();
 
-            // Reset click counts after enable() has already clicked them
-            expandedContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click.mockClear();
-            newContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click.mockClear();
+            collapsedByEnable.header.click();
+            expect(showsThinking(collapsedByEnable.block), 'fixture: the user click re-expanded the block').toBe(true);
+            await flush();
 
-            // Simulate user manually re-expanding by adding back the .ds-think-content child.
-            // This triggers a childList mutation, but the added node is .ds-think-content (not a
-            // container), so scanRoot will not attempt to collapse the parent container.
-            // Additionally, the container still has data-ht-collapsed='1' which guards against
-            // re-collapse even if the observer were to find it.
-            const content = document.createElement('div');
-            content.className = 'ds-think-content';
-            expandedContainer.appendChild(content);
+            expect(collapsedByEnable.clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(collapsedByEnable.block)).toBe(true);
 
-            // Wait for any potential mutation observer callbacks
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            const added = createExpandedMessage();
+            await flush();
+            expect(added.clicks).toHaveBeenCalledOnce();
+            expect(showsThinking(added.block)).toBe(false);
+        });
 
-            // The re-expanded container should NOT be clicked again
-            expect(expandedContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).not.toHaveBeenCalled();
+        it('observer does not re-collapse a natively collapsed block the user expands', async () => {
+            const collapsed = createCollapsedMessage();
+            HideThinking.enable();
+            expect(collapsed.clicks).not.toHaveBeenCalled();
 
-            // Now add a new container to verify the observer is still working for childList mutations
-            const anotherContainer = createExpandedContainer();
-            document.body.appendChild(anotherContainer);
-            await new Promise((resolve) => setTimeout(resolve, 0));
+            collapsed.header.click();
+            expect(showsThinking(collapsed.block), 'fixture: the user click expanded the block').toBe(true);
+            await flush();
 
-            // This new container SHOULD be clicked because it was added to the DOM
-            expect(anotherContainer.querySelector('.' + THINK_HEADER_TOGGLE_CLASS).click).toHaveBeenCalledOnce();
+            expect(collapsed.clicks, 'the extension clicked the header again after the user expanded the block').toHaveBeenCalledOnce();
+            expect(showsThinking(collapsed.block)).toBe(true);
         });
 
         it('sets enabled to true when enable() is called from disabled state', () => {
@@ -393,12 +408,11 @@ describe('HideThinking', () => {
             HideThinking.enable();
             HideThinking.enabled = false;
 
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            const { block, clicks } = createExpandedMessage();
+            await flush();
 
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
-            expect(header.click).not.toHaveBeenCalled();
+            expect(clicks).not.toHaveBeenCalled();
+            expect(showsThinking(block)).toBe(true);
         });
 
         it('observer does not process text nodes as elements', async () => {
@@ -407,7 +421,7 @@ describe('HideThinking', () => {
             scanRootSpy.mockClear();
 
             document.body.appendChild(document.createTextNode('just text'));
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await flush();
 
             expect(scanRootSpy).not.toHaveBeenCalled();
             scanRootSpy.mockRestore();
@@ -420,7 +434,7 @@ describe('HideThinking', () => {
 
             const el = document.createElement('div');
             document.body.appendChild(el);
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await flush();
 
             expect(spy).toHaveBeenCalled();
             spy.mockRestore();
@@ -436,15 +450,13 @@ describe('HideThinking', () => {
             HideThinking.disable();
             expect(HideThinking.enabled).toBe(false);
 
-            const container = createExpandedContainer();
-            document.body.appendChild(container);
-            container.setAttribute('data-ht-collapsed', '1');
-            const header = container.querySelector('.' + THINK_HEADER_TOGGLE_CLASS);
+            const { block, clicks } = createExpandedMessage();
+            block.setAttribute('data-ht-collapsed', '1');
 
             HideThinking.disable();
 
-            expect(container.hasAttribute('data-ht-collapsed')).toBe(true);
-            expect(header.click).not.toHaveBeenCalled();
+            expect(block.hasAttribute('data-ht-collapsed')).toBe(true);
+            expect(clicks).not.toHaveBeenCalled();
         });
     });
 

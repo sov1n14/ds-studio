@@ -45,25 +45,39 @@ The following change types are **not** considered code changes and therefore **d
 
 ## Pre-Bump Quality Gate
 
-Before finalizing a version bump, mutation testing must pass on the changed scope:
+Before finalizing a version bump, mutation testing must pass on the changed lines:
 
 | Timing | Command | Scope |
 |-|-|-|
-| Every version bump | `npx --prefix test stryker run test/stryker.config.json --mutate <touched-files-glob>` | Files changed in this commit |
+| Every version bump, right before its commit | `node test/scripts/stryker-scoped.mjs` from the repo root (or `npm run test:mutation:scoped --prefix test`) | Changed lines of production `.js` files against `HEAD` |
+| Before closing a branch | `node test/scripts/stryker-scoped.mjs --full --base origin/main` | Every production file the branch changed, whole file |
+| Killing survivors in a file with no diff | `node test/scripts/stryker-scoped.mjs --files <a.js,b.js>` | Each listed file whole, independent of the git diff |
 | Release or full audit | `npm run test:mutation --prefix test` | Full `utils/` + `content/` |
 
-A surviving mutant that the lead classifies as "weak assertion" must be killed (test-engineer) before the bump proceeds. Equivalent mutants (lead judgment) are acceptable.
+The scoped script diffs the working tree against `--base` (default `HEAD`) for `.js` files under `popup/`, `background/`, `content/`, `utils/` and `offscreen/`, mutates only the changed line ranges, runs only the specs selected by three rules (the spec's import graph, following relative imports only, reaches a changed file; the spec or a `test/` helper or fixture in that graph holds a changed file's repo-relative path as a string literal, comments ignored; or a changed file is loaded by `test/setup/vitest.setup.js`, which selects every spec and prints `Setup-loaded (all specs selected): <files>`), and applies the gate below. It skips the files that `!` entries of `mutate` in `test/stryker.config.json` exclude and prints the skipped files. The script's Stryker config sets `thresholds.break` to `null`, so Stryker never fails the run on its score and the gate alone sets the exit code. It writes `test/reports/mutation.scoped.{html,json}` and exits 0 on pass, 1 otherwise. `--plan` prints the mutate ranges and the spec list without running Stryker. Run `git add -N <file>` on every new production file before the run.
 
-### Selector Health Check (Capture Sweep)
+`--files <a.js,b.js>` replaces the diff with a comma-separated list of repo-relative files and mutates each listed file whole, which covers a file with no diff (for example, to kill old survivors). Spec selection and the gate follow the same rules as the diff mode, so every mutant in the listed files is in scope and the `!` entries of `mutate` in `test/stryker.config.json` still apply. `--files` cannot be combined with `--base` or `--full` (the script exits with an error), and a listed path that does not exist makes the script exit with an error that names it.
 
-Before finalizing a version bump, run the DOM capture sweep to verify selectors still match live DeepSeek elements:
+Specs on the `exclude` list of `test/stryker-vitest.config.js` are never selected, because they parse source text, which Stryker's instrumentation breaks. A spec that runs code in a `vm` context must forward the host's `globalThis.__stryker__` into that context, as `test/helpers/unload-grace-harness.js` does before `vm.createContext`, or the code in the context cannot see the active mutant.
 
-| Timing | Command | Expected |
-|-|-|-|
-| Every version bump | `node tools/capture.mjs && node tools/report.mjs` | No new zero-match selectors vs previous sweep |
-| After suspected DeepSeek build update | Same | Identifies rotated CSS hash classes |
+Gate: every in-scope mutant is Killed or Ignored, and an in-scope count of 0 fails. An Ignored mutant already has a recorded reason (a static mutant under `ignoreStatic`, or a line under a Stryker disable comment that gives its reason), so the gate passes it, and the script lists the in-scope Ignored mutants separately for information. Each mutant that is neither Killed nor Ignored (Survived, NoCoverage, Timeout or other) gets a new test that kills it (test-engineer), or, for an equivalent mutant approved by lead judgment, a Stryker disable comment on the line above it that names the mutator and the equivalence reason (`// Stryker disable next-line <Mutator>: <reason>`), scoped as the disable-comment paragraph below describes.
 
-Runtime: ~60 seconds (headed browser required, uses persistent profile at `tools/.pw-profile/`). Review the report's "matched nowhere" list — any selector dropping to zero matches is a rotation candidate requiring update in `content/ds-selectors.js`.
+When the production diff only deletes code and the gate reports 0 in-scope mutants, the gate passes if a regression test for the deleted behavior was observed failing on the parent commit; the commit body names that test.
+
+A Stryker disable comment covers every mutant of that mutator that starts on the next line; when that line holds other mutants of the same mutator, split the expression so only the equivalent mutant starts on the commented line, then confirm on the rerun that the in-scope Ignored mutants the script lists are only the intended ones.
+
+A kill claim counts only after a Stryker rerun reports the mutant Killed; when checking a kill by hand first, apply the mutant's replacement to exactly its `location` span (start and end line and column) from `test/reports/mutation.scoped.json`, and confirm the claimed test id is in that mutant's `coveredBy`.
+
+The script reuses the gitignored `test/stryker-incremental.scoped.json`. After a change to fixtures, mocks, helpers or the Stryker or vitest config, recycle that file before the run so no stale result is reused.
+
+### Release HAR Freshness Check
+
+Before each release, the offline E2E recordings and the live site get one check each:
+
+1. Find the main recording under `tools/recordings/` and its date: the file named exactly `deepseek-YYYY-MM-DD.har` with the latest date in the name, a same-date tie going to the latest modification time. A file named `deepseek-YYYY-MM-DD-<purpose>.har` is a purpose recording and never counts as the main recording; with no main recording the offline lane fails with the missing-HAR error.
+2. If the main recording is older than 14 days, or none exists, ask the user to re-record before the release: export a sanitized HAR of `chat.deepseek.com` from Chrome DevTools in their normal browser, with the extension disabled, and save it under `tools/recordings/` as `deepseek-YYYY-MM-DD.har` with the recording date.
+3. Run `cd test && npx playwright test -c playwright.offline.config.js e2e/selector-health.e2e.js` on the new HAR; on a failure, the failing message names each selector that matches nothing, so fix those selectors in `content/ds-selectors.js` before the release.
+4. Ask the user to run the [live smoke checklist](../../../docs/LIVE_SMOKE_CHECKLIST.md) (about 5 minutes) by hand in their own browser, then wait for their result before the release.
 
 ## Verification Checklist
 

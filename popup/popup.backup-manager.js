@@ -15,6 +15,9 @@
  */
 function createBackupManager(ctx) {
 
+    // 單一復原備份檔可匯入的記錄上限（與 content 層儲存上限 200 筆一致；只檢查檔案本身筆數，不含本機既有記錄）
+    const MAX_IMPORTED_RESTORED_RECORDS = 200;
+
     // --- 產生日期字串 YYYYMMDD ---
     function _formatDate(date) {
         const yyyy = date.getFullYear();
@@ -138,8 +141,15 @@ function createBackupManager(ctx) {
                 const importedData = JSON.parse(text);
 
                 const importedMessages = importedData[ctx.StorageManager.KEYS.RESTORED_MESSAGES];
-                if (!importedMessages || typeof importedMessages !== 'object') {
+                // 缺少、非物件或為陣列皆視為格式無效
+                if (!importedMessages || typeof importedMessages !== 'object' || Array.isArray(importedMessages)) {
                     throw new Error(dsI18n.t('invalidRestoredBackupFormatError'));
+                }
+
+                // 檔案筆數超過上限即拒絕匯入，本機記錄維持不變
+                const importedRecordCount = Object.keys(importedMessages).length;
+                if (importedRecordCount > MAX_IMPORTED_RESTORED_RECORDS) {
+                    throw new Error(dsI18n.t('tooManyRestoredRecordsError', { count: importedRecordCount }));
                 }
 
                 await ctx.StorageManager.mergeRestoredMessages(importedMessages);

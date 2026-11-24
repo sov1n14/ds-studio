@@ -1,7 +1,7 @@
 /**
- * RED-phase spec for utils/window-control.js (backlog B11 / decision D5).
+ * utils/window-control.js 的紅燈階段規格。
  *
- * D5: the editor window must be a TRUE singleton. The window id is persisted
+ * Requirement: the editor window must be a TRUE singleton. The window id is persisted
  * outside the popup closure (chrome.storage.session), so a second click focuses
  * the window that is already open; when that second click targets a DIFFERENT
  * prompt group, the existing window must navigate to the new url instead of

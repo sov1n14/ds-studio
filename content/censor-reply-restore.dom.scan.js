@@ -22,8 +22,8 @@
                 return false;
             }
 
-            // 2. 收集 DOM 中尚未復原且被審查的 assistant 訊息（按 DOM 順序）
-            var msgEls = document.querySelectorAll(selectors.ASSISTANT_MESSAGE_SELECTOR);
+            // 2. 收集 DOM 中尚未復原且被審查的訊息（按 DOM 順序）；查詢涵蓋所有訊息，由工具列與審查判定篩出 assistant 訊息
+            var msgEls = document.querySelectorAll(selectors.MESSAGE_SELECTOR);
             var unrestoredEls = [];
             for (var i = 0; i < msgEls.length; i++) {
                 var el = msgEls[i];

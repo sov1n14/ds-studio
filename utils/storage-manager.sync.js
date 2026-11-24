@@ -70,10 +70,13 @@
         },
 
         /**
-         * 透過合併雲端資料解決同步衝突，並將合併結果寫回 storage。
+         * 透過合併雲端資料解決同步衝突，並將合併結果寫回兩側 storage，使下一次偵測不再分歧。
+         * 雲端讀取失敗時以 Error reject 且兩側皆不寫入：以本機單側視圖合併會以僅含本機 id 的 index 與當下時戳覆寫雲端（或排入 dsLocalAuth 待 retrySync() 推送），永久遺失僅存於雲端的提示詞組。
+         * @returns {Promise<void>}
+         * @throws {Error} chrome.storage.sync 讀取失敗（lastError、Promise reject 或同步拋出）
          */
         async resolveSyncConflict() {
-            const syncRaw = await this._safeGet('sync', null);
+            const syncRaw = await this._strictGet('sync', null);
             const localRaw = await this._safeGet('local', null);
 
             const syncPresets = this._getPresetsFromRawStorage(syncRaw);
@@ -82,8 +85,7 @@
             const localOrderMeta = localRaw[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
             const syncOrderMeta = syncRaw[this.KEYS.PRESET_ORDER_META] || { order: [], orderUpdatedAt: 0 };
 
-            // 合併雙側 tombstone（同 id 取較新刪除時間戳）並清除過期記錄，
-            // 供 mergePresets() 判斷哪些 id 應被視為「已刪除」而排除於合併結果之外。
+            // 合併雙側 tombstone（同 id 取較新刪除時間戳）並清除過期記錄，供 mergePresets() 判斷哪些 id 應被視為「已刪除」而排除於合併結果之外。
             const localTombstones = localRaw[this.KEYS.PRESET_TOMBSTONES] || {};
             const syncTombstones = syncRaw[this.KEYS.PRESET_TOMBSTONES] || {};
             const mergedTombstones = this._pruneTombstones(this._mergeTombstones(localTombstones, syncTombstones));
@@ -100,21 +102,14 @@
                 ),
             };
 
-            // 1. 儲存合併後的 presets 與解決後的 order meta
-            await this.savePromptPresets(mergedPresets, mergedMeta);
+            // 1. 將合併後的排序與 presets 寫入兩側
+            await this._writeMergedPresets(mergedPresets, mergedMeta, syncRaw, localRaw);
 
-            // 1.5 持久化合併後的 tombstones 至兩側 storage，供跨裝置刪除傳播使用
-            //     （經由既有 _set() 的 8KB 守衛與重試佇列邏輯，不重新實作寫入守衛）
+            // 1.5 持久化合併後的 tombstones 至兩側 storage，供跨裝置刪除傳播使用（經由既有 _set() 的 8KB 守衛與重試佇列邏輯，不重新實作寫入守衛）
             await this._set({ [this.KEYS.PRESET_TOMBSTONES]: mergedTombstones });
 
-            // 2. 解決其他設定：雲端設定覆寫本機 UI 設定
-            // 只保留 StorageManager 實際擁有的金鑰（KEYS 靜態成員 + dsPreset_ 動態 preset 金鑰）。
-            // 原因：localRaw/syncRaw 是 chrome.storage.*.get(null) 的完整未過濾快照，
-            // 可能內含其他模組自行管理的 chrome.storage.local 金鑰（例如
-            // content/temporary-chat-toggle.js 的 dss-temporary-chat-enabled）。
-            // 若直接 spread 整包快照，這些「外來金鑰」會被誤判為需調和的資料，
-            // 導致某一側的舊值透過此處寫回而復活、覆蓋另一側裝置剛設定的新值。
-            // 因此改為以 ownership 白名單重建 updates，而非直接展開原始快照。
+            // 2. 解決其他設定：雲端設定覆寫本機 UI 設定。
+            // 以 ownership 白名單（KEYS 靜態成員 + dsPreset_ 動態 preset 金鑰）重建 updates，而非展開 get(null) 的完整快照：快照可能內含其他模組自行管理的金鑰（例如 content/temporary-chat-toggle.js 的 dss-temporary-chat-enabled），直接展開會讓某一側的舊值經此寫回而復活、覆蓋另一側裝置剛設定的新值。
             const ownedKeys = new Set(Object.values(this.KEYS));
             // chat-map 金鑰（meta、chunk、legacy）僅由 service worker 單一寫入者寫入：快照寫回會蓋掉其間的提交
             const isOwnedKey = (key) => !this._isChatMapKey(key) && (ownedKeys.has(key) || key.startsWith(this.PRESET_KEY_PREFIX));
@@ -129,29 +124,58 @@
             // 清理：若舊金鑰存在則移除
             delete updates[this.KEYS.PROMPT_PRESETS];
 
-            // 避免以原始資料覆蓋剛儲存的 presets
-            const presetIds = mergedPresets.map(p => p.id);
+            // presets、排序與 tombstones 已於上方寫入合併版本，避免被 raw data 覆蓋
             delete updates[this.KEYS.PRESET_INDEX];
-            delete updates[this.KEYS.PRESET_ORDER_META]; // savePromptPresets 已正確寫入此金鑰
-            delete updates[this.KEYS.PRESET_TOMBSTONES]; // 已於上方寫入合併後的版本，避免被 raw data 覆蓋
-            presetIds.forEach(id => delete updates[this._presetKey(id)]);
-            // 同時移除 raw data 中殘留的 dsPreset_ 金鑰
+            delete updates[this.KEYS.PRESET_ORDER_META];
+            delete updates[this.KEYS.PRESET_TOMBSTONES];
             Object.keys(updates).forEach(k => {
                 if (k.startsWith(this.PRESET_KEY_PREFIX)) delete updates[k];
             });
 
-            // restored_messages 僅存本機且可能超過 8KB 同步配額，排除以避免失敗
-            delete updates[this.KEYS.RESTORED_MESSAGES];
+            // 同步簿記（dsLocalAuth、dsOversizedKeys）與 restored_messages 僅存本機，不寫回 sync
+            this.SYNC_EXCLUDED_KEYS.forEach(key => delete updates[key]);
 
-            // isEnabled / globalPromptEnabled 為裝置層級的本機開關（local-only），
-            // 不應被雲端版本覆寫，故排除於合併結果之外。
+            // isEnabled / globalPromptEnabled / isReplyNotificationEnabled 為裝置層級的本機開關（local-only），不應被雲端版本覆寫，故排除於合併結果之外。
             delete updates[this.KEYS.IS_ENABLED];
             delete updates[this.KEYS.GLOBAL_PROMPT_ENABLED];
+            delete updates[this.KEYS.REPLY_NOTIFICATION];
+
+            // 仍排在 dsLocalAuth 重試佇列的金鑰是尚未推送成功的本機較新寫入：保留本機值留待 retrySync() 推送，不以雲端值覆寫
+            // Stryker disable next-line ArrayDeclaration: 等價變異 — dsLocalAuth 缺席時的回退陣列僅用於 delete updates[key]，updates 只含 KEYS 與 dsPreset_ 擁有金鑰，刪除任何非擁有金鑰皆無作用
+            (localRaw[this.KEYS.LOCAL_AUTHORITATIVE] || []).forEach(key => delete updates[key]);
 
             updates[this.KEYS.SYNC_INITIALIZED] = true;
             updates[this.KEYS.SYNC_CONFLICT_PENDING] = false;
 
             return this._set(updates);
+        },
+
+        /**
+         * 將合併後的排序與 presets 寫入兩側 storage。雲端缺少或較舊的 preset 經 _set() 寫入兩側（sync 寫入失敗時改存本機並排入 dsLocalAuth 重試佇列）；雲端已持有、僅本機缺少或不同者只寫本機；曾列於任一側 index 卻未進入合併結果者（例如被 tombstone 刪除）自兩側移除。
+         * @param {Array} mergedPresets - mergePresets() 的合併結果
+         * @param {{order: string[], orderUpdatedAt: number}} mergedMeta - 合併後的順序元資料
+         * @param {Object} syncRaw - chrome.storage.sync.get(null) 的快照
+         * @param {Object} localRaw - chrome.storage.local.get(null) 的快照
+         */
+        async _writeMergedPresets(mergedPresets, mergedMeta, syncRaw, localRaw) {
+            await this._set({ [this.KEYS.PRESET_INDEX]: mergedMeta.order, [this.KEYS.PRESET_ORDER_META]: mergedMeta });
+
+            for (const preset of mergedPresets) {
+                const key = this._presetKey(preset.id);
+                if (this._shouldPushPreset(preset, syncRaw[key])) {
+                    await this._set({ [key]: preset });
+                } else if (JSON.stringify(preset) !== JSON.stringify(localRaw[key])) {
+                    await this._safeSet('local', { [key]: preset });
+                }
+            }
+
+            const mergedIdSet = new Set(mergedMeta.order);
+            const indexedIds = new Set([...(localRaw[this.KEYS.PRESET_INDEX] || []), ...(syncRaw[this.KEYS.PRESET_INDEX] || [])]);
+            const droppedKeys = [...indexedIds].filter(id => !mergedIdSet.has(id)).map(id => this._presetKey(id));
+            if (droppedKeys.length > 0) {
+                await this._safeRemove('sync', droppedKeys);
+                await this._safeRemove('local', droppedKeys);
+            }
         },
 
         /**
@@ -179,17 +203,12 @@
          * 統一同步進入點。
          *
          * 流程：
-         *   1. 推送任何因先前暫時性失敗而擱置於 dsLocalAuth 的本機較新項目
-         *      （retrySync() 內部已依 _shouldPushPreset / orderUpdatedAt 逐項判斷，
-         *      並尊重既有的同步寫入配額守衛）。
-         *   2. 從雲端拉取最新設定（getSettings() → _get()，內部已完成
-         *      sync-wins 合併 + 逐項 updatedAt 收斂 + dsLocalAuth pin）。
+         *   1. retrySync()：推送因先前暫時性失敗而擱置於 dsLocalAuth 的本機較新項目（依 _shouldPushPreset / orderUpdatedAt 逐項判斷，並尊重既有的同步寫入配額守衛）；推送後若偵測到可自動解決的分歧，由 resolveSyncConflict() 將合併結果寫入兩側，仍排在 dsLocalAuth 的金鑰保留本機值。
+         *   2. 從雲端拉取最新設定（getSettings() → _get()，sync-wins 合併後逐項依 updatedAt 收斂，已完成首次合併的裝置上，遠端較新的 preset 與排序回寫本機；從未合併過的裝置不回寫，留待衝突偵測與合併）。
          *
-         * 每個項目的決策彼此獨立：同一次呼叫中，項目 A 可能判定為「遠端較新」，
-         * 項目 B 可能同時判定為「本機較新並已推送」。
+         * 每個項目的決策彼此獨立：同一次呼叫中，項目 A 可能判定為「遠端較新」，項目 B 可能同時判定為「本機較新並已推送」。
          *
-         * 設計原則：不重新實作任何比較邏輯，僅重用既有的 retrySync() / getSettings()，
-         * 避免與既有 tie-break 語意產生分歧。
+         * 設計原則：不重新實作任何比較邏輯，僅重用既有的 retrySync() / getSettings()，避免與既有 tie-break 語意產生分歧。
          *
          * @returns {Promise<Object>} 收斂後的最新設定物件（結構同 getSettings()）
          */

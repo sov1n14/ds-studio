@@ -111,7 +111,12 @@
             const localRaw = await this._safeGet('local', null);
             const conflictType = this._detectSyncConflict(syncRaw, localRaw);
             if (conflictType === 'auto') {
-                await this.resolveSyncConflict();
+                // 合併讀取失敗時僅告警，不寫入任何資料，下次同步會再偵測到衝突並重新合併；重試照常回報剩餘擱置數
+                try {
+                    await this.resolveSyncConflict();
+                } catch (err) {
+                    console.warn('[DSS] storage-manager retrySync: resolveSyncConflict failed:', err);
+                }
             }
 
             const after = await this._safeGet('local', [this.KEYS.LOCAL_AUTHORITATIVE]);

@@ -10,6 +10,12 @@
     // Stryker disable next-line all: equivalent mutant — conditional require always resolves in Node test env
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
+    // 計算元素的直接子元素中符合 icon button 選擇器的數量（不含更深層後代）
+    function countDirectIconButtons(el) {
+        return Array.prototype.filter.call(el.children, (child) =>
+            child.matches(__DS_DetectionSelectors.ICON_BUTTON_ROLE_SELECTOR)).length;
+    }
+
     const bundle = {
         _isCensored(toolbarGroupEl) {
             if (!toolbarGroupEl || !toolbarGroupEl.querySelectorAll) return false;
@@ -27,10 +33,10 @@
                 const toolbar = container.querySelector(__DS_DetectionSelectors.MESSAGE_TOOLBAR_SELECTOR);
                 if (toolbar) return toolbar;
 
-                // 後備方案：尋找容器中任何有 5 個以上 icon buttons 的 .ds-flex
+                // 後備方案：尋找「直接子元素」含 5 個以上 icon buttons 的 .ds-flex；以直接子元素判定，避免誤取包住工具列群組的外層 .ds-flex wrapper
                 const allFlex = container.querySelectorAll(__DS_DetectionSelectors.FLEX_ROW_SELECTOR);
                 for (let i = 0; i < allFlex.length; i++) {
-                    if (allFlex[i].querySelectorAll(__DS_DetectionSelectors.ICON_BUTTON_ROLE_SELECTOR).length >= 5) return allFlex[i];
+                    if (countDirectIconButtons(allFlex[i]) >= 5) return allFlex[i];
                 }
             }
 

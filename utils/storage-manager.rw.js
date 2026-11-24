@@ -21,6 +21,17 @@
         });
     },
 
+    // 嚴格讀取：讀取失敗（lastError 或同步拋出）時 reject，供必須區分「空資料」與「讀取失敗」的呼叫端使用；_safeGet 維持 resolve({}) 的既有契約
+    _strictGet(area, keys) {
+        return new Promise((resolve, reject) => {
+            chrome.storage[area].get(keys, (data) => {
+                const readError = chrome.runtime.lastError;
+                if (readError) { reject(new Error(`chrome.storage.${area}.get failed: ${readError.message ?? readError}`)); return; }
+                resolve(data || {});
+            });
+        });
+    },
+
     _safeSet(area, items) {
         return new Promise((resolve, reject) => {
             try {
@@ -29,7 +40,9 @@
                     resolve();
                 });
             } catch (e) {
-                resolve(); // Context invalidated — silently succeed
+                // 同步拋出（例如擴充功能情境失效）：維持 resolve 讓既有呼叫端行為不變，但記錄錯誤供診斷
+                console.warn('[DSS] storage-manager: chrome.storage.' + area + '.set threw:', e);
+                resolve();
             }
         });
     },
@@ -50,7 +63,7 @@
     /**
      * Internal getter that prioritizes sync, then falls back to local.
      * 合併順序為 sync 覆寫 local，逐筆 preset 與 preset 排序再依時間戳收斂；
-     * 遠端勝出的項目會由 _reconcileRemoteWins() 回寫本機。
+     * 已完成首次合併的裝置上，遠端勝出的項目會由 _reconcileRemoteWins() 回寫本機。
      */
     async _get(keys) {
         const localStatus = await this._safeGet('local', [this.KEYS.SYNC_CONFLICT_PENDING]);
@@ -87,7 +100,7 @@
     },
 
     /**
-     * 收斂 _get() 的合併結果，並將「遠端較新」的項目回寫 chrome.storage.local。
+     * 收斂 _get() 的合併結果，並在已完成首次合併的裝置上將「遠端較新」的項目回寫 chrome.storage.local。
      * 這是讀取路徑中唯一會寫入儲存的步驟，獨立命名以免寫入行為藏在 _get() 之下。
      * merged 會被原地修改。
      * @param {Object} args
@@ -98,7 +111,7 @@
      */
     async _reconcileRemoteWins({ merged, lData, sData, effectiveKeys }) {
         // 用於收集本次判定為「遠端較新」的項目，稍後一次性持久化回 chrome.storage.local，
-        // 確保回傳值與本機持久化狀態一致（避免僅存在於記憶體中的合併結果）。
+        // 確保已完成首次合併的裝置上回傳值與本機持久化狀態一致（避免僅存在於記憶體中的合併結果）。
         const remoteWinsToPersist = {};
 
         // === 逐筆 preset 依 updatedAt 挑最新版本，避免 Chrome 同步收斂時以較舊版本覆蓋較新編輯 ===
@@ -140,11 +153,13 @@
 
         // 將「遠端較新」的最終結果持久化回 chrome.storage.local。
         const keysToPersist = Object.keys(remoteWinsToPersist).filter((key) => merged[key] === remoteWinsToPersist[key]);
-        if (keysToPersist.length > 0) {
-            const persistPayload = {};
-            keysToPersist.forEach((key) => { persistPayload[key] = remoteWinsToPersist[key]; });
-            await this._safeSet('local', persistPayload);
-        }
+        if (keysToPersist.length === 0) return;
+        // 從未合併過的裝置（本機無 syncInitialized 旗標）只回傳合併視圖、不回寫：本機 index 與 preset 是首次合併辨識本機獨有提示詞組、偵測同時間衝突的唯一依據，回寫後合併會永久遺失它們。
+        const flagState = await this._safeGet('local', [this.KEYS.SYNC_INITIALIZED]);
+        if (flagState[this.KEYS.SYNC_INITIALIZED] !== true) return;
+        const persistPayload = {};
+        keysToPersist.forEach((key) => { persistPayload[key] = remoteWinsToPersist[key]; });
+        await this._safeSet('local', persistPayload);
     },
 
     /**

@@ -15,6 +15,7 @@
  * sendResponse spy handed to callListeners as the third argument.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 import '../../utils/temporary-chat-constants.js';
 import StorageManager from '../../utils/storage-manager.js';
 import { resetStorageOnChangedListeners } from '../setup/vitest.setup.js';

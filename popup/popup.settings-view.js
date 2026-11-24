@@ -1,7 +1,7 @@
 /**
  * DS studio — Popup Settings View 模組
  * 將一份完整的設定物件套用到 popup 的控制項上（單向：settings → DOM）。
- * 初次載入與其他需要整批還原 UI 的流程共用此對應表，避免十二個設定鍵的對應邏輯重複實作。
+ * 初次載入與其他需要整批還原 UI 的流程共用此對應表，避免各設定鍵的對應邏輯重複實作。
  *
  * 此檔案以 classic script 載入，無 ES import/export。
  */
@@ -27,7 +27,10 @@ function applySettingsToDom(dom, settings) {
         autoRetryToggle,
         autoContinueToggle,
         autoOpenSidebarToggle,
+        autoCopyReplyToggle,
+        autoCopyCodeToggle,
         websearchRadios = [],
+        replyNotificationRadios = [],
         chatWidthToggle, chatWidthSlider, chatWidthValue, chatWidthSliderContainer,
         inputWidthToggle, inputWidthSlider, inputWidthValue, inputWidthSliderContainer,
     } = dom;
@@ -43,11 +46,17 @@ function applySettingsToDom(dom, settings) {
     if (autoRetryToggle)         autoRetryToggle.checked         = settings.autoRetry;
     if (autoContinueToggle)      autoContinueToggle.checked      = settings.autoContinue;
     if (autoOpenSidebarToggle)   autoOpenSidebarToggle.checked   = settings.autoOpenSidebar;
+    if (autoCopyReplyToggle)     autoCopyReplyToggle.checked     = settings.autoCopyReply;
+    if (autoCopyCodeToggle)      autoCopyCodeToggle.checked      = settings.autoCopyCode;
 
     // 舊版 'default' 值由 StorageManager 的讀取路徑統一校正，此處僅處理尚未設定的情況
     if (websearchRadios.length) {
         websearchRadios.forEach(r => { r.checked = (r.value === (settings.websearchToggle ?? 'on')); });
     }
+
+    // 回覆完成通知為布林設定，以 on / off 單選鈕呈現；僅 true 視為開啟
+    const replyNotificationValue = settings.replyNotification === true ? 'on' : 'off';
+    replyNotificationRadios.forEach(r => { r.checked = (r.value === replyNotificationValue); });
 
     if (chatWidthToggle && chatWidthSlider && chatWidthValue) {
         chatWidthToggle.checked = settings.chatWidthEnabled;

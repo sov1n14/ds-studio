@@ -23,6 +23,7 @@
  * invoked directly wherever the return value is part of the contract.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 import TemporaryChatPendingStore from '../../background/pending-store.js';
 import constants from '../../utils/temporary-chat-constants.js';
 

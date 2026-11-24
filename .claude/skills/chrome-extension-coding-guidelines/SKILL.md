@@ -15,7 +15,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 
 **Enforcement mechanism:** conformance to the rules *in this file* — layer boundaries, naming, file size — is checked by human or agent review, with one mechanical exception: `test/unit/storage-manager.loader-contract.spec.js` enforces the load-order contract described in §1.
 
-**This says nothing about testing the code's behavior**, which is a separate obligation and is not optional. `CLAUDE.md` §2 governs it: logic-layer changes follow the red-green protocol — `test-engineer` writes the failing test and reports the observed failure before any implementation exists, `code-implementer` implements without touching the test files, `test-executor` certifies the pass. DOM-adapter changes explore the live page first, then implement, then add tests. Unit tests only, all of them under `test/`. Satisfying the review rules here does not discharge that; passing tests does not discharge these.
+**This says nothing about testing the code's behavior**, which is a separate obligation and is not optional. `CLAUDE.md` `## Layered TDD` governs it: logic-layer changes follow the red-green protocol — `test-engineer` writes the failing test and reports the observed failure before any implementation exists, `code-implementer` implements without touching the test files, `test-executor` certifies the pass. DOM-adapter changes explore the live page first, then implement, then add tests. All tests live under `test/`; `CLAUDE.md` `## Testing Policy` names the kinds that exist. Satisfying the review rules here does not discharge that; passing tests does not discharge these.
 
 ---
 
@@ -28,6 +28,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 | `popup/` | Rendering, user input, calling `utils/` | Call `chrome.*` directly; hold business logic |
 | `background/` | Service-worker lifecycle, cross-tab coordination, alarms, message routing | Touch the DOM |
 | `content/` | DOM reading and injection on `chat.deepseek.com`, DeepSeek selectors, `MutationObserver` wiring | Call `chrome.storage.*`, `chrome.alarms.*`, or any other service-worker-only API (exception: see §1 StorageManager exception below) |
+| `offscreen/` | Offscreen documents (one per purpose, e.g. the clipboard write via `document.execCommand('copy')`) that answer `chrome.runtime` messages from `background/` | Call `chrome.*` beyond `chrome.runtime` messaging; hold business logic or state |
 | `utils/` | Reusable logic — storage, i18n, messaging, formatting, validation | Reference the DOM; contain layer-specific branching |
 
 **Layer access rules:**
@@ -104,12 +105,13 @@ A multi-part module extends its entry file's name with a dot segment: `storage-m
 
 ## 4. Documentation & Assets
 
+The documentation language rule and its README exception live in the project `CLAUDE.md` (`## Versioning, Commits, and Docs`). Layout:
+
 | File | Language | Purpose |
 |-|-|-|
-| `SPEC.md` | 繁體中文 | Product specification: features, acceptance criteria, roadmap |
-| `README.md` | 繁體中文 | User manual: install, configure, operate |
-| `ARCHITECTURE.md` | English | Developer guide: code structure, design decisions, onboarding |
-| `docs/CHANGELOG.md` | English | Version-summary table linking into `docs/changelog/v<major>.md`, which holds the per-line entries |
+| `README.md` | English | Project front page on GitHub |
+| `docs/README.md` | 繁體中文 | Chinese version of the front page |
+| `docs/` (every other file) | English | Spec, architecture, features, and changelog; `docs/CHANGELOG.md` links into `docs/changelog/v<major>.md` |
 
 Plans, task breakdowns, and directives to subagents MUST be written in English. UI copy is localized through `_locales/` and `utils/i18n.js`, never hardcoded in a view file.
 

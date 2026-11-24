@@ -47,6 +47,8 @@
                 if (importedSettings.autoRetry !== undefined) updates[this.KEYS.AUTO_RETRY] = importedSettings.autoRetry;
                 if (importedSettings.autoContinue !== undefined) updates[this.KEYS.AUTO_CONTINUE] = importedSettings.autoContinue;
                 if (importedSettings.autoOpenSidebar !== undefined) updates[this.KEYS.AUTO_OPEN_SIDEBAR] = importedSettings.autoOpenSidebar;
+                if (importedSettings.autoCopyReply !== undefined) updates[this.KEYS.AUTO_COPY_REPLY] = importedSettings.autoCopyReply;
+                if (importedSettings.autoCopyCode !== undefined) updates[this.KEYS.AUTO_COPY_CODE] = importedSettings.autoCopyCode;
                 if (importedSettings.isShowSystemTime !== undefined) updates[this.KEYS.SHOW_SYSTEM_TIME] = importedSettings.isShowSystemTime;
                 if (importedSettings.chatWidth !== undefined) updates[this.KEYS.CHAT_WIDTH] = importedSettings.chatWidth;
                 if (importedSettings.chatWidthEnabled !== undefined) updates[this.KEYS.CHAT_WIDTH_ENABLED] = importedSettings.chatWidthEnabled;

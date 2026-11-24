@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * GoToTop render-combined mutant killer tests.
  */
@@ -6,6 +7,7 @@ import '../../utils/storage-manager.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createNativeButton,
+    insertNativeButton,
     createWrapperWithoutNativeButton,
     createFullWrapperWithNativeButton,
     resetGoToTopState,
@@ -13,7 +15,8 @@ import {
 
 describe('GoToTop render-combined mutant killers', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     describe('_iconSvg', () => {
         // These coordinates are author-controlled constants: the path data is copied verbatim from DeepSeek's native chevron icon, and the upward orientation comes from `transform:scaleY(-1)` at render time.
@@ -167,19 +170,16 @@ describe('GoToTop render-combined mutant killers', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
             GoToTop._injectIntoWrapperDirect();
             GoToTop._button.style.marginBottom = '';
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
             GoToTop._transitionToStacked(GoToTop._button, nativeBtn);
             expect(GoToTop._button.style.marginBottom).not.toBe('');
         });
     });
 
     describe('_startWrapperObserver callback', () => {
-        // happy-dom captures the real setTimeout at module-load time and uses it
-        // to deliver MutationObserver callbacks. vi.useFakeTimers() patches
-        // globalThis.setTimeout but NOT the already-bound reference inside
-        // happy-dom. We must yield to the real macrotask queue so MO callbacks
-        // fire and schedule the (fake) debounce timer before we advance it.
+        // MutationObserver callbacks are delivered outside the fake clock that
+        // vi.useFakeTimers() installs. Yield to the real macrotask queue so MO
+        // callbacks fire and schedule the (fake) debounce timer before we advance it.
         const realSetTimeout = globalThis.setTimeout;
         const yieldToMacrotask = () => new Promise(resolve => realSetTimeout(resolve, 0));
         it('restores visibility for previously visible button', async () => {

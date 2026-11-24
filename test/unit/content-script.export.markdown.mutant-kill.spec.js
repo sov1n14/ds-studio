@@ -9,6 +9,18 @@ function md(html, options) {
     return parseHtmlToMarkdown(doc.body.firstElementChild, options);
 }
 
+// DeepSeek md-code-block as the live page renders it: the language label sits in the banner, the copy and download buttons beside it, and the pre (no class) holds one span per line with token spans inside.
+function codeBlock(containerClass, label, preHtml) {
+    const button = (text) => "<div class=\"ds-button ds-button--borderless\" role=\"button\"><div class=\"ds-button__icon\"><svg viewBox=\"0 0 16 16\"></svg></div><span class=\"ds-button__content\"><span>" + text + "</span></span></div>";
+    return "<div class=\"" + containerClass + "\">"
+        + "<div class=\"md-code-block-banner-wrap\"><div class=\"md-code-block-banner md-code-block-banner-lite\"><div>"
+        + "<div><span>" + label + "</span></div>"
+        + "<div><div>" + button("Copy") + button("Download") + "</div></div>"
+        + "</div></div></div>"
+        + "<pre>" + preHtml + "</pre>"
+        + "</div>";
+}
+
 describe("export.markdown mutant killers", () => {
 
     describe("bold", () => {
@@ -163,9 +175,8 @@ describe("export.markdown mutant killers", () => {
         });
         it("code block container span join", () => {
             const fence = String.fromCharCode(96, 96, 96);
-            const r = md("<div><div class=\"md-code-block\"><pre class=\"language-js\"><span>const</span><span> x</span></pre></div></div>");
-            expect(r).toContain(fence + "js");
-            expect(r).toContain("const x");
+            const r = md("<div>" + codeBlock("md-code-block", "js", "<span><span class=\"token keyword\">const</span><span> x</span></span>") + "</div>");
+            expect(r, "a DIV.md-code-block becomes one fence with the banner language and the joined spans as its body").toBe(fence + "js\nconst x\n" + fence);
         });
         it("non-DIV not code container", () => {
             const fence = String.fromCharCode(96, 96, 96);
@@ -276,9 +287,8 @@ describe("export.markdown mutant killers", () => {
     describe("code block container edge cases", () => {
         it("DIV with classList containing code block class renders spans", () => {
             const fence = String.fromCharCode(96, 96, 96);
-            const r = md("<div><div class=\"other md-code-block extra\"><pre class=\"language-ts\"><span>let</span><span> y</span></pre></div></div>");
-            expect(r).toContain(fence + "ts");
-            expect(r).toContain("let y");
+            const r = md("<div>" + codeBlock("other md-code-block extra", "ts", "<span><span class=\"token keyword\">let</span><span> y</span></span>") + "</div>");
+            expect(r, "md-code-block among other classes still becomes one fence with the banner language and the joined spans as its body").toBe(fence + "ts\nlet y\n" + fence);
         });
     });
 

@@ -1,6 +1,7 @@
 *.log
 *.py
 *.zip
+.claude/agent-memory/
 .claude/screenshots/
 .ignore/
 .playwright-cli/
@@ -15,9 +16,11 @@ test-results/
 to-do/
 .stryker-tmp/
 reports/
-test/stryker-incremental.json
+test/stryker-incremental*.json
 tools/test_auth.txt
 tools/node_modules/
-tools/.pw-profile/
 tools/captures/
 tools/screenshots/
+.browser-profile/
+tools/recordings/
+tools/session-reuse.png

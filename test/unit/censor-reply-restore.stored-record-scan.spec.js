@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
-import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * The full-DOM scan that matches stored records to censored elements by
@@ -15,8 +14,7 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
     beforeEach(resetCensorReplyRestore);
 
     describe('_tryRestoreFromStoredRecords() — session+prompt anchoring', () => {
-        // Uses the shared buildChatPair() helper (censored: true by default), which builds
-        // the identical container/user/assistant/toolbar shape this block previously duplicated.
+        // Uses the shared buildChatPair() helper (censored: true by default), which appends live-markup user + assistant pairs to one visible-items container. The live user .ds-message shares the assistant hash class, so assistant elements come from buildChatPair's return value, never from a class query.
 
         beforeEach(() => {
             CensorReplyRestore._keyToMessageId = new Map();
@@ -31,9 +29,11 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
         it('restores messages by matching prompt_key between DOM and records', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            buildChatPair('asst-1', 'What is AI?');
-            buildChatPair('asst-2', 'Tell me a joke');
-            buildChatPair('asst-3', 'Explain quantum physics');
+            const msgEls = [
+                buildChatPair('asst-1', 'What is AI?'),
+                buildChatPair('asst-2', 'Tell me a joke'),
+                buildChatPair('asst-3', 'Explain quantum physics')
+            ];
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -56,19 +56,16 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
             const result = CensorReplyRestore._tryRestoreFromStoredRecords();
             expect(result).toBe(true);
 
-            const msgEls = document.querySelectorAll('.ds-message._63c77b1');
-            expect(msgEls).toHaveLength(3);
             expect(CensorReplyRestore._keyToMessageId.size).toBe(3);
-            for (const msgEl of msgEls) {
-                expect(msgEl.querySelector('.restored-content')).not.toBeNull();
-            }
+            expect(msgEls[0].querySelector('.restored-content').innerHTML).toContain('AI response');
+            expect(msgEls[1].querySelector('.restored-content').innerHTML).toContain('Joke response');
+            expect(msgEls[2].querySelector('.restored-content').innerHTML).toContain('Physics response');
         });
 
         it('pairs duplicate prompts by message_id order', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            buildChatPair('asst-1', 'hello');
-            buildChatPair('asst-2', 'hello');
+            const msgEls = [buildChatPair('asst-1', 'hello'), buildChatPair('asst-2', 'hello')];
 
             CensorReplyRestore._restoredMessages = {
                 '100': {
@@ -86,7 +83,6 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
             const result = CensorReplyRestore._tryRestoreFromStoredRecords();
             expect(result).toBe(true);
 
-            const msgEls = document.querySelectorAll('.ds-message._63c77b1');
             expect(CensorReplyRestore._keyToMessageId.size).toBe(2);
             const firstRestored = msgEls[0].querySelector('.restored-content');
             const secondRestored = msgEls[1].querySelector('.restored-content');
@@ -99,7 +95,7 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
         it('does NOT inject records from a different chat_session_id', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/a0000000-0000-0000-0000-000000000001');
 
-            buildChatPair('asst-1', 'Hello');
+            const msgEl = buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -111,14 +107,13 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
 
             CensorReplyRestore._tryRestoreFromStoredRecords();
 
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).toBeNull();
         });
 
         it('skips legacy records without prompt_key or chat_session_id', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            buildChatPair('asst-1', 'Hello');
+            const msgEl = buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -130,14 +125,13 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
 
             CensorReplyRestore._tryRestoreFromStoredRecords();
 
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).toBeNull();
         });
 
         it('does nothing when current session cannot be determined from URL', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/some/other/page');
 
-            buildChatPair('asst-1', 'Hello');
+            const msgEl = buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -149,14 +143,13 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
 
             CensorReplyRestore._tryRestoreFromStoredRecords();
 
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).toBeNull();
         });
 
         it('returns false when no records can be matched', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            buildChatPair('asst-1', 'What is AI?');
+            const msgEl = buildChatPair('asst-1', 'What is AI?');
 
             CensorReplyRestore._restoredMessages = {
                 '101': {
@@ -169,7 +162,6 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
             const result = CensorReplyRestore._tryRestoreFromStoredRecords();
 
             expect(result).toBe(false);
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).toBeNull();
         });
     });
@@ -188,42 +180,8 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
         it('skips record with censored !== true — record is filtered out, no injection', () => {
             vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('/a/chat/s/550e8400-e29b-41d4-a716-446655440000');
 
-            // User message (preceding)
-            const userItem = document.createElement('div');
-            userItem.setAttribute('data-virtual-list-item-key', 'user-1');
-            const userMsgDiv = document.createElement('div');
-            userMsgDiv.className = 'ds-message';
-            const userContent = document.createElement('div');
-            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            userContent.textContent = 'Hello';
-            userMsgDiv.appendChild(userContent);
-            userItem.appendChild(userMsgDiv);
-            document.body.appendChild(userItem);
-
-            // Assistant message with toolbar indicating censorship
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', 'asst-1');
-            const msgEl = document.createElement('div');
-            msgEl.className = 'ds-message _63c77b1';
-            const mainContent = document.createElement('div');
-            mainContent.className = 'ds-markdown ds-assistant-message-main-content';
-            msgEl.appendChild(mainContent);
-            asstItem.appendChild(msgEl);
-            // Censored toolbar: buttons 2 and 5 disabled (0-indexed 1 and 4)
-            const toolbar = document.createElement('div');
-            toolbar.className = 'ds-flex';
-            for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
-                const btn = document.createElement('div');
-                btn.setAttribute('role', 'button');
-                btn.className = 'ds-button ds-button--icon';
-                if (state === 'disabled') {
-                    btn.classList.add('ds-button--disabled');
-                    btn.setAttribute('aria-disabled', 'true');
-                }
-                toolbar.appendChild(btn);
-            }
-            asstItem.appendChild(toolbar);
-            document.body.appendChild(asstItem);
+            // Censored assistant reply preceded by its user prompt (live markup); only the record's censored flag rules it out.
+            const msgEl = buildChatPair('asst-1', 'Hello');
 
             CensorReplyRestore._restoredMessages = {
                 '100': {
@@ -312,12 +270,11 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
             };
 
             document.body.innerHTML = '';
-            buildChatPair('asst-refresh2', 'refresh question');
+            const msgEl = buildChatPair('asst-refresh2', 'refresh question');
 
             const result = CensorReplyRestore._tryRestoreFromStoredRecords();
             expect(result).toBe(true);
 
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).not.toBeNull();
             expect(msgEl.querySelector('.restored-content').innerHTML).toContain('refresh restored content');
         });
@@ -338,12 +295,11 @@ describe('CensorReplyRestore — _tryRestoreFromStoredRecords full scan', () => 
             };
 
             document.body.innerHTML = '';
-            buildChatPair('asst-refresh3', 'refresh question');
+            const msgEl = buildChatPair('asst-refresh3', 'refresh question');
 
             const result = CensorReplyRestore._tryRestoreFromStoredRecords();
             expect(result).toBe(false);
 
-            const msgEl = document.querySelector('.ds-message._63c77b1');
             expect(msgEl.querySelector('.restored-content')).toBeNull();
         });
     });

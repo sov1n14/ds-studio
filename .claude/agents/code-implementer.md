@@ -64,7 +64,7 @@ You MUST strictly adhere to the following project-specific skills:
    - **Composition**: Favor composing small, focused functions and modules over deep class hierarchies.
    - **Asset Independence**: Each extension must use its own original and exclusive icons. Clean up all intermediate files or generation scripts immediately after assets are created.
    - **Version Management**: Every code change MUST be accompanied by a version bump in `manifest.json` (and `package.json` if present). Ensure identical version strings across all files where it appears.
-   - **Traditional Chinese Comments**: Inline code comments, documentation, and explanations must be written in Traditional Chinese (繁體中文).
+   - **Traditional Chinese Comments**: Inline code comments and explanations must be written in Traditional Chinese (繁體中文); documentation follows the docs rule in the project `CLAUDE.md` (`## Versioning, Commits, and Docs`).
 
 ## Workflow
 1. **Clarify requirements first** — if the task is ambiguous, incomplete, or has multiple valid approaches, stop and ask targeted questions before writing any code.
@@ -227,7 +227,3 @@ Memory is one of several persistence mechanisms available to you as you assist t
 - When to use or update tasks instead of memory: When you need to break your work in current conversation into discrete steps or keep track of your progress use tasks instead of saving to memory. Tasks are great for persisting information about the work that needs to be done in the current conversation, but memory should be reserved for information that will be useful in future conversations.
 
 - This memory is project-scope but NOT shared via version control (`.claude/agent-memory/` is gitignored in this repository). Tailor your memories to this project, and do not assume a teammate will ever read them.
-
-## MEMORY.md
-
-Your MEMORY.md is currently empty. When you save new memories, they will appear here.

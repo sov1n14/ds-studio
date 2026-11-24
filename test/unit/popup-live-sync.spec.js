@@ -18,6 +18,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import StorageManager from '../../utils/storage-manager.js';
 import { evalPopupScript, readProjectFile } from '../helpers/popup-script-loader.js';
+import { readClosureDomRefs, sliceCompilable, topLevelFunctionDeclarations } from '../helpers/popup-closure-source.js';
 import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
 
 const K = StorageManager.KEYS;
@@ -46,6 +47,10 @@ function makeRadio(value, checked = false) {
 }
 
 function makeWebsearchRadios(checkedValue = 'on') {
+    return ['on', 'off'].map((value) => makeRadio(value, value === checkedValue));
+}
+
+function makeReplyNotificationRadios(checkedValue = 'off') {
     return ['on', 'off'].map((value) => makeRadio(value, value === checkedValue));
 }
 
@@ -88,7 +93,10 @@ function makeDom(overrides = {}) {
         autoRetryToggle: makeCheckbox(false),
         autoContinueToggle: makeCheckbox(false),
         autoOpenSidebarToggle: makeCheckbox(false),
+        autoCopyReplyToggle: makeCheckbox(false),
+        autoCopyCodeToggle: makeCheckbox(false),
         websearchRadios: makeWebsearchRadios(),
+        replyNotificationRadios: makeReplyNotificationRadios(),
         ...overrides,
     };
 }
@@ -536,15 +544,24 @@ describe('createLiveSyncListener — preset list reload', () => {
         expect(customSelect.render).not.toHaveBeenCalled();
     });
 
-    it('does not throw when customSelect has not been created yet (getCustomSelect returns falsy)', async () => {
-        const { ctx } = buildCtx({ customSelect: null });
+    // The reload runs in an un-awaited async chain, so a throw on a missing customSelect never reaches the listener caller; it surfaces only as the reload stopping short. Assert the reload end state after the drain, not a synchronous not.toThrow.
+    it('still reloads presets and refreshes the edit button when customSelect has not been created yet (getCustomSelect returns null)', async () => {
+        await StorageManager.savePromptPresets([
+            { id: 'p4', name: 'Delta', content: 'D', createdAt: 1, updatedAt: 1 },
+        ]);
+
+        const getCustomSelect = vi.fn(() => null);
+        const { ctx, state, updateEditPresetBtnState } = buildCtx();
+        ctx.getCustomSelect = getCustomSelect;
         useVirtualTime();
         const listener = startAndCapture(ctx);
 
-        expect(() => {
-            listener({ [K.PRESET_INDEX]: { oldValue: [], newValue: [] } }, 'sync');
-        }).not.toThrow();
+        listener({ [K.PRESET_INDEX]: { oldValue: [], newValue: ['p4'] } }, 'sync');
         await drainStorageChain();
+
+        expect(getCustomSelect, 'reload path must consult getCustomSelect').toHaveBeenCalled();
+        expect(state.presets).toEqual([expect.objectContaining({ id: 'p4', name: 'Delta' })]);
+        expect(updateEditPresetBtnState, 'edit-button state must refresh even without a custom select').toHaveBeenCalledTimes(1);
     });
 });
 
@@ -687,7 +704,7 @@ describe('createLiveSyncListener — idempotency and namespace filtering', () =>
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Group H — popup.js wiring block (static source assertions)
+// Group H — popup.js 的 Live Sync 接線區塊（執行真實區塊，斷言交給 createLiveSyncListener 的 ctx）
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('popup.js — Live Sync wiring block', () => {
@@ -697,22 +714,57 @@ describe('popup.js — Live Sync wiring block', () => {
         popupCode = readProjectFile('popup/popup.js');
     });
 
-    function extractWiringBlock() {
-        const match = popupCode.match(
-            /const liveSync = window\.__DS_PopupLiveSync\.createLiveSyncListener\(\{[\s\S]*?\r?\n {4}\}\);\r?\n {4}liveSync\.start\(\);/
-        );
-        if (!match) throw new Error('Could not locate Live Sync wiring block in popup.js');
-        return match[0];
+    /**
+     * 執行 popup.js 從 `const liveSync = window.__DS_PopupLiveSync.createLiveSyncListener(...)` 到 `liveSync.start()` 的真實原始碼。
+     * 區塊範圍以可編譯判斷取出，不依賴縮排，因此在 Stryker 以 Babel 重新排版並插樁的 popup.js 上同樣執行；檔案最外層的 stryMutAct_* 等輔助函式放在同一範圍。
+     * 閉包變數由 with 範圍提供：每個閉包層級 DOM 參照是一個獨立的標記物件，presets、activePresetId、chatPresetMap、customSelect 讀寫 state，window 只帶一個記錄 ctx 的 createLiveSyncListener。區塊若引用其他閉包變數，執行時丟出 ReferenceError。
+     */
+    function runWiringBlock() {
+        const start = popupCode.search(/const\s+liveSync\s*=\s*window\.__DS_PopupLiveSync\.createLiveSyncListener\s*\(/);
+        if (start === -1) throw new Error('Could not locate Live Sync wiring block in popup.js');
+        const call = sliceCompilable(popupCode, start, ')', 'the createLiveSyncListener(...) call');
+        const startCallIdx = popupCode.indexOf('liveSync.start()', start + call.length);
+        if (startCallIdx === -1) throw new Error('Could not locate liveSync.start() after the Live Sync wiring block in popup.js');
+        const block = popupCode.slice(start, startCallIdx + 'liveSync.start()'.length);
+
+        const domRefs = Object.fromEntries([...readClosureDomRefs(popupCode).keys()].map((name) => [name, { domRef: name }]));
+        const state = {
+            presets: [{ id: 'p-initial' }],
+            activePresetId: 'a-initial',
+            chatPresetMap: { 'chat-initial': 'p-initial' },
+            customSelect: { name: 'customSelect-initial' },
+        };
+        const created = [];
+        const listener = { startCalls: 0, start() { this.startCalls += 1; } };
+        const scope = {
+            ...domRefs,
+            StorageManager: { name: 'StorageManager sentinel' },
+            applyMasterSwitchUI: function applyMasterSwitchUI() {},
+            updateEditPresetBtnState: function updateEditPresetBtnState() {},
+            window: { __DS_PopupLiveSync: { createLiveSyncListener: (ctx) => { created.push(ctx); return listener; } } },
+            get presets() { return state.presets; },
+            set presets(v) { state.presets = v; },
+            get activePresetId() { return state.activePresetId; },
+            set activePresetId(v) { state.activePresetId = v; },
+            get chatPresetMap() { return state.chatPresetMap; },
+            set chatPresetMap(v) { state.chatPresetMap = v; },
+            get customSelect() { return state.customSelect; },
+            set customSelect(v) { state.customSelect = v; },
+        };
+        // new Function 的函式本體為非嚴格模式，可使用 with 把閉包變數接到 scope；最外層宣告放在 with 之外，作用同檔案最外層。
+        new Function('scope', `${topLevelFunctionDeclarations(popupCode).join('\n')}\nwith (scope) {\n${block}\n}`)(scope);
+        expect(created, 'the wiring block must call createLiveSyncListener exactly once').toHaveLength(1);
+        return { ctx: created[0], listener, scope, domRefs, state };
     }
 
     it('constructs createLiveSyncListener with StorageManager and calls start()', () => {
-        const block = extractWiringBlock();
-        expect(block).toMatch(/StorageManager,/);
-        expect(block).toMatch(/liveSync\.start\(\);$/);
+        const { ctx, listener, scope } = runWiringBlock();
+        expect(ctx.StorageManager).toBe(scope.StorageManager);
+        expect(listener.startCalls).toBe(1);
     });
 
     it('passes all expected dom fields into ctx.dom', () => {
-        const block = extractWiringBlock();
+        const { ctx, domRefs } = runWiringBlock();
         const expectedDomFields = [
             'enableToggle', 'includeThinkingToggle', 'includeReferencesToggle',
             'showSystemTimeToggle', 'globalPromptToggle',
@@ -720,28 +772,47 @@ describe('popup.js — Live Sync wiring block', () => {
             'chatWidthToggle', 'chatWidthSlider', 'chatWidthValue', 'chatWidthSliderContainer',
             'inputWidthToggle', 'inputWidthSlider', 'inputWidthValue', 'inputWidthSliderContainer',
             'preventAutoScrollToggle', 'autoExpandMessagesToggle', 'websearchRadios',
-            'autoOpenSidebarToggle',
+            'autoOpenSidebarToggle', 'autoCopyReplyToggle', 'autoCopyCodeToggle',
+            'replyNotificationRadios',
         ];
         for (const field of expectedDomFields) {
-            expect(block, `missing dom field: ${field}`).toMatch(new RegExp(`\\b${field}\\b`));
+            expect(domRefs[field], `popup.js declares no closure DOM ref named ${field}`).toBeDefined();
+            expect(ctx.dom[field], `missing dom field: ${field}`).toBe(domRefs[field]);
         }
     });
 
     it('wires applyMasterSwitchUI and updateEditPresetBtnState callbacks', () => {
-        const block = extractWiringBlock();
-        expect(block).toMatch(/applyMasterSwitchUI,/);
-        expect(block).toMatch(/updateEditPresetBtnState,/);
+        const { ctx, scope } = runWiringBlock();
+        expect(ctx.applyMasterSwitchUI).toBe(scope.applyMasterSwitchUI);
+        expect(ctx.updateEditPresetBtnState).toBe(scope.updateEditPresetBtnState);
     });
 
     it('wires preset/activePresetId/chatPresetMap/customSelect accessors', () => {
-        const block = extractWiringBlock();
-        expect(block).toMatch(/getPresets:\s*\(\)\s*=>\s*presets/);
-        expect(block).toMatch(/setPresets:\s*\(v\)\s*=>\s*\{\s*presets\s*=\s*v;\s*\}/);
-        expect(block).toMatch(/getActivePresetId:\s*\(\)\s*=>\s*activePresetId/);
-        expect(block).toMatch(/setActivePresetId:\s*\(v\)\s*=>\s*\{\s*activePresetId\s*=\s*v;\s*\}/);
-        expect(block).toMatch(/getChatPresetMap:\s*\(\)\s*=>\s*chatPresetMap/);
-        expect(block).toMatch(/setChatPresetMap:\s*\(v\)\s*=>\s*\{\s*chatPresetMap\s*=\s*v;\s*\}/);
-        expect(block).toMatch(/getCustomSelect:\s*\(\)\s*=>\s*customSelect/);
+        const { ctx, state } = runWiringBlock();
+
+        // getter 讀的是閉包變數的當下值，不是建立 ctx 時的快照
+        const laterPresets = [{ id: 'p-later' }];
+        state.presets = laterPresets;
+        expect(ctx.getPresets()).toBe(laterPresets);
+        const nextPresets = [{ id: 'p-next' }];
+        ctx.setPresets(nextPresets);
+        expect(state.presets).toBe(nextPresets);
+
+        state.activePresetId = 'a-later';
+        expect(ctx.getActivePresetId()).toBe('a-later');
+        ctx.setActivePresetId('a-next');
+        expect(state.activePresetId).toBe('a-next');
+
+        const laterMap = { 'chat-later': 'p-later' };
+        state.chatPresetMap = laterMap;
+        expect(ctx.getChatPresetMap()).toBe(laterMap);
+        const nextMap = { 'chat-next': 'p-next' };
+        ctx.setChatPresetMap(nextMap);
+        expect(state.chatPresetMap).toBe(nextMap);
+
+        const laterSelect = { name: 'customSelect-later' };
+        state.customSelect = laterSelect;
+        expect(ctx.getCustomSelect()).toBe(laterSelect);
     });
 
     it('is wired after customSelect creation and after sendActivePresetToContentScript()', () => {

@@ -53,6 +53,9 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         AUTO_RETRY: 'isAutoRetryEnabled',
         AUTO_CONTINUE: 'isAutoContinueEnabled',
         AUTO_OPEN_SIDEBAR: 'isAutoOpenSidebarEnabled',
+        AUTO_COPY_REPLY: 'isAutoCopyReplyEnabled',
+        AUTO_COPY_CODE: 'isAutoCopyCodeEnabled',
+        REPLY_NOTIFICATION: 'isReplyNotificationEnabled', // local-only：回覆完成通知開關（裝置層級）
         PREVENT_AUTO_SCROLL: 'dsPreventAutoScroll',
         WEBSEARCH_TOGGLE: 'dsWebSearchToggle',
         SHOW_SYSTEM_TIME: 'dsShowSystemTime',
@@ -86,6 +89,9 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         isAutoRetryEnabled: false,
         isAutoContinueEnabled: false,
         isAutoOpenSidebarEnabled: false,
+        isAutoCopyReplyEnabled: false,
+        isAutoCopyCodeEnabled: false,
+        isReplyNotificationEnabled: false,
         dsPreventAutoScroll: false,
         dsWebSearchToggle: 'on',
         dsShowSystemTime: false,
@@ -127,6 +133,35 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
     PRESET_KEY_PREFIX: 'dsPreset_',
 
     /**
+     * 待完成權限意圖：popup 於選用權限提示前記下要開啟哪項設定，權限授予後由 service worker 完成開啟。
+     * 每筆意圖各占一個 chrome.storage.local 金鑰（前綴 + 意圖名），各自獨立寫入與移除；前綴不列入 KEYS，同步合併因此不會把意圖寫進 sync。
+     */
+    PERMISSION_INTENT_KEY_PREFIX: 'dsPermissionIntent_',
+
+    /** 意圖名稱即 getSettings() 的欄位名。 */
+    PERMISSION_INTENTS: {
+        AUTO_COPY_REPLY: 'autoCopyReply',
+        AUTO_COPY_CODE: 'autoCopyCode',
+        REPLY_NOTIFICATION: 'replyNotification',
+    },
+
+    /**
+     * 每個待完成意圖需要的選用權限包裝：'clipboard' 對應 utils/clipboard-permission.js，'notification' 對應 utils/notification-permission.js。
+     * popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程皆以此表決定查詢哪個包裝，意圖與權限的對應僅此一處定義。
+     */
+    PERMISSION_INTENT_PERMISSIONS: {
+        autoCopyReply: 'clipboard',
+        autoCopyCode: 'clipboard',
+        replyNotification: 'notification',
+    },
+
+    /**
+     * 已還原訊息「清除全部」的世代值，存於 chrome.storage.local，每次 clearRestoredMessages() 遞增。分頁存檔以此判斷讀取記錄之後是否有其他情境清除過，避免把清除前的記錄寫回。
+     * 不列入 KEYS，同步合併因此不會把它寫進 sync。
+     */
+    RESTORED_MESSAGES_CLEAR_GENERATION_KEY: 'dsRestoredMessagesClearGeneration',
+
+    /**
      * Helper to get storage key for a specific preset
      */
     _presetKey(id) {
@@ -141,6 +176,16 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
         return ids.map(id => data[this._presetKey(id)]).filter(Boolean);
     },
     };
+
+    /**
+     * 永不寫入 chrome.storage.sync 的金鑰：裝置層級的同步簿記（dsLocalAuth 重試佇列、dsOversizedKeys 超量清單）與僅存本機的還原訊息。
+     * 所有把本機金鑰複製到 sync 的寫入路徑（initialize() 預設值補齊與遷移推送、resolveSyncConflict() 回寫）皆以此清單排除。
+     */
+    bundle.SYNC_EXCLUDED_KEYS = Object.freeze([
+        bundle.KEYS.LOCAL_AUTHORITATIVE,
+        bundle.KEYS.OVERSIZED_KEYS,
+        bundle.KEYS.RESTORED_MESSAGES,
+    ]);
 
     root.__DS_StorageManager_keys = bundle;
     if (typeof module !== 'undefined' && module.exports) module.exports = bundle;

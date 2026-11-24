@@ -19,6 +19,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const EXPECTED_SCRIPTS = [
     'content/sse-parser.js',
+    'utils/temporary-chat-message-types.js',
     'content/censor-xhr-hook.js',
     'content/temporary-chat-history-hook.js',
     'content/temporary-chat-fiber-delete.js',
@@ -80,14 +81,23 @@ afterEach(() => {
 });
 
 describe('MAIN_WORLD_SCRIPTS', () => {
-    it('lists exactly the four MAIN-world scripts, sse-parser first', async () => {
+    it('lists exactly the five MAIN-world scripts, sse-parser first', async () => {
         const { MAIN_WORLD_SCRIPTS } = await load();
         expect(MAIN_WORLD_SCRIPTS).toEqual(EXPECTED_SCRIPTS);
+    });
+
+    it('injects the shared message types before every hook that reads them', async () => {
+        const { MAIN_WORLD_SCRIPTS } = await load();
+        const typesIndex = MAIN_WORLD_SCRIPTS.indexOf('utils/temporary-chat-message-types.js');
+        expect(typesIndex, 'message types listed').toBeGreaterThanOrEqual(0);
+        ['content/censor-xhr-hook.js', 'content/temporary-chat-history-hook.js', 'content/temporary-chat-fiber-delete.js'].forEach((hook) => {
+            expect(MAIN_WORLD_SCRIPTS.indexOf(hook), `${hook} listed`).toBeGreaterThan(typesIndex);
+        });
     });
 });
 
 describe('inject()', () => {
-    it('appends exactly four <script> elements in declared order', async () => {
+    it('appends exactly five <script> elements in declared order', async () => {
         await load();
         expect(appendedSrcs).toEqual(EXPECTED_SCRIPTS.map(url));
     });
@@ -105,7 +115,7 @@ describe('inject()', () => {
         await settleObserver();
 
         expect(appendedSrcs).toEqual(afterAutoStart);
-        expect(appendedSrcs).toHaveLength(4);
+        expect(appendedSrcs).toHaveLength(5);
     });
 
     it('returns false and logs a [DSS] error instead of throwing when getURL fails', async () => {

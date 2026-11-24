@@ -378,30 +378,33 @@ describe('resolveTextareaForButton (edit-window case)', () => {
     });
 });
 
+// The composer case targets the main input (textarea[name="search"] on the live page). While a message edit window is open, the edit box (textarea[name="user query"]) sits BEFORE the main input in document order, so "first textarea in the document" is the wrong answer there.
 describe('resolveTextareaForButton (composer case)', () => {
-    it('always takes the first textarea in the document, ignoring focus and the walk-up', () => {
-        const first = makeTextarea('first in document');
+    /** Live order with an edit window open: edit box first, then the composer input area (main input + send button). */
+    function mountEditBoxThenComposer() {
+        const editBox = makeTextarea('edit box text');
+        editBox.setAttribute('name', 'user query');
         const inputArea = document.createElement('div');
-        const near = makeTextarea('near the button');
+        const main = makeTextarea('composer text');
+        main.setAttribute('name', 'search');
         const { button } = makeMobileSendButton();
-        inputArea.appendChild(near);
+        inputArea.appendChild(main);
         inputArea.appendChild(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
-        cleanup = mountInDocument(first, inputArea);
-        near.focus();
+        cleanup = mountInDocument(editBox, inputArea);
+        return { editBox, main, button };
+    }
 
-        expect(SB.resolveTextareaForButton(button, false)).toBe(first);
+    it('takes the main input even when another textarea precedes it and holds focus', () => {
+        const { editBox, main, button } = mountEditBoxThenComposer();
+        editBox.focus();
+
+        expect(SB.resolveTextareaForButton(button, false)).toBe(main);
     });
 
-    it('treats an omitted isEditSendButton argument as the composer case', () => {
-        const first = makeTextarea('first in document');
-        const inputArea = document.createElement('div');
-        const near = makeTextarea('near the button');
-        const { button } = makeMobileSendButton();
-        inputArea.appendChild(near);
-        inputArea.appendChild(wrapIn(DSSelectors.SEND_BUTTON_ROW_CLASS, button));
-        cleanup = mountInDocument(first, inputArea);
+    it('treats an omitted isEditSendButton argument as the composer case (main input, not the preceding textarea)', () => {
+        const { main, button } = mountEditBoxThenComposer();
 
-        expect(SB.resolveTextareaForButton(button)).toBe(first);
+        expect(SB.resolveTextareaForButton(button)).toBe(main);
     });
 });
 

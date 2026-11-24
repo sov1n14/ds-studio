@@ -31,15 +31,26 @@ function resetState() {
     Object.assign(TemporaryChatDelete.state, {
         capturedAuthToken: null,
         trackedTemporaryUuid: null,
-        createDetected: false,
-        isCompletionDetected: false,
-        isPendingCreate: false,
-        coOccurrenceTimer: null,
+        createdSessionIds: new Set(),
+        sentSessionIds: new Set(),
+        enabledFirstSendIds: new Set(),
+        pendingTemporaryUuid: null,
         suppressNextUnloadDelete: false,
         isKeyboardRefresh: false,
         isListening: false,
     });
     globalThis.TemporaryChatEnabledFlag.__setCache(false);
+}
+
+/** With the switch on: a create returns uuid, then the first message is sent in uuid. */
+function matchSession(uuid) {
+    globalThis.TemporaryChatEnabledFlag.__setCache(true);
+    TemporaryChatDelete.handleCreateMessage(new MessageEvent('message', {
+        data: { type: 'DSS_CHAT_CREATE_DETECTED', createdSessionId: uuid }, source: window,
+    }));
+    TemporaryChatDelete.handleCompletionMessage(new MessageEvent('message', {
+        data: { type: 'DSS_CHAT_COMPLETION_DETECTED', chatSessionId: uuid }, source: window,
+    }));
 }
 
 function simulateContextInvalidation() {
@@ -82,9 +93,8 @@ describe('chain-safety — context invalidation must not cause chain deletion', 
             Object.assign(TemporaryChatDelete.state, {
                 trackedTemporaryUuid: TEMP_UUID,
                 capturedAuthToken: 'Bearer test-token',
-                isPendingCreate: true,
             });
-            globalThis.TemporaryChatEnabledFlag.__setCache(true);
+            matchSession(CHAT_A);
             simulateContextInvalidation();
 
             TemporaryChatDelete.handleNavigationEvent(
@@ -95,21 +105,23 @@ describe('chain-safety — context invalidation must not cause chain deletion', 
             expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(TEMP_UUID);
         });
 
-        it('isPendingCreate remains unchanged (handler bails before any processing)', () => {
-            setPathname('/a/chat/s/' + TEMP_UUID);
-            Object.assign(TemporaryChatDelete.state, {
-                trackedTemporaryUuid: TEMP_UUID,
-                capturedAuthToken: 'Bearer test-token',
-                isPendingCreate: true,
-            });
-            globalThis.TemporaryChatEnabledFlag.__setCache(true);
+        it('the matched destination is not marked and stays matched (handler bails before any processing)', () => {
+            setPathname('/');
+            matchSession(CHAT_A);
             simulateContextInvalidation();
 
             TemporaryChatDelete.handleNavigationEvent(
                 makeNavigateEvent(chatUrl(CHAT_A))
             );
+            expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
 
-            expect(TemporaryChatDelete.state.isPendingCreate).toBe(true);
+            // Context restored: the same navigation now marks CHAT_A, so the bail consumed nothing.
+            chrome.runtime.id = 'test-extension-id';
+            chrome.runtime.sendMessage = vi.fn();
+            TemporaryChatDelete.handleNavigationEvent(
+                makeNavigateEvent(chatUrl(CHAT_A))
+            );
+            expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(CHAT_A);
         });
 
         it('no deletion API calls when context is invalidated', () => {
@@ -117,7 +129,6 @@ describe('chain-safety — context invalidation must not cause chain deletion', 
             Object.assign(TemporaryChatDelete.state, {
                 trackedTemporaryUuid: CHAT_A,
                 capturedAuthToken: 'Bearer test-token',
-                isPendingCreate: true,
             });
             globalThis.TemporaryChatEnabledFlag.__setCache(true);
             simulateContextInvalidation();
@@ -134,15 +145,14 @@ describe('chain-safety — context invalidation must not cause chain deletion', 
 
     // ── Group 2: Defense-in-depth (context VALID) ──────────────────────────────
 
-    describe('defense-in-depth — valid context, early returns and isPendingCreate fix', () => {
-        it('after deleteTrackedAndClear, destination UUID must not be tracked', () => {
+    describe('defense-in-depth — valid context, early returns and the matched uuid', () => {
+        it('after deleteTrackedAndClear, the matched destination UUID must not be tracked', () => {
             setPathname('/a/chat/s/' + TEMP_UUID);
             Object.assign(TemporaryChatDelete.state, {
                 trackedTemporaryUuid: TEMP_UUID,
                 capturedAuthToken: 'Bearer test-token',
-                isPendingCreate: true,
             });
-            globalThis.TemporaryChatEnabledFlag.__setCache(true);
+            matchSession(CHAT_A);
             // Keep runtime.id valid — only sendMessage throws
             chrome.runtime.sendMessage = vi.fn(() => {
                 throw new Error('Extension context invalidated.');
@@ -160,21 +170,18 @@ describe('chain-safety — context invalidation must not cause chain deletion', 
             expect(TemporaryChatDelete.state.trackedTemporaryUuid).not.toBe(CHAT_A);
         });
 
-        it('isPendingCreate must be reset even when sendMessage throws in trackUuid', () => {
+        it('the matched uuid is tracked, and marked only once, even when sendMessage throws in trackUuid', () => {
             setPathname('/a/chat/s/' + CHAT_A);
-            Object.assign(TemporaryChatDelete.state, {
-                createDetected: true,
-                isCompletionDetected: true,
-                isPendingCreate: false,
-            });
-            globalThis.TemporaryChatEnabledFlag.__setCache(true);
             simulateContextInvalidation();
 
-            try {
-                TemporaryChatDelete.checkCoOccurrence();
-            } catch { /* sendMessage throw */ }
+            expect(() => matchSession(CHAT_A)).not.toThrow();
+            expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(CHAT_A);
 
-            expect(TemporaryChatDelete.state.isPendingCreate).toBe(false);
+            // A later navigation to CHAT_A must not mark it again (vi.fn records calls that threw).
+            chrome.runtime.id = 'test-extension-id';
+            TemporaryChatDelete.handleNavigationEvent(makeNavigateEvent(chatUrl(CHAT_A) + '?again=1'));
+            const trackCalls = chrome.runtime.sendMessage.mock.calls.filter(([m]) => m?.type === 'DSS_TRACK_FOR_DELETION');
+            expect(trackCalls).toHaveLength(1);
         });
     });
 });

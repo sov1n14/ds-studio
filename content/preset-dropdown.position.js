@@ -20,7 +20,7 @@
      *   <  768px ('hidden') — 間隙 <= 0，隱藏 overlay。
      *
      * @param {Object} input
-     * @param {Object} input.containerRect  - 容器（._2be88ba）的 DOMRect-like 物件，至少含 { left, right, width }
+     * @param {Object} input.containerRect  - 標題列容器（直接包住 .the-header 的 div）的 DOMRect-like 物件，至少含 { left, right, width }
      * @param {Object} [input.titleRect]    - 對話標題的 DOMRect-like 物件，至少含 { right }
      * @param {Object} [input.buttonRect]   - 新對話按鈕的 DOMRect-like 物件，至少含 { left }
      * @param {number} [input.naturalWidth] - dropdown 內容自然寬度（px），預設 80

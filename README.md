@@ -20,10 +20,12 @@ DS studio is a **Chrome extension** that enhances the experience of using **[cha
 | **JSON Backup & Restore** | Full backup and restore of prompt groups, settings, and censored reply recovery records |
 | **Auto Retry and Auto Continue** | Two independent toggles (off by default): automatically click retry when DeepSeek returns a server error, and click continue when a reply stops |
 | **Auto Open Sidebar** | Toggle (off by default) that clicks DeepSeek's collapsed-sidebar button whenever it appears, keeping the sidebar open |
+| **Auto Copy Reply and Code Blocks** | Two independent toggles (off by default): press DeepSeek's copy buttons automatically when a reply finishes, copying the reply or its code blocks; while the DeepSeek tab is unfocused, the extension writes to the clipboard itself, which needs the optional `clipboardWrite` and `offscreen` permissions requested when you turn a toggle on |
+| **Reply-Complete Notification** | Toggle (off by default): shows a browser notification when a DeepSeek reply finishes while the tab is not in the foreground; the notification permission is optional and requested only when you turn the toggle on; stored on this device only and never synced |
 | **Edit Message Cleanup** | Strips injected prompt wrapper tags when editing a sent message so you see only your original text |
 | **Mobile Support** | Sidebar swipe gesture to solve the lack of quick sidebar switching on mobile |
 
-For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
+For detailed usage instructions, see the [Feature Guide](docs/FEATURES.md).
 
 ## Installation
 
@@ -43,13 +45,14 @@ For detailed usage instructions, see the [Feature Guide](docs/en/FEATURES.md).
 
 ## Related Documents
 
-| Document | Language | Description |
-|-|-|-|
-| [Feature Guide](docs/en/FEATURES.md) | English | Complete usage instructions and feature introduction |
-| [Privacy Policy](PRIVACY.md) | English | Data handling and privacy practices |
-| [Specification](docs/SPEC.md) | Chinese | Technical specification and module index |
-| [Architecture](docs/ARCHITECTURE.md) | Chinese | Architecture design and data flow |
-| [Changelog](docs/CHANGELOG.md) | Chinese | Version history |
+| Document | Description |
+|-|-|
+| [Feature Guide](docs/FEATURES.md) | Complete usage instructions and feature introduction |
+| [Privacy Policy](PRIVACY.md) | Data handling and privacy practices |
+| [Specification](docs/SPEC.md) | Technical specification and module index |
+| [Architecture](docs/ARCHITECTURE.md) | Architecture design and data flow |
+| [Changelog](docs/CHANGELOG.md) | Version history |
+| [Live Smoke Checklist](docs/LIVE_SMOKE_CHECKLIST.md) | Manual pre-release check on the live site |
 
 ## Development Technologies
 

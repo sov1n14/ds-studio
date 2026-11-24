@@ -66,6 +66,14 @@
             return this._set({ [this.KEYS.AUTO_OPEN_SIDEBAR]: enabled });
         },
 
+        async saveAutoCopyReply(enabled) {
+            return this._set({ [this.KEYS.AUTO_COPY_REPLY]: enabled });
+        },
+
+        async saveAutoCopyCode(enabled) {
+            return this._set({ [this.KEYS.AUTO_COPY_CODE]: enabled });
+        },
+
         async savePreventAutoScroll(enabled) {
             return this._set({ [this.KEYS.PREVENT_AUTO_SCROLL]: enabled });
         },

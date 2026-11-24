@@ -2,7 +2,7 @@
  * popup checkbox toggle - "Prevent Auto-Scroll" (preventAutoScrollToggle)
  *
  * Requirement contract under test (mirrors the existing hideThinkingToggle / dsHideThinking toggle exactly):
- *   1. popup.html defines a checkbox #preventAutoScrollToggle inside the "UI Adjustments" card; popup.js holds a DOM ref for it.
+ *   1. popup.html defines a checkbox #preventAutoScrollToggle inside the "Features" card; popup.js holds a DOM ref for it.
  *   2. StorageManager.KEYS.PREVENT_AUTO_SCROLL === "dsPreventAutoScroll"; settings.preventAutoScroll defaults to false.
  *   3. On popup load, preventAutoScrollToggle.checked reflects settings.preventAutoScroll.
  *   4. Changing the checkbox persists the new boolean via StorageManager.savePreventAutoScroll(value).
@@ -19,14 +19,10 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import StorageManager from "../../utils/storage-manager.js";
-import { mountPopupHtml, buildApplyMasterSwitchUI } from "../helpers/popup-master-switch-harness.js";
+import { parsePopupHtml, mountPopupHtml, buildApplyMasterSwitchUI } from "../helpers/popup-master-switch-harness.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-function readPopupHtml() {
-    return readFileSync(resolve(__dirname, "../../popup/popup.html"), "utf-8");
-}
 
 function readPopupJs() {
     return readFileSync(resolve(__dirname, "../../popup/popup.js"), "utf-8");
@@ -66,15 +62,13 @@ describe("StorageManager - preventAutoScroll setting", () => {
 // -----------------------------------------------------------------------------
 
 describe("popup.html - preventAutoScrollToggle checkbox markup", () => {
-    it("defines a checkbox with id=preventAutoScrollToggle inside the Features card", () => {
-        const html = readPopupHtml();
-        const cardStart = html.indexOf("Features");
-        const cardEnd = html.indexOf("<!-- Toast");
-        expect(cardStart, "could not locate the Features card").toBeGreaterThan(-1);
-        expect(cardEnd, "could not locate end-of-container marker").toBeGreaterThan(cardStart);
-
-        const cardHtml = html.slice(cardStart, cardEnd);
-        expect(cardHtml).toMatch(/<input\s+type="checkbox"\s+id="preventAutoScrollToggle"/);
+    it("defines a checkbox with id=preventAutoScrollToggle inside the Features card (located by its card heading)", () => {
+        const doc = parsePopupHtml();
+        const title = [...doc.querySelectorAll(".card-title")].find((el) => el.textContent.trim() === "Features");
+        expect(title, "could not locate the Features card heading").toBeTruthy();
+        const input = title.closest(".card").querySelector("#preventAutoScrollToggle");
+        expect(input, "#preventAutoScrollToggle missing from the Features card").not.toBeNull();
+        expect(input.type).toBe("checkbox");
     });
 });
 

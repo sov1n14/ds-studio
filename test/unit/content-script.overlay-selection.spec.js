@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
+import { waitForContentScriptInit } from '../helpers/content-script-init-probe.js';
 
 const overlay = contentScript.PresetOverlay;
 
@@ -30,18 +31,6 @@ const CHAT_UUID = '44444444-4444-4444-4444-444444444444';
 
 async function flush(times = 20) {
     for (let i = 0; i < times; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-// content-script.js registers its DSS_SETTINGS_CHANGED listener as the LAST
-// statement of the un-awaited initSettings() bootstrap; the popup router is
-// registered synchronously at module load. Count >= 2 therefore means the
-// bootstrap finished and a broadcast delivered now will be received.
-async function waitForContentScriptBootstrap() {
-    for (let i = 0; i < 500; i++) {
-        if (chrome.runtime.onMessage.listenerCount() >= 2) return;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
 }
 
 function broadcastSettingsChanged(changes, area = 'local') {
@@ -76,7 +65,8 @@ describe('overlay selected preset after a DSS_SETTINGS_CHANGED broadcast', () =>
     let target;
 
     beforeEach(async () => {
-        await waitForContentScriptBootstrap();
+        // content-script.js 於 import 時啟動且未被等待的 initSettings() 須先完成，否則其尾端的初始設定與對話綁定會覆寫本案例寫入的 state
+        await waitForContentScriptInit(contentScript);
         Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         target = document.createElement('div');
         document.body.appendChild(target);

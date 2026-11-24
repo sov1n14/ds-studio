@@ -14,7 +14,7 @@
      * @param {object} state - tracking 部件建立的共享狀態物件
      * @param {object} deps
      * @param {object} deps.tracking - tracking 部件的已綁定 API
-     * @param {(options?: object) => void} deps.deleteTrackedAndClear
+     * @param {() => void} deps.deleteTrackedAndClear
      * @param {(uuid: string) => void} deps.handOffToServiceWorker
      * @param {() => boolean} deps.readEnabledFlag
      * @param {(isEnabled: boolean) => void} deps.setEnabledFlagCache
@@ -31,46 +31,60 @@
         const extractUuidFromUrl = tracking.extractUuidFromUrl;
 
         /**
-         * 處理來自 MAIN world XHR hook 的授權 token 訊息（DSS_AUTH_CAPTURED）。
-         * 無論切換狀態如何皆保存 token（離開時刪除可能在切換關閉後才發生）。
+         * 只把 MAIN world XHR hook 的授權 token（DSS_AUTH_CAPTURED）存入本分頁記憶體：不傳背景、不寫儲存。
          * @param {MessageEvent} e
+         * @returns {boolean} 是否為本視窗的 DSS_AUTH_CAPTURED 訊息
          */
-        function handleAuthMessage(e) {
-            if (e.source !== window) return;
-            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_AUTH_CAPTURED_TYPE) return;
+        function holdAuthMessage(e) {
+            if (e.source !== window) return false;
+            if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_AUTH_CAPTURED_TYPE) return false;
             state.capturedAuthToken = e.data.authorization || null;
-            if (!e.data.authorization) return;
-            // 委派 SW 的待刪佇列路由；fire-and-forget，失敗僅記錄
-            Promise.resolve(chrome.runtime.sendMessage({
-                type: globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN,
-                token: e.data.authorization,
-            }))
+            return true;
+        }
+
+        /** 把 token 交給 SW 的待刪佇列路由（DSS_SET_LAST_AUTH_TOKEN）；無 token 時不送。fire-and-forget，失敗僅記錄。 */
+        function relayAuthToken(token) {
+            if (!token) return;
+            Promise.resolve(chrome.runtime.sendMessage({ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_SET_LAST_AUTH_TOKEN, token }))
                 .then((response) => { if (response?.ok === false) throw new Error(response.error); })
-                .catch((err) => console.error('[DSS] temporary-chat-delete.handlers handleAuthMessage:', err));
+                .catch((err) => console.error('[DSS] temporary-chat-delete.handlers relayAuthToken:', err));
+        }
+
+        /** 監聽器掛載期間的 auth 訊息：保存 token 並立即交給 SW（離開時刪除可能在切換關閉後才發生）。 */
+        function handleAuthMessage(e) {
+            if (holdAuthMessage(e)) relayAuthToken(state.capturedAuthToken);
         }
 
         /**
-         * 處理來自 MAIN world 的新對話建立偵測訊息（DSS_CHAT_CREATE_DETECTED）。
+         * 處理來自 MAIN world 的新對話建立訊息（DSS_CHAT_CREATE_DETECTED { createdSessionId }）。
+         * 不受切換狀態限制：切換可能在頁面載入的 create 之後才開啟，id 仍須保留供首次送出時配對。
          * @param {MessageEvent} e
          */
         function handleCreateMessage(e) {
             if (e.source !== window) return;
             if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_CHAT_CREATE_MESSAGE_TYPE) return;
-            if (!readEnabledFlag()) return;
-            state.createDetected = true;
-            tracking.checkCoOccurrence();
+            tracking.recordCreatedSession(e.data.createdSessionId);
         }
 
         /**
-         * 處理來自 MAIN world 的 completion API 偵測訊息（DSS_CHAT_COMPLETION_DETECTED）。
+         * 處理來自 MAIN world 的 completion 請求訊息（DSS_CHAT_COMPLETION_DETECTED { chatSessionId }）。
+         * 一律記錄（判定首次送出），並附上送出當下的切換狀態。
          * @param {MessageEvent} e
          */
         function handleCompletionMessage(e) {
             if (e.source !== window) return;
             if (e.data?.type !== globalThis.DSS_TEMP_CHAT.DSS_CHAT_COMPLETION_MESSAGE_TYPE) return;
-            if (!readEnabledFlag()) return;
-            state.isCompletionDetected = true;
-            tracking.checkCoOccurrence();
+            tracking.recordCompletionSession(e.data.chatSessionId, readEnabledFlag());
+        }
+
+        /**
+         * 常駐的 session 觀察器：路由 create 與 completion 訊息。
+         * 由入口檔於 init 掛載且不隨切換卸載，確保切換開啟前發生的 create 與首次送出都被觀察到。
+         * @param {MessageEvent} e
+         */
+        function handleSessionMessage(e) {
+            handleCreateMessage(e);
+            handleCompletionMessage(e);
         }
 
         /**
@@ -89,20 +103,19 @@
         }
 
         /**
-         * 統一處理所有 postMessage（根據 type 路由至對應處理器）。
+         * 統一處理切換期間的 postMessage（根據 type 路由至對應處理器）。
+         * create 與 completion 由常駐的 handleSessionMessage 處理，不在此重複路由。
          * @param {MessageEvent} e
          */
         function handleWindowMessage(e) {
             handleAuthMessage(e);
-            handleCreateMessage(e);
-            handleCompletionMessage(e);
             handleHistoryNavMessage(e);
         }
 
         /**
          * Navigation API navigate 事件處理器：
          * 1. 若離開的是追蹤中的臨時對話（且非刷新/同 URL），執行刪除。
-         * 2. 若有待定建立旗標且導航目的地是對話頁面，標記該 UUID 為臨時對話。
+         * 2. 若導航目的地正是已配對的臨時對話 UUID，標記該 UUID（其他對話一律不標記）。
          * @param {NavigateEvent} event
          */
         function handleNavigationEvent(event) {
@@ -139,22 +152,16 @@
             // 離開臨時對話：非刷新、非同一對話再導航、且有追蹤 UUID 與當前頁面 UUID 吻合
             const isLeavingTracked = !isRefresh && !isSameConversation && fromUuid && fromUuid === state.trackedTemporaryUuid;
             if (isLeavingTracked) {
-                if (state.capturedAuthToken) {
-                    deleteTrackedAndClear({ keepalive: false });
-                    return;
-                } else {
-                    // 無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
-                    handOffToServiceWorker(fromUuid);
-                    return;
-                }
+                // 有 token → 頁面內刪除；無 token（例如 Chrome 還原分頁）→ 交接 SW 排程重試
+                if (state.capturedAuthToken) deleteTrackedAndClear();
+                else handOffToServiceWorker(fromUuid);
+                return;
             }
 
-            // 標記新建立的臨時對話：有待定旗標且目的地是對話頁面
-            if (state.isPendingCreate && readEnabledFlag()) {
-                const destinationUuid = extractUuidFromUrl(destinationUrl);
-                if (destinationUuid) {
-                    tracking.trackUuid(destinationUuid);
-                }
+            // 標記新建立的臨時對話：目的地必須正是已配對（本文件建立且以開啟狀態首次送出）的 UUID
+            const isPendingDestination = !!destUuid && destUuid === state.pendingTemporaryUuid;
+            if (isPendingDestination && readEnabledFlag()) {
+                tracking.trackUuid(destUuid);
             }
         }
 
@@ -179,8 +186,8 @@
         }
 
         /**
-         * beforeunload 處理器：涵蓋分頁關閉與 Navigation API 未處理的完整頁面導航。
-         * keepalive=true 確保分頁關閉後請求仍能送出。
+         * beforeunload 處理器：頁面無法分辨關閉分頁與工具列重新整理，故不自行刪除。
+         * 追蹤中的對話以 DSS_TAB_UNLOADING 交給 SW 等寬限期再決定（有無 token 皆同），sessionStorage 追蹤保留給重新整理後的頁面認領。
          */
         function handleBeforeUnload() {
             if (state.suppressNextUnloadDelete) return;
@@ -189,9 +196,15 @@
             const currentUuid = extractUuidFromUrl();
             if (!currentUuid) return;
             if (currentUuid !== state.trackedTemporaryUuid) return;
-            if (!state.capturedAuthToken) return;
+            // 擴充功能情境失效（runtime.id 消失）時靜默放棄：佇列項目留給 SW 的補救流程刪除
+            if (!chrome.runtime?.id) return;
 
-            deleteTrackedAndClear({ keepalive: true });
+            try {
+                Promise.resolve(chrome.runtime.sendMessage({ type: globalThis.DSS_TEMP_CHAT.DSS_MSG_TAB_UNLOADING, uuid: currentUuid }))
+                    .catch((err) => console.error('[DSS] temporary-chat-delete.handlers handleBeforeUnload:', err));
+            } catch (err) {
+                console.error('[DSS] temporary-chat-delete.handlers handleBeforeUnload:', err);
+            }
         }
 
         /**
@@ -212,9 +225,12 @@
         }
 
         return {
+            holdAuthMessage,
+            relayAuthToken,
             handleAuthMessage,
             handleCreateMessage,
             handleCompletionMessage,
+            handleSessionMessage,
             handleHistoryNavMessage,
             handleWindowMessage,
             handleNavigationEvent,

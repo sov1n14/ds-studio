@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Targeted mutant-killer tests for the censor-reply-restore module family.
  * Each group targets survived Stryker mutants by asserting observable behavior.
@@ -7,6 +8,7 @@ import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
 import DSSelectors from '../../content/ds-selectors.js';
+import { loadThinkMessage, thinkParts } from '../helpers/think-block-fixtures.js';
 const KeyToMessageIdMap = require('../../content/censor-reply-restore.keymap.js');
 const markdownBundle = require('../../content/censor-reply-restore.markdown.js');
 
@@ -266,6 +268,20 @@ describe('dom.inject.js mutant killers', () => {
     });
 
     describe('_injectThinkContent()', () => {
+        // Real finished reply (expanded think block, three think steps) and the same reply natively collapsed; the restored think text goes into the first think step.
+        function mountThinkReply(state) {
+            const msgEl = loadThinkMessage(state);
+            document.body.appendChild(msgEl);
+            const block = thinkParts(msgEl).block;
+            const firstStep = block.querySelector('.ds-think-content');
+            return { msgEl, block, firstStep };
+        }
+        // Positional anatomy of a captured think step: loading dots, separator, markdown.
+        function stepParts(step) {
+            const [dots, separator, markdown] = step.children;
+            return { dots, separator, markdown };
+        }
+
         it('builds think block when no container and inserts before restoredEl', () => {
             const parent = document.createElement('div');
             const restoredEl = document.createElement('div');
@@ -277,70 +293,55 @@ describe('dom.inject.js mutant killers', () => {
             expect(parent.children.length).toBe(2);
             expect(parent.lastChild).toBe(restoredEl);
         });
-        it('uses existing think container and adds restored-content class', () => {
-            const msgEl = document.createElement('div');
-            const tc = document.createElement('div');
-            tc.className = DSSelectors.THINK_BLOCK_CLASS;
-            const tce = document.createElement('div');
-            tce.className = DSSelectors.THINK_CONTENT_CLASS;
-            const md = document.createElement('div');
-            md.className = DSSelectors.MARKDOWN_CLASS;
-            tce.appendChild(md); tc.appendChild(tce); msgEl.appendChild(tc);
+        it('uses the existing think block: marks it restored and renders the text into the first think step markdown', () => {
+            const { msgEl, block, firstStep } = mountThinkReply('open');
+            const { markdown } = stepParts(firstStep);
+            const childCount = msgEl.children.length;
             const restoredEl = document.createElement('div');
             CensorReplyRestore._injectThinkContent(msgEl, '**bold**', {}, restoredEl);
-            expect(tc.classList.contains('restored-content')).toBe(true);
-            expect(md.innerHTML).not.toBe('');
-            expect(md.getAttribute('style')).toContain('--ds-md-zoom: 1.143');
+            expect(block.classList.contains('restored-content')).toBe(true);
+            expect(markdown.querySelector('strong').textContent).toBe('bold');
+            expect(markdown.getAttribute('style')).toContain('--ds-md-zoom: 1.143');
+            expect(msgEl.children.length, 'no replica block was added beside the native one').toBe(childCount);
         });
         it('clears existing separator content', () => {
-            const msgEl = document.createElement('div');
-            const tc = document.createElement('div');
-            tc.className = DSSelectors.THINK_BLOCK_CLASS;
-            const tce = document.createElement('div');
-            tce.className = DSSelectors.THINK_CONTENT_CLASS;
-            const sep = document.createElement('div');
-            sep.className = DSSelectors.THINK_SEPARATOR_CLASS;
-            sep.textContent = 'old content';
-            tce.appendChild(sep); tc.appendChild(tce); msgEl.appendChild(tc);
-            const restoredEl = document.createElement('div');
-            CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, restoredEl);
-            expect(sep.innerHTML).toBe('');
+            const { msgEl, firstStep } = mountThinkReply('open');
+            const { separator } = stepParts(firstStep);
+            separator.textContent = 'old content';
+            CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, document.createElement('div'));
+            expect(separator.innerHTML).toBe('');
         });
-        it('creates markdown element after separator when none exists', () => {
-            const msgEl = document.createElement('div');
-            const tc = document.createElement('div');
-            tc.className = DSSelectors.THINK_BLOCK_CLASS;
-            const tce = document.createElement('div');
-            tce.className = DSSelectors.THINK_CONTENT_CLASS;
-            const sep = document.createElement('div');
-            sep.className = DSSelectors.THINK_SEPARATOR_CLASS;
-            tce.appendChild(sep); tc.appendChild(tce); msgEl.appendChild(tc);
-            const restoredEl = document.createElement('div');
-            CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, restoredEl);
-            const mdEl = tce.querySelector('.' + DSSelectors.MARKDOWN_CLASS);
+        it('creates the missing markdown at the end of the first think step, right after its separator', () => {
+            const { msgEl, firstStep } = mountThinkReply('open');
+            const { separator, markdown } = stepParts(firstStep);
+            markdown.remove();
+            CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, document.createElement('div'));
+            const mdEl = firstStep.querySelector('.' + DSSelectors.MARKDOWN_CLASS);
             expect(mdEl).not.toBeNull();
-            expect(sep.nextElementSibling).toBe(mdEl);
+            expect(mdEl.textContent.trim()).toBe('text');
+            expect(separator.nextElementSibling).toBe(mdEl);
+            expect(firstStep.lastElementChild).toBe(mdEl);
         });
-        it('appends markdown to thinkContentEl when no separator', () => {
-            const msgEl = document.createElement('div');
-            const tc = document.createElement('div');
-            tc.className = DSSelectors.THINK_BLOCK_CLASS;
-            const tce = document.createElement('div');
-            tce.className = DSSelectors.THINK_CONTENT_CLASS;
-            tc.appendChild(tce); msgEl.appendChild(tc);
-            const restoredEl = document.createElement('div');
-            CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, restoredEl);
-            const mdEl = tce.querySelector('.' + DSSelectors.MARKDOWN_CLASS);
+        it('appends markdown to the first think step when it has neither separator nor markdown', () => {
+            const { msgEl, firstStep } = mountThinkReply('open');
+            const { separator, markdown } = stepParts(firstStep);
+            separator.remove();
+            markdown.remove();
+            CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, document.createElement('div'));
+            const mdEl = firstStep.querySelector('.' + DSSelectors.MARKDOWN_CLASS);
             expect(mdEl).not.toBeNull();
-            expect(tce.lastChild).toBe(mdEl);
+            expect(firstStep.lastChild).toBe(mdEl);
         });
-        it('returns early if thinkContentEl is missing', () => {
-            const msgEl = document.createElement('div');
-            const tc = document.createElement('div');
-            tc.className = DSSelectors.THINK_BLOCK_CLASS;
-            msgEl.appendChild(tc);
+        it('returns early for a natively collapsed block that shows no think step', () => {
+            const { msgEl, block } = mountThinkReply('closed');
+            const before = block.innerHTML;
             const restoredEl = document.createElement('div');
+            msgEl.appendChild(restoredEl);
+            const childCount = msgEl.children.length;
             expect(() => CensorReplyRestore._injectThinkContent(msgEl, 'text', {}, restoredEl)).not.toThrow();
+            expect(block.innerHTML).toBe(before);
+            expect(msgEl.children.length, 'no replica block was inserted').toBe(childCount);
+            expect(msgEl.querySelectorAll('.ds-think-content')).toHaveLength(0);
         });
     });
 

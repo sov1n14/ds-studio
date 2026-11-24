@@ -36,6 +36,7 @@ describe('Send-button interception: desktop vs mobile selector fix', () => {
         contentScript.state.globalDefaultPrompt = 'sys';
 
         textarea = document.createElement('textarea');
+        textarea.setAttribute('name', 'search'); // models the live main input; composer paths target textarea[name="search"]
         textarea.value = 'hello world';
     });
 

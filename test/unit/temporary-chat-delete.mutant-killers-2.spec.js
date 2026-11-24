@@ -64,10 +64,10 @@ beforeEach(() => {
     Object.assign(TemporaryChatDelete.state, {
         capturedAuthToken: null,
         trackedTemporaryUuid: null,
-        createDetected: false,
-        isCompletionDetected: false,
-        isPendingCreate: false,
-        coOccurrenceTimer: null,
+        createdSessionIds: new Set(),
+        sentSessionIds: new Set(),
+        enabledFirstSendIds: new Set(),
+        pendingTemporaryUuid: null,
         suppressNextUnloadDelete: false,
         isKeyboardRefresh: false,
         isListening: false,
@@ -107,10 +107,13 @@ function fullHandlerDeps(state) {
 }
 
 describe('tracking.create — valid state', () => {
-    it('returns the tracking API instead of throwing when a state object is given', () => {
-        const api = TRACKING().create(TRACKING().createState());
-        expect(typeof api.trackUuid).toBe('function');
-        expect(typeof api.checkCoOccurrence).toBe('function');
+    it('returns a working tracking API instead of throwing when a state object is given', () => {
+        const state = TRACKING().createState();
+        const api = TRACKING().create(state);
+        setPathname('/a/chat/s/' + UUID_A);
+        api.recordCreatedSession(UUID_A);
+        api.recordCompletionSession(UUID_A, true);
+        expect(state.trackedTemporaryUuid).toBe(UUID_A);
     });
 });
 
@@ -153,51 +156,22 @@ describe('coordinator.create — every dependency is required', () => {
 // HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('handlers.handleBeforeUnload — requests deletion only for the tracked page with a token', () => {
-    it('requests a keepalive deletion when leaving the tracked chat with a token', () => {
-        const state = TRACKING().createState();
-        const deps = fullHandlerDeps(state);
-        const handlers = HANDLERS().create(state, deps);
-        setPathname('/a/chat/s/' + UUID_A);
-        Object.assign(state, { trackedTemporaryUuid: UUID_A, capturedAuthToken: 'Bearer tok' });
-        handlers.handleBeforeUnload();
-        expect(deps.deleteTrackedAndClear).toHaveBeenCalledWith({ keepalive: true });
-    });
-
-    it('requests nothing on a non-chat page even when nothing is tracked and a token exists', () => {
-        const state = TRACKING().createState();
-        const deps = fullHandlerDeps(state);
-        const handlers = HANDLERS().create(state, deps);
-        setPathname('/');
-        Object.assign(state, { trackedTemporaryUuid: null, capturedAuthToken: 'Bearer tok' });
-        handlers.handleBeforeUnload();
-        expect(deps.deleteTrackedAndClear).not.toHaveBeenCalled();
-    });
-
-    it('requests nothing on the tracked chat page when no token was captured', () => {
-        const state = TRACKING().createState();
-        const deps = fullHandlerDeps(state);
-        const handlers = HANDLERS().create(state, deps);
-        setPathname('/a/chat/s/' + UUID_A);
-        Object.assign(state, { trackedTemporaryUuid: UUID_A, capturedAuthToken: null });
-        handlers.handleBeforeUnload();
-        expect(deps.deleteTrackedAndClear).not.toHaveBeenCalled();
-    });
-});
 
 describe('handlers — window messages without data are ignored safely', () => {
     it.each([
         'handleAuthMessage',
         'handleCreateMessage',
         'handleCompletionMessage',
+        'handleSessionMessage',
         'handleHistoryNavMessage',
         'handleWindowMessage',
     ])('%s does not throw for a same-window message whose data is null', (name) => {
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
+        setPathname('/a/chat/s/' + UUID_A);
         expect(() => TemporaryChatDelete[name]({ source: window, data: null })).not.toThrow();
         expect(TemporaryChatDelete.state.capturedAuthToken).toBeNull();
-        expect(TemporaryChatDelete.state.createDetected).toBe(false);
-        expect(TemporaryChatDelete.state.isCompletionDetected).toBe(false);
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+        expect(sentOfType(T().DSS_MSG_TRACK_FOR_DELETION)).toEqual([]);
     });
 });
 
@@ -235,12 +209,13 @@ describe('handlers.handleAuthMessage — SW response handling', () => {
     });
 });
 
-describe('handlers.handleCreateMessage — completes a co-occurrence that started with completion', () => {
-    it('completion first, then create, marks the current chat as temporary', () => {
+describe('handlers.handleCreateMessage — completes a match that started with the first send', () => {
+    it('first send in U with the switch on, then the create for U, marks U on its page', () => {
         globalThis.TemporaryChatEnabledFlag.__setCache(true);
         setPathname('/a/chat/s/' + UUID_A);
-        TemporaryChatDelete.handleCompletionMessage(windowMessage({ type: T().DSS_CHAT_COMPLETION_MESSAGE_TYPE }));
-        TemporaryChatDelete.handleCreateMessage(windowMessage({ type: T().DSS_CHAT_CREATE_MESSAGE_TYPE }));
+        TemporaryChatDelete.handleCompletionMessage(windowMessage({ type: T().DSS_CHAT_COMPLETION_MESSAGE_TYPE, chatSessionId: UUID_A }));
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
+        TemporaryChatDelete.handleCreateMessage(windowMessage({ type: T().DSS_CHAT_CREATE_MESSAGE_TYPE, createdSessionId: UUID_A }));
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
     });
 });
@@ -315,16 +290,6 @@ describe('coordinator — pending-store route responses', () => {
         expect(labelFor(T().DSS_MSG_RELEASE_LEASE)).toMatch(/^\[DSS\].*lease/i);
     });
 
-    it('failed routes after a confirmed keepalive delete name the failed operation', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        routeResponse = (m) => ({ ok: false, error: 'fail:' + m.type });
-        trackOnChatPage();
-        TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true });
-        await flush();
-        const labelFor = (type) => errorSpy.mock.calls.find(([, err]) => err?.message === 'fail:' + type)?.[0];
-        expect(labelFor(T().DSS_MSG_REMOVE_OPEN_UUID)).toMatch(/^\[DSS\].*open.?uuid/i);
-        expect(labelFor(T().DSS_MSG_REMOVE_PENDING_DELETE)).toMatch(/^\[DSS\].*pending/i);
-    });
 });
 
 describe('coordinator — heartbeat module without stop()', () => {
@@ -336,15 +301,6 @@ describe('coordinator — heartbeat module without stop()', () => {
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
     });
 
-    it('deleteTrackedAndClear still deletes via keepalive fetch', async () => {
-        trackOnChatPage();
-        withHeartbeat({}, () => {
-            expect(() => TemporaryChatDelete.deleteTrackedAndClear({ keepalive: true })).not.toThrow();
-        });
-        await flush();
-        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBeNull();
-        expect(deleteFetches()).toHaveLength(1);
-    });
 });
 
 describe('coordinator — fiber result listener lifecycle', () => {
@@ -429,14 +385,14 @@ describe('coordinator — fiber result listener lifecycle', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('entry — beforeunload listener', () => {
-    it('attached: unloading the tracked chat sends a keepalive delete fetch', async () => {
+    it('attached: unloading the tracked chat hands it to the service worker, sends no delete fetch and keeps it tracked', async () => {
         trackOnChatPage();
         TemporaryChatDelete.attachListeners();
         window.dispatchEvent(new Event('beforeunload'));
         await flush();
-        const fetches = deleteFetches();
-        expect(fetches).toHaveLength(1);
-        expect(fetches[0][1].keepalive).toBe(true);
+        expect(sentOfType(T().DSS_MSG_TAB_UNLOADING ?? 'DSS_MSG_TAB_UNLOADING is not defined'), 'the attached beforeunload listener must send one unload message for the tracked chat').toEqual([{ type: T().DSS_MSG_TAB_UNLOADING, uuid: UUID_A }]);
+        expect(deleteFetches(), 'the page must not delete on unload').toHaveLength(0);
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
     });
 
     it('detached: unloading sends no delete and keeps the chat tracked', async () => {
@@ -445,17 +401,34 @@ describe('entry — beforeunload listener', () => {
         TemporaryChatDelete.detachListeners();
         window.dispatchEvent(new Event('beforeunload'));
         await flush();
+        expect(sentOfType(T().DSS_MSG_TAB_UNLOADING ?? 'DSS_MSG_TAB_UNLOADING is not defined'), 'a detached instance must send no unload message').toEqual([]);
         expect(deleteFetches()).toHaveLength(0);
         expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
     });
 });
 
 describe('entry — message listener', () => {
-    it('detached: an auth message is no longer captured', () => {
+    it('detached: an SPA navigation away from the tracked chat starts no deletion, while auth capture keeps working', async () => {
+        // Kills skipping removeEventListener('message', handleWindowMessage) in detachListeners:
+        // a leftover handleWindowMessage would route DSS_HISTORY_NAV into handleNavigationEvent,
+        // which leaves tracked UUID_A with a token and so posts DSS_FIBER_DELETE_SESSION and clears tracking.
+        trackOnChatPage(UUID_A, null);
+        const postSpy = vi.spyOn(window, 'postMessage');
         TemporaryChatDelete.attachListeners();
         TemporaryChatDelete.detachListeners();
+
+        // Auth capture stays resident on every page load: it survives the detach.
         window.dispatchEvent(windowMessage({ type: T().DSS_AUTH_CAPTURED_TYPE, authorization: 'Bearer late' }));
-        expect(TemporaryChatDelete.state.capturedAuthToken).toBeNull();
+        expect(TemporaryChatDelete.state.capturedAuthToken).toBe('Bearer late');
+
+        window.dispatchEvent(windowMessage({ type: T().DSS_HISTORY_NAV_TYPE, url: chatUrl(UUID_B) }));
+        await flush();
+
+        expect(TemporaryChatDelete.state.trackedTemporaryUuid).toBe(UUID_A);
+        expect(postSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: T().DSS_FIBER_DELETE_MESSAGE_TYPE }), '*');
+        expect(sentOfType(T().DSS_MSG_REMOVE_OPEN_UUID)).toEqual([]);
+        expect(sentOfType(T().DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE)).toEqual([]);
+        expect(deleteFetches()).toHaveLength(0);
     });
 });
 
@@ -699,30 +672,6 @@ describe('tracking.trackUuid — SW route handling', () => {
             expect(() => tracking.trackUuid(UUID_A)).not.toThrow();
         });
         expect(state.trackedTemporaryUuid).toBe(UUID_A);
-    });
-});
-
-describe('tracking.checkCoOccurrence — a completed window cancels its timer', () => {
-    it('the first window timer does not wipe a second, still-open window', () => {
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-        const state = TRACKING().createState();
-        const tracking = TRACKING().create(state);
-        setPathname('/a/chat/s/' + UUID_A);
-        state.createDetected = true;
-        tracking.checkCoOccurrence();
-        vi.advanceTimersByTime(100);
-        state.isCompletionDetected = true;
-        tracking.checkCoOccurrence();
-        expect(state.trackedTemporaryUuid).toBe(UUID_A);
-
-        vi.advanceTimersByTime(400);
-        setPathname('/a/chat/s/' + UUID_B);
-        state.createDetected = true;
-        tracking.checkCoOccurrence();
-        vi.advanceTimersByTime(600);
-        state.isCompletionDetected = true;
-        tracking.checkCoOccurrence();
-        expect(state.trackedTemporaryUuid).toBe(UUID_B);
     });
 });
 

@@ -9,8 +9,8 @@
 const __DS_EditCleanupSelectors = (globalThis).DSstudio?.Selectors ||
     (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
 
-/** 編輯按鈕的混淆 class 名稱 */
-const EDIT_BUTTON_CLASS = __DS_EditCleanupSelectors.EDIT_MESSAGE_BUTTON_CLASS;
+/** 編輯訊息按鈕的結構式 selector */
+const EDIT_BUTTON_SELECTOR = __DS_EditCleanupSelectors.EDIT_MESSAGE_BUTTON_SELECTOR;
 
 /** 需移除 max-height（設為 none）的容器 selector */
 const REMOVE_MAX_HEIGHT_SELECTOR = __DS_EditCleanupSelectors.EDIT_BOX_SELECTOR;
@@ -55,7 +55,7 @@ function extractUserInput(text) {
 }
 
 /**
- * 計算 ._646a522 元素的動態 max-height 值。
+ * 計算編輯框高度容器（DYNAMIC_MAX_HEIGHT_SELECTOR）的動態 max-height 值。
  * 純計算函式，不存取 DOM。
  *
  * 公式：windowHeight - sourceHeightA - sourceHeightB - MAX_HEIGHT_OFFSET_PX
@@ -88,9 +88,9 @@ function computeScrollDelta(editBoxTop, headerBottom, gap) {
 
 /**
  * 調整指定根節點內所有相關元素的 max-height：
- *   - REMOVE_MAX_HEIGHT_SELECTOR (.cc852ac5)：一律設為 'none'
- *   - DYNAMIC_MAX_HEIGHT_SELECTOR (._646a522)：依視窗高度與來源元素高度動態計算；
- *     若任一來源元素不存在於 DOM 中，則跳過 ._646a522 的設定。
+ *   - REMOVE_MAX_HEIGHT_SELECTOR（編輯框容器）：一律設為 'none'
+ *   - DYNAMIC_MAX_HEIGHT_SELECTOR（編輯框高度容器）：依視窗高度與來源元素高度動態計算；
+ *     若任一來源元素不存在於 DOM 中，則跳過編輯框高度容器的設定。
  *
  * 在 textarea 被偵測到的當下呼叫一次；不監聽 resize 事件。
  *
@@ -100,7 +100,7 @@ function applyMaxHeightAdjustments(root) {
     // Guard：若未傳入則使用 document
     const searchRoot = root != null ? root : document;
 
-    // 移除 .cc852ac5 的 max-height 限制
+    // 移除編輯框容器的 max-height 限制
     searchRoot.querySelectorAll(REMOVE_MAX_HEIGHT_SELECTOR).forEach((el) => {
         el.style.maxHeight = 'none';
     });
@@ -109,7 +109,7 @@ function applyMaxHeightAdjustments(root) {
     const sourceElA = document.querySelector(HEIGHT_SOURCE_SELECTOR_A);
     const sourceElB = document.querySelector(HEIGHT_SOURCE_SELECTOR_B);
 
-    // 缺少任一來源元素時，跳過 ._646a522 的 max-height 設定
+    // 缺少任一來源元素時，跳過編輯框高度容器的 max-height 設定
     if (!sourceElA || !sourceElB) return;
 
     const computed = computeDynamicMaxHeight(
@@ -194,7 +194,7 @@ function applyEditScrollPosition(root) {
     const header = document.querySelector(HEIGHT_SOURCE_SELECTOR_A);
     if (!header) return;
 
-    // 找到 ._6f2c522 容器，再向上尋找真正可捲動的祖先
+    // 找到虛擬列表項目容器，再向上尋找真正可捲動的祖先
     const listItems = document.querySelector(__DS_EditCleanupSelectors.VIRTUAL_LIST_CONTAINER_SELECTOR);
     if (!listItems) return;
 
@@ -217,7 +217,7 @@ function applyEditScrollPosition(root) {
         findScrollableAncestor: findScrollableAncestor,
         applyEditScrollPosition: applyEditScrollPosition,
         // 常數匯出（供測試與主檔使用）
-        EDIT_BUTTON_CLASS: EDIT_BUTTON_CLASS,
+        EDIT_BUTTON_SELECTOR: EDIT_BUTTON_SELECTOR,
         REMOVE_MAX_HEIGHT_SELECTOR: REMOVE_MAX_HEIGHT_SELECTOR,
         DYNAMIC_MAX_HEIGHT_SELECTOR: DYNAMIC_MAX_HEIGHT_SELECTOR,
         HEIGHT_SOURCE_SELECTOR_A: HEIGHT_SOURCE_SELECTOR_A,

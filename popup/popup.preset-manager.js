@@ -20,7 +20,7 @@
  * @param {Function} ctx.refreshSyncStatus - 刷新同步狀態 UI
  * @param {Function} ctx.showSaveStatus - 顯示儲存提示
  * @param {Function} ctx.updateEditPresetBtnState - 更新鉛筆按鈕停用狀態
- * @param {Function} ctx.sendActivePresetToContentScript - 廣播活躍提示詞組
+ * @param {Function} ctx.sendActivePresetToContentScript - 將活躍提示詞組送往彈出視窗底下的 DeepSeek 分頁
  * @param {Function} [ctx.renderGlobalPromptToggle] - 重新渲染全域提示詞開關（刪除後立即反映回退狀態）
  * @param {Object} ctx.Modal - Modal 實例
  * @param {Object} ctx.StorageManager - StorageManager 實例

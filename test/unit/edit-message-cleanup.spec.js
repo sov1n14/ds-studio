@@ -13,6 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,7 +38,7 @@ const {
     handleEditButtonClick,
     applyEditScrollPosition,
     computeScrollDelta,
-    EDIT_BUTTON_CLASS,
+    EDIT_BUTTON_SELECTOR,
     REMOVE_MAX_HEIGHT_SELECTOR,
     DYNAMIC_MAX_HEIGHT_SELECTOR,
     HEIGHT_SOURCE_SELECTOR_A,
@@ -50,17 +51,51 @@ const {
 } = require('../../content/edit-message-cleanup.js');
 
 // ---------------------------------------------------------------------------
+// Real-markup fixtures (test/fixtures/ds-snapshots/)
+//
+// Both files hold the chat pane (header, message list, composer column) copied from live DeepSeek snapshots, with title and message text replaced by placeholders:
+//   conv2-finished-chat-pane.html — idle conversation: a user message with its toolbar (copy and edit buttons) and an assistant message with its six-button toolbar.
+//   edit-window-chat-pane.html    — the same pane while the user message is being edited: the user item holds the edit box (textarea[name="user query"]); the assistant message body is reduced to one placeholder paragraph.
+// Tests locate elements by page structure (parent of .the-header, ancestors of the edit textarea, toolbar button order), never through the selectors under test, so a selector that drifts from the real markup fails the assertions instead of agreeing with them.
+// ---------------------------------------------------------------------------
+const SNAPSHOT_DIR = path.resolve(__dirname, '../fixtures/ds-snapshots');
+const CONV_PANE_HTML = fs.readFileSync(path.join(SNAPSHOT_DIR, 'conv2-finished-chat-pane.html'), 'utf8');
+const EDIT_PANE_HTML = fs.readFileSync(path.join(SNAPSHOT_DIR, 'edit-window-chat-pane.html'), 'utf8');
+
+/** Mount a chat-pane fixture as the page body and return its landmark elements. */
+function mountPane(html) {
+    document.body.innerHTML = html;
+    const listRoot = document.querySelector('.ds-virtual-list');
+    const mainTextarea = document.querySelector('textarea[name="search"]');
+    const editTextarea = document.querySelector('textarea[name="user query"]');
+    return {
+        header: document.querySelector('.the-header').parentElement,
+        listRoot,
+        list: listRoot.querySelector('.ds-virtual-list-items'),
+        column: Array.from(listRoot.children).find((child) => child.contains(mainTextarea)),
+        mainTextarea,
+        editTextarea,
+        editBox: editTextarea ? editTextarea.closest('.ds-textarea') : null,
+        heightContainer: editTextarea ? editTextarea.parentElement : null,
+        userItem: document.querySelector('[data-virtual-list-item-key="-2"]'),
+        assistantItem: document.querySelector('[data-virtual-list-item-key="2"]'),
+    };
+}
+
+/** Give a real element a fixed measured height. */
+function setMeasuredHeight(el, height) {
+    el.getBoundingClientRect = () => ({ height });
+}
+
+// ---------------------------------------------------------------------------
 // Group A: extractUserInput + constant exports
 // ---------------------------------------------------------------------------
 
 describe('A. extractUserInput', () => {
     // Only constants with no independent behavior coverage are asserted here.
-    // REMOVE_MAX_HEIGHT_SELECTOR / DYNAMIC_MAX_HEIGHT_SELECTOR / HEIGHT_SOURCE_SELECTOR_A/B /
-    // MAX_HEIGHT_OFFSET_PX are exercised as hardcoded DOM literals by Group C/F (e.g. C1, C8);
-    // USER_INPUT_REGEX's matching behavior is exercised by A2-A14 — a value change there
-    // already fails those tests, so re-asserting the literal here would be a redundant mirror.
+    // REMOVE_MAX_HEIGHT_SELECTOR / DYNAMIC_MAX_HEIGHT_SELECTOR / HEIGHT_SOURCE_SELECTOR_A/B / MAX_HEIGHT_OFFSET_PX are exercised against real snapshot markup by Group C/F (e.g. C1, C8); USER_INPUT_REGEX's matching behavior is exercised by A2-A14 — a value change there already fails those tests, so re-asserting the literal here would be a redundant mirror.
     it('A1: exports the correct constant values (constants with no other tripwire)', () => {
-        expect(EDIT_BUTTON_CLASS).toBe(DSSelectors.EDIT_MESSAGE_BUTTON_CLASS);
+        expect(EDIT_BUTTON_SELECTOR).toBe(DSSelectors.EDIT_MESSAGE_BUTTON_SELECTOR);
         expect(DETECTION_TIMEOUT_MS).toBe(2000);
         expect(VALUE_WAIT_TIMEOUT_MS).toBe(800);
     });
@@ -149,232 +184,166 @@ describe('B. computeDynamicMaxHeight', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Group C: applyMaxHeightAdjustments — DOM style mutations
+// Group C: applyMaxHeightAdjustments — DOM style mutations on real edit-window markup
 // ---------------------------------------------------------------------------
 
 describe('C. applyMaxHeightAdjustments', () => {
-    let container;
-
-    // Save and restore getBoundingClientRect and window.innerHeight between tests
-    let originalGetBCR;
-
-    beforeEach(() => {
-        container = document.createElement('div');
-        document.body.appendChild(container);
-        originalGetBCR = Element.prototype.getBoundingClientRect;
-    });
-
     afterEach(() => {
-        document.body.removeChild(container);
-        Element.prototype.getBoundingClientRect = originalGetBCR;
+        document.body.innerHTML = '';
         vi.restoreAllMocks();
-        // Remove any lingering source elements added directly to body
-        document.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR + ", " + DSSelectors.CONTENT_COLUMN_SELECTOR).forEach(el => el.remove());
     });
 
-    // Helper: append a source element to document.body so document.querySelector can find it
-    function appendSourceA(height = 0) {
-        const el = document.createElement('div');
-        el.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        el.getBoundingClientRect = () => ({ height });
-        document.body.appendChild(el);
-        return el;
-    }
+    // ---- edit box always cleared ----
 
-    function appendSourceB(height = 0) {
-        const el = document.createElement('div');
-        el.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
-        el.getBoundingClientRect = () => ({ height });
-        document.body.appendChild(el);
-        return el;
-    }
+    it('C1: sets maxHeight=none on every edit box under root', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        pane.editBox.style.maxHeight = '300px';
+        const second = pane.editBox.cloneNode(true);
+        second.style.maxHeight = '150px';
+        pane.editBox.after(second);
 
-    // ---- .cc852ac5 always cleared ----
+        applyMaxHeightAdjustments(document);
 
-    it('C1: sets maxHeight=none on all .cc852ac5 elements inside root', () => {
-        const a = document.createElement('div');
-        a.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        a.style.maxHeight = '300px';
-        const b = document.createElement('div');
-        b.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        b.style.maxHeight = '150px';
-        container.append(a, b);
-
-        applyMaxHeightAdjustments(container);
-
-        expect(a.style.maxHeight).toBe('none');
-        expect(b.style.maxHeight).toBe('none');
+        expect(pane.editBox.style.maxHeight).toBe('none');
+        expect(second.style.maxHeight).toBe('none');
     });
 
-    it('C2: .cc852ac5 is cleared EVEN when source elements are absent (no sources in DOM)', () => {
-        const el = document.createElement('div');
-        el.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        el.style.maxHeight = '200px';
-        container.appendChild(el);
+    it('C2: edit box is cleared EVEN when the header and content column are absent', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        pane.header.remove();
+        pane.column.remove();
+        pane.editBox.style.maxHeight = '200px';
 
-        // No ._2be88ba or ._871cbca in DOM
-        applyMaxHeightAdjustments(container);
+        applyMaxHeightAdjustments(document);
 
-        expect(el.style.maxHeight).toBe('none');
+        expect(pane.editBox.style.maxHeight).toBe('none');
     });
 
-    it('C3: does NOT touch an unrelated element', () => {
-        const el = document.createElement('div');
-        el.className = 'some-other-class';
-        el.style.maxHeight = '200px';
-        container.appendChild(el);
+    it('C3: does NOT touch the main composer scroll area (real neighbouring element)', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        const composerScrollArea = pane.mainTextarea.parentElement;
+        composerScrollArea.style.maxHeight = '200px';
 
-        applyMaxHeightAdjustments(container);
+        applyMaxHeightAdjustments(document);
 
-        expect(el.style.maxHeight).toBe('200px');
+        expect(composerScrollArea.style.maxHeight).toBe('200px');
     });
 
-    // ---- ._646a522 skipped when source missing ----
+    // ---- height container skipped when a source is missing ----
 
-    it('C4: ._646a522 left untouched when HEIGHT_SOURCE_SELECTOR_A is missing', () => {
-        appendSourceB(50);
+    it('C4: height container left untouched when the chat header is missing', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        setMeasuredHeight(pane.column, 50);
+        pane.header.remove();
+        pane.heightContainer.style.maxHeight = '400px';
 
-        const target = document.createElement('div');
-        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        target.style.maxHeight = '400px';
-        container.appendChild(target);
+        applyMaxHeightAdjustments(document);
 
-        applyMaxHeightAdjustments(container);
-
-        // .cc852ac5 cleared (none here); ._646a522 untouched because A is absent
-        expect(target.style.maxHeight).toBe('400px');
+        expect(pane.heightContainer.style.maxHeight).toBe('400px');
     });
 
-    it('C5: ._646a522 left untouched when HEIGHT_SOURCE_SELECTOR_B is missing', () => {
-        appendSourceA(50);
+    it('C5: height container left untouched when the content column is missing', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        setMeasuredHeight(pane.header, 50);
+        pane.column.remove();
+        pane.heightContainer.style.maxHeight = '400px';
 
-        const target = document.createElement('div');
-        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        target.style.maxHeight = '400px';
-        container.appendChild(target);
+        applyMaxHeightAdjustments(document);
 
-        applyMaxHeightAdjustments(container);
-
-        expect(target.style.maxHeight).toBe('400px');
+        expect(pane.heightContainer.style.maxHeight).toBe('400px');
     });
 
-    it('C6: ._646a522 left untouched when BOTH source elements are missing', () => {
-        const target = document.createElement('div');
-        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        target.style.maxHeight = '400px';
-        container.appendChild(target);
+    it('C6: height container left untouched when BOTH sources are missing', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        pane.header.remove();
+        pane.column.remove();
+        pane.heightContainer.style.maxHeight = '400px';
 
-        applyMaxHeightAdjustments(container);
+        applyMaxHeightAdjustments(document);
 
-        expect(target.style.maxHeight).toBe('400px');
+        expect(pane.heightContainer.style.maxHeight).toBe('400px');
     });
 
-    it('C7: .cc852ac5 is still cleared when ._646a522 is left untouched (missing sources)', () => {
-        const cc = document.createElement('div');
-        cc.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        cc.style.maxHeight = '300px';
-        container.appendChild(cc);
+    it('C7: edit box is still cleared when the height container is left untouched (missing sources)', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        pane.header.remove();
+        pane.column.remove();
+        pane.editBox.style.maxHeight = '300px';
+        pane.heightContainer.style.maxHeight = '400px';
 
-        const dyn = document.createElement('div');
-        dyn.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        dyn.style.maxHeight = '400px';
-        container.appendChild(dyn);
+        applyMaxHeightAdjustments(document);
 
-        // No sources — ._646a522 must be untouched; .cc852ac5 must be cleared
-        applyMaxHeightAdjustments(container);
-
-        expect(cc.style.maxHeight).toBe('none');
-        expect(dyn.style.maxHeight).toBe('400px');
+        expect(pane.editBox.style.maxHeight).toBe('none');
+        expect(pane.heightContainer.style.maxHeight).toBe('400px');
     });
 
-    // ---- ._646a522 set when both sources present ----
+    // ---- height container set when both sources are present ----
 
-    it('C8: sets correct maxHeight on ._646a522 when both sources are present', () => {
+    it('C8: sets the computed maxHeight on the height container when header and content column are present', () => {
         const winHeight = 900;
         const aHeight = 60;
         const bHeight = 40;
         const expected = winHeight - aHeight - bHeight - 32; // 768
 
         Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
-        appendSourceA(aHeight);
-        appendSourceB(bHeight);
+        const pane = mountPane(EDIT_PANE_HTML);
+        setMeasuredHeight(pane.header, aHeight);
+        setMeasuredHeight(pane.column, bHeight);
 
-        const target = document.createElement('div');
-        target.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        container.appendChild(target);
+        applyMaxHeightAdjustments(document);
 
-        applyMaxHeightAdjustments(container);
-
-        expect(target.style.maxHeight).toBe(expected + 'px');
+        expect(pane.heightContainer.style.maxHeight).toBe(expected + 'px');
     });
 
-    it('C9: sets the same computed value on ALL ._646a522 elements under root', () => {
+    it('C9: sets the same computed value on ALL height containers under root', () => {
         const winHeight = 800;
         const aHeight = 50;
         const bHeight = 50;
         const expected = winHeight - aHeight - bHeight - 32; // 668
 
         Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
-        appendSourceA(aHeight);
-        appendSourceB(bHeight);
+        const pane = mountPane(EDIT_PANE_HTML);
+        setMeasuredHeight(pane.header, aHeight);
+        setMeasuredHeight(pane.column, bHeight);
+        pane.editBox.after(pane.editBox.cloneNode(true), pane.editBox.cloneNode(true));
+        const containers = Array.from(document.querySelectorAll('textarea[name="user query"]'), (ta) => ta.parentElement);
+        expect(containers).toHaveLength(3);
 
-        const t1 = document.createElement('div');
-        t1.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        const t2 = document.createElement('div');
-        t2.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        const t3 = document.createElement('div');
-        t3.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        container.append(t1, t2, t3);
+        applyMaxHeightAdjustments(document);
 
-        applyMaxHeightAdjustments(container);
-
-        expect(t1.style.maxHeight).toBe(expected + 'px');
-        expect(t2.style.maxHeight).toBe(expected + 'px');
-        expect(t3.style.maxHeight).toBe(expected + 'px');
+        containers.forEach((el) => expect(el.style.maxHeight).toBe(expected + 'px'));
     });
 
     // ---- root scoping ----
 
-    it('C10: root parameter scoping — does not affect .cc852ac5 elements outside root', () => {
-        const inside = document.createElement('div');
-        inside.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        container.appendChild(inside);
-
-        const outside = document.createElement('div');
-        outside.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
+    it('C10: root parameter scoping — does not affect an edit box outside root', () => {
+        const pane = mountPane(EDIT_PANE_HTML);
+        const outside = pane.editBox.cloneNode(true);
         outside.style.maxHeight = '100px';
         document.body.appendChild(outside);
 
-        applyMaxHeightAdjustments(container);
+        applyMaxHeightAdjustments(pane.userItem);
 
-        expect(inside.style.maxHeight).toBe('none');
+        expect(pane.editBox.style.maxHeight).toBe('none');
         expect(outside.style.maxHeight).toBe('100px');
-
-        document.body.removeChild(outside);
     });
 
-    it('C11: root parameter scoping — does not affect ._646a522 elements outside root', () => {
+    it('C11: root parameter scoping — does not affect a height container outside root', () => {
         const winHeight = 700;
         Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
-        appendSourceA(30);
-        appendSourceB(20);
-
-        const inside = document.createElement('div');
-        inside.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        container.appendChild(inside);
-
-        const outside = document.createElement('div');
-        outside.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
+        const pane = mountPane(EDIT_PANE_HTML);
+        setMeasuredHeight(pane.header, 30);
+        setMeasuredHeight(pane.column, 20);
+        const outsideBox = pane.editBox.cloneNode(true);
+        document.body.appendChild(outsideBox);
+        const outside = outsideBox.querySelector('textarea[name="user query"]').parentElement;
         outside.style.maxHeight = '999px';
-        document.body.appendChild(outside);
 
-        applyMaxHeightAdjustments(container);
+        applyMaxHeightAdjustments(pane.userItem);
 
         const expected = winHeight - 30 - 20 - 32;
-        expect(inside.style.maxHeight).toBe(expected + 'px');
+        expect(pane.heightContainer.style.maxHeight).toBe(expected + 'px');
         expect(outside.style.maxHeight).toBe('999px');
-
-        document.body.removeChild(outside);
     });
 
     // ---- fallback when root is null / omitted ----
@@ -635,23 +604,13 @@ describe('E. waitForNewTextarea', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Group F: handleEditButtonClick
+// Group F: handleEditButtonClick — on the real idle-conversation pane
 // ---------------------------------------------------------------------------
 
 describe('F. handleEditButtonClick', () => {
-    let originalGetBCR;
-
-    beforeEach(() => {
-        originalGetBCR = Element.prototype.getBoundingClientRect;
-    });
-
     afterEach(() => {
-        while (document.body.firstChild) {
-            document.body.removeChild(document.body.firstChild);
-        }
-        Element.prototype.getBoundingClientRect = originalGetBCR;
+        document.body.innerHTML = '';
         vi.restoreAllMocks();
-        document.querySelectorAll(DSSelectors.CHAT_HEADER_SELECTOR + ", " + DSSelectors.CONTENT_COLUMN_SELECTOR).forEach(el => el.remove());
     });
 
     // Helper: fire a synthetic click event targeting a specific element
@@ -662,7 +621,37 @@ describe('F. handleEditButtonClick', () => {
         return evt;
     }
 
-    it('F1: no-op when click target is not inside .d4910adc', () => {
+    /** Mount the idle conversation pane; the user toolbar holds two buttons, copy then edit (live snapshot order). */
+    function mountConversation() {
+        const pane = mountPane(CONV_PANE_HTML);
+        const userButtons = pane.userItem.querySelectorAll('[role="button"]');
+        expect(userButtons).toHaveLength(2);
+        const [copyButton, editButton] = userButtons;
+        return { ...pane, copyButton, editButton, editIcon: editButton.querySelector('svg') };
+    }
+
+    /**
+     * Simulate DeepSeek entering edit mode: the user item is replaced by the edit-window snapshot's user item, which holds the edit box and a textarea that did not exist at click time.
+     * Values are applied before insertion, as React renders them.
+     */
+    function renderEditBox({ value, editBoxMaxHeight, heightContainerMaxHeight } = {}) {
+        const holder = document.createElement('div');
+        holder.innerHTML = EDIT_PANE_HTML;
+        const editTextarea = holder.querySelector('textarea[name="user query"]');
+        const editBox = editTextarea.closest('.ds-textarea');
+        const heightContainer = editTextarea.parentElement;
+        if (value !== undefined) editTextarea.value = value;
+        if (editBoxMaxHeight !== undefined) editBox.style.maxHeight = editBoxMaxHeight;
+        if (heightContainerMaxHeight !== undefined) heightContainer.style.maxHeight = heightContainerMaxHeight;
+        document.querySelector('[data-virtual-list-item-key="-2"]').replaceWith(editTextarea.closest('[data-virtual-list-item-key]'));
+        return { editTextarea, editBox, heightContainer };
+    }
+
+    const WRAPPED_VALUE =
+        '<system-reminder>\nSys\n</system-reminder>\n\n' +
+        '<user-input>\noriginal user text\n</user-input>';
+
+    it('F1: no-op when click target is not inside an edit button', () => {
         const unrelated = document.createElement('div');
         document.body.appendChild(unrelated);
 
@@ -672,152 +661,91 @@ describe('F. handleEditButtonClick', () => {
     // -------------------------------------------------------------------------
     // F2: REGRESSION TEST — the original bug
     //
-    // Before the fix, handleEditButtonClick used waitForTextareaInContainer which
-    // traversed ancestors to find a container, then grabbed the first textarea
-    // inside it. When DeepSeek rendered the edit UI, the pre-existing main
-    // composer textarea (empty) was sometimes found instead of the new edit
-    // textarea that already contained the wrapped content. This caused
-    // applyTextareaCleanup to run on the wrong element.
+    // Before the fix, handleEditButtonClick used waitForTextareaInContainer which traversed ancestors to find a container, then grabbed the first textarea inside it. When DeepSeek rendered the edit UI, the pre-existing main composer textarea was sometimes found instead of the new edit textarea that already contained the wrapped content. This caused applyTextareaCleanup to run on the wrong element.
     //
-    // The fix uses waitForNewTextarea with a pre-click snapshot, ensuring only
-    // a textarea that did NOT exist at click-time is passed to the cleanup.
+    // The fix uses waitForNewTextarea with a pre-click snapshot, ensuring only a textarea that did NOT exist at click-time is passed to the cleanup.
     // -------------------------------------------------------------------------
-    it('F2: regression — pre-existing empty composer is ignored; NEW edit textarea is cleaned up', async () => {
-        // Simulate the pre-existing main composer textarea (empty, always present)
-        const composer = document.createElement('textarea');
-        composer.value = '';
-        document.body.appendChild(composer);
+    it('F2: regression — pre-existing main composer is ignored; NEW edit textarea is cleaned up', async () => {
+        const page = mountConversation();
+        // The composer exists before the click and holds wrapped text, so cleaning the wrong textarea is visible
+        page.mainTextarea.value = WRAPPED_VALUE;
 
-        // Build the edit button (click target)
-        const editButton = document.createElement('div');
-        editButton.className = EDIT_BUTTON_CLASS;
-        const inner = document.createElement('span');
-        editButton.appendChild(inner);
-        document.body.appendChild(editButton);
-
-        // Click — snapshot is taken at this point; composer is in it
-        fireClick(inner);
+        // Click the icon inside the real edit button — snapshot is taken here; the composer is in it
+        fireClick(page.editIcon);
 
         // DeepSeek asynchronously mounts the edit textarea pre-filled with wrapped content
-        const wrappedValue =
-            '<system-reminder>\nSys\n</system-reminder>\n\n' +
-            '<user-input>\noriginal user text\n</user-input>';
-        const editTextarea = document.createElement('textarea');
-        editTextarea.value = wrappedValue;
-        document.body.appendChild(editTextarea);
+        const { editTextarea } = renderEditBox({ value: WRAPPED_VALUE });
 
         // Allow MutationObserver callbacks to fire
         await new Promise(r => setTimeout(r, 0));
 
-        // The NEW edit textarea must be cleaned up
         expect(editTextarea.value).toBe('original user text');
-
-        // The pre-existing empty composer must be completely untouched
-        expect(composer.value).toBe('');
+        expect(page.mainTextarea.value).toBe(WRAPPED_VALUE);
     });
 
-    it('F3: non-.d4910adc click is a no-op (guard clause)', () => {
-        const randomEl = document.createElement('button');
-        document.body.appendChild(randomEl);
+    // F3: the user toolbar's copy button and the assistant toolbar buttons share the edit button's classes (ds-button--icon inside a ds-flex row), so each must be rejected. The copy button differs from the edit button only by lacking aria-disabled; the assistant's second button carries aria-disabled like the edit button and differs only by sitting outside a user message item.
+    it.each([
+        ['F3a: user message copy button', (page) => page.copyButton],
+        ['F3b: assistant toolbar first button', (page) => page.assistantItem.querySelectorAll('[role="button"]')[0]],
+        ['F3c: assistant toolbar second button (carries aria-disabled)', (page) => page.assistantItem.querySelectorAll('[role="button"]')[1]],
+    ])('%s click is a no-op — a later edit textarea is not cleaned', async (_title, pickButton) => {
+        const page = mountConversation();
+        const button = pickButton(page);
+        expect(button).toBeTruthy();
 
-        const composer = document.createElement('textarea');
-        composer.value = 'unchanged';
-        document.body.appendChild(composer);
+        fireClick(button.querySelector('svg'));
 
-        fireClick(randomEl);
+        const { editTextarea } = renderEditBox({ value: WRAPPED_VALUE });
+        await new Promise(r => setTimeout(r, 0));
 
-        expect(composer.value).toBe('unchanged');
+        expect(editTextarea.value).toBe(WRAPPED_VALUE);
     });
 
-    it('F4: applyMaxHeightAdjustments clears .cc852ac5 at detection time (sources absent — skip ._646a522)', async () => {
-        // Build edit button
-        const editButton = document.createElement('div');
-        editButton.className = EDIT_BUTTON_CLASS;
-        const inner = document.createElement('span');
-        editButton.appendChild(inner);
-        document.body.appendChild(editButton);
+    it('F4: max-height adjustment clears the edit box at detection time (sources absent — height container skipped)', async () => {
+        const page = mountConversation();
+        page.header.remove();
+        page.column.remove();
 
-        // .cc852ac5 constrained element — must always be cleared
-        const constrained1 = document.createElement('div');
-        constrained1.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        constrained1.style.maxHeight = '300px';
-        document.body.appendChild(constrained1);
+        fireClick(page.editIcon);
 
-        // ._646a522 element — must be left untouched because no source elements exist
-        const constrained2 = document.createElement('div');
-        constrained2.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        constrained2.style.maxHeight = '150px';
-        document.body.appendChild(constrained2);
-
-        fireClick(inner);
-
-        // Append edit textarea to trigger onFound callback
-        const editTextarea = document.createElement('textarea');
-        editTextarea.value = 'plain text';
-        document.body.appendChild(editTextarea);
+        const { editBox, heightContainer } = renderEditBox({
+            value: 'plain text',
+            editBoxMaxHeight: '300px',
+            heightContainerMaxHeight: '150px',
+        });
 
         await new Promise(r => setTimeout(r, 0));
 
-        // .cc852ac5 must always be cleared
-        expect(constrained1.style.maxHeight).toBe('none');
-        // ._646a522 left untouched — no ._2be88ba / ._871cbca in DOM
-        expect(constrained2.style.maxHeight).toBe('150px');
+        expect(editBox.style.maxHeight).toBe('none');
+        expect(heightContainer.style.maxHeight).toBe('150px');
     });
 
-    it('F5: applyMaxHeightAdjustments sets ._646a522 computed value when source elements are present', async () => {
+    it('F5: max-height adjustment sets the height container computed value when header and content column are present', async () => {
         const winHeight = 900;
         const aHeight = 60;
         const bHeight = 40;
         const expectedPx = (winHeight - aHeight - bHeight - 32) + 'px'; // '768px'
 
         Object.defineProperty(window, 'innerHeight', { value: winHeight, configurable: true });
+        const page = mountConversation();
+        setMeasuredHeight(page.header, aHeight);
+        setMeasuredHeight(page.column, bHeight);
 
-        // Source elements
-        const sourceA = document.createElement('div');
-        sourceA.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        sourceA.getBoundingClientRect = () => ({ height: aHeight });
-        document.body.appendChild(sourceA);
+        fireClick(page.editIcon);
 
-        const sourceB = document.createElement('div');
-        sourceB.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
-        sourceB.getBoundingClientRect = () => ({ height: bHeight });
-        document.body.appendChild(sourceB);
-
-        // Build edit button
-        const editButton = document.createElement('div');
-        editButton.className = EDIT_BUTTON_CLASS;
-        const inner = document.createElement('span');
-        editButton.appendChild(inner);
-        document.body.appendChild(editButton);
-
-        // ._646a522 target
-        const dynEl = document.createElement('div');
-        dynEl.className = DSSelectors.EDIT_BOX_HEIGHT_CONTAINER_SELECTOR.slice(1);
-        document.body.appendChild(dynEl);
-
-        fireClick(inner);
-
-        const editTextarea = document.createElement('textarea');
-        editTextarea.value = 'plain text';
-        document.body.appendChild(editTextarea);
+        const { heightContainer } = renderEditBox({ value: 'plain text' });
 
         await new Promise(r => setTimeout(r, 0));
 
-        expect(dynEl.style.maxHeight).toBe(expectedPx);
+        expect(heightContainer.style.maxHeight).toBe(expectedPx);
     });
 
-    it('F6: applyTextareaCleanup does not modify textarea when value has no wrapper', async () => {
-        const editButton = document.createElement('div');
-        editButton.className = EDIT_BUTTON_CLASS;
-        const inner = document.createElement('span');
-        editButton.appendChild(inner);
-        document.body.appendChild(editButton);
+    it('F6: applyTextareaCleanup does not modify the edit textarea when its value has no wrapper', async () => {
+        const page = mountConversation();
 
-        fireClick(inner);
+        fireClick(page.editIcon);
 
-        const editTextarea = document.createElement('textarea');
-        editTextarea.value = 'plain user message without wrapper';
-        document.body.appendChild(editTextarea);
+        const { editTextarea } = renderEditBox({ value: 'plain user message without wrapper' });
 
         await new Promise(r => setTimeout(r, 0));
 
@@ -867,78 +795,39 @@ describe('G. scroll-into-position', () => {
     });
 
     // -------------------------------------------------------------------------
-    // G7–G14: applyEditScrollPosition — DOM behaviour
+    // G7–G16: applyEditScrollPosition — DOM behaviour on real edit-window markup
     //
-    // Selector map:
-    //   edit box        → .cc852ac5
-    //   header          → ._2be88ba
-    //   virtual list    → .ds-virtual-list-items._6f2c522  (also just ._6f2c522)
+    // Landmarks (located structurally by mountPane):
+    //   edit box      → .ds-textarea around textarea[name="user query"]
+    //   header        → parent of .the-header
+    //   items list    → .ds-virtual-list-items inside the .ds-virtual-list scroll root
     //
-    // Geometry is mocked via per-element getBoundingClientRect overrides,
-    // exactly as Group C does for source elements.
+    // Geometry is mocked via per-element getBoundingClientRect overrides; scrollability via scrollHeight/clientHeight getters (happy-dom reports 0 for both, so unmocked elements are never scrollable).
     // -------------------------------------------------------------------------
 
-    let originalGetBCR;
-
-    beforeEach(() => {
-        originalGetBCR = Element.prototype.getBoundingClientRect;
-    });
-
     afterEach(() => {
-        Element.prototype.getBoundingClientRect = originalGetBCR;
-        // Clean up any elements appended directly to body
-        while (document.body.firstChild) {
-            document.body.removeChild(document.body.firstChild);
-        }
+        document.body.innerHTML = '';
         vi.restoreAllMocks();
     });
 
+    function setScrollable(el, scrollable, scrollTop) {
+        Object.defineProperty(el, 'scrollHeight', { get: () => (scrollable ? 2000 : 100), configurable: true });
+        Object.defineProperty(el, 'clientHeight', { get: () => 100, configurable: true });
+        el.scrollTop = scrollTop;
+    }
+
     /**
-     * Build a minimal DOM with edit box, header, and a scroll container.
+     * Mount the edit-window pane with mocked edit-box top and header bottom.
      *
      * @param {object} opts
-     * @param {number} opts.editBoxTop        – mocked getBoundingClientRect().top for edit box
-     * @param {number} opts.headerBottom      – mocked getBoundingClientRect().bottom for header
-     * @param {number} opts.initialScrollTop  – starting scrollTop of the container
-     * @param {boolean} [opts.containerScrollable=true] – whether the ._6f2c522 element itself is scrollable
-     * @returns {{ editBox, header, listEl, container }}
+     * @param {number} opts.editBoxTop   – mocked getBoundingClientRect().top for the edit box
+     * @param {number} opts.headerBottom – mocked getBoundingClientRect().bottom for the header
      */
-    function buildScrollDOM({
-        editBoxTop,
-        headerBottom,
-        initialScrollTop = 0,
-        containerScrollable = true,
-    }) {
-        // Header (._2be88ba) — placed directly on body so document.querySelector finds it
-        const header = document.createElement('div');
-        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        header.getBoundingClientRect = () => ({ bottom: headerBottom, top: 0, height: headerBottom });
-        document.body.appendChild(header);
-
-        // Scroll container — either ._6f2c522 itself or an ancestor wrapper
-        const listEl = document.createElement('div');
-        listEl.className = 'ds-virtual-list-items _6f2c522';
-
-        // Mock scrollHeight/clientHeight to control scrollability
-        Object.defineProperty(listEl, 'scrollHeight', {
-            get: () => containerScrollable ? 2000 : 100,
-            configurable: true,
-        });
-        Object.defineProperty(listEl, 'clientHeight', {
-            get: () => 100,
-            configurable: true,
-        });
-        listEl.scrollTop = initialScrollTop;
-
-        // Edit box (.cc852ac5) — child of the list element
-        const editBox = document.createElement('div');
-        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        editBox.getBoundingClientRect = () => ({ top: editBoxTop, bottom: editBoxTop + 50, height: 50 });
-        listEl.appendChild(editBox);
-
-        document.body.appendChild(listEl);
-
-        return { editBox, header, listEl };
+    function mountEditGeometry({ editBoxTop, headerBottom }) {
+        const pane = mountPane(EDIT_PANE_HTML);
+        pane.header.getBoundingClientRect = () => ({ bottom: headerBottom, top: 0, height: headerBottom });
+        pane.editBox.getBoundingClientRect = () => ({ top: editBoxTop, bottom: editBoxTop + 50, height: 50 });
+        return pane;
     }
 
     it.each([
@@ -949,136 +838,72 @@ describe('G. scroll-into-position', () => {
         // editBoxTop=116, headerBottom=100, gap=16 → delta=0
         ['G9: zero delta leaves scrollTop unchanged', 116, 100, 500, 500],
     ])('%s', (_title, editBoxTop, headerBottom, initialScrollTop, expectedScrollTop) => {
-        const { listEl } = buildScrollDOM({ editBoxTop, headerBottom, initialScrollTop });
+        const pane = mountEditGeometry({ editBoxTop, headerBottom });
+        setScrollable(pane.list, true, initialScrollTop);
 
         applyEditScrollPosition(document);
 
-        expect(listEl.scrollTop).toBe(expectedScrollTop);
+        expect(pane.list.scrollTop).toBe(expectedScrollTop);
     });
 
-    it('G10: scrollable-ancestor detection — when ._6f2c522 is not scrollable, walks up to scrollable ancestor', () => {
-        // Header
-        const header = document.createElement('div');
-        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        header.getBoundingClientRect = () => ({ bottom: 100, top: 0, height: 100 });
-        document.body.appendChild(header);
-
-        // Ancestor wrapper — scrollable
-        const ancestor = document.createElement('div');
-        Object.defineProperty(ancestor, 'scrollHeight', { get: () => 2000, configurable: true });
-        Object.defineProperty(ancestor, 'clientHeight', { get: () => 100, configurable: true });
-        ancestor.scrollTop = 400;
-
-        // ._6f2c522 — NOT scrollable (scrollHeight === clientHeight)
-        const listEl = document.createElement('div');
-        listEl.className = 'ds-virtual-list-items _6f2c522';
-        Object.defineProperty(listEl, 'scrollHeight', { get: () => 100, configurable: true });
-        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
-        listEl.scrollTop = 0;
-
-        // Edit box
-        const editBox = document.createElement('div');
-        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        editBox.getBoundingClientRect = () => ({ top: 200, bottom: 250, height: 50 });
-
-        listEl.appendChild(editBox);
-        ancestor.appendChild(listEl);
-        document.body.appendChild(ancestor);
+    it('G10: scrollable-ancestor detection — when the items list is not scrollable, scrolls the message-list scroll root', () => {
+        const pane = mountEditGeometry({ editBoxTop: 200, headerBottom: 100 });
+        setScrollable(pane.list, false, 0);
+        setScrollable(pane.listRoot, true, 400);
 
         applyEditScrollPosition(document);
 
-        // delta = 200 - (100 + 16) = 84; ancestor.scrollTop should increase by 84
-        expect(ancestor.scrollTop).toBe(400 + 84);
-        // ._6f2c522's own scrollTop must be untouched
-        expect(listEl.scrollTop).toBe(0);
+        // delta = 200 - (100 + 16) = 84
+        expect(pane.listRoot.scrollTop).toBe(400 + 84);
+        expect(pane.list.scrollTop).toBe(0);
     });
 
-    it('G11: fallback to ._6f2c522 itself when no ancestor is scrollable', () => {
-        // Header
-        const header = document.createElement('div');
-        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        header.getBoundingClientRect = () => ({ bottom: 100, top: 0, height: 100 });
-        document.body.appendChild(header);
+    it('G11: fallback to the items list itself when no ancestor is scrollable', () => {
+        const pane = mountEditGeometry({ editBoxTop: 200, headerBottom: 100 });
+        setScrollable(pane.list, false, 50);
 
-        // ._6f2c522 — NOT scrollable; no scrollable ancestor exists
-        const listEl = document.createElement('div');
-        listEl.className = 'ds-virtual-list-items _6f2c522';
-        Object.defineProperty(listEl, 'scrollHeight', { get: () => 100, configurable: true });
-        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
-        listEl.scrollTop = 50;
-
-        // Edit box
-        const editBox = document.createElement('div');
-        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        editBox.getBoundingClientRect = () => ({ top: 200, bottom: 250, height: 50 });
-        listEl.appendChild(editBox);
-
-        document.body.appendChild(listEl);
-
-        // Should fall back to listEl and still apply delta without throwing
         expect(() => applyEditScrollPosition(document)).not.toThrow();
         // delta = 84; fallback element's scrollTop is updated
-        expect(listEl.scrollTop).toBe(50 + 84);
+        expect(pane.list.scrollTop).toBe(50 + 84);
     });
 
-    it('G12: guard — missing .cc852ac5 edit box is a no-op (no throw, no scrollTop change)', () => {
-        // Header present, list with NO edit box
-        const header = document.createElement('div');
-        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        header.getBoundingClientRect = () => ({ bottom: 100 });
-        document.body.appendChild(header);
-
-        const listEl = document.createElement('div');
-        listEl.className = 'ds-virtual-list-items _6f2c522';
-        Object.defineProperty(listEl, 'scrollHeight', { get: () => 2000, configurable: true });
-        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
-        listEl.scrollTop = 300;
-        document.body.appendChild(listEl);
+    it('G12: guard — no edit box (idle conversation pane) is a no-op (no throw, no scrollTop change)', () => {
+        const pane = mountPane(CONV_PANE_HTML);
+        pane.header.getBoundingClientRect = () => ({ bottom: 100 });
+        setScrollable(pane.list, true, 300);
 
         expect(() => applyEditScrollPosition(document)).not.toThrow();
-        expect(listEl.scrollTop).toBe(300);
+        expect(pane.list.scrollTop).toBe(300);
     });
 
-    it('G13: guard — missing ._2be88ba header is a no-op (no throw, no scrollTop change)', () => {
-        // List with edit box but NO header
-        const listEl = document.createElement('div');
-        listEl.className = 'ds-virtual-list-items _6f2c522';
-        Object.defineProperty(listEl, 'scrollHeight', { get: () => 2000, configurable: true });
-        Object.defineProperty(listEl, 'clientHeight', { get: () => 100, configurable: true });
-        listEl.scrollTop = 200;
-
-        const editBox = document.createElement('div');
-        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        editBox.getBoundingClientRect = () => ({ top: 150 });
-        listEl.appendChild(editBox);
-        document.body.appendChild(listEl);
+    it('G13: guard — missing chat header is a no-op (no throw, no scrollTop change)', () => {
+        const pane = mountEditGeometry({ editBoxTop: 150, headerBottom: 100 });
+        pane.header.remove();
+        setScrollable(pane.list, true, 200);
 
         expect(() => applyEditScrollPosition(document)).not.toThrow();
-        expect(listEl.scrollTop).toBe(200);
+        expect(pane.list.scrollTop).toBe(200);
     });
 
-    it('G14: guard — missing ._6f2c522 scroll container element is a no-op (no throw)', () => {
-        // Header and edit box present but NO ._6f2c522 in DOM
-        const header = document.createElement('div');
-        header.className = DSSelectors.CHAT_HEADER_SELECTOR.slice(1);
-        header.getBoundingClientRect = () => ({ bottom: 100 });
-        document.body.appendChild(header);
-
-        const editBox = document.createElement('div');
-        editBox.className = DSSelectors.EDIT_BOX_SELECTOR.slice(1);
-        editBox.getBoundingClientRect = () => ({ top: 200 });
-        document.body.appendChild(editBox);
+    it('G14: guard — missing items list container is a no-op (no throw, no scrollTop change)', () => {
+        const pane = mountEditGeometry({ editBoxTop: 200, headerBottom: 100 });
+        // Minimal mutation: the list element loses the class that identifies it; the edit box stays inside
+        pane.list.classList.remove('ds-virtual-list-items');
+        setScrollable(pane.listRoot, true, 300);
 
         expect(() => applyEditScrollPosition(document)).not.toThrow();
+        expect(pane.listRoot.scrollTop).toBe(300);
     });
 
     it.each([
-        ['G15: searchRoot null falls back to document without throwing', null],
-        ['G16: searchRoot undefined falls back to document without throwing', undefined],
+        ['G15: searchRoot null falls back to document', null],
+        ['G16: searchRoot undefined falls back to document', undefined],
     ])('%s', (_title, searchRoot) => {
-        // Minimal DOM so the function can actually execute
-        buildScrollDOM({ editBoxTop: 200, headerBottom: 100, initialScrollTop: 0 });
+        const pane = mountEditGeometry({ editBoxTop: 200, headerBottom: 100 });
+        setScrollable(pane.list, true, 0);
 
         expect(() => applyEditScrollPosition(searchRoot)).not.toThrow();
+        // delta = 200 - (100 + 16) = 84 — the edit box was found through the document fallback
+        expect(pane.list.scrollTop).toBe(84);
     });
 });

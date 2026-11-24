@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import CensorReplyRestore from '../../content/censor-reply-restore.js';
 import { resetCensorReplyRestore, buildChatPair } from '../helpers/censor-reply-restore-fixtures.js';
-import DSSelectors from '../../content/ds-selectors.js';
 
 /**
  * _tryRestoreMessage and applyToExisting: post-refresh restore, idempotency,
@@ -107,15 +106,16 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
                 }
             };
 
-            buildChatPair('asst-cold1', 'Cold prompt 1');
-            buildChatPair('asst-cold2', 'Cold prompt 2');
+            const msgEls = [
+                buildChatPair('asst-cold1', 'Cold prompt 1'),
+                buildChatPair('asst-cold2', 'Cold prompt 2')
+            ];
 
             CensorReplyRestore.applyToExisting();
 
-            const msgEls = document.querySelectorAll('.ds-message._63c77b1');
-            for (const el of msgEls) {
-                expect(el.querySelector('.restored-content')).not.toBeNull();
-            }
+            // The live user .ds-message shares the assistant hash class, so the assistant elements come from buildChatPair, not a class query.
+            expect(msgEls[0].querySelector('.restored-content').innerHTML).toContain('Cold start answer 1');
+            expect(msgEls[1].querySelector('.restored-content').innerHTML).toContain('Cold start answer 2');
         });
     });
 
@@ -143,52 +143,8 @@ describe('CensorReplyRestore — per-element restore entry points', () => {
                 }
             };
 
-            // Build a censored assistant msg WITH a user sibling so _tryRestoreFromStoredRecords can match it,
-            // but WITHOUT a virtual-item key ancestor so that _getPrecedingUserPromptKey returns null
-            // (causing _resolveMessageIdFromStorage to return null → messageId null → full scan triggered).
-            const orphanContainer = document.createElement('div');
-            // No data-virtual-list-item-key on the container
-
-            const userItem = document.createElement('div');
-            userItem.setAttribute('data-virtual-list-item-key', 'user-guard1');
-            const userMsg = document.createElement('div');
-            userMsg.className = 'ds-message';
-            const userContent = document.createElement('div');
-            userContent.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-            userContent.textContent = 'Guard test prompt';
-            userMsg.appendChild(userContent);
-            userItem.appendChild(userMsg);
-            orphanContainer.appendChild(userItem);
-
-            // The assistant item has a virtual-list key (needed so _tryRestoreFromStoredRecords can find it)
-            // but the msgEl itself has NO data-virtual-list-item-key ANCESTOR at the time
-            // _resolveMessageIdFromStorage is called (we'll detach and re-attach to simulate).
-            // Simpler: just build the pair normally and mock _resolveMessageIdFromStorage to return null.
-            const asstItem = document.createElement('div');
-            asstItem.setAttribute('data-virtual-list-item-key', 'asst-guard1');
-            const msgEl = document.createElement('div');
-            msgEl.className = 'ds-message _63c77b1';
-            const mainContent = document.createElement('div');
-            mainContent.className = 'ds-markdown ds-assistant-message-main-content';
-            mainContent.textContent = 'censored';
-            msgEl.appendChild(mainContent);
-            asstItem.appendChild(msgEl);
-
-            const toolbar = document.createElement('div');
-            toolbar.className = 'ds-flex';
-            for (const state of ['enabled', 'disabled', 'enabled', 'enabled', 'disabled']) {
-                const btn = document.createElement('div');
-                btn.setAttribute('role', 'button');
-                btn.className = 'ds-button ds-button--icon';
-                if (state === 'disabled') {
-                    btn.classList.add('ds-button--disabled');
-                    btn.setAttribute('aria-disabled', 'true');
-                }
-                toolbar.appendChild(btn);
-            }
-            asstItem.appendChild(toolbar);
-            orphanContainer.appendChild(asstItem);
-            document.body.appendChild(orphanContainer);
+            // A censored assistant reply preceded by its user prompt (live markup), so the full scan can match it by prompt_key.
+            const msgEl = buildChatPair('asst-guard1', 'Guard test prompt');
 
             // Mock _resolveMessageIdFromStorage to return null so full-scan path is exercised
             vi.spyOn(CensorReplyRestore, '_resolveMessageIdFromStorage').mockReturnValue(null);

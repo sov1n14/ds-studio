@@ -4,6 +4,13 @@
  * 避免硬編碼重複字串（chrome-extension-coding-guidelines §2：訊息型別與 storage key 皆用具名常數）。
  */
 
+// MAIN world 與 isolated world 共用的 postMessage 型別表（utils/temporary-chat-message-types.js；瀏覽器與 service worker 由載入順序保證先行載入，Node.js 測試直接 require）
+const DSS_MAIN_WORLD_MESSAGE_TYPES = globalThis.DSS_TEMP_CHAT_MESSAGE_TYPES ||
+    (typeof require !== 'undefined' ? require('./temporary-chat-message-types.js') : null);
+if (!DSS_MAIN_WORLD_MESSAGE_TYPES) {
+    throw new Error('[DSS] utils/temporary-chat-constants.js 需要 utils/temporary-chat-message-types.js 先行載入');
+}
+
 // chrome.storage.local key：臨時對話功能啟用狀態；值為 boolean；缺少時預設為停用
 const DSS_TEMP_CHAT_STORAGE_KEY = 'dss-temporary-chat-enabled';
 
@@ -13,26 +20,20 @@ const DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed';
 // sessionStorage key：目前追蹤中的臨時對話 UUID；值為 UUID 字串或空字串（無追蹤時）
 const DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid';
 
-// window.postMessage type：main world XHR/fetch hook 偵測到新對話建立請求時發送
-const DSS_CHAT_CREATE_MESSAGE_TYPE = 'DSS_CHAT_CREATE_DETECTED';
+// window.postMessage type：下列七個常數各取自 utils/temporary-chat-message-types.js 的同名鍵，發送端、接收端與酬載說明見該檔
+const DSS_CHAT_CREATE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_CREATE;
 
-// window.postMessage type：XHR hook 偵測到 /api/v0/chat/completion 時發送
-const DSS_CHAT_COMPLETION_MESSAGE_TYPE = 'DSS_CHAT_COMPLETION_DETECTED';
+const DSS_CHAT_COMPLETION_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_COMPLETION;
 
-// window.postMessage type：ISOLATED world 要求 MAIN world 透過 React Fiber 刪除對話
-const DSS_FIBER_DELETE_MESSAGE_TYPE = 'DSS_FIBER_DELETE_SESSION';
+const DSS_FIBER_DELETE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FIBER_DELETE;
 
-// window.postMessage type：MAIN world 回報 Fiber 刪除結果給 ISOLATED world
-const DSS_FIBER_DELETE_RESULT_TYPE = 'DSS_FIBER_DELETE_RESULT';
+const DSS_FIBER_DELETE_RESULT_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FIBER_DELETE_RESULT;
 
-// window.postMessage type：MAIN world XHR hook 攔截到 authorization 標頭時回傳給 ISOLATED world
-const DSS_AUTH_CAPTURED_TYPE = 'DSS_AUTH_CAPTURED';
+const DSS_AUTH_CAPTURED_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.AUTH_CAPTURED;
 
-// window.postMessage type：MAIN world history hook 偵測到 SPA 導航（pushState/replaceState）時通知 ISOLATED world
-const DSS_HISTORY_NAV_TYPE = 'DSS_HISTORY_NAV';
+const DSS_HISTORY_NAV_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.HISTORY_NAV;
 
-// window.postMessage type：MAIN world XHR hook 完成一段 SSE 片段組裝後回傳給 ISOLATED world
-const DSS_FRAGMENT_COMPLETE_TYPE = 'DSS_FRAGMENT_COMPLETE';
+const DSS_FRAGMENT_COMPLETE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FRAGMENT_COMPLETE;
 
 // chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt, ownerDeviceId}>
 const DSS_PENDING_DELETES_SYNC_KEY = 'dss-pending-deletes-sync';
@@ -62,6 +63,8 @@ const DSS_MSG_RELEASE_LEASE = 'DSS_RELEASE_LEASE';
 const DSS_MSG_GET_PENDING_UUIDS = 'DSS_GET_PENDING_UUIDS';
 // SW->content：待刪佇列變更後推送最新 uuid 快照，payload {uuids:string[]}
 const DSS_MSG_PENDING_UUIDS_CHANGED = 'DSS_PENDING_UUIDS_CHANGED';
+// content->SW：分頁卸載（beforeunload）時把追蹤中的臨時對話交給 SW 等寬限期再決定是否刪除，payload {uuid}
+const DSS_MSG_TAB_UNLOADING = 'DSS_TAB_UNLOADING';
 
 // chrome.storage.local key 前綴：本機觀察到 lastActiveAt 最後一次變更的時間戳
 const DSS_LAST_SEEN_CHANGE_KEY_PREFIX = 'dss-last-seen-change:';
@@ -97,6 +100,7 @@ const DSS_TEMP_CHAT_CONSTANTS = {
     DSS_MSG_RELEASE_LEASE,
     DSS_MSG_GET_PENDING_UUIDS,
     DSS_MSG_PENDING_UUIDS_CHANGED,
+    DSS_MSG_TAB_UNLOADING,
     DSS_LAST_SEEN_CHANGE_KEY_PREFIX,
     LEASE_TTL_MS,
     FOREIGN_LEASE_TTL_MS,

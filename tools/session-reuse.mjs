@@ -4,16 +4,16 @@
 import { chromium } from 'playwright';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { launchProfile } from './profile.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const profileDir = resolve(__dirname, '.pw-profile');
 const WAIT_MS = 30_000;
 
 async function checkSession(headless, screenshotName) {
   const mode = headless ? 'HEADLESS' : 'HEADED';
   console.log(`\n=== Checking session (${mode}) ===`);
 
-  const context = await chromium.launchPersistentContext(profileDir, {
+  const context = await launchProfile(chromium, {
     headless,
     viewport: { width: 1280, height: 800 },
     locale: 'en-US',

@@ -28,7 +28,6 @@ describe('overlay rollback of a rejected bind (O1, O2)', () => {
         return {
             getIsEnabled: vi.fn(() => true),
             getCurrentChatUuid: vi.fn(() => CHAT_UUID),
-            setCurrentChatUuid: vi.fn(),
             getChatPresetMap: vi.fn(() => ({})),
             setChatPresetMap: vi.fn(),
             getPendingPresetId: vi.fn(() => undefined),

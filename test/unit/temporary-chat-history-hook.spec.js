@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
 import { fileURLToPath } from 'url';
+import { loadClassicScript } from '../helpers/load-classic-script.js';
 
 /**
  * Unit tests for content/temporary-chat-history-hook.js
@@ -32,6 +33,8 @@ function loadHook({ locationHref = 'https://chat.deepseek.com/' } = {}) {
 
     const sandbox = {
         URL,       // expose the host environment's URL constructor
+        // The hook reads its postMessage type from the table that content/main-world-injector.js injects first.
+        DSS_TEMP_CHAT_MESSAGE_TYPES: loadClassicScript('utils/temporary-chat-message-types.js').DSS_TEMP_CHAT_MESSAGE_TYPES,
         history: {
             pushState: originalPushState,
             replaceState: originalReplaceState,

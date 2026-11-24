@@ -12,8 +12,9 @@ DOM-adapter behavior is defined by the live page (selectors, React timing, class
 |-|-|-|
 | Logic | State, settings, toggles, retry/timing, parsing, storage schema, pure helpers | **MUST** red-green: failing test first, then implement |
 | DOM-adapter | Selectors, `MutationObserver`, injection timing, event binding | Implement first, then add tests |
+| E2E | Playwright specs under `test/e2e/` driving the live page | Implement first, then add tests |
 
-**MUST**: every bug fix, in either layer, starts with a test observed failing on pre-fix code — a reproduced bug is observed behavior, so the red test encodes a fact instead of a guess.
+**MUST**: every bug fix, in any layer, starts with a test observed failing on pre-fix code — a reproduced bug is observed behavior, so the red test encodes a fact instead of a guess.
 
 **MUST**: when the bug is confirmed real and existing tests missed it, the same change records a lesson (cause, solution, prevention) in the `testing-pitfalls` skill, following its entry format — so no future test repeats the same blind spot.
 
@@ -23,7 +24,10 @@ DOM-adapter behavior is defined by the live page (selectors, React timing, class
 
 ## Testing Policy
 
-- **MUST** write unit tests only — no integration or e2e (Playwright) tests.
+- E2E tests use `@playwright/test`, live under `test/e2e/`, and run locally only in the offline lane (`npm run test:e2e:offline`, tests tagged `@offline`, no network); specs without `@offline` drive the live site and stay unrun until migrated, as [ARCHITECTURE E2E Specs](docs/ARCHITECTURE.md#e2e-specs) describes.
+- **MUST NOT** drive the live DeepSeek site from any automation (E2E spec, `tools/` script, `playwright-cli`); only the user checks the live site, by hand in their own browser before each release, as [Release HAR Freshness Check](.claude/skills/version-bump/SKILL.md#release-har-freshness-check) describes.
+- E2E tests add to unit tests and never replace the unit tests a change requires; run them only when explicitly requested; Stryker mutation testing covers the unit suite.
+- For a test-only commit (only test files changed, production code untouched), take the before and after evidence from the mutation status of the targeted mutants, Survived on the parent's tests and Killed on the commit's, quoted from a Stryker report in the session, by running the scoped run that [Pre-Bump Quality Gate](.claude/skills/version-bump/SKILL.md#pre-bump-quality-gate) describes; state that status as the done condition, not a test-pass rerun.
 - Every code change **MUST** land with new or updated unit tests, and delete cases the change made obsolete.
 - **ALL** test files (tests, fixtures, helpers, mocks) live under `test/`.
 - Run scoped tests by default; run the full suite only when explicitly requested.
@@ -48,4 +52,4 @@ Scenario rules:
 
 - Behavior-affecting changes **MUST** bump the `manifest.json` version per the `version-bump` skill.
 - Commits follow the `commit-standards` skill.
-- `docs/` **MUST** stay synchronized with every code or feature change.
+- `docs/` **MUST** stay synchronized with every code or feature change. Write all documentation in English, one copy per document; the sole exception is README, where root `README.md` (English) and `docs/README.md` (Chinese) both stay.

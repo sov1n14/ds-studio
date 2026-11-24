@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — button injection unit tests.
  * Shared fixtures: test/helpers/go-top-fixtures.js
@@ -7,14 +8,15 @@ import '../../utils/storage-manager.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createWrapperWithoutNativeButton,
-    createNativeButton,
+    insertNativeButton,
     createFullWrapperWithNativeButton,
     resetGoToTopState,
 } from '../helpers/go-top-fixtures.js';
 
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     // ─────────────────────────────────────
     //  _injectIntoWrapperDirect
@@ -93,18 +95,6 @@ describe('GoToTop', () => {
     // ─────────────────────────────────────
 
     describe('_applyStackedOffset', () => {
-        it('fallback: sets margin-bottom to 62px when native geometry is unreadable (jsdom)', () => {
-            // In jsdom: offsetHeight === 0 → uses fallback 34 (new ds-button--m size)
-            //           computed marginBottom is '' → parseFloat → NaN → uses fallback 20
-            // Result: 20 + 34 + STACK_GAP_PX(8) = 62px
-            const btn = document.createElement('div');
-            const nativeBtn = document.createElement('div');
-            document.body.appendChild(nativeBtn);
-
-            GoToTop._applyStackedOffset(btn, nativeBtn);
-            expect(btn.style.marginBottom).toBe('62px');
-        });
-
         it('uses actual offsetHeight and marginBottom when geometry is readable', () => {
             const btn = document.createElement('div');
             const nativeBtn = document.createElement('div');
@@ -197,9 +187,9 @@ describe('GoToTop', () => {
             expect(GoToTop._button).not.toBeNull();
             expect(GoToTop._button.className).toContain('dsw-gotop');
             expect(GoToTop._injectionMode).toBe('injected');
-            // Button should be inserted BEFORE nativeBtn in the parent
-            expect(injectParent.children[1]).toBe(GoToTop._button);
-            expect(injectParent.children[2]).toBe(nativeBtn);
+            // Button sits in the floating bar immediately before the native button
+            expect(GoToTop._button.parentElement).toBe(injectParent);
+            expect(GoToTop._button.nextElementSibling).toBe(nativeBtn);
         });
 
         it('starts hidden (style.display = "none")', () => {
@@ -215,10 +205,13 @@ describe('GoToTop', () => {
             expect(GoToTop._button.classList.contains('dsw-gotop--stacked')).toBe(true);
         });
 
-        it('sets inline margin-bottom via _applyStackedOffset (jsdom fallback: 62px)', () => {
+        it('sets inline margin-bottom from the native button geometry via _applyStackedOffset', () => {
             const { nativeBtn } = createFullWrapperWithNativeButton();
+            // No layout engine: give the native button its live geometry (34px tall, 20px margin-bottom).
+            Object.defineProperty(nativeBtn, 'offsetHeight', { value: 34, configurable: true });
+            vi.spyOn(window, 'getComputedStyle').mockReturnValue({ marginBottom: '20px', right: '' });
             GoToTop._injectIntoWrapper(nativeBtn);
-            // jsdom: offsetHeight=0 → fallback 34, marginBottom='' → fallback 20; 20+34+8=62
+            // 20 + 34 + STACK_GAP_PX (8) = 62px
             expect(GoToTop._button.style.marginBottom).toBe('62px');
         });
 
@@ -258,8 +251,7 @@ describe('GoToTop', () => {
             expect(GoToTop._injectionMode).toBe('wrapper-solo');
 
             // Now native button appears
-            const nativeBtn = createNativeButton();
-            injectParent.appendChild(nativeBtn);
+            const nativeBtn = insertNativeButton(injectParent);
 
             // Reset state to simulate fresh injection call
             GoToTop._button = null;
@@ -305,7 +297,7 @@ describe('GoToTop', () => {
             expect(GoToTop._injectionMode).toBeNull();
         });
 
-        it('uses wrapper-solo when native button absent but .aaff8b8f wrapper exists', () => {
+        it('uses wrapper-solo when native button absent but floating button bar exists', () => {
             createWrapperWithoutNativeButton();
             GoToTop._injectButton();
             expect(GoToTop._button).not.toBeNull();

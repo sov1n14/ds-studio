@@ -78,6 +78,13 @@ function makeTextarea(value = '') {
     return ta;
 }
 
+/** The composer main input; name="search" models the live page, where composer paths target textarea[name="search"]. */
+function makeMainTextarea(value = '') {
+    const ta = makeTextarea(value);
+    ta.setAttribute('name', 'search');
+    return ta;
+}
+
 /** Record the types of events dispatched on `el`; returns the recording array. */
 function recordEvents(el, types) {
     const seen = [];
@@ -329,7 +336,7 @@ describe('send interception via click', () => {
         row.appendChild(button);
 
         const inputArea = document.createElement('div');
-        const textarea = makeTextarea(value);
+        const textarea = makeMainTextarea(value);
         inputArea.appendChild(textarea);
         inputArea.appendChild(row);
 
@@ -552,7 +559,7 @@ describe('send interception via click', () => {
         resetState({ isGlobalPromptEnabled: true, globalDefaultPrompt: 'GLOBAL' });
         const { row, svg } = makeActionsRowWithStopButton();
         const inputArea = document.createElement('div');
-        const textarea = makeTextarea('');
+        const textarea = makeMainTextarea('');
         inputArea.appendChild(textarea);
         inputArea.appendChild(row);
         cleanup = mountInDocument(inputArea);
@@ -605,7 +612,7 @@ describe('send interception via Enter', () => {
         row.appendChild(button);
 
         const inputArea = document.createElement('div');
-        const textarea = makeTextarea(value);
+        const textarea = makeMainTextarea(value);
         inputArea.appendChild(textarea);
         inputArea.appendChild(row);
 

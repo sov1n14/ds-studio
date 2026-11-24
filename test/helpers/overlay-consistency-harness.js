@@ -2,12 +2,16 @@
  * Shared harness for content-script scenarios asserting "what the overlay displays" == "what will be injected".
  *
  * Real modules: content-script.js, ChatBinding, PresetOverlay, StorageManager, in-memory chrome.storage (clone semantics). Mocked trust boundaries only: chrome.runtime.sendMessage (the SW chat-map writer) and the settings relay the SW performs (chrome.storage.onChanged -> DSS_SETTINGS_CHANGED to the content script), played here because no service worker runs.
+ *
+ * Opt-in `setUpOverlayScenario({ isUnchangedWriteSilent: true })` gives chrome.storage.onChanged real Chrome semantics through `silenceUnchangedWrites` in chrome-storage-change-events.js. By default the in-memory fake reports every written key as a change.
  */
 import { vi } from 'vitest';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import { setPathname } from './set-pathname.js';
 import { writeChatMapLayout, NO_RECEIVER, PORT_CLOSED, CONTEXT_INVALIDATED } from './chat-map-writer-harness.js';
+import { relaySettingsChanged, silenceUnchangedWrites } from './chrome-storage-change-events.js';
+import { waitForContentScriptInit } from './content-script-init-probe.js';
 
 export { contentScript };
 export const overlay = contentScript.PresetOverlay;
@@ -25,19 +29,8 @@ export async function settle() {
     await flush();
 }
 
-// content-script.js starts initSettings() un-awaited at import; its last step registers the second onMessage listener. Await this before touching state, or the bootstrap's handleChatChange() lands mid-test and supersedes the test's promptPrefix write.
-export async function waitForContentScriptBootstrap() {
-    for (let i = 0; i < 500; i++) {
-        if (chrome.runtime.onMessage.listenerCount() >= 2) return;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener.');
-}
-
-// Plays background/settings-routes.js: every committed storage change reaches the content script as DSS_SETTINGS_CHANGED.
-const relaySettingsChanged = (changes, area) => {
-    chrome.runtime.onMessage.callListeners({ type: 'DSS_SETTINGS_CHANGED', area, changes }, {}, () => {});
-};
+// content-script.js 於 import 時啟動且未被等待的 initSettings()；動到 state 前須等它完成，否則其尾端的 handleChatChange() 會在案例中途落地並覆寫案例寫入的 promptPrefix
+export const waitForContentScriptBootstrap = () => waitForContentScriptInit(contentScript);
 
 export async function seedPresets(presets) {
     const item = { dsPresetIndex: presets.map((p) => p.id) };
@@ -99,8 +92,9 @@ export async function unrelatedPresetEditArrives(p) {
 }
 
 /** Call from beforeEach; returns the teardown to call from afterEach. */
-export async function setUpOverlayScenario() {
+export async function setUpOverlayScenario({ isUnchangedWriteSilent = false } = {}) {
     await waitForContentScriptBootstrap();
+    const restoreNotify = isUnchangedWriteSilent ? silenceUnchangedWrites() : () => {};
     map = {};
     Object.assign(contentScript.state, { isEnabled: true, promptPrefix: '', globalDefaultPrompt: GLOBAL, isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
     const originalSendMessage = chrome.runtime.sendMessage;
@@ -110,6 +104,7 @@ export async function setUpOverlayScenario() {
     document.body.appendChild(target);
     overlay.mountTo(target);
     return () => {
+        restoreNotify();
         chrome.storage.onChanged.removeListener(relaySettingsChanged);
         chrome.runtime.sendMessage = originalSendMessage;
         errorSpy.mockRestore();

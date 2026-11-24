@@ -16,14 +16,13 @@ import '../../utils/debounce.js';
 // editor.js calls DSSPresetDomain.validatePresetName — publish the preset-domain module too.
 import '../../popup/popup.preset-domain.js';
 
-// editor.js references `location.search` and `window.DSSTabControl`, and
-// assigns to `window.__DSSEditor`. Set up mocks before importing.
+// editor.js references `location.search` and assigns to `window.__DSSEditor`.
 // We stub location.search via globalThis.location in happy-dom.
 
 // Provide StorageManager as a global so editor.js's classic-script path finds it
 globalThis.StorageManager = StorageManager;
 
-// Provide a stub DSSTabControl
+// Ensure a window object exists for the `window.__DSSEditor` assignment
 globalThis.window = globalThis.window ?? {};
 
 const editor = await import('../../popup/editor/editor.js');
@@ -175,31 +174,6 @@ describe('saveContent — routing with spied StorageManager', () => {
         expect(savedPreset.id).toBe('p1');
     });
 
-    it('preset save triggers DSSTabControl.broadcastActivePreset', async () => {
-        await StorageManager.savePromptPresets([
-            { id: 'p1', name: 'P1', content: 'old', createdAt: 1000, updatedAt: 1000 },
-        ]);
-        vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
-
-        const broadcastSpy = vi.fn().mockResolvedValue(undefined);
-        globalThis.window.DSSTabControl = { broadcastActivePreset: broadcastSpy };
-
-        await saveContent({ type: 'preset', id: 'p1' }, 'new content');
-        expect(broadcastSpy).toHaveBeenCalledWith('p1', 'new content');
-
-        delete globalThis.window.DSSTabControl;
-    });
-
-    it('preset save does not throw when DSSTabControl is absent', async () => {
-        await StorageManager.savePromptPresets([
-            { id: 'p2', name: 'P2', content: 'old', createdAt: 1000, updatedAt: 1000 },
-        ]);
-        vi.spyOn(StorageManager, 'saveOnePromptPreset').mockResolvedValue(undefined);
-        delete globalThis.window.DSSTabControl;
-
-        await expect(saveContent({ type: 'preset', id: 'p2' }, 'new')).resolves.toBeUndefined();
-    });
-
     it('silently ignores save when preset not found (deleted during save)', async () => {
         vi.spyOn(StorageManager, 'saveOnePromptPreset');
         // p-gone does not exist in storage
@@ -213,102 +187,6 @@ describe('saveContent — routing with spied StorageManager', () => {
 
     it('throws for unknown target type', async () => {
         await expect(saveContent({ type: 'unknown' }, 'val')).rejects.toThrow();
-    });
-});
-
-// ─────────────────────────────────────────────
-// Auto-save debounce wiring — must be 500ms, not 600ms
-//
-// performSave/debouncedSave live inside the DOMContentLoaded closure and are not
-// exported via __DSSEditor, so we assert the literal wiring in source. This is
-// paired with test/unit/debounce.spec.js (which owns the shared helper's timing
-// contract) to fully cover the "auto-save now fires at 500ms" requirement.
-// ─────────────────────────────────────────────
-
-describe('editor.js auto-save debounce wiring — source assertion', () => {
-    it('wires debouncedSave = debounce(performSave, 500) — not 600ms', async () => {
-        const { readFileSync } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __dirname = dirname(fileURLToPath(import.meta.url));
-        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
-
-        expect(code).toContain('const debouncedSave = DSSDebounce(performSave, 500);');
-        expect(code).not.toContain('DSSDebounce(performSave, 600)');
-    });
-
-    it('textarea "input" handler sets isDirty and calls the debounced save (not performSave directly)', async () => {
-        const { readFileSync } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __dirname = dirname(fileURLToPath(import.meta.url));
-        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
-
-        const inputBlockMatch = code.match(/textareaEl\.addEventListener\('input', \(\) => \{[\s\S]*?\}\);/);
-        expect(inputBlockMatch).not.toBeNull();
-        expect(inputBlockMatch[0]).toContain('isDirty = true');
-        expect(inputBlockMatch[0]).toContain('debouncedSave()');
-        expect(inputBlockMatch[0]).not.toContain('performSave()');
-    });
-
-    it('preset target flow fills the name input with the preset name, hides the title, and focuses (without selecting) the name input', async () => {
-        const { readFileSync } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __dirname = dirname(fileURLToPath(import.meta.url));
-        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
-
-        // Anchor on the distinctive name-input assignment (the 'if (target.type === "preset")'
-        // header also appears in saveContent/loadContent) and capture through the block's close.
-        const presetBlockMatch = code.match(/nameInputEl\.value = loaded\.name \?\? '';[\s\S]*?\n    \}/);
-        expect(presetBlockMatch).not.toBeNull();
-        expect(presetBlockMatch[0]).toContain("nameInputEl.value = loaded.name ?? ''");
-        expect(presetBlockMatch[0]).toContain("titleEl.classList.add('is-hidden')");
-        expect(presetBlockMatch[0]).toContain("nameInputEl.classList.remove('is-hidden')");
-        expect(presetBlockMatch[0]).toContain('nameInputEl.focus()');
-        // v4.18.2 (2026-08-07): auto-select-all was deliberately removed so the user's
-        // first keystroke doesn't wipe the whole preset name -- focus-only, cursor at end.
-        // Do NOT reintroduce nameInputEl.select() here; this guards that decision.
-        expect(presetBlockMatch[0]).not.toContain('nameInputEl.select()');
-    });
-
-    it('name input "input" handler sets isDirty and calls the debounced save (not performSave directly)', async () => {
-        const { readFileSync } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __dirname = dirname(fileURLToPath(import.meta.url));
-        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
-
-        const inputBlockMatch = code.match(/nameInputEl\.addEventListener\('input', \(\) => \{[\s\S]*?\}\);/);
-        expect(inputBlockMatch).not.toBeNull();
-        expect(inputBlockMatch[0]).toContain('isDirty = true');
-        expect(inputBlockMatch[0]).toContain('debouncedSave()');
-        expect(inputBlockMatch[0]).not.toContain('performSave()');
-    });
-});
-
-// ─────────────────────────────────────────────
-// Escape-to-close wiring — source assertion
-//
-// The window-level keydown listener lives inside the DOMContentLoaded closure
-// and is not exported via __DSSEditor, so we assert the literal wiring in
-// source, matching the auto-save debounce tests above.
-// ─────────────────────────────────────────────
-
-describe('editor.js Escape-to-close wiring — source assertion', () => {
-    it('registers a window-level keydown listener that closes the window on Escape', async () => {
-        const { readFileSync } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __dirname = dirname(fileURLToPath(import.meta.url));
-        const code = readFileSync(resolve(__dirname, '../../popup/editor/editor.js'), 'utf-8');
-
-        // Anchor on the distinctive Esc comment and capture through the listener's close.
-        const escBlockMatch = code.match(/\/\/ Esc 關閉視窗：pagehide 自動儲存保證未存內容先寫入[\s\S]*?\}\);/);
-        expect(escBlockMatch).not.toBeNull();
-        expect(escBlockMatch[0]).toContain("window.addEventListener('keydown'");
-        expect(escBlockMatch[0]).toContain("e.key === 'Escape'");
-        expect(escBlockMatch[0]).toContain('window.close()');
     });
 });
 

@@ -3,7 +3,7 @@
  *
  * Requirement:
  *   - Gates: retry = master "isEnabled" ON && "isAutoRetryEnabled" true; continue = master ON && "isAutoContinueEnabled" true. Both own keys default false. Initial values come from DSS_GET_SETTINGS (both own keys requested), changes from DSS_SETTINGS_CHANGED (area 'local').
- *   - Location by window.DSstudio.Selectors only: retry = RETRY_BUTTON_SELECTOR, fallback RETRY_BUTTON_FALLBACK_SELECTOR; continue = CONTINUE_BUTTON_SELECTOR, fallback CONTINUE_BUTTON_FALLBACK_SELECTOR. Never by button text.
+ *   - Location by window.DSstudio.Selectors only: retry = RETRY_BUTTON_SELECTOR (no fallback); continue = CONTINUE_BUTTON_SELECTOR, fallback CONTINUE_BUTTON_FALLBACK_SELECTOR. Never by button text.
  *   - Timing: one setTimeout chain. While any gate is open: wait DSSAutoClickDelay.nextDelayMs() (floor(Math.random() * 31) * 100 ms), activate each gated, present button once, schedule the next round with a fresh delay. At most one pending timer. No activation cap. All gates closed -> no timer.
  *   - "Activate" means the button's React onClick guard accepts the event (see guardButton in the harness); a bare click event is not success, because the live buttons ignore untrusted clicks.
  *
@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     MASTER_KEY, RETRY_KEY, CONTINUE_KEY, R_300, R_1500, R_2500, R_2700,
-    selectors, RETRY_MARKUP, CONTINUE_MARKUP, RETRY_FALLBACK_ONLY_MARKUP, CONTINUE_FALLBACK_ONLY_MARKUP, DECOY_MARKUP,
+    selectors, RETRY_MARKUP, CONTINUE_MARKUP, CONTINUE_FALLBACK_ONLY_MARKUP, DECOY_MARKUP,
     mount, clickSpy, guardButton, stubRandom, installChromeRuntime, requestedKeys, broadcast, changes, loadAutoClick,
 } from '../helpers/auto-click-harness.js';
 
@@ -44,7 +44,6 @@ afterEach(() => {
 describe('selector contract', () => {
     it.each([
         ['RETRY_BUTTON_SELECTOR', '.ds-button--warning.ds-button--circle.ds-button--xs'],
-        ['RETRY_BUTTON_FALLBACK_SELECTOR', '.a3b9bd76._76a2310'],
         ['CONTINUE_BUTTON_SELECTOR', '._8e85838 > .ds-button[role="button"]'],
         ['CONTINUE_BUTTON_FALLBACK_SELECTOR', '._6eef0b0'],
     ])('Selectors.%s === %s', (name, value) => {
@@ -52,15 +51,15 @@ describe('selector contract', () => {
     });
 
     it.each([
-        ['retry', RETRY_MARKUP, ['RETRY_BUTTON_SELECTOR', 'RETRY_BUTTON_FALLBACK_SELECTOR'], ['CONTINUE_BUTTON_SELECTOR', 'CONTINUE_BUTTON_FALLBACK_SELECTOR']],
-        ['continue', CONTINUE_MARKUP, ['CONTINUE_BUTTON_SELECTOR', 'CONTINUE_BUTTON_FALLBACK_SELECTOR'], ['RETRY_BUTTON_SELECTOR', 'RETRY_BUTTON_FALLBACK_SELECTOR']],
-    ])('the real %s button matches its own two selectors and neither of the other button', (name, markup, own, other) => {
+        ['retry', RETRY_MARKUP, ['RETRY_BUTTON_SELECTOR'], ['CONTINUE_BUTTON_SELECTOR', 'CONTINUE_BUTTON_FALLBACK_SELECTOR']],
+        ['continue', CONTINUE_MARKUP, ['CONTINUE_BUTTON_SELECTOR', 'CONTINUE_BUTTON_FALLBACK_SELECTOR'], ['RETRY_BUTTON_SELECTOR']],
+    ])('the real %s button matches every one of its own selectors and none of the other button', (name, markup, own, other) => {
         mount(markup);
         const el = document.querySelector(`[data-fixture="${name}"]`);
         const s = selectors();
         for (const key of [...own, ...other]) expect(s[key], `Selectors.${key} must be a string`).toBeTypeOf('string');
-        expect(own.map((key) => el.matches(s[key])), `matches ${own.join(', ')}`).toEqual([true, true]);
-        expect(other.map((key) => el.matches(s[key])), `matches ${other.join(', ')}`).toEqual([false, false]);
+        expect(own.map((key) => el.matches(s[key])), `matches ${own.join(', ')}`).toEqual(own.map(() => true));
+        expect(other.map((key) => el.matches(s[key])), `matches ${other.join(', ')}`).toEqual(other.map(() => false));
     });
 });
 
@@ -318,27 +317,21 @@ describe('button location', () => {
         stubRandom(R_2500);
     });
 
-    it.each([
-        ['retry', RETRY_FALLBACK_ONLY_MARKUP, RETRY_ONLY],
-        ['continue', CONTINUE_FALLBACK_ONLY_MARKUP, CONTINUE_ONLY],
-    ])('activates a %s button matched only by its fallback selector', async (name, markup, values) => {
-        mount(markup);
-        const fallback = guardButton(`${name}-fallback`);
-        await loadAutoClick(values);
+    it('activates a continue button matched only by its fallback selector', async () => {
+        mount(CONTINUE_FALLBACK_ONLY_MARKUP);
+        const fallback = guardButton('continue-fallback');
+        await loadAutoClick(CONTINUE_ONLY);
 
         vi.advanceTimersByTime(5000);
 
         expect(fallback, 'fallback-only button after 2 rounds').toHaveBeenCalledTimes(2);
     });
 
-    it.each([
-        ['retry', RETRY_FALLBACK_ONLY_MARKUP, RETRY_MARKUP, RETRY_ONLY],
-        ['continue', CONTINUE_FALLBACK_ONLY_MARKUP, CONTINUE_MARKUP, CONTINUE_ONLY],
-    ])('prefers the %s primary match over an earlier fallback-only element', async (name, fallbackMarkup, markup, values) => {
-        mount(fallbackMarkup, markup);
-        const fallback = guardButton(`${name}-fallback`);
-        const primary = guardButton(name);
-        await loadAutoClick(values);
+    it('prefers the continue primary match over an earlier fallback-only element', async () => {
+        mount(CONTINUE_FALLBACK_ONLY_MARKUP, CONTINUE_MARKUP);
+        const fallback = guardButton('continue-fallback');
+        const primary = guardButton('continue');
+        await loadAutoClick(CONTINUE_ONLY);
 
         vi.advanceTimersByTime(2500);
 

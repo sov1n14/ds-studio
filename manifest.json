@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "zh_TW",
   "name": "__MSG_extName__",
-  "version": "4.36.5",
+  "version": "4.39.43",
   "minimum_chrome_version": "111",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5m3yyRKn27CeKs8JGkaVRTRHLvqdyacX4c/WMpYohs1PXPY+xcB2CP9SDlPtocX5qZjmP7B+Qs/pWFc/vEvOWcorQhbebm6jiGS+ZAe75NemUSt7MCJV61THdtb30k1nPGxL8viEYb09B8ZWh+QEN4t+hHAHsMFf9EA9UPrJb7YgIrulQVIkWPT+2afjdlwe6oUeogpdN6QJK19qe52vf9dZXTt0AFw/ORk1c3PLKBIitM1l3RZYbrBiG2DwgJw6N5iSVgHwEq5qPCdkFXlEl9LnFWa4wviFV8OpaAdCC0B3Ud+QNWNJrBWeiVAMi4wamg34f0P6gXAbvS4nEfEkKwIDAQAB",
   "description": "__MSG_extDesc__",
@@ -17,6 +17,7 @@
     "activeTab",
     "alarms"
   ],
+  "optional_permissions": ["notifications", "clipboardWrite", "offscreen"],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {
@@ -29,6 +30,7 @@
     {
       "resources": [
         "content/sse-parser.js",
+        "utils/temporary-chat-message-types.js",
         "content/censor-xhr-hook.js",
         "content/temporary-chat-history-hook.js",
         "content/prevent-auto-scroll.js",
@@ -56,6 +58,7 @@
         "utils/i18n.js",
         "utils/logger.js",
         "utils/message-constants.js",
+        "utils/runtime-message-errors.js",
         "utils/deepseek-api.js",
         "utils/storage-manager.keys.js",
         "utils/storage-manager.rw.js",
@@ -88,6 +91,7 @@
         "content/input-width.js",
         "content/hide-thinking.js",
         "content/auto-expand-messages.js",
+        "content/react-click-bridge.shared.js",
         "content/auto-open-sidebar.js",
         "content/websearch-toggle.js",
         "content/main-world-injector.js",
@@ -104,6 +108,7 @@
         "content/prevent-auto-scroll-bridge.js",
         "content/harvest.toast.js",
         "content/harvest.dom.js",
+        "content/harvest.think.js",
         "content/harvest.policy.js",
         "content/harvest.js",
         "content/content-script.export.time.js",
@@ -121,6 +126,7 @@
         "content/preset-id.resolver.js",
         "content/preset-viewport-sync.js",
         "content/preset-overlay.controller.js",
+        "utils/temporary-chat-message-types.js",
         "utils/temporary-chat-constants.js",
         "content/invalidation-toast.js",
         "content/invalidation-watcher.js",
@@ -155,8 +161,13 @@
         "content/mobile-sidebar-swipe.lifecycle.js",
         "content/mobile-sidebar-swipe.js",
         "content/mobile-homepage-cleanup.js",
+        "content/runtime-send.js",
         "content/auto-click.delay.js",
         "content/auto-retry.js",
+        "content/reply-completion.js",
+        "content/auto-copy.relay.js",
+        "content/auto-copy.js",
+        "content/reply-notification.js",
         "content/editor-window-autoclose.js"
       ],
       "css": [
@@ -173,6 +184,7 @@
         "*://chat.deepseek.com/*"
       ],
       "js": [
+        "content/react-click-bridge.shared.js",
         "content/react-click-bridge.main.js"
       ],
       "world": "MAIN",

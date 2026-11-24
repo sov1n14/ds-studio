@@ -123,10 +123,13 @@ const CensorReplyRestore = {
             thinking_elapsed_secs: data.thinkingElapsedSecs || 0,
             chat_session_id: data.chatSessionId || null,
             prompt_key: this._normalizePrompt(data.promptText)
+        }).catch((err) => {
+            // 存檔未被 await，是無人能接住錯誤的邊界：寫入失敗時在此捕捉並記錄
+            console.error('[DSS] censor-reply-restore: save restored message failed:', err);
         });
 
         // MutationObserver 可能已在 postMessage 之前觸發，手動掃描一遍
-        var msgs = document.querySelectorAll(__DS_CensorSelectors.ASSISTANT_MESSAGE_SELECTOR);
+        var msgs = document.querySelectorAll(__DS_CensorSelectors.MESSAGE_SELECTOR);
         for (var mi = 0; mi < msgs.length; mi++) {
             this._tryRestoreMessage(msgs[mi]);
         }
@@ -155,7 +158,7 @@ const CensorReplyRestore = {
     async clearAllRestoredMessages() {
         this._restoredMessages = {};
         this._keyToMessageId.clear();
-        await StorageManager.clearRestoredMessages();
+        await this._clearStoredRecords();
     },
 
     enable() {
@@ -181,7 +184,10 @@ const CensorReplyRestore = {
         // 註冊來自 popup 的訊息監聽器
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (request.type === DSS_CONTENT_MSG.CLEAR_RESTORED_MESSAGES) {
-                this.clearAllRestoredMessages();
+                // 訊息監聽器是無人能接住錯誤的邊界：清除寫入失敗時在此捕捉並記錄
+                this.clearAllRestoredMessages().catch((err) => {
+                    console.error('[DSS] censor-reply-restore: clear restored messages failed:', err);
+                });
                 sendResponse({ success: true });
             }
         });

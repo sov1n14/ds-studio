@@ -386,3 +386,86 @@ export function makeSendButtonWithChangedIcon() {
 
     return { button, svg };
 }
+
+/** The attachment card DeepSeek shows for an attached text file, verbatim from tools/captures/composer-attach-text-box.html (SVG paths omitted, file name replaced by a placeholder). */
+const LIVE_FILE_CARD_HTML =
+    '<div class="b40079d7 _2113217"><div class="_9ebd84c"></div><div class="_6d1b417"><div class="ds-animated-size-item" style="--duration: 200ms; margin-left: 0px;">' +
+    '<div class="_25c7358 dafb6286" tabindex="0"><div class="cd314545"><div class="_1c3b90b"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none"></svg></div>' +
+    '<div class="_158cea4"><div class="_967f3f9"><div class="e70accd6">placeholder.txt</div><div class="d0fee470"></div></div><div class="_7103a25 _078ccb5">TXT 25B</div></div>' +
+    '<div class="_8402d8c" tabindex="0"><div class="ds-icon" style="font-size: 14px; width: 14px; height: 14px;"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"></svg></div><div class="ds-focus-ring" style="--dsl-focus-ring-offset: -2px;"></div></div>' +
+    '</div><div class="ds-focus-ring"></div></div></div></div><div class="_0d5f28a"></div></div>';
+
+/** The attachment card DeepSeek shows for an attached image, verbatim from tools/captures/composer-attach-image-box.html (SVG paths and the blob src omitted, alt replaced by a placeholder). */
+const LIVE_IMAGE_CARD_HTML =
+    '<div class="b40079d7 _2113217"><div class="_9ebd84c"></div><div class="_6d1b417"><div class="ds-animated-size-item" style="--duration: 200ms; margin-left: 0px;">' +
+    '<div class="d5fa3d1b _183e647" role="button" tabindex="0"><div class="cc804671 _2571442"><img decoding="sync" alt="placeholder.png" class="_9f130b7"></div>' +
+    '<div class="fb3b3771"><div class="b2a4d1af _04c868b"><div class="f8553f18"><div class="ds-loading" style="font-size: 18px;"><svg viewBox="0 0 36 36" version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" data-icon="spin"></svg></div></div></div></div>' +
+    '<div class="c8b3f8a6" tabindex="0"><div class="ds-icon" style="font-size: 14px; width: 14px; height: 14px;"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"></svg></div></div>' +
+    '<div class="ds-focus-ring" style="border-radius: 14px; --dsl-focus-ring-offset: 2px;"></div></div></div></div><div class="_0d5f28a"></div></div>';
+
+/** The composer wrapper (textarea area, toggle row, actions row), verbatim from tools/captures/composer-attach-text-box.html with the toggle-button Lottie SVGs omitted and the file-input accept list shortened. */
+const LIVE_COMPOSER_WRAPPER_HTML =
+    '<div class="_020ab5b"><div class="_24fad49"><div class="ds-scroll-area__gutters" style="--container-height: 60px; position: absolute; inset: 0px; width: 100%;">' +
+    '<div class="ds-scroll-area__horizontal-gutter" style="left: 2px; right: 2px; display: block; bottom: 2px; height: 6px;"><div class="ds-scroll-area__horizontal-bar" style="display: none;"></div></div>' +
+    '<div class="ds-scroll-area__vertical-gutter" style="right: 2px; top: 16px; bottom: 2px; width: 6px;"><div class="ds-scroll-area__vertical-bar" style="display: none;"></div></div></div>' +
+    '<textarea class="_27c9245 ds-scroll-area ds-scroll-area--show-on-focus-within ds-scroll-area--enabled d96f2d2a" placeholder="Message DeepSeek" rows="2" autocomplete="off" name="search" style="--container-height: 60px;"></textarea>' +
+    '<div class="b13855df"></div></div>' +
+    '<div class="ec4f5d61"><div class="_58b31c9">' +
+    '<div tabindex="0" aria-pressed="true" class="f79352dc ds-toggle-button ds-toggle-button--m ds-toggle-button--selected" style="transform: translateZ(0px);"><div class="ds-toggle-button__icon"><div class="ds-icon" style="font-size: inherit;"><div class="ds-lottie-toggle-icon" aria-hidden="true"><div style="width: 14px; height: 14px;"></div></div></div></div><span class="_6dbc175">DeepThink</span><div class="ds-focus-ring" style="--dsl-focus-ring-offset: -1px;"></div></div>' +
+    '<div tabindex="0" aria-pressed="false" class="f79352dc ds-toggle-button ds-toggle-button--m" style="transform: translateZ(0px);"><div class="ds-toggle-button__icon"><div class="ds-icon" style="font-size: inherit;"><div class="ds-lottie-toggle-icon" aria-hidden="true"><div style="width: 14px; height: 14px;"></div></div></div></div><span class="_6dbc175">Search</span><div class="ds-focus-ring" style="--dsl-focus-ring-offset: -1px;"></div></div>' +
+    '</div><div class="bf38813a">' +
+    '<div role="button" class="ds-button ds-button--iconLabelPrimary ds-button--icon ds-button--capsule ds-button--s ds-button--icon-relative-m f02f0e25" tabindex="0" style="--dsl-button-height: 34px;"><div class="ds-button__background"></div><div class="ds-button__icon ds-button__icon--last-child"><div class="ds-icon" style="font-size: inherit;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="' + ATTACHMENT_ICON_PATH_D + '" fill="currentColor"></path></svg></div></div></div>' +
+    '<input type="file" multiple="" accept=".txt,.png" style="display: none;">' +
+    '<div style="width: fit-content;"><div role="button" class="ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ds-button--icon-relative-m _52c986b" style="--dsl-button-height: 34px;" tabindex="0"><div class="ds-button__background"></div><div class="ds-button__icon ds-button__icon--last-child"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="' + REAL_SEND_ICON_PATH_D + '" fill="currentColor"></path></svg></div></div></div>' +
+    '</div></div></div>';
+
+function htmlToElement(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    return template.content.firstElementChild;
+}
+
+/**
+ * Live composer box as captured on chat.deepseek.com (tools/captures/composer-attach-{empty,text,image}*.html):
+ *   div._77cefa5._9996a53                  <-- box
+ *     [div.b40079d7._2113217]              <-- attachment card, only while a file or image is attached; a sibling of the wrapper, placed before it
+ *     div._020ab5b                         <-- wrapper
+ *       div._24fad49 > textarea[name="search"]
+ *       div.ec4f5d61 > div._58b31c9 (DeepThink / Search toggles) + div.bf38813a (paperclip, hidden file input, send button)
+ * The hidden file input sits in the actions row in every state, so it never signals an attachment.
+ * The send button follows the live rule: enabled whenever the textarea is non-empty or a card is present, disabled only for an empty textarea with no card. The state is recomputed on every `input` event, the way React re-renders after a value write.
+ *
+ * @param {{ value?: string, attachment?: null | 'file' | 'image' }} [opts]
+ * Returns { box, wrapper, textarea, sendButton, sendSvg, card }; card is null without an attachment.
+ */
+export function makeLiveComposerBox(opts) {
+    const value = (opts && opts.value) || '';
+    const attachment = (opts && opts.attachment) || null;
+
+    const box = document.createElement('div');
+    box.className = '_77cefa5 _9996a53';
+    let card = null;
+    if (attachment) {
+        card = htmlToElement(attachment === 'image' ? LIVE_IMAGE_CARD_HTML : LIVE_FILE_CARD_HTML);
+        box.classList.add('_1d5e44c');
+        box.appendChild(card);
+    }
+    const wrapper = htmlToElement(LIVE_COMPOSER_WRAPPER_HTML);
+    box.appendChild(wrapper);
+
+    const textarea = wrapper.querySelector('textarea');
+    textarea.value = value;
+    const sendSvg = Array.from(wrapper.querySelectorAll('path'))
+        .find(p => p.getAttribute('d') === REAL_SEND_ICON_PATH_D)
+        .closest('svg');
+    const sendButton = sendSvg.closest('[role="button"]');
+
+    const syncSendButtonState = () => {
+        const isSendable = textarea.value !== '' || card !== null;
+        sendButton.classList.toggle('ds-button--disabled', !isSendable);
+    };
+    syncSendButtonState();
+    textarea.addEventListener('input', syncSendButtonState);
+
+    return { box, wrapper, textarea, sendButton, sendSvg, card };
+}

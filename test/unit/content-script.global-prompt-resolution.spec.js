@@ -34,6 +34,7 @@ import { setPathname } from '../helpers/set-pathname.js';
 import '../../utils/storage-manager.js';
 import contentScript from '../../content/content-script.js';
 import { writeChatMapLayout } from '../helpers/chat-map-writer-harness.js';
+import { waitForContentScriptInit } from '../helpers/content-script-init-probe.js';
 
 function makeTextarea(value) {
     const ta = document.createElement('textarea');
@@ -45,26 +46,6 @@ async function flush(times = 10) {
     for (let i = 0; i < times; i++) {
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
-}
-
-// Deterministic replacement for a fixed tick-count guess. content-script.js
-// registers TWO chrome.runtime.onMessage listeners: the popup message router,
-// synchronously at module load, and the DSS_SETTINGS_CHANGED broadcast receiver
-// as the LAST statement of the un-awaited initSettings() bootstrap started at
-// module-import time. Until that second listener exists, any broadcast the test
-// delivers (cross-device / remote change simulation) reaches nobody and is lost
-// forever -- the mock does not replay past messages to late listeners.
-// Waiting for the count to reach 2 is therefore an exact signal that the entire
-// bootstrap chain (including the isEnabled / globalDefaultPrompt /
-// isGlobalPromptEnabled assignments that precede it) has settled, removing the
-// race instead of merely outlasting it with a bigger magic number.
-async function waitForContentScriptBootstrap() {
-    const maxTicks = 500;
-    for (let i = 0; i < maxTicks; i++) {
-        if (chrome.runtime.onMessage.listenerCount() >= 2) return;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error('Timed out waiting for content-script.js initSettings() to register its DSS_SETTINGS_CHANGED listener (bootstrap never completed).');
 }
 
 // Delivers the broadcast background/settings-routes.js would send after a
@@ -135,7 +116,8 @@ describe('isGlobalPromptEnabled resolution from the displayed preset (per-preset
         // before resetting state -- otherwise its delayed isEnabled /
         // globalDefaultPrompt / isGlobalPromptEnabled assignments can land AFTER
         // state writes run in the test body and silently clobber it mid-test.
-        await waitForContentScriptBootstrap();
+        // content-script.js 於 import 時啟動且未被等待的 initSettings() 須先完成，否則其尾端的初始設定與對話綁定會覆寫本案例寫入的 state
+        await waitForContentScriptInit(contentScript);
         Object.assign(contentScript.state, { isEnabled: false, promptPrefix: "", globalDefaultPrompt: "", isGlobalPromptEnabled: true, isShowSystemTime: false, isInjecting: false, currentChatUuid: null, chatPresetMap: {}, pendingPresetId: null, awaitingNewChatUuid: false, awaitingNewChatUuidTimer: null });
         overlayShownId = undefined;
         contentScript.PresetOverlay.dropdown = { setValue: (id) => { overlayShownId = id; }, setOptions: () => {} };

@@ -20,6 +20,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import StorageManager from '../../utils/storage-manager.js';
+import { findFunctionDeclaration, topLevelFunctionDeclarations } from '../helpers/popup-closure-source.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -425,18 +426,12 @@ describe('retrySync() behavior', () => {
 // refreshSyncStatus() — hasOversizedItems() precedence (8KB guard, report.md §6)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 以可編譯判斷取出真實的 refreshSyncStatus，不依賴縮排；Stryker 插樁後的 popup.js 會呼叫檔案最外層的 stryMutAct_* 等輔助函式，因此一併放入同一範圍。
 function buildRefreshSyncStatus() {
-    const match = popupCode.match(
-        /async function refreshSyncStatus\(\)\s*\{[\s\S]*?\n    \}/
-    );
-    if (!match) throw new Error('Could not extract refreshSyncStatus from popup.js');
-
+    const fnSource = findFunctionDeclaration(popupCode, 'refreshSyncStatus');
     const factory = new Function(
         'StorageManager', 'dsI18n',
-        `
-        ${match[0].replace('async function refreshSyncStatus', 'var refreshSyncStatus = async function')}
-        return refreshSyncStatus;
-        `
+        `${topLevelFunctionDeclarations(popupCode).join('\n')}\n${fnSource}\nreturn refreshSyncStatus;`
     );
     return factory(StorageManager, globalThis.dsI18n);
 }

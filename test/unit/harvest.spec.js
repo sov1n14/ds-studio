@@ -34,7 +34,6 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import harvestModule from '../../content/harvest.js';
-import DSSelectors from '../../content/ds-selectors.js';
 import harvestDomBundle from '../../content/harvest.dom.js';
 
 const { _measureMountedBottomOffset } = harvestDomBundle;
@@ -62,12 +61,13 @@ const {
  */
 function buildVirtualListDOM({ scrollHeight = 1000, clientHeight = 400 } = {}) {
     const scrollArea = document.createElement('div');
-    scrollArea.className = 'ds-scroll-area';
+    // The live message-list root carries both ds-virtual-list and ds-scroll-area
+    scrollArea.className = 'ds-virtual-list ds-scroll-area';
     Object.defineProperty(scrollArea, 'scrollHeight', { value: scrollHeight, configurable: true });
     Object.defineProperty(scrollArea, 'clientHeight', { value: clientHeight, configurable: true });
 
     const virtualListItems = document.createElement('div');
-    virtualListItems.className = 'ds-virtual-list-items _6f2c522';
+    virtualListItems.className = 'ds-virtual-list-items';
 
     const visibleItems = document.createElement('div');
     visibleItems.className = 'ds-virtual-list-visible-items';
@@ -103,15 +103,32 @@ function appendMessage(visibleItems, key, textContent = 'msg', isAI = false) {
         md.appendChild(p);
         msg.appendChild(md);
     } else {
-        const inner = document.createElement('div');
-        inner.className = DSSelectors.USER_CONTENT_SELECTOR.slice(1);
-        inner.textContent = textContent;
-        msg.appendChild(inner);
+        // Live user-message markup: .ds-message > div > .ds-collapsible-text (text) + its toggle button
+        const content = document.createElement('div');
+        content.className = 'fbb737a4';
+        const collapsible = document.createElement('div');
+        collapsible.className = 'ds-collapsible-text';
+        const line = document.createElement('div');
+        const span = document.createElement('span');
+        span.textContent = textContent;
+        line.appendChild(span);
+        collapsible.appendChild(line);
+        const toggle = document.createElement('div');
+        toggle.className = 'ds-collapsible-text-toggle-button';
+        toggle.innerHTML = '<div></div><div><div class="ds-icon"></div></div>';
+        content.appendChild(collapsible);
+        content.appendChild(toggle);
+        msg.appendChild(content);
     }
 
     wrapper.appendChild(msg);
     visibleItems.appendChild(wrapper);
     return msg;
+}
+
+/** User text of a captured message clone, read from its collapsible text block. */
+function userText(clone) {
+    return clone.querySelector('.ds-collapsible-text')?.textContent;
 }
 
 /** Install a PreventAutoScroll mock on window.DSstudio */
@@ -311,7 +328,7 @@ describe('_findHarvestScrollContainer — body exclusion guard', () => {
     it('strategy 1: does NOT return document.body even when body has .ds-scroll-area class', () => {
         document.body.classList.add('ds-scroll-area');
         const virtualListItems = document.createElement('div');
-        virtualListItems.className = 'ds-virtual-list-items _6f2c522';
+        virtualListItems.className = 'ds-virtual-list-items';
         const visibleItems = document.createElement('div');
         visibleItems.className = 'ds-virtual-list-visible-items';
         virtualListItems.appendChild(visibleItems);
@@ -918,7 +935,7 @@ describe('harvestAllMessages', () => {
         const result = await harvestPromise;
 
         expect(result.items.length).toBeGreaterThanOrEqual(1);
-        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent || '');
+        const texts = result.items.map(el => userText(el) || '');
         expect([...new Set(texts)].filter(t => t === 'original-content').length).toBeLessThanOrEqual(1);
     });
 
@@ -943,7 +960,7 @@ describe('harvestAllMessages', () => {
         const result = await harvestPromise;
 
         expect(result.items.length).toBe(3);
-        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
+        const texts = result.items.map(el => userText(el));
         expect(texts).toEqual(['msg-1', 'msg-2', 'msg-3']);
     });
 
@@ -1083,7 +1100,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('complete');
         expect(result.isComplete).toBe(true);
         expect(result.items.length).toBe(TOTAL_MESSAGES);
-        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
+        const texts = result.items.map(el => userText(el));
         expect(texts).toEqual(Array.from({ length: TOTAL_MESSAGES }, (_, i) => "msg-" + i));
     }, 20000);
 
@@ -1102,7 +1119,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('stalled');
         expect(result.isComplete).toBe(false);
         expect(result.items.length).toBeGreaterThan(0);
-        expect(result.items[0].querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent).toBe('captured-before-stall');
+        expect(userText(result.items[0])).toBe('captured-before-stall');
     }, 15000);
 
     it('does NOT stall when fresh progress arrives before the 20000ms threshold - the stall clock resets on progress', async () => {
@@ -1151,7 +1168,7 @@ describe('harvestAllMessages', () => {
 
         expect(result.reason).toBe('complete');
         expect(result.isComplete).toBe(true);
-        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
+        const texts = result.items.map(el => userText(el));
         expect(texts).toEqual(['msg-0', 'msg-1']);
     }, 20000);
 
@@ -1198,7 +1215,7 @@ describe('harvestAllMessages', () => {
         expect(result.reason).toBe('cancelled');
         expect(result.isComplete).toBe(false);
         expect(result.items.length).toBeGreaterThan(0);
-        const texts = result.items.map(el => el.querySelector(DSSelectors.USER_CONTENT_SELECTOR)?.textContent);
+        const texts = result.items.map(el => userText(el));
         expect(texts).toEqual(expect.arrayContaining(['keep-me-0', 'keep-me-1']));
     }, 15000);
 
@@ -1570,7 +1587,7 @@ describe('_findHarvestScrollContainer - mutant killers', () => {
         scrollArea.className = 'ds-scroll-area';
         const middleDiv = document.createElement('div');
         const virtualList = document.createElement('div');
-        virtualList.className = 'ds-virtual-list-items _6f2c522';
+        virtualList.className = 'ds-virtual-list-items';
         middleDiv.appendChild(virtualList);
         scrollArea.appendChild(middleDiv);
         document.body.appendChild(scrollArea);

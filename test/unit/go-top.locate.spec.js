@@ -1,10 +1,10 @@
+// @vitest-environment jsdom
 /**
  * GoToTop — DOM location unit tests.
  * Shared fixtures: test/helpers/go-top-fixtures.js
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
-import DSSelectors from '../../content/ds-selectors.js';
 import GoToTop from '../../content/go-top.js';
 import {
     createWrapperWithoutNativeButton,
@@ -14,7 +14,8 @@ import {
 
 describe('GoToTop', () => {
     beforeEach(resetGoToTopState);
-    afterEach(() => { vi.useRealTimers(); });
+    // Tear down after each test too: the last test of the file must not leave a wrapper-observer debounce timer firing after the environment is torn down.
+    afterEach(() => { resetGoToTopState(); vi.useRealTimers(); });
 
     // ─────────────────────────────────────
     //  _querySelectorWithFallback
@@ -223,20 +224,28 @@ describe('GoToTop', () => {
             expect(result).not.toBe(ourBtn);
         });
 
-        it('falls back to structural selector when _0706cde is absent', () => {
-            const { injectParent } = createWrapperWithoutNativeButton();
-            // Native button without the hash class (renamed scenario)
-            const nativeBtn = document.createElement('div');
-            nativeBtn.setAttribute('role', 'button');
-            nativeBtn.className =
-                'ds-button ds-button--outlinedNeutral ds-button--outlined ds-button--circle ' +
-                'ds-button--m ds-button--icon-relative-m ds-button--floating';
-            injectParent.appendChild(nativeBtn);
+        it('never returns the floating button nested inside our own clone of the live native wrapper', () => {
+            // Live markup: the native go-bottom role="button" sits inside a wrapper div, and the GoTop
+            // button is built from what _getNativeButton() returned. Once the conversation reaches the
+            // bottom the native wrapper unmounts, leaving no native go-bottom button on the page.
+            const { nativeBtn } = createFullWrapperWithNativeButton();
+            GoToTop._injectIntoWrapper(nativeBtn);
+            nativeBtn.remove();
+
+            GoToTop._hasSeenDom = true;
+            expect(GoToTop._getNativeButton()).toBeNull();
+        });
+
+        it('falls back to the floating circle control when DeepSeek renames the _0706cde positioning class', () => {
+            // Minimal mutation of the live markup: only the positioning wrapper's hashed class is stripped.
+            const { nativeBtn } = createFullWrapperWithNativeButton();
+            nativeBtn.classList.remove('_0706cde');
+            const control = nativeBtn.querySelector('[role="button"]');
 
             GoToTop._hasSeenDom = true;
 
             const result = GoToTop._getNativeButton();
-            expect(result).toBe(nativeBtn);
+            expect(result).toBe(control);
         });
 
         it('returns null when no native button is present', () => {
@@ -254,7 +263,7 @@ describe('GoToTop', () => {
 
         it('fallback rejects primary button (post-validation): matches fallback selector but has ds-button--primary', () => {
             const { injectParent } = createWrapperWithoutNativeButton();
-            // A button matching fallback #2/#3/#4 (ds-button--floating + ds-button--circle inside .aaff8b8f)
+            // A button matching the structural fallback (ds-button--floating + ds-button--circle)
             // but fails post-validation because it carries ds-button--primary (and ds-button--filled, etc.)
             const wrongBtn = document.createElement('div');
             wrongBtn.setAttribute('role', 'button');
@@ -268,15 +277,10 @@ describe('GoToTop', () => {
             expect(result).toBeNull();
         });
 
-        it('fallback rejects non-floating button: no ds-button--floating means no fallback match', () => {
+        it("fallback rejects the composer's real send button (circle but not floating) when the native button is absent", () => {
+            // Live markup scrolled to the bottom: the only other circle role="button" on the page is the composer's send button.
             const { injectParent } = createWrapperWithoutNativeButton();
-            // A button without ds-button--floating cannot match any fallback selector
-            const wrongBtn = document.createElement('div');
-            wrongBtn.setAttribute('role', 'button');
-            wrongBtn.className =
-                'ds-button ds-button--primary ds-button--filled ' +
-                'ds-button--circle ds-button--m ds-button--disabled _52c986b';
-            injectParent.appendChild(wrongBtn);
+            expect(injectParent.querySelector('[role="button"].ds-button--circle.ds-button--primary')).not.toBeNull();
 
             GoToTop._hasSeenDom = true;
             const result = GoToTop._getNativeButton();
@@ -339,26 +343,12 @@ describe('GoToTop', () => {
     // ─────────────────────────────────────
 
     describe('_locateWrapperDirect', () => {
-        it('returns { injectParent, outerWrapper } when .aaff8b8f exists', () => {
+        it('returns { injectParent, outerWrapper } when the floating button bar exists', () => {
             const { outerWrapper, injectParent } = createWrapperWithoutNativeButton();
             const result = GoToTop._locateWrapperDirect();
             expect(result).not.toBeNull();
             expect(result.injectParent).toBe(injectParent);
             expect(result.outerWrapper).toBe(outerWrapper);
-        });
-
-        it('falls back to INJECT_PARENT_FALLBACK selector when .aaff8b8f is absent', () => {
-            const outerWrapper = document.createElement('div');
-            outerWrapper.className = DSSelectors.CONTENT_COLUMN_SELECTOR.slice(1);
-            const firstChild = document.createElement('div');
-            const injectParent = document.createElement('div');
-            outerWrapper.appendChild(firstChild);
-            outerWrapper.appendChild(injectParent);
-            document.body.appendChild(outerWrapper);
-
-            const result = GoToTop._locateWrapperDirect();
-            expect(result).not.toBeNull();
-            expect(result.injectParent).toBe(injectParent);
         });
 
         it('returns null when neither container selector matches', () => {

@@ -7,7 +7,7 @@
  * chrome.storage.*（chrome-extension-coding-guidelines §1 層級界線）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
- * 相依：utils/temporary-chat-constants.js、background/pending-store.js 需先載入。
+ * 相依：utils/temporary-chat-constants.js、background/pending-store.js 與 background/route-dispatch.js（共用的訊息分派與回應格式）需先載入。
  */
 (function () {
     'use strict';
@@ -58,35 +58,14 @@
     }
 
     /**
-     * 執行單一路由並回應結果；失敗於此邊界攔截（onMessage 之外無人可攔）。
-     * @param {(message: object) => Promise<void>} route
-     * @param {object} message
-     * @param {(response: object) => void} sendResponse
-     */
-    async function runRoute(route, message, sendResponse) {
-        try {
-            const result = await route(message);
-            // 回傳值為物件時併入回應（既有路由回傳 undefined，回應維持 {ok:true} 不變）
-            sendResponse(result && typeof result === 'object' ? { ok: true, ...result } : { ok: true });
-        } catch (err) {
-            console.error(`[DSS] pending-store-routes ${message?.type}:`, err);
-            sendResponse({ ok: false, error: String(err) });
-        }
-    }
-
-    /**
      * 註冊待刪佇列訊息路由監聽器。
      * 必須由 service worker 於頂層呼叫，確保 worker 重啟後仍能存活。
      */
     function install() {
         const routes = buildRouteTable();
-
-        chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-            const route = routes[message?.type];
-            if (!route) return false; // 交由其他監聽器處理
-            runRoute(route, message, sendResponse);
-            return true; // 非同步回應
-        });
+        const dispatch = globalThis.DSSRouteDispatch;
+        if (!dispatch) throw new Error('[DSS] pending-store-routes 需要 background/route-dispatch.js 先行載入');
+        dispatch.install(routes, 'pending-store-routes');
     }
 
     globalThis.DSSPendingStoreRoutes = { install };

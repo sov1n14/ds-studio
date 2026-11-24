@@ -49,6 +49,7 @@ function loadXhrHook(SseParser) {
     const sandbox = loadClassicScript('content/censor-xhr-hook.js', {
         XMLHttpRequest: MockXMLHttpRequest,
         SseParser,
+        DSS_TEMP_CHAT_MESSAGE_TYPES: loadClassicScript('utils/temporary-chat-message-types.js').DSS_TEMP_CHAT_MESSAGE_TYPES,
         window: { postMessage: vi.fn((data) => postedMessages.push(data)) },
     });
 
@@ -285,7 +286,7 @@ describe('censor-xhr-hook — edit_message endpoint support', () => {
                 prompt: 'hello world',
             });
             simulateXhr(hookCtx, '/api/v0/chat/completion', body, COMPLETION_SSE);
-            // Note: /chat/completion now also posts DSS_CHAT_COMPLETION_DETECTED before DSS_FRAGMENT_COMPLETE
+            // /chat/completion also posts DSS_CHAT_COMPLETION_DETECTED { chatSessionId } at send(), before DSS_FRAGMENT_COMPLETE; pick the fragment message by type
             const msg = hookCtx.postedMessages.find(m => m.type === 'DSS_FRAGMENT_COMPLETE');
             expect(msg.chatSessionId).toBe('aabbccdd-1111-2222-3333-444444444444');
             expect(msg.promptText).toBe('hello world');
@@ -307,7 +308,7 @@ describe('censor-xhr-hook — edit_message endpoint support', () => {
             const ctx2 = loadXhrHook(SseParser);
             simulateXhr(ctx2, '/api/v0/chat/completion', '{}', COMPLETION_SSE);
             simulateXhr(ctx2, '/api/v0/chat/edit_message', '{}', EDIT_MESSAGE_SSE);
-            // Note: /chat/completion also posts DSS_CHAT_COMPLETION_DETECTED; filter for fragment messages only
+            // /chat/completion also posts DSS_CHAT_COMPLETION_DETECTED { chatSessionId } at send(); count only the fragment messages
             const fragmentMessages = ctx2.postedMessages.filter(m => m.type === 'DSS_FRAGMENT_COMPLETE');
             expect(fragmentMessages).toHaveLength(2);
         });

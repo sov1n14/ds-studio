@@ -27,6 +27,19 @@
     }
 
     /**
+     * 自訊息根節點查詢 selector，只保留位於 container 內的結果：思考區塊的結構式選擇器以 .ds-message 為錨點，須從訊息根節點查詢；從子節點直接 querySelector 時，部分 DOM 實作（happy-dom）不比對範圍外的祖先。
+     * @param {Element} msg - 訊息根節點
+     * @param {Element} container - 限定範圍的子節點
+     * @param {string} selector
+     * @returns {Element[]}
+     */
+    function _queryAllWithin(msg, container, selector) {
+        return Array.prototype.filter.call(msg.querySelectorAll(selector), function (el) {
+            return container.contains(el);
+        });
+    }
+
+    /**
      * 將單一訊息節點（.ds-message）轉換為 Markdown 字串。
      * 此函式為純查詢，不修改 DOM，不持有模組層級狀態。
      * @param {Element} msg - .ds-message 節點（可為克隆節點）
@@ -61,17 +74,19 @@
                             var quoted = text.split('\n').map(function (line) { return '> ' + line; }).join('\n');
                             result += quoted + '\n';
                         }
-                    } else if (child.querySelector(selectors.THINK_STATUS_SELECTOR)) {
-                        var span = child.querySelector(selectors.THINK_STATUS_SELECTOR);
-                        result += '> ' + span.textContent.trim() + '\n';
-                    } else if (child.querySelector(selectors.THINK_REFERENCE_LABEL_SELECTOR)) {
-                        var labelDiv = child.querySelector(selectors.THINK_REFERENCE_LABEL_SELECTOR);
-                        var links = child.querySelectorAll(selectors.THINK_REFERENCE_LINK_SELECTOR);
-                        var line = '> ' + labelDiv.textContent.trim();
-                        links.forEach(function (link) {
-                            line += ' [' + link.textContent.trim() + '](' + link.href + ')';
-                        });
-                        result += line + '\n';
+                    } else {
+                        var span = _queryAllWithin(msg, child, selectors.THINK_STATUS_SELECTOR)[0];
+                        var labelDiv = span ? null : _queryAllWithin(msg, child, selectors.THINK_REFERENCE_LABEL_SELECTOR)[0];
+                        if (span) {
+                            result += '> ' + span.textContent.trim() + '\n';
+                        } else if (labelDiv) {
+                            var links = _queryAllWithin(msg, child, selectors.THINK_REFERENCE_LINK_SELECTOR);
+                            var line = '> ' + labelDiv.textContent.trim();
+                            links.forEach(function (link) {
+                                line += ' [' + link.textContent.trim() + '](' + link.href + ')';
+                            });
+                            result += line + '\n';
+                        }
                     }
                 }
                 result += '\n';
@@ -88,8 +103,8 @@
                 result += parseHtmlToMarkdown(mainResponse, { forceReferences: includeReferences }) + '\n\n';
             }
         } else {
-            // 使用者訊息
-            var userContentWrapper = msg.querySelector(selectors.USER_CONTENT_SELECTOR) || msg.firstElementChild;
+            // 使用者訊息：找不到使用者內容包裝層時退回整則訊息的 innerText；不取 firstElementChild，因為串流中尚無 .ds-markdown 的空白 AI 訊息會被誤判為使用者訊息
+            var userContentWrapper = msg.querySelector(selectors.USER_CONTENT_SELECTOR);
             var text = userContentWrapper ? userContentWrapper.innerText : msg.innerText;
             text = (text || '').trim();
             if (text) {
@@ -116,6 +131,22 @@
             return 'the export stopped early and the reason could not be determined (HarvestPolicy module unavailable)';
         }
         return HarvestPolicy.describeIncompleteReason(reason);
+    }
+
+    /**
+     * 顯示「匯出不完整」頁內警示 toast。於呼叫當下才自 harvest.toast.js 發布的 globalThis.__DS_Harvest_toast 取得函式：content scripts 為各自獨立的 classic script，showHarvestToastIncomplete 從未成為頂層全域名稱，且單元測試會在 harvest.toast.js 之前預載本檔，故不可於載入時擷取。
+     * toast 僅為附帶效果：bundle 或成員缺席時記錄警告並略過，不拋出例外，讓呼叫端照常下載含警告頁尾的檔案（與 Harvest、HarvestPolicy 缺席時的回退方式一致）。
+     * @param {number} capturedCount - 已擷取的訊息數
+     * @param {string} clause - 不完整原因子句
+     */
+    function showIncompleteToastSafely(capturedCount, clause) {
+        var showHarvestToastIncomplete = root.__DS_Harvest_toast && root.__DS_Harvest_toast.showHarvestToastIncomplete;
+        // Guard: toast bundle 缺席時僅警告，不中斷匯出下載
+        if (typeof showHarvestToastIncomplete !== 'function') {
+            console.warn('[DSS] Incomplete-export warning toast skipped: globalThis.__DS_Harvest_toast.showHarvestToastIncomplete is unavailable; load content/harvest.toast.js before content/content-script.export.js.');
+            return;
+        }
+        showHarvestToastIncomplete(capturedCount, clause);
     }
 
     /**
@@ -146,8 +177,8 @@
             return;
         }
 
-        // 執行完整擷取（遮罩由 Harvest 內部管理）
-        var harvestResult = await Harvest.harvestAllMessages();
+        // 執行完整擷取（Harvest 內部顯示不阻擋操作的進度 toast）；含思考時請 Harvest 暫時展開已收合的思考區塊，收合僅屬顯示層，不得影響匯出內容
+        var harvestResult = await Harvest.harvestAllMessages({ expandThinking: includeThinking });
 
         // Guard: 完全沒有訊息
         if (!harvestResult.items || harvestResult.items.length === 0) {
@@ -167,7 +198,7 @@
             var capturedCount = harvestResult.items.length;
             var clause = describeIncompleteReasonSafely(harvestResult.reason);
             markdownContent += '\n> ⚠️ Export may be incomplete (' + capturedCount + ' messages captured): ' + clause + '.\n';
-            showHarvestToastIncomplete(capturedCount, clause);
+            showIncompleteToastSafely(capturedCount, clause);
         }
 
         downloadMarkdown(markdownContent);

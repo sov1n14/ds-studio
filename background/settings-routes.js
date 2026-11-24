@@ -7,7 +7,7 @@
  *   2. chrome.storage.onChanged：受監看鍵變更時廣播 DSS_SETTINGS_CHANGED 給
  *      chat.deepseek.com 的所有分頁。
  *
- * 相依：utils/message-constants.js、utils/storage-manager.js 需先載入。
+ * 相依：utils/message-constants.js、utils/storage-manager.js 與 background/route-dispatch.js（共用的訊息分派與回應格式）需先載入。
  */
 (function () {
     'use strict';
@@ -135,34 +135,14 @@
     }
 
     /**
-     * 執行單一路由並回應結果；失敗於此邊界攔截（onMessage 之外無人可攔）。
-     * @param {(message: object) => Promise<void>} route
-     * @param {object} message
-     * @param {(response: object) => void} sendResponse
-     */
-    async function runRoute(route, message, sendResponse) {
-        try {
-            const result = await route(message);
-            sendResponse(result && typeof result === 'object' ? { ok: true, ...result } : { ok: true });
-        } catch (err) {
-            console.error(`[DSS] settings-routes ${message?.type}:`, err);
-            sendResponse({ ok: false, error: err?.message || String(err) });
-        }
-    }
-
-    /**
      * 註冊設定訊息路由與變更廣播監聽器。
      * 必須由 service worker 於頂層呼叫，確保 worker 重啟後仍能存活。
      */
     function install() {
         const routes = buildRouteTable();
-
-        chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-            const route = routes[message?.type];
-            if (!route) return false; // 交由其他監聽器處理
-            runRoute(route, message, sendResponse);
-            return true; // 非同步回應
-        });
+        const dispatch = globalThis.DSSRouteDispatch;
+        if (!dispatch) throw new Error('[DSS] settings-routes 需要 background/route-dispatch.js 先行載入');
+        dispatch.install(routes, 'settings-routes');
 
         chrome.storage.onChanged.addListener((changes, area) => {
             broadcastSettingsChanged(changes, area).catch((err) => {

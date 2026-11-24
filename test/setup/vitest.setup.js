@@ -27,6 +27,8 @@ import '../../utils/logger.js';
 // DSS_SETTINGS_MSG, and DSS_CONTENT_MSG onto globalThis. Preload it so specs
 // referencing any cross-layer constant don't hit ReferenceError.
 import '../../utils/message-constants.js';
+// utils/runtime-message-errors.js classifies the "Receiving end does not exist" rejection; the chat-map client (preloaded below) reads it when a send fails.
+import '../../utils/runtime-message-errors.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec
@@ -112,6 +114,7 @@ import '../../content/mobile-sidebar-swipe.js';
 import '../../popup/editor/editor.parse.js';
 import '../../popup/editor/editor.render.js';
 import '../../popup/editor/editor.storage.js';
+import '../../popup/editor/editor.autosave.js';
 
 // ResizeObserver stub — happy-dom / jsdom may not implement ResizeObserver.
 // The controller feature-detects it (typeof ResizeObserver === 'undefined') and
@@ -143,9 +146,7 @@ function createMockEvent() {
         removeListener: (fn) => listeners.delete(fn),
         hasListener: (fn) => listeners.has(fn),
         callListeners: (...args) => listeners.forEach((fn) => fn(...args)),
-        // Test helper: how many listeners are currently registered. Lets a spec
-        // await a module's load-time bootstrap by polling for the listener that
-        // the bootstrap registers as its last step, instead of guessing a tick budget.
+        // Test helper: how many listeners are currently registered. The count says only which listeners exist, not that a module's load-time bootstrap has finished; to wait for content-script.js init to finish, use waitForContentScriptInit() in test/helpers/content-script-init-probe.js.
         listenerCount: () => listeners.size,
     };
 }
