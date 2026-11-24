@@ -17,17 +17,6 @@
     }
 
     /**
-     * 於安裝時解析存檔請求通道（瀏覽器：importScripts 先載入；Node.js 測試：直接 require），缺失即拋出並指名修法。
-     * @returns {(slot: string) => Promise<string|undefined>} 共用的 requestEditorFlush
-     */
-    function resolveRequestEditorFlush() {
-        const channel = globalThis.DSSEditorFlushChannel
-            || (typeof require !== 'undefined' ? require('../utils/editor-flush-channel.js') : null);
-        if (typeof channel?.requestEditorFlush === 'function') return channel.requestEditorFlush;
-        throw new Error('[DSS] editor-window-routes: globalThis.DSSEditorFlushChannel is missing — importScripts utils/editor-flush-channel.js before editor-window-routes.js');
-    }
-
-    /**
      * 關閉單一目標（若有記錄的視窗 id）並移除其 storage key；關窗前先請編輯視窗存檔。
      * 名稱重複存檔失敗時保留視窗與 key，且不聚焦。
      * chrome.windows.remove 的拒絕（視窗已不存在）不影響 key 的移除。
@@ -64,7 +53,7 @@
      * @returns {Object<string, (message: object) => Promise<void>>}
      */
     function buildRouteTable() {
-        const deps = { constants: resolveConstants(), requestEditorFlush: resolveRequestEditorFlush() };
+        const deps = { constants: resolveConstants(), requestEditorFlush: DSSEditorFlushChannel.requestEditorFlush };
         return {
             [deps.constants.CLOSE_MESSAGE_TYPE]: () => closeAllEditorWindows(deps),
         };

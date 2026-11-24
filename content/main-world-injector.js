@@ -5,7 +5,7 @@
  * 腳本一次注入完畢。這些腳本無法用 content script 載入，因為它們必須改寫頁面自身的
  * XMLHttpRequest / history / React fiber。
  *
- * 注入順序即 MAIN_WORLD_SCRIPTS 的陣列順序：sse-parser.js 與 utils/temporary-chat-message-types.js
+ * 執行順序即 MAIN_WORLD_SCRIPTS 的陣列順序（injectScript 將 async 設為 false 以保證此順序）：sse-parser.js 與 utils/temporary-chat-message-types.js
  * 是各 hook 的相依，必須在其之前執行。
  *
  * 每個腳本皆須列入 manifest.json 的 web_accessible_resources 才能取得 URL。
@@ -26,10 +26,12 @@
 
     /**
      * 將單一腳本以 <script src> 注入 MAIN world，載入觸發後隨即移除標籤保持 DOM 乾淨。
+     * 動態建立的 <script src> 預設為 async，會依下載完成順序而非插入順序執行；async 設為 false 才能保證依插入順序執行。
      * @param {string} resourcePath 相對於擴充功能根目錄的路徑
      */
     function injectScript(resourcePath) {
         const script = document.createElement('script');
+        script.async = false;
         script.src = chrome.runtime.getURL(resourcePath);
         document.documentElement.appendChild(script);
         script.remove();

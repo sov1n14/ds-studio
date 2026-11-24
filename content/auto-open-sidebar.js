@@ -67,8 +67,8 @@
             }
             this._hasClickedThisEpisode = true;
             this._lastClickAt = now;
-            // 事件名稱與 content/react-click-bridge.main.js 一致（跨 world 無共用載入器）
-            button.dispatchEvent(new CustomEvent('dss:react-click', { bubbles: true }));
+            // 事件名稱取自 content/react-click-bridge.shared.js（與 MAIN world 的 content/react-click-bridge.main.js 同一來源）
+            button.dispatchEvent(new CustomEvent(globalThis.DSSReactClickBridgeShared.REACT_CLICK_EVENT, { bubbles: true }));
         },
 
         /** 啟動 MutationObserver；圖示 path 可能晚於按鈕節點插入、收合狀態隨 wrapper 子層增減（childList）或 className 改寫而切換，故每批變更皆整頁重掃 */

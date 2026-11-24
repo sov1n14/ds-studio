@@ -1,7 +1,7 @@
 /**
  * DS studio — React Click Bridge 共用定義（isolated 與 MAIN world 皆載入）
  *
- * 單一職責：宣告 isolated world（content/auto-copy.js、content/auto-retry.js、content/auto-copy.relay.js）與 MAIN world（content/react-click-bridge.main.js）兩端共用的橋接約定，並提供兩端共用的待處理項目佇列。
+ * 單一職責：宣告 isolated world（content/auto-copy.js、content/auto-retry.js、content/auto-copy.relay.js、content/auto-open-sidebar.js）與 MAIN world（content/react-click-bridge.main.js）兩端共用的橋接約定，並提供兩端共用的待處理項目佇列。
  * 約定：點擊事件名稱 dss:react-click、自動複製派送的 detail 標記 auto-copy、擷取事件名稱 dss:auto-copy-captured、待處理項目的存活時間 1500 ms。
  * 佇列：createPendingQueue() 回傳先進先出的失效時間戳佇列；note() 登記一筆，consume() 丟棄已失效項目後消耗最早的一筆存活項目。每次呼叫建立獨立佇列，兩個 world 各持有自己的實例。
  * 載入：manifest 的 isolated 與 "world": "MAIN" 兩個 content_scripts 項目皆須在使用端之前載入本檔。無載入期副作用，僅指派全域；注意：本檔不得包含 chrome.* API 呼叫。

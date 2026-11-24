@@ -23,6 +23,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import '../../background/route-dispatch.js';
+import '../../utils/editor-flush-channel.js';
 
 let listener;
 

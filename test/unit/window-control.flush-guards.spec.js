@@ -5,7 +5,7 @@
  * - A stored id whose window is gone (chrome.windows.get rejects) falls through to chrome.windows.create and the new id is stored; the gone window is not focused.
  * - The existing tab is navigated (chrome.tabs.update) only when there is a tab to navigate and its url differs; otherwise the window is only focused.
  * - The flush request is sent only when a swap is needed and the storage key belongs to an editor window (DSS_EDITOR_WINDOW.STORAGE_KEYS); no request when the url is unchanged.
- * - Each caller throws a message naming utils/editor-flush-channel.js when the channel is missing.
+ * - The call rejects with an error naming DSSEditorFlushChannel when the channel is missing.
  *
  * Doubles (trust boundary only): chrome.storage.session, chrome.windows (get / create / update), chrome.tabs.update, chrome.runtime.sendMessage. Values cross the boundary as structuredClone copies.
  */
@@ -27,9 +27,8 @@ const WINDOW_ID = 11;
 const TAB_ID = 101;
 const NEW_WINDOW_ID = 22;
 const NEW_TAB_ID = 202;
-const CHANNEL_FILE_PATTERN = /editor-flush-channel\.js/;
+const CHANNEL_GLOBAL_PATTERN = /DSSEditorFlushChannel/;
 const requireFromTest = createRequire(import.meta.url);
-const CHANNEL_PATH = requireFromTest.resolve('../../utils/editor-flush-channel.js');
 const WINDOW_CONTROL_PATH = requireFromTest.resolve('../../utils/window-control.js');
 
 /** Install copy-semantics doubles for the boundaries openSingletonWindow touches; every effect lands in one ordered log. */
@@ -261,31 +260,25 @@ describe('openSingletonWindow: editor constants (utils/message-constants.js) not
     });
 });
 
-describe('openSingletonWindow: flush channel (utils/editor-flush-channel.js) resolution', () => {
+describe('openSingletonWindow: flush channel (utils/editor-flush-channel.js) lookup', () => {
     let b;
     let savedChannel;
-    let savedCacheEntry;
 
     beforeEach(() => {
         b = createBoundary();
         b.trackWindow(PRESET_KEY, WINDOW_ID, editorWindow([tabShowing(URL_CURRENT)]));
         savedChannel = globalThis.DSSEditorFlushChannel;
         delete globalThis.DSSEditorFlushChannel;
-        savedCacheEntry = requireFromTest.cache[CHANNEL_PATH];
     });
 
     afterEach(() => {
-        if (savedCacheEntry === undefined) delete requireFromTest.cache[CHANNEL_PATH]; else requireFromTest.cache[CHANNEL_PATH] = savedCacheEntry;
         if (savedChannel === undefined) delete globalThis.DSSEditorFlushChannel; else globalThis.DSSEditorFlushChannel = savedChannel;
         b.restore();
     });
 
-    /** Make the CommonJS require of utils/editor-flush-channel.js yield `exportsValue`, as a broken or stale channel file would. */
-    function stubChannelModule(exportsValue) {
-        requireFromTest.cache[CHANNEL_PATH] = { id: CHANNEL_PATH, filename: CHANNEL_PATH, loaded: true, exports: exportsValue, children: [], paths: [] };
-    }
+    it('channel global loaded: the flush request is sent and the window navigates', async () => {
+        globalThis.DSSEditorFlushChannel = requireFromTest('../../utils/editor-flush-channel.js');
 
-    it('Node runtime, channel global not loaded: the channel file is loaded on demand, the flush request is sent and the window navigates', async () => {
         const { value, error } = await settle(open(URL_OTHER));
 
         expect(error, 'openSingletonWindow rejection').toBeUndefined();
@@ -294,25 +287,14 @@ describe('openSingletonWindow: flush channel (utils/editor-flush-channel.js) res
         expect(b.kinds('tabs.update').map((e) => ({ tabId: e.tabId, props: e.props })), 'chrome.tabs.update calls').toEqual([{ tabId: TAB_ID, props: { url: URL_OTHER } }]);
     });
 
-    it('the channel file exports no requestEditorFlush function: the call rejects with an error naming utils/editor-flush-channel.js', async () => {
-        stubChannelModule({});
-
+    it('channel global not loaded: the call rejects with an error naming DSSEditorFlushChannel and the window is not navigated', async () => {
         const { error } = await settle(open(URL_OTHER));
 
-        expect(error?.message, 'rejection message').toMatch(CHANNEL_FILE_PATTERN);
+        expect(error?.message, 'rejection message').toMatch(CHANNEL_GLOBAL_PATTERN);
         expect(b.kinds('tabs.update'), 'chrome.tabs.update calls').toEqual([]);
     });
 
-    it('the channel file exports nothing (null): the call rejects with an error naming utils/editor-flush-channel.js', async () => {
-        stubChannelModule(null);
-
-        const { error } = await settle(open(URL_OTHER));
-
-        expect(error?.message, 'rejection message').toMatch(CHANNEL_FILE_PATTERN);
-        expect(b.kinds('tabs.update'), 'chrome.tabs.update calls').toEqual([]);
-    });
-
-    it('browser classic-script runtime (no require, as popup.html loads it), channel not loaded: the call rejects with an error naming utils/editor-flush-channel.js', async () => {
+    it('browser classic-script runtime (no require, as popup.html loads it), channel not loaded: the call rejects with an error naming DSSEditorFlushChannel', async () => {
         // Run the real file as a classic script in a context without require or module, the way popup.html loads it.
         const context = vm.createContext({ chrome, console, setTimeout, clearTimeout, DSS_EDITOR_WINDOW: EDITOR_CONSTANTS });
         // Share the mutation-testing namespace (absent in a normal run) so an instrumented copy of the file sees the active mutant.
@@ -322,7 +304,7 @@ describe('openSingletonWindow: flush channel (utils/editor-flush-channel.js) res
 
         const { error } = await settle(context.DSSWindowControl.openSingletonWindow({ url: URL_OTHER, createOptions: CREATE_OPTIONS, storageKey: PRESET_KEY }));
 
-        expect(error?.message, 'rejection message').toMatch(CHANNEL_FILE_PATTERN);
+        expect(error?.message, 'rejection message').toMatch(CHANNEL_GLOBAL_PATTERN);
         expect(b.kinds('tabs.update'), 'chrome.tabs.update calls').toEqual([]);
     });
 });

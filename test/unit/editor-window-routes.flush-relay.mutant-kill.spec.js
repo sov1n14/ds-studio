@@ -1,9 +1,9 @@
 /**
- * background/editor-window-routes.js — how install() finds the flush request channel in each load context, and that the close route it registers really closes the tracked editor windows.
+ * background/editor-window-routes.js — how install() reads the flush request channel in each load context, and that the close route it registers really closes the tracked editor windows.
  *
  * Requirements (file header of the route module; docs/ARCHITECTURE.md "Editor Window Auto-Close"; docs/architecture/POPUP.md "Flush requests"):
- *  - The service worker loads the route with importScripts after utils/editor-flush-channel.js, so the route takes requestEditorFlush from globalThis.DSSEditorFlushChannel. A classic importScripts context has no `require`; when the channel global is missing there, install() throws the named load-order error that names utils/editor-flush-channel.js, and registers no listener.
- *  - Node.js tests load the route with require, and the route requires the channel module itself.
+ *  - The service worker loads the route with importScripts after utils/editor-flush-channel.js, so the route takes requestEditorFlush from globalThis.DSSEditorFlushChannel. A classic importScripts context has no `require`; when the channel global is missing there, install() throws an error that names DSSEditorFlushChannel, and registers no listener.
+ *  - Node.js tests load the route with require and load the channel first.
  *  - DSS_CLOSE_EDITOR_WINDOWS: for each editor-window id stored in chrome.storage.session, send DSS_FLUSH_EDITOR_WINDOW { slot } first, then chrome.windows.remove() the window and remove its key; reply { ok: true }.
  *
  * Load per test: every test loads a fresh copy of the route module inside the test body, so install() (and the route table it builds) runs while the test is active.
@@ -17,7 +17,6 @@ import '../../background/route-dispatch.js';
 import { readFileSync } from 'node:fs';
 
 const ROUTES_PATH = require.resolve('../../background/editor-window-routes.js');
-const CHANNEL_PATH = require.resolve('../../utils/editor-flush-channel.js');
 const { STORAGE_KEYS, CLOSE_MESSAGE_TYPE, FLUSH_MESSAGE_TYPE, FLUSH_STATUS } = globalThis.DSS_EDITOR_WINDOW;
 
 /** Evaluate the route file the way importScripts does: classic script, no `require`, no `module`. Returns the published install(). */
@@ -91,7 +90,7 @@ function dispatch(message) {
 }
 
 describe('editor-window-routes flush channel lookup and close relay', () => {
-    it('service-worker context without the channel global: install() throws the named load-order error, not a require or null-access error, and registers no listener', () => {
+    it('service-worker context without the channel global: install() throws an error that names DSSEditorFlushChannel and registers no listener', () => {
         delete globalThis.DSSEditorFlushChannel;
         const install = loadAsServiceWorkerScript();
 
@@ -102,9 +101,8 @@ describe('editor-window-routes flush channel lookup and close relay', () => {
             thrown = err;
         }
 
-        expect(thrown, 'install() throws when the channel global is missing and require does not exist').toBeInstanceOf(Error);
+        expect(thrown, 'install() throws when the channel global is missing').toBeInstanceOf(Error);
         expect(thrown.message, 'the error names the missing global').toContain('DSSEditorFlushChannel');
-        expect(thrown.message, 'the error names the file to importScripts before the route').toContain('utils/editor-flush-channel.js');
         expect(listeners, 'listeners registered by a failed install()').toHaveLength(0);
     });
 
@@ -124,9 +122,8 @@ describe('editor-window-routes flush channel lookup and close relay', () => {
         expect(sessionData, 'session storage after the close: the tracked id is gone').toEqual({});
     });
 
-    it('Node context (fresh require): DSS_CLOSE_EDITOR_WINDOWS asks each tracked editor to save, closes both windows and clears both keys', async () => {
-        delete globalThis.DSSEditorFlushChannel;
-        delete require.cache[CHANNEL_PATH];
+    it('Node context (fresh require, channel loaded first): DSS_CLOSE_EDITOR_WINDOWS asks each tracked editor to save, closes both windows and clears both keys', async () => {
+        globalThis.DSSEditorFlushChannel = require('../../utils/editor-flush-channel.js');
         const install = loadWithFreshRequire();
         sessionData[STORAGE_KEYS.global] = 7;
         sessionData[STORAGE_KEYS.preset] = 8;

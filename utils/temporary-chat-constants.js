@@ -20,25 +20,19 @@ const DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed';
 // sessionStorage key：目前追蹤中的臨時對話 UUID；值為 UUID 字串或空字串（無追蹤時）
 const DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid';
 
-// window.postMessage type：main world XHR/fetch hook 讀到 chat_session/create 回應時發送；payload {createdSessionId: string}（回應的 data.biz_data.chat_session.id）
+// window.postMessage type：下列七個常數各取自 utils/temporary-chat-message-types.js 的同名鍵，發送端、接收端與酬載說明見該檔
 const DSS_CHAT_CREATE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_CREATE;
 
-// window.postMessage type：main world XHR/fetch hook 偵測到 /api/v0/chat/completion 請求時發送；payload {chatSessionId: string|null}（請求主體的 chat_session_id）
 const DSS_CHAT_COMPLETION_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_COMPLETION;
 
-// window.postMessage type：ISOLATED world 要求 MAIN world 透過 React Fiber 刪除對話
 const DSS_FIBER_DELETE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FIBER_DELETE;
 
-// window.postMessage type：MAIN world 回報 Fiber 刪除結果給 ISOLATED world
 const DSS_FIBER_DELETE_RESULT_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FIBER_DELETE_RESULT;
 
-// window.postMessage type：MAIN world XHR hook 攔截到 authorization 標頭時回傳給 ISOLATED world
 const DSS_AUTH_CAPTURED_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.AUTH_CAPTURED;
 
-// window.postMessage type：MAIN world history hook 偵測到 SPA 導航（pushState/replaceState）時通知 ISOLATED world
 const DSS_HISTORY_NAV_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.HISTORY_NAV;
 
-// window.postMessage type：MAIN world XHR hook 完成一段 SSE 片段組裝後回傳給 ISOLATED world
 const DSS_FRAGMENT_COMPLETE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FRAGMENT_COMPLETE;
 
 // chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt, ownerDeviceId}>

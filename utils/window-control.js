@@ -50,17 +50,6 @@ function findEditorSlot(storageKey) {
 }
 
 /**
- * 解析編輯視窗存檔請求通道（瀏覽器：popup.html 先載入；Node.js 測試：直接 require），缺失即拋出並指名修法。
- * @returns {(slot: string) => Promise<string|undefined>} 共用的 requestEditorFlush
- */
-function resolveRequestEditorFlush() {
-    const channel = globalThis.DSSEditorFlushChannel
-        || (typeof require !== 'undefined' ? require('./editor-flush-channel.js') : null);
-    if (typeof channel?.requestEditorFlush === 'function') return channel.requestEditorFlush;
-    throw new Error('[DSS] window-control: globalThis.DSSEditorFlushChannel is missing — load utils/editor-flush-channel.js before utils/window-control.js');
-}
-
-/**
  * 導覽前請 storageKey 對應的編輯視窗先存檔（最多約 1 秒，見 utils/editor-flush-channel.js）。
  * 非編輯視窗時不送請求並回傳 undefined；無接收端、同步拋錯、回應缺漏或逾時同樣回傳 undefined，由呼叫端照常導覽。
  * @param {string} storageKey - session 儲存鍵
@@ -69,7 +58,7 @@ function resolveRequestEditorFlush() {
 async function requestFlushBeforeNavigation(storageKey) {
     const slot = findEditorSlot(storageKey);
     if (slot === null) return undefined;
-    return resolveRequestEditorFlush()(slot);
+    return DSSEditorFlushChannel.requestEditorFlush(slot);
 }
 
 /**

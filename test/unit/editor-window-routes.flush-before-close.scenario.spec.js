@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import '../../background/route-dispatch.js';
+import '../../utils/editor-flush-channel.js';
 import { createEditorWindowHarness } from '../helpers/editor-window-harness.js';
 import { createEditorWindowFlushDoubles, NON_BLOCKING_FLUSH_OUTCOMES } from '../helpers/editor-window-flush-doubles.js';
 
