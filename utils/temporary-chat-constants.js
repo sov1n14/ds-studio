@@ -20,7 +20,7 @@ const DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed';
 // sessionStorage key：目前追蹤中的臨時對話 UUID；值為 UUID 字串或空字串（無追蹤時）
 const DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid';
 
-// window.postMessage type：下列七個常數各取自 utils/temporary-chat-message-types.js 的同名鍵，發送端、接收端與酬載說明見該檔
+// window.postMessage type：下列七個常數各取自 utils/temporary-chat-message-types.js 的對應鍵（例如 `CHAT_CREATE`），發送端、接收端與酬載說明見該檔
 const DSS_CHAT_CREATE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_CREATE;
 
 const DSS_CHAT_COMPLETION_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_COMPLETION;
