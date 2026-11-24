@@ -42,6 +42,7 @@ description: Read before writing, reviewing, or refactoring any code in this ext
 - The extension loads classic scripts in the order declared by `manifest.json`, `popup/popup.html`, `popup/editor/editor.html`, and `background/service-worker.js`. `import` / `export` MUST NOT be used.
 - A file publishes its API by attaching to a global — `window.DSstudio.<Concern>`, or the module's own established global such as `StorageManager`. Match the global already used by the file you are editing.
 - A multi-file module (the `utils/storage-manager.*.js` bundle) mixes its parts into the entry file's global. Every part MUST be loaded before the entry file in every loader. `test/unit/storage-manager.loader-contract.spec.js` fails when a new part is added without wiring it into all five loaders — add the part to the loaders in the same change.
+- A file path MUST appear in at most one world across `manifest.json` `content_scripts`: Chromium runs a given script path only once per page, so the same file listed in an ISOLATED entry and a MAIN entry runs in only one of them and the other world loses its globals. A file that both worlds need gets a separate MAIN-world copy, kept byte-identical by a consistency test. Guard: `test/unit/react-click-bridge.shared.spec.js` (cross-world manifest test) and `test/unit/react-click-bridge.shared-main-copy.spec.js`.
 - Service workers terminate at any time. Persistent state MUST live in `chrome.storage`, and every listener and alarm MUST be registered at the top level of the service worker so it survives termination.
 
 ---
