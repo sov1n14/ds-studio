@@ -43,7 +43,7 @@ async function _hasWrapperPermission(permissionModule, hasMethodName) {
 }
 
 /**
- * 建立權限種類 → 權限查詢函式的對照表，popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程共用此表。
+ * 建立權限種類 → 權限查詢函式的對照表，popup 請求權限前的已取得檢查（ensurePermission）、popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程共用此表。
  * 每次呼叫查詢函式都重新詢問包裝，建表後才取得的權限也能被下一次查詢看見。
  * @param {{ clipboardPermission?: Object, notificationPermission?: Object }} permissionModules - utils/clipboard-permission.js 與 utils/notification-permission.js 的包裝；缺失者該種類一律回報 false
  * @returns {Object<string, () => Promise<boolean>>}
@@ -176,7 +176,7 @@ function buildHasPermissionOfKind({ clipboardPermission, notificationPermission 
 
     /**
      * 每個待完成意圖需要的選用權限種類：CLIPBOARD 對應 utils/clipboard-permission.js，NOTIFICATION 對應 utils/notification-permission.js。
-     * popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程皆以此表從 buildHasPermissionOfKind() 的表中取出查詢函式，意圖與權限的對應僅此一處定義。
+     * popup 請求權限前的已取得檢查、popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程皆以此表從 buildHasPermissionOfKind() 的表中取出查詢函式，意圖與權限的對應僅此一處定義。
      */
     PERMISSION_INTENT_PERMISSIONS: {
         autoCopyReply: PERMISSION_KINDS.CLIPBOARD,

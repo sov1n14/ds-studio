@@ -2,7 +2,7 @@
  * background/permission-intent-routes.js - targeted tests for behaviors the existing permission-intent specs leave unpinned.
  *
  * Requirements (docs/ARCHITECTURE.md "Permission Intent Route"):
- *   A. install() throws a named load-order error when StorageManager.PERMISSION_INTENTS, StorageManager.PERMISSION_INTENT_PERMISSIONS, StorageManager.buildHasPermissionOfKind, DSSClipboardPermission or DSSNotificationPermission is absent, so a service worker that forgot an importScripts entry fails with a message naming the file to load first, never with a bare TypeError or ReferenceError. With all three present, install() registers one chrome.permissions.onAdded listener.
+ *   A. install() throws a named load-order error when StorageManager.PERMISSION_INTENTS, StorageManager.PERMISSION_INTENT_PERMISSIONS, StorageManager.buildHasPermissionOfKind, DSSClipboardPermission or DSSNotificationPermission is absent, so a service worker that forgot an importScripts entry fails with a message naming the file to load first, never with a bare TypeError or ReferenceError. With all five present, install() registers one chrome.permissions.onAdded listener.
  *   B. For every pending intent (autoCopyReply, autoCopyCode, replyNotification) whose permissions are all held when chrome.permissions.onAdded fires, the service worker saves the setting true through StorageManager and clears the intent; this holds for the listener of a worker that called install() at any time, not only for one installed before the suite started.
  *
  * A runs the routes file as a classic script in a fresh vm context that plays the service-worker global, so each test decides exactly which dependency exists; StorageManager is resolved there by identifier, as in the worker. Only chrome.permissions.onAdded and console are faked; the StorageManager object holds the real members of utils/storage-manager.js (the intent tables, PERMISSION_KINDS and buildHasPermissionOfKind), so it cannot drift from the module, and the permission wrapper objects exist only to be present.
@@ -58,7 +58,7 @@ function installError(deps) {
 }
 
 describe('A - install() names the missing dependency', () => {
-    it('all three dependencies present: install() does not throw and registers one chrome.permissions.onAdded listener', () => {
+    it('all five dependencies present: install() does not throw and registers one chrome.permissions.onAdded listener', () => {
         expect(typeof STORAGE_MANAGER.buildHasPermissionOfKind, 'precondition: the real StorageManager exposes buildHasPermissionOfKind').toBe('function');
         const { install, onAddedListeners } = loadRoutesInWorker(ALL);
         expect(() => install()).not.toThrow();

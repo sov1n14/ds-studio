@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.46](changelog/v4.md#43946---2026-11-25) | Makes the popup check a permission as held through the shared permission-kind lookup, counting only an exact `true`, so the popup no longer keeps its own held check beside the lookup |
 | [4.39.45](changelog/v4.md#43945---2026-11-25) | Merges the two permission-kind tables of the popup and the service worker into one `StorageManager.buildHasPermissionOfKind` lookup without changing behavior |
 | [4.39.44](changelog/v4.md#43944---2026-11-24) | Fixes auto retry, auto continue, auto open sidebar and auto copy doing nothing since 4.39.42: the page-world bridge never received the shared bridge definitions because Chromium runs one script path only in the first world that lists it; the page-world entry now loads a byte-identical copy of the shared file |
 | [4.39.43](changelog/v4.md#43943---2026-11-24) | Fixes the temporary chat hooks failing to install when the shared message type table finished downloading after them: the injector now makes the five page-world scripts run in their listed order. Also gives the popup and the service worker one flush channel call and has the sidebar auto-open read the shared click event name |
