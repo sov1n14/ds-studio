@@ -50,9 +50,11 @@ Before finalizing a version bump, mutation testing must pass on the changed line
 | Timing | Command | Scope |
 |-|-|-|
 | Every version bump, right before its commit | `node test/scripts/stryker-scoped.mjs` from the repo root (or `npm run test:mutation:scoped --prefix test`) | Changed lines of production `.js` files against `HEAD` |
-| Before closing a branch | `node test/scripts/stryker-scoped.mjs --full --base origin/main` | Every production file the branch changed, whole file |
+| Before closing a branch | The command of the scope the user chose in the branch-close prompt below the table | The chosen scope |
 | Killing survivors in a file with no diff | `node test/scripts/stryker-scoped.mjs --files <a.js,b.js>` | Each listed file whole, independent of the git diff |
 | Release or full audit | `npm run test:mutation --prefix test` | Full `utils/` + `content/` |
+
+At each branch close, ask the user with AskUserQuestion which scope to run: whole changed files (`--full --base origin/main`) or changed lines only (`--base origin/main`).
 
 The scoped script diffs the working tree against `--base` (default `HEAD`) for `.js` files under `popup/`, `background/`, `content/`, `utils/` and `offscreen/`, mutates only the changed line ranges, runs only the specs selected by three rules (the spec's import graph, following relative imports only, reaches a changed file; the spec or a `test/` helper or fixture in that graph holds a changed file's repo-relative path as a string literal, comments ignored; or a changed file is loaded by `test/setup/vitest.setup.js`, which selects every spec and prints `Setup-loaded (all specs selected): <files>`), and applies the gate below. It skips the files that `!` entries of `mutate` in `test/stryker.config.json` exclude and prints the skipped files. The script's Stryker config sets `thresholds.break` to `null`, so Stryker never fails the run on its score and the gate alone sets the exit code. It writes `test/reports/mutation.scoped.{html,json}` and exits 0 on pass, 1 otherwise. `--plan` prints the mutate ranges and the spec list without running Stryker. Run `git add -N <file>` on every new production file before the run.
 

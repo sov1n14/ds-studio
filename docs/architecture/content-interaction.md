@@ -256,7 +256,7 @@ div.ds-button--iconLabelPrimary.ds-button--m[role="button"]:has(path[d^="M9.6727
 
 ### Load Order
 
-In the manifest, `content/auto-open-sidebar.js` loads right after `content/auto-expand-messages.js`, after `content/ds-selectors.js` and `content/feature-toggle.js`; `start()` logs a `console.warn` and skips registration when `DSSFeatureToggle` is absent.
+In the manifest, `content/auto-open-sidebar.js` loads right after `content/react-click-bridge.shared.js` (which follows `content/auto-expand-messages.js`), after `content/ds-selectors.js` and `content/feature-toggle.js`; `start()` logs a `console.warn` and skips registration when `DSSFeatureToggle` is absent.
 
 ## Auto Copy (AutoCopy)
 
