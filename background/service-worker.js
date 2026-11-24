@@ -80,7 +80,7 @@ function computeBackoffMinutes(attemptCount) {
 
 /**
  * 建立週期性重試 alarm，週期為佇列中最短退避延遲。
- * 佇列為空時清除 alarm。
+ * 僅在傳入空清單時清除 alarm（例如掃描後佇列已空）；remediatePendingDeletes 遇空佇列直接返回而不呼叫本函式，REMOVE_PENDING_DELETE 也不重排，故 alarm 可能仍存在，觸發一次無作業的掃描（讀取一次儲存，不送刪除請求、不寫入）。
  */
 async function scheduleRetryAlarm(pendingItems) {
     if (!pendingItems || pendingItems.length === 0) {
