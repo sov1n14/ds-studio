@@ -1,10 +1,10 @@
 /**
- * DS studio — React Click Bridge 共用定義（isolated 與 MAIN world 皆載入）
+ * DS studio — React Click Bridge 共用定義（isolated world 與 MAIN world 共用）
  *
  * 單一職責：宣告 isolated world（content/auto-copy.js、content/auto-retry.js、content/auto-copy.relay.js、content/auto-open-sidebar.js）與 MAIN world（content/react-click-bridge.main.js）兩端共用的橋接約定，並提供兩端共用的待處理項目佇列。
  * 約定：點擊事件名稱 dss:react-click、自動複製派送的 detail 標記 auto-copy、擷取事件名稱 dss:auto-copy-captured、待處理項目的存活時間 1500 ms。
  * 佇列：createPendingQueue() 回傳先進先出的失效時間戳佇列；note() 登記一筆，consume() 丟棄已失效項目後消耗最早的一筆存活項目。每次呼叫建立獨立佇列，兩個 world 各持有自己的實例。
- * 載入：manifest 的 isolated 與 "world": "MAIN" 兩個 content_scripts 項目皆須在使用端之前載入本檔。無載入期副作用，僅指派全域；注意：本檔不得包含 chrome.* API 呼叫。
+ * 載入：manifest 的 isolated content_scripts 項目列出 content/react-click-bridge.shared.js，"world": "MAIN" 項目列出其逐位元組相同的副本 content/react-click-bridge.shared.main.js，兩者皆排在各自 world 的使用端之前。Chromium 每頁只執行同一路徑一次，且只在第一個列出該路徑的項目所屬 world 執行，故 MAIN world 必須以不同路徑的副本載入；修改任一檔時須同步複製，使兩檔保持逐位元組相同（由 test/unit/react-click-bridge.shared-main-copy.spec.js 檢查）。無載入期副作用，僅指派全域；注意：本檔不得包含 chrome.* API 呼叫。
  */
 (function (root) {
     'use strict';
@@ -23,6 +23,7 @@
      * @returns {{ note: () => void, consume: () => boolean }}
      */
     function createPendingQueue() {
+        // Stryker disable next-line ArrayDeclaration: a non-number seed never satisfies `expiry > now`, so consume() skips it exactly like an empty array
         const expiries = [];
         return {
             /** 登記一筆自現在起 PENDING_WINDOW_MS 後失效的項目 */
