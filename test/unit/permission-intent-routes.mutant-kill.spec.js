@@ -2,10 +2,10 @@
  * background/permission-intent-routes.js - targeted tests for behaviors the existing permission-intent specs leave unpinned.
  *
  * Requirements (docs/ARCHITECTURE.md "Permission Intent Route"):
- *   A. install() throws a named load-order error when StorageManager.PERMISSION_INTENTS, DSSClipboardPermission or DSSNotificationPermission is absent, so a service worker that forgot an importScripts entry fails with a message naming the file to load first, never with a bare TypeError or ReferenceError. With all three present, install() registers one chrome.permissions.onAdded listener.
+ *   A. install() throws a named load-order error when StorageManager.PERMISSION_INTENTS, StorageManager.PERMISSION_INTENT_PERMISSIONS, StorageManager.buildHasPermissionOfKind, DSSClipboardPermission or DSSNotificationPermission is absent, so a service worker that forgot an importScripts entry fails with a message naming the file to load first, never with a bare TypeError or ReferenceError. With all five present, install() registers one chrome.permissions.onAdded listener.
  *   B. For every pending intent (autoCopyReply, autoCopyCode, replyNotification) whose permissions are all held when chrome.permissions.onAdded fires, the service worker saves the setting true through StorageManager and clears the intent; this holds for the listener of a worker that called install() at any time, not only for one installed before the suite started.
  *
- * A runs the routes file as a classic script in a fresh vm context that plays the service-worker global, so each test decides exactly which dependency exists; StorageManager is resolved there by identifier, as in the worker. Only chrome.permissions.onAdded and console are faked; the dependency objects exist only to be present.
+ * A runs the routes file as a classic script in a fresh vm context that plays the service-worker global, so each test decides exactly which dependency exists; StorageManager is resolved there by identifier, as in the worker. Only chrome.permissions.onAdded and console are faked; the StorageManager object holds the real members of utils/storage-manager.js (the intent tables, PERMISSION_KINDS and buildHasPermissionOfKind), so it cannot drift from the module, and the permission wrapper objects exist only to be present.
  * B uses test/helpers/permission-intent-harness.js: the real StorageManager, the real permission wrappers and the real routes module share the suite in-memory chrome.storage; only chrome.permissions is faked. install() runs inside each test body.
  */
 import fs from 'fs';
@@ -21,10 +21,10 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
 // @stryker-mutator/api INSTRUMENTER_CONSTANTS.NAMESPACE
 const STRYKER_NAMESPACE = '__stryker__';
 
-const STORAGE_MANAGER = {
-    PERMISSION_INTENTS: { AUTO_COPY_REPLY: 'autoCopyReply', AUTO_COPY_CODE: 'autoCopyCode', REPLY_NOTIFICATION: 'replyNotification' },
-    PERMISSION_INTENT_PERMISSIONS: { autoCopyReply: 'clipboard', autoCopyCode: 'clipboard', replyNotification: 'notification' },
-};
+// 取自真實 StorageManager 的成員，worker 內的 StorageManager 與 utils/storage-manager.js 同源，不會脫鉤
+const { PERMISSION_INTENTS, PERMISSION_INTENT_PERMISSIONS, PERMISSION_KINDS, buildHasPermissionOfKind } = StorageManager;
+const STORAGE_MANAGER_WITHOUT_BUILDER = { PERMISSION_INTENTS, PERMISSION_INTENT_PERMISSIONS, PERMISSION_KINDS };
+const STORAGE_MANAGER = { ...STORAGE_MANAGER_WITHOUT_BUILDER, buildHasPermissionOfKind };
 const CLIPBOARD_PERMISSION = { hasClipboardPermission: async () => true };
 const NOTIFICATION_PERMISSION = { hasNotificationPermission: async () => true };
 const ALL = { StorageManager: STORAGE_MANAGER, DSSClipboardPermission: CLIPBOARD_PERMISSION, DSSNotificationPermission: NOTIFICATION_PERMISSION };
@@ -58,7 +58,8 @@ function installError(deps) {
 }
 
 describe('A - install() names the missing dependency', () => {
-    it('all three dependencies present: install() does not throw and registers one chrome.permissions.onAdded listener', () => {
+    it('all five dependencies present: install() does not throw and registers one chrome.permissions.onAdded listener', () => {
+        expect(typeof STORAGE_MANAGER.buildHasPermissionOfKind, 'precondition: the real StorageManager exposes buildHasPermissionOfKind').toBe('function');
         const { install, onAddedListeners } = loadRoutesInWorker(ALL);
         expect(() => install()).not.toThrow();
         expect(onAddedListeners).toHaveLength(1);
@@ -67,7 +68,8 @@ describe('A - install() names the missing dependency', () => {
     it.each([
         ['StorageManager is not declared in the worker', without('StorageManager')],
         ['StorageManager exists without PERMISSION_INTENTS', { ...ALL, StorageManager: {} }],
-        ['StorageManager exists without PERMISSION_INTENT_PERMISSIONS', { ...ALL, StorageManager: { PERMISSION_INTENTS: STORAGE_MANAGER.PERMISSION_INTENTS } }],
+        ['StorageManager exists without PERMISSION_INTENT_PERMISSIONS', { ...ALL, StorageManager: { PERMISSION_INTENTS } }],
+        ['StorageManager exists without buildHasPermissionOfKind', { ...ALL, StorageManager: STORAGE_MANAGER_WITHOUT_BUILDER }],
     ])('%s: install() throws a [DSS] load-order error naming utils/storage-manager*.js', (_label, deps) => {
         const err = installError(deps);
         expect(err, 'install() must throw').not.toBeNull();

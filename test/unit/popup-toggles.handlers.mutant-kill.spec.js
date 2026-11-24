@@ -6,7 +6,7 @@
  *   2. The master switch persists isEnabled, disables or re-enables the sub-controls through applyMasterSwitchUI, and shows the save status.
  *   3. Selecting a websearch radio persists its value and shows the save status; the change event of the radio being deselected is ignored.
  *   4. Changing the global prompt toggle with no active preset persists the device-local flag and shows the save status.
- *   5. bindToggles tolerates a missing (optional) global prompt toggle; renderGlobalPromptToggle with no active preset always shows the device-local flag.
+ *   5. bindToggles tolerates a missing (optional) global prompt toggle; renderGlobalPromptToggle with no active preset always shows the device-local flag, and with a missing toggle element it neither throws nor changes anything, and with a missing state accessor or a preset list accessor that returns undefined or null it shows the device-local flag instead of throwing.
  *
  * The real popup/popup.html DOM, the real StorageManager over the in-memory chrome.storage of vitest.setup.js, and the real applyMasterSwitchUI (popup-master-switch-harness) are used; only showSaveStatus and refreshSyncStatus, the popup.js UI callbacks, are recorded.
  */
@@ -185,5 +185,24 @@ describe('global prompt toggle', () => {
         ['empty active id, preset list holds an entry whose id is empty', { getActivePresetId: () => '', getPresets: () => [{ id: '', name: 'blank id', content: 'x', globalPromptEnabled: true }] }],
     ])('no active preset (%s): render shows the device-local flag, never a preset value', async (_label, overrides) => {
         expect(await renderWithLegacyFlagOff(overrides)).toBe(false);
+    });
+
+    it.each([
+        ['no active id accessor', { getActivePresetId: undefined }],
+        ['an active id but no preset list accessor', { getActivePresetId: () => 'p1', getPresets: undefined }],
+    ])('missing state accessor (%s): render shows the device-local flag instead of throwing', async (_label, overrides) => {
+        expect(await renderWithLegacyFlagOff(overrides)).toBe(false);
+    });
+
+    it.each([
+        ['undefined', () => undefined],
+        ['null', () => null],
+    ])('an active id but a preset list accessor that returns %s: render shows the device-local flag instead of throwing', async (_label, getPresets) => {
+        expect(await renderWithLegacyFlagOff({ getActivePresetId: () => 'p1', getPresets })).toBe(false);
+    });
+
+    it.each([[null], [undefined]])('render with the global prompt toggle element %s resolves without touching anything', async (missingToggle) => {
+        const { manager } = buildManager();
+        await expect(manager.renderGlobalPromptToggle(missingToggle)).resolves.toBeUndefined();
     });
 });
