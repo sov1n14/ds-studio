@@ -203,7 +203,9 @@ function buildHasPermissionOfKind({ clipboardPermission, notificationPermission 
      * Reconstruct PromptPreset[] from raw storage data
      */
     _getPresetsFromRawStorage(data) {
-        const ids = data[this.KEYS.PRESET_INDEX] || [];
+        const ids = data[this.KEYS.PRESET_INDEX];
+        // 索引缺失或為假值時視為沒有 preset
+        if (!ids) return [];
         return ids.map(id => data[this._presetKey(id)]).filter(Boolean);
     },
     };

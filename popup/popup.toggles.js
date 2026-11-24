@@ -65,8 +65,7 @@ function createToggleManager(ctx) {
     function resolveActivePreset() {
         const activePresetId = getActivePresetId?.();
         if (!activePresetId) return null;
-        const presets = getPresets?.() ?? [];
-        return presets.find(p => p.id === activePresetId) ?? null;
+        return getPresets?.()?.find(p => p.id === activePresetId) ?? null;
     }
 
     /**
