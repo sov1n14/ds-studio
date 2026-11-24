@@ -1,4 +1,4 @@
-// 287 lines: single temporary-chat storage facade — sync pending-delete queue, per-device lease/TTL evaluation, local open-UUID set, and auth-token cache share one runExclusive write chain and the trackForDeletion ordering invariant (open-set before queue); splitting would expose that ordering across files
+// 293 lines: single temporary-chat storage facade — sync pending-delete queue, per-device lease/TTL evaluation, local open-UUID set, and auth-token cache share one runExclusive write chain and the trackForDeletion ordering invariant (open-set before queue); splitting would expose that ordering across files
 /**
  * DS studio — 臨時對話待刪佇列與裝置本機狀態存取（background/pending-store.js）
  * 職責：管理 chrome.storage.sync 的跨裝置待刪佇列，以及 chrome.storage.local 的
@@ -100,6 +100,11 @@ const TemporaryChatPendingStore = (() => {
             await savePendingDeletes(filtered);
             await chrome.storage.local.remove(DSS_SEEN_CHANGE_KEY_PREFIX + chatUuid);
         });
+    }
+
+    // 純查詢：chatUuid 是否仍在待刪佇列；排在互斥鏈尾端讀取，先前已排入的移除完成後才判定；空或缺少的 uuid 不會在佇列中（addPendingDelete 拒收），直接回傳 false
+    async function hasPendingDelete(chatUuid) {
+        return chatUuid ? runExclusive(async () => (await getPendingDeletes()).some((entry) => entry.chatUuid === chatUuid)) : false;
     }
 
     // 續約：將目標 entry 的 lastActiveAt 更新為現在；未知 uuid 不寫入
@@ -262,6 +267,7 @@ const TemporaryChatPendingStore = (() => {
         savePendingDeletes,
         addPendingDelete,
         removePendingDelete,
+        hasPendingDelete,
         refreshLease,
         releaseLease,
         applySweepResult,

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.41](changelog/v4.md#43941---2026-11-24) | Fixes a temporary chat staying undeleted on the server when it was queued for deletion while a cleanup sweep was running, and a delete request being sent for a chat already removed from the deletion queue: the worker re-arms the retry alarm for chats queued during a sweep and checks that each chat is still queued before deleting it |
 | [4.39.40](changelog/v4.md#43940---2026-11-24) | Fixes prompt groups and chat bindings being lost when an older extension version writes the legacy prompt group list again on a synced device: the legacy list is merged into the current groups, adding only the groups the device lacks, and a group the user deleted stays deleted |
 | [4.39.39](changelog/v4.md#43939---2026-11-24) | Fixes Markdown export writing a code block of a restored reply as a bare fence without its language: the exporter takes the language from the block header label when the block has no banner |
 | [4.39.38](changelog/v4.md#43938---2026-11-24) | Fixes a new conversation never being bound to the prompt group picked when its first message was sent, when the user returned to a new conversation page before the binding finished: reopening that conversation showed no group; the conversation binds to the group picked at the send |

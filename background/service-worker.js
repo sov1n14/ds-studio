@@ -1,3 +1,4 @@
+// 314 lines: service-worker entry — the pending-delete sweep, its exclusive queue-job chain (in-flight guard, nested grace jobs, closing broadcast, additions seen in flight) and the top-level listeners share module-scope state that both test harnesses load as this one classic script; splitting it out would need a new importScripts file the stubbed harness does not load
 'use strict';
 
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
@@ -64,6 +65,8 @@ let queueTail = Promise.resolve();
 // 在進行中工作內執行的巢狀工作（卸載寬限到期）：外層工作等它們全部結束才廣播並清除旗標。加入次數只增不減，外層比較廣播前後的次數，察覺等候或廣播期間加入（即使已結束）的巢狀工作；結算 promise 在所有已加入者結束（成敗皆可）時 resolve，尚無加入者時為 undefined
 let nestedJoinCount = 0;
 let nestedJobsSettled;
+// 工作進行中收到、新增了待刪項目的同步變更次數（每個工作開始時歸零）：新增可能晚於工作的 alarm 判定與廣播讀取，結尾據此補排 alarm 並重新廣播
+let queueAdditionsSeenInFlight = 0;
 
 // 雲端同步重試週期（分鐘）
 const SYNC_RETRY_PERIOD_MINUTES = 5;
@@ -138,6 +141,9 @@ async function remediatePendingDeletes() {
             continue;
         }
 
+        // 開頭快照可能已過時：送出刪除前於 store 互斥鏈內確認仍在佇列，已完成的移除一律尊重
+        if (!(await TemporaryChatPendingStore.hasPendingDelete(item.chatUuid))) continue;
+
         const isOk = await DSSDeepSeekApi.performDeleteFetch(item.chatUuid, token);
         if (isOk) {
             // 刪除成功 → 清除觀察紀錄 key
@@ -162,6 +168,11 @@ async function remediatePendingDeletes() {
     } catch (err) {
         console.error('[DSS] remediate sweep:', err);
     }
+}
+
+// 依目前儲存的佇列重排重試 alarm（佇列為空則清除）
+async function scheduleRetryAlarmForStoredQueue() {
+    await scheduleRetryAlarm(await TemporaryChatPendingStore.getPendingDeletes());
 }
 
 /**
@@ -205,7 +216,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type !== DSS_TEMP_CHAT.DSS_SCHEDULE_DELETE_RETRY_MESSAGE_TYPE) return false;
     // 讀取佇列以計算正確退避週期
-    TemporaryChatPendingStore.getPendingDeletes().then((items) => scheduleRetryAlarm(items));
+    scheduleRetryAlarmForStoredQueue();
     return false;
 });
 
@@ -241,18 +252,22 @@ async function broadcastPendingUuids() {
     }
 }
 
-// 在補救重入防護下獨佔執行一個佇列工作：旗標自工作開始設起，等巢狀工作結束並廣播給各分頁側邊欄後才清除，期間佇列寫入觸發的掃描一律略過。等候或廣播期間又有巢狀工作加入（即使已結束）時，再等候並廣播一次，確保清除旗標前最後一次廣播涵蓋所有佇列寫入；每輪都含廣播的 storage 讀取，不會只靠 microtask 空轉。工作失敗也照樣廣播，讓各分頁的隱藏集合對齊佇列的實際內容，錯誤再交還呼叫端；廣播本身失敗只記錄，不蓋掉工作結果。
+// 在補救重入防護下獨佔執行一個佇列工作：旗標自工作開始設起，等巢狀工作結束並廣播給各分頁側邊欄後才清除，期間佇列寫入觸發的掃描一律略過。等候或廣播期間又有巢狀工作加入（即使已結束）時，再等候並廣播一次，確保清除旗標前最後一次廣播涵蓋所有佇列寫入；工作期間收到新增待刪項目的同步變更時，廣播前依儲存的佇列補排重試 alarm，廣播讀取之後才收到者再補排並廣播一次，新增的項目因此不會在無 alarm 的情況下滯留佇列；每輪都含廣播的 storage 讀取，不會只靠 microtask 空轉。工作失敗也照樣廣播，讓各分頁的隱藏集合對齊佇列的實際內容，錯誤再交還呼叫端；廣播本身失敗只記錄，不蓋掉工作結果。
 async function runExclusiveQueueJob(job) {
     isRemediationInFlight = true;
+    queueAdditionsSeenInFlight = 0;
     try {
         await job();
     } finally {
         let seenJoinCount;
+        let seenAdditionCount;
         do {
             seenJoinCount = nestedJoinCount;
             await nestedJobsSettled;
+            seenAdditionCount = queueAdditionsSeenInFlight;
+            if (seenAdditionCount > 0) await scheduleRetryAlarmForStoredQueue().catch((err) => console.error('[DSS] in-flight addition retry alarm:', err));
             await broadcastPendingUuids().catch((err) => console.error('[DSS] broadcastPendingUuids:', err));
-        } while (nestedJoinCount > seenJoinCount);
+        } while (nestedJoinCount > seenJoinCount || queueAdditionsSeenInFlight > seenAdditionCount);
         isRemediationInFlight = false;
     }
 }
@@ -282,8 +297,18 @@ async function runQueuedSweep(job, context) {
     }
 }
 
-// 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救（佇列工作連同其結尾廣播進行中則略過）
+// 純查詢：此次待刪佇列變更的新值是否含有舊值沒有的項目；首次寫入沒有舊值（new Set(undefined) 為空集合），佇列 key 被移除時沒有新值、視為無新增
+function hasAddedPendingEntry({ oldValue, newValue }) {
+    const oldUuids = new Set(Array.isArray(oldValue) ? oldValue.map((item) => item.chatUuid) : undefined);
+    return Array.isArray(newValue) && newValue.some((item) => !oldUuids.has(item.chatUuid));
+}
+
+// 同步變更安全網：其他裝置寫入待刪佇列時，本機也嘗試補救。佇列工作連同其結尾廣播進行中則不另起掃描（工作自身的寫入只移除或更新項目，另起掃描會循環）；其中新增項目的變更記下，交由該工作收尾補排 alarm 並重新廣播
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync' || !(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes) || isRemediationInFlight) return;
-    runQueuedSweep(remediatePendingDeletes, 'sync change');
+    if (area !== 'sync' || !(DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY in changes)) return;
+    if (!isRemediationInFlight) {
+        runQueuedSweep(remediatePendingDeletes, 'sync change');
+        return;
+    }
+    if (hasAddedPendingEntry(changes[DSS_TEMP_CHAT.DSS_PENDING_DELETES_SYNC_KEY])) queueAdditionsSeenInFlight += 1;
 });
