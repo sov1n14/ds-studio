@@ -1,7 +1,7 @@
 /**
  * content/react-click-bridge.shared.main.js — the MAIN-world copy of content/react-click-bridge.shared.js.
  *
- * Contract: the two files are byte-identical. Chromium runs a file path only once per page, in the first content_scripts entry that lists it, so the "world": "MAIN" entry cannot reuse the isolated entry's path and lists this copy instead (manifest wiring: test/unit/react-click-bridge.shared.spec.js). Any drift between the copies gives the two worlds different bridge definitions.
+ * Contract: the two files are byte-identical. no path may appear in content_scripts entries of two worlds (rule: chrome-extension-coding-guidelines SKILL.md section 1, Runtime model), so the "world": "MAIN" entry lists this copy instead of the isolated entry's path (manifest wiring: test/unit/react-click-bridge.shared.spec.js). Any drift between the copies gives the two worlds different bridge definitions.
  * This spec compares two files as data; it asserts no text of either file. It reads source files, so test/stryker-vitest.config.js excludes it: Stryker instruments each copy differently, and mutant switching keeps the text identical across mutants.
  */
 import fs from 'fs';

@@ -6,7 +6,7 @@
  *
  * 失焦自動複製：事件 detail 為 'auto-copy' 時（僅 content/auto-copy.js 如此派送），先登記一筆待擷取項目（存活時間見 content/react-click-bridge.shared.main.js）再呼叫 onClick。本檔包裝 navigator.clipboard.writeText：有存活的待擷取項目時消耗一筆並記下文字，原 Promise 原封不動回傳給網站；僅在該 Promise 拒絕（如文件未取得焦點）時，於 document 派送 dss:auto-copy-captured（detail 為文字），由 isolated world 的 content/auto-copy.relay.js 轉交 service worker。使用者點擊、無待擷取項目或寫入成功時不做任何額外動作。
  *
- * 相依：content/react-click-bridge.shared.main.js（事件名稱、detail 標記與待處理佇列的共用定義，為 content/react-click-bridge.shared.js 的逐位元組相同副本）須先於本檔載入，由 manifest 的 "world": "MAIN" 項目列於本檔之前。Chromium 每頁只執行同一路徑一次，且只在第一個列出該路徑的項目所屬 world 執行，isolated 項目已列出 shared.js，故 MAIN world 改載入此副本。
+ * 相依：content/react-click-bridge.shared.main.js（事件名稱、detail 標記與待處理佇列的共用定義，為 content/react-click-bridge.shared.js 的逐位元組相同副本）須先於本檔載入，由 manifest 的 "world": "MAIN" 項目列於本檔之前。isolated 項目已列出 shared.js，同一路徑不得出現在兩個 world 的項目（理由見 .claude/skills/chrome-extension-coding-guidelines/SKILL.md 第 1 節 Runtime model 的「一個檔案路徑最多出現在一個 world」規則），故 MAIN world 改載入此副本。
  *
  * 載入期即安裝監聽器與包裝：MAIN world 腳本無法由 isolated world 呼叫其 init，故為刻意的啟動點；window 旗標為防禦性防護：若同一視窗內本腳本被執行兩次，仍只保留一個監聽器與一層包裝，一次 dss:react-click 只呼叫一次 onClick。
  * 注意：此檔案不得包含 chrome.* API 呼叫。

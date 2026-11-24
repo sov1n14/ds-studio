@@ -2,7 +2,7 @@
  * content/react-click-bridge.shared.js — bridge definitions shared by the isolated world and the MAIN world, plus the manifest wiring that makes both worlds see them.
  *
  * Contract: createPendingQueue() returns an independent first-in-first-out queue; an entry notes at time t and is consumable strictly before t + PENDING_WINDOW_MS (the end instant is excluded); consume() discards expired entries first, then takes the oldest live one and reports whether it took one.
- * Manifest: the isolated content_scripts entry lists this file before every file that reads it; the "world": "MAIN" entry lists its byte-identical copy content/react-click-bridge.shared.main.js before the bridge, because a MAIN-world script cannot reach any global of the isolated world and Chromium runs a file path only once per page, in the first entry that lists it, so no path may appear in entries of two worlds.
+ * Manifest: the isolated content_scripts entry lists this file before every file that reads it; the "world": "MAIN" entry lists its byte-identical copy content/react-click-bridge.shared.main.js before the bridge, because a MAIN-world script cannot reach any global of the isolated world and no path may appear in entries of two worlds (rule: chrome-extension-coding-guidelines SKILL.md section 1, Runtime model).
  * Time is a fake Date only; the queue reads Date.now().
  */
 import fs from 'fs';
@@ -131,7 +131,7 @@ describe('manifest wiring', () => {
         });
         const sharedAcrossWorlds = [...worldsByPath].filter(([, worlds]) => worlds.size > 1).map(([file]) => file);
 
-        expect(sharedAcrossWorlds, 'Chromium runs a path once per page, in the first entry that lists it, so these never run in the other world').toEqual([]);
+        expect(sharedAcrossWorlds, 'a path listed in entries of two worlds breaks one of them (rule: chrome-extension-coding-guidelines SKILL.md section 1, Runtime model)').toEqual([]);
     });
 
     it('the MAIN-world entry loads the shared copy before the bridge and does not list the isolated shared file', () => {

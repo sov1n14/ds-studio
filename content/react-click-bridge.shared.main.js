@@ -4,7 +4,7 @@
  * 單一職責：宣告 isolated world（content/auto-copy.js、content/auto-retry.js、content/auto-copy.relay.js、content/auto-open-sidebar.js）與 MAIN world（content/react-click-bridge.main.js）兩端共用的橋接約定，並提供兩端共用的待處理項目佇列。
  * 約定：點擊事件名稱 dss:react-click、自動複製派送的 detail 標記 auto-copy、擷取事件名稱 dss:auto-copy-captured、待處理項目的存活時間 1500 ms。
  * 佇列：createPendingQueue() 回傳先進先出的失效時間戳佇列；note() 登記一筆，consume() 丟棄已失效項目後消耗最早的一筆存活項目。每次呼叫建立獨立佇列，兩個 world 各持有自己的實例。
- * 載入：manifest 的 isolated content_scripts 項目列出 content/react-click-bridge.shared.js，"world": "MAIN" 項目列出其逐位元組相同的副本 content/react-click-bridge.shared.main.js，兩者皆排在各自 world 的使用端之前。Chromium 每頁只執行同一路徑一次，且只在第一個列出該路徑的項目所屬 world 執行，故 MAIN world 必須以不同路徑的副本載入；修改任一檔時須同步複製，使兩檔保持逐位元組相同（由 test/unit/react-click-bridge.shared-main-copy.spec.js 檢查）。無載入期副作用，僅指派全域；注意：本檔不得包含 chrome.* API 呼叫。
+ * 載入：manifest 的 isolated content_scripts 項目列出 content/react-click-bridge.shared.js，"world": "MAIN" 項目列出其逐位元組相同的副本 content/react-click-bridge.shared.main.js，兩者皆排在各自 world 的使用端之前。同一路徑不得出現在兩個 world 的項目（理由見 .claude/skills/chrome-extension-coding-guidelines/SKILL.md 第 1 節 Runtime model 的「一個檔案路徑最多出現在一個 world」規則），故 MAIN world 以不同路徑的副本載入；修改任一檔時須同步複製，使兩檔保持逐位元組相同（由 test/unit/react-click-bridge.shared-main-copy.spec.js 檢查）。無載入期副作用，僅指派全域；注意：本檔不得包含 chrome.* API 呼叫。
  */
 (function (root) {
     'use strict';
