@@ -49,6 +49,7 @@ function loadXhrHook(SseParser) {
     const sandbox = loadClassicScript('content/censor-xhr-hook.js', {
         XMLHttpRequest: MockXMLHttpRequest,
         SseParser,
+        DSS_TEMP_CHAT_MESSAGE_TYPES: loadClassicScript('utils/temporary-chat-message-types.js').DSS_TEMP_CHAT_MESSAGE_TYPES,
         window: { postMessage: vi.fn((data) => postedMessages.push(data)) },
     });
 

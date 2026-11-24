@@ -259,6 +259,7 @@ describe('a failing sendMessage does not break the feature', () => {
         expect(notifications(), 'the failing attempt reached the boundary').toEqual([expectedNotification()]);
         expect(uncaught, 'uncaught rejections / errors').toEqual([]);
         expect(dssLogs().length, 'console.error / console.warn calls starting with [DSS]').toBeGreaterThan(0);
+        expect(dssLogs().map((args) => args[0]).join(' '), 'the log names the feature and the failed step').toMatch(/reply-notification.*送出通知訊息失敗/);
 
         setNotificationMode('ok');
         await completeNewReply(list, awaitingItem(6, 'control'));

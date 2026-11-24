@@ -1,6 +1,6 @@
 /**
  * DS studio — Reply Completion
- * 單一職責：純判斷「哪些訊息工具列是新出現的」與「某則回覆是否被停止」，供自動複製回覆的消費端呼叫。
+ * 單一職責：純判斷「哪些訊息工具列是新出現的」「某則回覆是否被停止」與「哪些回覆新完成」（新出現且未被停止），供自動複製與回覆通知的消費端呼叫。
  * 新回覆或重新生成時，DeepSeek 先掛載不含工具列的虛擬列表項目，之後的批次才把工具列加入該已掛載項目；捲動則整個重新掛載已含工具列的項目，因此與項目同批加入的工具列視為重新掛載而非新出現。
  * 停止的回覆會在工具列自身的外層包裝（toolbar.parentElement）內帶有「继续生成」按鈕；僅以選擇器定位，絕不比對文字，範圍僅限該包裝。
  * 不建立 MutationObserver、不持有模組層級可變狀態、不修改 DOM；由呼叫端傳入 MutationRecord 與工具列節點。
@@ -92,9 +92,19 @@
         return wrapper.querySelector(continueSelector) !== null;
     }
 
+    /**
+     * 從一批 MutationRecord 找出新完成的回覆工具列：新出現（newToolbarsFromRecords）且所屬回覆未被停止（isStoppedReply）。
+     * @param {MutationRecord[]} records
+     * @returns {Element[]} 依文件順序、不重複的工具列；無則為空陣列
+     */
+    function completedToolbarsFromRecords(records) {
+        return newToolbarsFromRecords(records).filter((toolbar) => !isStoppedReply(toolbar));
+    }
+
     const ReplyCompletion = {
         newToolbarsFromRecords,
         isStoppedReply,
+        completedToolbarsFromRecords,
     };
 
     // Stryker disable all: equivalent mutants — module/globalThis export boilerplate, untestable in Node

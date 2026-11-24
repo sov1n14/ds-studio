@@ -26,6 +26,7 @@ const RADIO_SELECTOR = 'input[type="radio"][name="' + RADIO_NAME + '"]';
 const NOTIFICATIONS_PERMISSION_SET = { permissions: ['notifications'] };
 
 beforeAll(() => {
+    evalPopupScript('utils/permission-module.js');
     evalPopupScript('utils/notification-permission.js');
     evalPopupScript('popup/popup.settings-view.js');
     evalPopupScript('popup/popup.toggles.js');

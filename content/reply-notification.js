@@ -5,9 +5,11 @@
  * 行為：
  *   - 閘控：由 content/feature-toggle.js 以「總開關 isEnabled 且 isReplyNotificationEnabled」決定。本層不直讀儲存區。
  *   - 觀察：閘門開啟時以 MutationObserver（childList、subtree）觀察 document.body；關閉時中斷。
- *   - 判斷：每批次交由 DSstudio.ReplyCompletion.newToolbarsFromRecords 找出新出現的工具列（捲動重新掛載的舊工具列不計）；isStoppedReply 為真的工具列（被停止的回覆）不通知。
+ *   - 判斷：每批次交由 DSstudio.ReplyCompletion.completedToolbarsFromRecords 找出新完成的回覆工具列（捲動重新掛載的舊工具列與被停止的回覆不計）。
  *   - 前景：於回覆完成當下判斷，visibilityState 非 visible 或視窗未取得焦點即視為不在前景；前景時不通知。
- *   - 通知：每個完成的回覆送出一則 DSS_SHOW_NOTIFICATION（標題與內文取自 dsI18n）；sendMessage 同步拋錯或 Promise 拒絕皆記錄後吞下，不影響後續回覆。
+ *   - 通知：每個完成的回覆送出一則 DSS_SHOW_NOTIFICATION（標題與內文取自 dsI18n）；送出由 content/runtime-send.js 防護：sendMessage 同步拋錯或 Promise 拒絕皆記錄後吞下，不影響後續回覆。
+ *
+ * 相依：content/reply-completion.js 與 content/runtime-send.js 須先載入。
  */
 (function () {
     'use strict';
@@ -39,9 +41,7 @@
          * @returns {number}
          */
         _countCompletedReplies(records) {
-            return this._replyCompletion.newToolbarsFromRecords(records)
-                .filter((toolbar) => !this._replyCompletion.isStoppedReply(toolbar))
-                .length;
+            return this._replyCompletion.completedToolbarsFromRecords(records).length;
         },
 
         // ─────────────────────────────
@@ -55,16 +55,7 @@
                 title: globalThis.dsI18n.t('replyNotificationTitle'),
                 body: globalThis.dsI18n.t('replyNotificationBody'),
             };
-            try {
-                const pending = chrome.runtime.sendMessage(message);
-                if (pending && typeof pending.catch === 'function') {
-                    pending.catch((error) => {
-                        console.error('[DSS] reply-notification:送出通知訊息失敗:', error);
-                    });
-                }
-            } catch (error) {
-                console.error('[DSS] reply-notification:送出通知訊息失敗:', error);
-            }
+            globalThis.DSSRuntimeSend.sendAndLogFailure(message, 'reply-notification:送出通知訊息失敗');
         },
 
         /**
@@ -127,6 +118,9 @@
             }
             if (!_Keys) {
                 throw new Error('content/reply-notification.js 需要 utils/storage-manager.keys.js 先行載入');
+            }
+            if (!globalThis.DSSRuntimeSend) {
+                throw new Error('content/reply-notification.js 需要 content/runtime-send.js 先行載入');
             }
             this._replyCompletion = replyCompletion;
 

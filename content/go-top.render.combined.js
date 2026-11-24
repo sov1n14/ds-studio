@@ -1,4 +1,4 @@
-// 378 lines: three render concerns (button, inject, observer) for go-top unified per CA7
+// 379 lines: three render concerns (button, inject, observer) of go-top that share one button element and one injection state
 /**
  * DS studio — Go To Top Render Combined
  * 按鈕建構、注入策略、包裝容器 Observer 三合一。
@@ -10,6 +10,7 @@
     const __DSSelectorsButton = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectorsButton.GO_TOP_NATIVE_BUTTON_CLASS;
+    const GO_TOP_CLONE_CLASS = __DSSelectorsButton.GO_TOP_CLONE_CLASS;
 
     const bundle = {
         // ── Button ──────────────────────────────────────────────
@@ -81,7 +82,7 @@
             }
 
             // 兩條路徑共用：識別 class + 語意屬性
-            btn.classList.add('dsw-gotop');
+            btn.classList.add(GO_TOP_CLONE_CLASS);
             btn.setAttribute('role', 'button');
             btn.setAttribute('tabindex', '0');
             btn.setAttribute('aria-disabled', 'false');
@@ -170,7 +171,7 @@
             const { injectParent, outerWrapper } = wrapperInfo;
 
             // 去重保護：若已有按鈕就不重複注入；若為 solo 殘留，升級為 stacked 模式（複用元素，不移除）
-            const existingBtn = injectParent.querySelector('.dsw-gotop');
+            const existingBtn = injectParent.querySelector('.' + GO_TOP_CLONE_CLASS);
             if (existingBtn) {
                 if (existingBtn.classList.contains('dsw-gotop--solo')) {
                     // solo → stacked 升級：複用現有元素（不 remove）以避免閃爍
@@ -211,7 +212,7 @@
 
             const { injectParent, outerWrapper } = wrapperInfo;
 
-            if (injectParent.querySelector('.dsw-gotop')) {
+            if (injectParent.querySelector('.' + GO_TOP_CLONE_CLASS)) {
                 return true;
             }
 

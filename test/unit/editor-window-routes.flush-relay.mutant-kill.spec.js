@@ -13,6 +13,7 @@
  * Trust boundaries only: chrome.runtime.onMessage.addListener (captures the listener), chrome.runtime.sendMessage (the editor page answering the flush request), chrome.windows.remove and chrome.storage.session (in-memory, structuredClone on the way in and out). The real utils/editor-flush-channel.js and utils/message-constants.js run unmocked.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 import { readFileSync } from 'node:fs';
 
 const ROUTES_PATH = require.resolve('../../background/editor-window-routes.js');

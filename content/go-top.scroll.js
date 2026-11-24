@@ -11,7 +11,7 @@
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
     // 本擴充功能自行注入的 GoTop 按鈕識別 class（非 DeepSeek 原生標記）
-    const GO_TOP_CLONE_SELECTOR = '.dsw-gotop';
+    const GO_TOP_CLONE_SELECTOR = '.' + __DSSelectors.GO_TOP_CLONE_CLASS;
     // 使用者按下原生「到底部」按鈕的事件：pointerdown 為主，click 為備援（例如未產生 pointer 事件的輸入方式）
     const NATIVE_PRESS_EVENT_TYPES = ['pointerdown', 'click'];
 

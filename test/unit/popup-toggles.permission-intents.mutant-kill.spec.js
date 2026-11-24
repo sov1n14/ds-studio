@@ -17,6 +17,7 @@ import { mountPopupHtml } from '../helpers/popup-master-switch-harness.js';
 const INTENTS = { reply: 'autoCopyReply', code: 'autoCopyCode', notification: 'replyNotification' };
 
 beforeAll(() => {
+    evalPopupScript('utils/permission-module.js');
     evalPopupScript('utils/clipboard-permission.js');
     evalPopupScript('utils/notification-permission.js');
     evalPopupScript('popup/popup.toggles.js');

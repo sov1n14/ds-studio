@@ -247,6 +247,7 @@ export function bootDeepSeekPage(isolatedWindow, options = {}) {
 
     const sandbox = { window: pageWindow, history: pageHistory, XMLHttpRequest: FakeXHR, URL, console };
     loadClassicScript('content/sse-parser.js', sandbox);
+    loadClassicScript('utils/temporary-chat-message-types.js', sandbox);
     loadClassicScript('content/censor-xhr-hook.js', sandbox);
     loadClassicScript('content/temporary-chat-history-hook.js', sandbox);
     PagePromise = vm.runInContext('Promise', sandbox);

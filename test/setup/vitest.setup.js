@@ -27,6 +27,8 @@ import '../../utils/logger.js';
 // DSS_SETTINGS_MSG, and DSS_CONTENT_MSG onto globalThis. Preload it so specs
 // referencing any cross-layer constant don't hit ReferenceError.
 import '../../utils/message-constants.js';
+// utils/runtime-message-errors.js classifies the "Receiving end does not exist" rejection; the chat-map client (preloaded below) reads it when a send fails.
+import '../../utils/runtime-message-errors.js';
 
 // ── Bundle / collaborator preloads ──────────────────────────────────────────
 // These files set globalThis.__DS_*_* keys. They MUST execute before any spec

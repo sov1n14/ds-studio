@@ -9,6 +9,7 @@
     const __DSSelectors = (globalThis).DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectors.GO_TOP_NATIVE_BUTTON_CLASS;
+    const GO_TOP_CLONE_CLASS = __DSSelectors.GO_TOP_CLONE_CLASS;
     const SCROLL_AREA_CLASS = __DSSelectors.SCROLL_AREA_CLASS;
     const DS_BUTTON_FLOATING = __DSSelectors.DS_BUTTON_FLOATING_CLASS;
     const DS_BUTTON_CIRCLE = __DSSelectors.DS_BUTTON_CIRCLE_CLASS;
@@ -185,7 +186,7 @@
         // 降級：浮動圓形按鈕（實測頁面中僅原生 go-bottom 按鈕符合），不依賴浮動按鈕列結構；以 closest 排除 GoTop 本身及其內部的原生按鈕副本（不用 :not(.dsw-gotop *)，happy-dom 對其求值錯誤）
         _queryFloatingButtonOutsideGoTop() {
             const candidates = document.querySelectorAll('.' + DS_BUTTON_FLOATING + '.' + DS_BUTTON_CIRCLE + '[role="button"]');
-            const match = [...candidates].find(el => !el.closest('.dsw-gotop')) || null;
+            const match = [...candidates].find(el => !el.closest('.' + GO_TOP_CLONE_CLASS)) || null;
             if (match) this._hasSeenDom = true;
             return match;
         },

@@ -98,4 +98,28 @@ describe('temporary-chat-fiber-delete', () => {
 
         expect(postMessageSpy).toHaveBeenCalledWith({ type: RESULT_TYPE, sessionId: undefined, success: false }, '*');
     });
+
+    it.each([
+        ['a message of another type', { type: 'DSS_SOMETHING_ELSE', sessionId: 'x' }],
+        ['a message with null data', null],
+        ['a message with no data', undefined],
+    ])('ignores %s and posts nothing', (_label, data) => {
+        mountSidebar();
+
+        send(data);
+
+        expect(postMessageSpy).not.toHaveBeenCalled();
+    });
+
+    it('fails to load with a hint naming the injected types file when the shared type table is missing', () => {
+        const typeTable = globalThis.DSS_TEMP_CHAT_MESSAGE_TYPES;
+        const scriptPath = require.resolve('../../content/temporary-chat-fiber-delete.js');
+        delete require.cache[scriptPath];
+        delete globalThis.DSS_TEMP_CHAT_MESSAGE_TYPES;
+        try {
+            expect(() => require('../../content/temporary-chat-fiber-delete.js')).toThrow('[DSS] temporary-chat-fiber-delete needs utils/temporary-chat-message-types.js injected first');
+        } finally {
+            globalThis.DSS_TEMP_CHAT_MESSAGE_TYPES = typeTable;
+        }
+    });
 });

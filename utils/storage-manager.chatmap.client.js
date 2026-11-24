@@ -21,7 +21,12 @@
         return types;
     }
 
-    const isNoReceiverError = (err) => /Receiving end does not exist/i.test(String(err?.message ?? err));
+    // 於呼叫時讀取無接收端分類器（runtime-message-errors.js 與 message-constants.js 同樣在 storage manager 之後載入）
+    function getRuntimeMessageErrors() {
+        const errors = root.DSSRuntimeMessageErrors;
+        if (!errors) throw new Error('[DSS] StorageManager chat-map：globalThis.DSSRuntimeMessageErrors 未定義，請先載入 utils/runtime-message-errors.js');
+        return errors;
+    }
 
     /**
      * 傳送一次訊息；同步拋出轉為 rejection，逾時亦 reject。
@@ -129,7 +134,7 @@
             try {
                 response = await sendOnce(msg);
             } catch (err) {
-                if (!isNoReceiverError(err)) throw err;
+                if (!getRuntimeMessageErrors().isNoReceiverError(err)) throw err;
                 await delay(NO_RECEIVER_RETRY_DELAY_MS);
                 response = await sendOnce(msg);
             }

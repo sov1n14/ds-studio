@@ -4,10 +4,14 @@
  * Intercepts /api/v0/chat/completion and /api/v0/chat/edit_message XHR requests and parses SSE fragments.
  * Reads the /api/v0/chat_session/create response (XHR and fetch) and posts DSS_CHAT_CREATE_DETECTED { createdSessionId }.
  * Reads the /api/v0/chat/completion request body (XHR and fetch) and posts DSS_CHAT_COMPLETION_DETECTED { chatSessionId }.
- * Depends on SseParser (sse-parser.js) loaded in the same scope.
+ * Depends on SseParser (sse-parser.js) and DSS_TEMP_CHAT_MESSAGE_TYPES (utils/temporary-chat-message-types.js) loaded in the same scope.
  */
 (function () {
     'use strict';
+
+    // postMessage 型別取自 MAIN world 共用型別表（本檔看不到 isolated world 常數，由 content/main-world-injector.js 先行注入該表）
+    var MESSAGE_TYPES = globalThis.DSS_TEMP_CHAT_MESSAGE_TYPES;
+    if (!MESSAGE_TYPES) { throw new Error('[DSS] censor-xhr-hook needs utils/temporary-chat-message-types.js injected first'); }
 
     var originalOpen = XMLHttpRequest.prototype.open;
     var originalSend = XMLHttpRequest.prototype.send;
@@ -70,12 +74,12 @@
     function notifyCreatedSession(payload) {
         var createdSessionId = extractCreatedSessionId(payload);
         if (!createdSessionId) { warnUnreadableCreate(); return; }
-        window.postMessage({ type: 'DSS_CHAT_CREATE_DETECTED', createdSessionId: createdSessionId }, '*');
+        window.postMessage({ type: MESSAGE_TYPES.CHAT_CREATE, createdSessionId: createdSessionId }, '*');
     }
 
     /** 通知 isolated world 補全請求所屬的對話 id */
     function notifyCompletion(chatSessionId) {
-        window.postMessage({ type: 'DSS_CHAT_COMPLETION_DETECTED', chatSessionId: chatSessionId }, '*');
+        window.postMessage({ type: MESSAGE_TYPES.CHAT_COMPLETION, chatSessionId: chatSessionId }, '*');
     }
 
     /** 讀取 XHR 的 JSON 回應（依 responseType 取 response 或 responseText），不影響頁面自身的讀取 */
@@ -159,7 +163,7 @@
 
                 if (shouldDispatch) {
                     window.postMessage({
-                        type: 'DSS_FRAGMENT_COMPLETE',
+                        type: MESSAGE_TYPES.FRAGMENT_COMPLETE,
                         messageId: state.messageId,
                         fragments: state.fragments,
                         thinkingElapsedSecs: state.thinkingElapsedSecs,
@@ -180,7 +184,7 @@
     XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
         if (name.toLowerCase() === 'authorization' && value !== lastCapturedAuth) {
             lastCapturedAuth = value;
-            window.postMessage({ type: 'DSS_AUTH_CAPTURED', authorization: value }, '*');
+            window.postMessage({ type: MESSAGE_TYPES.AUTH_CAPTURED, authorization: value }, '*');
         }
         return originalSetRequestHeader.apply(this, arguments);
     };

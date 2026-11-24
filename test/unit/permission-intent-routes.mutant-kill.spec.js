@@ -21,7 +21,10 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
 // @stryker-mutator/api INSTRUMENTER_CONSTANTS.NAMESPACE
 const STRYKER_NAMESPACE = '__stryker__';
 
-const STORAGE_MANAGER = { PERMISSION_INTENTS: { AUTO_COPY_REPLY: 'autoCopyReply', AUTO_COPY_CODE: 'autoCopyCode', REPLY_NOTIFICATION: 'replyNotification' } };
+const STORAGE_MANAGER = {
+    PERMISSION_INTENTS: { AUTO_COPY_REPLY: 'autoCopyReply', AUTO_COPY_CODE: 'autoCopyCode', REPLY_NOTIFICATION: 'replyNotification' },
+    PERMISSION_INTENT_PERMISSIONS: { autoCopyReply: 'clipboard', autoCopyCode: 'clipboard', replyNotification: 'notification' },
+};
 const CLIPBOARD_PERMISSION = { hasClipboardPermission: async () => true };
 const NOTIFICATION_PERMISSION = { hasNotificationPermission: async () => true };
 const ALL = { StorageManager: STORAGE_MANAGER, DSSClipboardPermission: CLIPBOARD_PERMISSION, DSSNotificationPermission: NOTIFICATION_PERMISSION };
@@ -64,6 +67,7 @@ describe('A - install() names the missing dependency', () => {
     it.each([
         ['StorageManager is not declared in the worker', without('StorageManager')],
         ['StorageManager exists without PERMISSION_INTENTS', { ...ALL, StorageManager: {} }],
+        ['StorageManager exists without PERMISSION_INTENT_PERMISSIONS', { ...ALL, StorageManager: { PERMISSION_INTENTS: STORAGE_MANAGER.PERMISSION_INTENTS } }],
     ])('%s: install() throws a [DSS] load-order error naming utils/storage-manager*.js', (_label, deps) => {
         const err = installError(deps);
         expect(err, 'install() must throw').not.toBeNull();
@@ -93,6 +97,7 @@ describe('B - a listener installed during the test completes each intent once it
         saved.StorageManager = globalThis.StorageManager;
         chrome.permissions = world.api;
         globalThis.StorageManager = StorageManager;
+        evalPopupScript('utils/permission-module.js');
         evalPopupScript('utils/clipboard-permission.js');
         evalPopupScript('utils/notification-permission.js');
     });

@@ -302,3 +302,50 @@ describe('edge contracts', () => {
         expect(returned).toBe(false);
     });
 });
+
+describe('write message type comes from utils/message-constants.js', () => {
+    let savedType;
+
+    beforeEach(() => {
+        savedType = globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD;
+    });
+
+    afterEach(() => {
+        globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD = savedType;
+    });
+
+    it('answers the type the shared constant holds, not a copy of its current value', async () => {
+        globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD = 'DSS_RENAMED_WRITE';
+        const listener = await loadListener();
+        stubExecCommand(document, true);
+
+        const renamed = await deliver(listener, { type: 'DSS_RENAMED_WRITE', text: 'x' });
+        const original = await deliver(listener, { type: WRITE_TYPE, text: 'x' });
+
+        expect(onlyAnswer(renamed)).toEqual({ ok: true });
+        expect(original.sendResponse, 'the old literal type must stay unanswered').not.toHaveBeenCalled();
+        expect(original.returned).toBe(false);
+    });
+
+    it('fails loading with an error naming utils/message-constants.js when the constant is missing', async () => {
+        delete globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD;
+        let thrown = null;
+        try {
+            await loadFresh();
+        } catch (err) {
+            thrown = err;
+        }
+        expect(thrown, 'loading without the constant must throw').toBeInstanceOf(Error);
+        expect(thrown.message).toMatch(/utils\/message-constants\.js/);
+    });
+
+    it('is loaded by the offscreen page before the script that reads it', () => {
+        const html = fs.readFileSync(path.resolve(__dirname, '../../offscreen/clipboard-offscreen.html'), 'utf8');
+        const sources = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((match) => match[1]);
+        const constantsIndex = sources.indexOf('../utils/message-constants.js');
+        const scriptIndex = sources.indexOf('clipboard-offscreen.js');
+        expect(constantsIndex, 'clipboard-offscreen.html must load ../utils/message-constants.js').toBeGreaterThan(-1);
+        expect(scriptIndex, 'clipboard-offscreen.html must load clipboard-offscreen.js').toBeGreaterThan(-1);
+        expect(constantsIndex, 'message-constants.js must come first').toBeLessThan(scriptIndex);
+    });
+});

@@ -9,6 +9,7 @@
  */
 import { RETRY_ALARM_NAME, NOW, store, setClock, settle, readQueue, installServiceWorkerHarness } from '../helpers/service-worker-harness.js';
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 
 installServiceWorkerHarness();
 

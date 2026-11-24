@@ -4,6 +4,13 @@
  * 避免硬編碼重複字串（chrome-extension-coding-guidelines §2：訊息型別與 storage key 皆用具名常數）。
  */
 
+// MAIN world 與 isolated world 共用的 postMessage 型別表（utils/temporary-chat-message-types.js；瀏覽器與 service worker 由載入順序保證先行載入，Node.js 測試直接 require）
+const DSS_MAIN_WORLD_MESSAGE_TYPES = globalThis.DSS_TEMP_CHAT_MESSAGE_TYPES ||
+    (typeof require !== 'undefined' ? require('./temporary-chat-message-types.js') : null);
+if (!DSS_MAIN_WORLD_MESSAGE_TYPES) {
+    throw new Error('[DSS] utils/temporary-chat-constants.js 需要 utils/temporary-chat-message-types.js 先行載入');
+}
+
 // chrome.storage.local key：臨時對話功能啟用狀態；值為 boolean；缺少時預設為停用
 const DSS_TEMP_CHAT_STORAGE_KEY = 'dss-temporary-chat-enabled';
 
@@ -14,25 +21,25 @@ const DSS_TEMP_CHAT_CHANGED_EVENT = 'dss-temporary-chat-changed';
 const DSS_TEMP_CHAT_UUID_KEY = 'dss-temporary-chat-uuid';
 
 // window.postMessage type：main world XHR/fetch hook 讀到 chat_session/create 回應時發送；payload {createdSessionId: string}（回應的 data.biz_data.chat_session.id）
-const DSS_CHAT_CREATE_MESSAGE_TYPE = 'DSS_CHAT_CREATE_DETECTED';
+const DSS_CHAT_CREATE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_CREATE;
 
 // window.postMessage type：main world XHR/fetch hook 偵測到 /api/v0/chat/completion 請求時發送；payload {chatSessionId: string|null}（請求主體的 chat_session_id）
-const DSS_CHAT_COMPLETION_MESSAGE_TYPE = 'DSS_CHAT_COMPLETION_DETECTED';
+const DSS_CHAT_COMPLETION_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.CHAT_COMPLETION;
 
 // window.postMessage type：ISOLATED world 要求 MAIN world 透過 React Fiber 刪除對話
-const DSS_FIBER_DELETE_MESSAGE_TYPE = 'DSS_FIBER_DELETE_SESSION';
+const DSS_FIBER_DELETE_MESSAGE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FIBER_DELETE;
 
 // window.postMessage type：MAIN world 回報 Fiber 刪除結果給 ISOLATED world
-const DSS_FIBER_DELETE_RESULT_TYPE = 'DSS_FIBER_DELETE_RESULT';
+const DSS_FIBER_DELETE_RESULT_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FIBER_DELETE_RESULT;
 
 // window.postMessage type：MAIN world XHR hook 攔截到 authorization 標頭時回傳給 ISOLATED world
-const DSS_AUTH_CAPTURED_TYPE = 'DSS_AUTH_CAPTURED';
+const DSS_AUTH_CAPTURED_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.AUTH_CAPTURED;
 
 // window.postMessage type：MAIN world history hook 偵測到 SPA 導航（pushState/replaceState）時通知 ISOLATED world
-const DSS_HISTORY_NAV_TYPE = 'DSS_HISTORY_NAV';
+const DSS_HISTORY_NAV_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.HISTORY_NAV;
 
 // window.postMessage type：MAIN world XHR hook 完成一段 SSE 片段組裝後回傳給 ISOLATED world
-const DSS_FRAGMENT_COMPLETE_TYPE = 'DSS_FRAGMENT_COMPLETE';
+const DSS_FRAGMENT_COMPLETE_TYPE = DSS_MAIN_WORLD_MESSAGE_TYPES.FRAGMENT_COMPLETE;
 
 // chrome.storage.sync：跨裝置待刪佇列 Array<{chatUuid, attemptCount, lastActiveAt, ownerDeviceId}>
 const DSS_PENDING_DELETES_SYNC_KEY = 'dss-pending-deletes-sync';

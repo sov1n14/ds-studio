@@ -43,8 +43,8 @@ function hasBalancedBrackets(selector) {
 }
 
 describe('DSSelectors — export shape', () => {
-    it('exports exactly 95 keys (guards accidental export removal)', () => {
-        expect(Object.keys(S)).toHaveLength(95);
+    it('exports exactly 96 keys (guards accidental export removal)', () => {
+        expect(Object.keys(S)).toHaveLength(96);
     });
     it('does not export the rejected websearch hash classes (ARCHITECTURE.md rejected signals)', () => {
         expect(S).not.toHaveProperty('WEBSEARCH_TOGGLE_CLASS');

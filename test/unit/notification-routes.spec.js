@@ -10,6 +10,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 import messageConstants from '../../utils/message-constants.js';
 
 const MODULE_REL = 'background/notification-routes.js';

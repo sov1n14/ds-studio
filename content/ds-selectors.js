@@ -1,4 +1,4 @@
-// 402 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
+// 405 lines: pure constant mapping table — every selector targets DeepSeek's DOM and rotates together on upstream UI updates; splitting would scatter co-dependent selectors across files and multiply the cost of each DeepSeek class-name rotation
 /**
  * DS studio — Shared DOM Selector Constants
  *
@@ -278,6 +278,9 @@
     /** DeepSeek 原生回到頂端按鈕的定位 class */
     const GO_TOP_NATIVE_BUTTON_CLASS = '_0706cde';
 
+    /** 本擴充功能自行注入的 GoTop 按鈕識別 class（非 DeepSeek 原生標記；content/go-top.css 的 .dsw-gotop 規則須與此值一致） */
+    const GO_TOP_CLONE_CLASS = 'dsw-gotop';
+
     /** 回到頂部錨點選擇器（精確雜湊 class 組合） */
     const GO_TOP_ANCHOR_SELECTOR = '._9663006._2c189bc';
 
@@ -373,7 +376,7 @@
         SIDEBAR_TITLE_CLASS, SIDEBAR_ACTIONS_CLASS, SIDEBAR_OPEN_BUTTON_SELECTOR,
         SIDEBAR_HAMBURGER_BUTTON_SELECTOR, SIDEBAR_WRAPPER_COLLAPSED_SELECTOR,
         CHAT_HEADER_TITLE_ROW_SELECTOR, CHAT_TITLE_FALLBACK_SELECTOR,
-        GO_TOP_NATIVE_BUTTON_CLASS,
+        GO_TOP_NATIVE_BUTTON_CLASS, GO_TOP_CLONE_CLASS,
         GO_TOP_ANCHOR_SELECTOR, GO_TOP_ANCHOR_FALLBACK1_SELECTOR,
         SEND_BUTTON_ROW_CLASS,
         SEND_BUTTON_ROLE_SELECTOR,

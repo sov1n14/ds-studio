@@ -11,6 +11,7 @@
  * test/setup/vitest.setup.js installs no chrome.permissions, so each test installs its own and afterEach restores the original (absent) state. loadApi() evaluates the module afresh in every test (vi.resetModules), so its load-time code runs inside the test that asserts it; the wrapper must still read chrome.permissions at call time, because each test installs its mock after loading.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../utils/permission-module.js';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -211,5 +212,19 @@ describe('DSSNotificationPermission', () => {
 
             await expect(api.requestNotificationPermission()).resolves.toBe(false);
         });
+    });
+});
+
+describe('load order', () => {
+    it('fails loading with an Error naming utils/permission-module.js when the factory is not loaded', async () => {
+        const saved = globalThis.DSSPermissionModule;
+        delete globalThis.DSSPermissionModule;
+        try {
+            const [loader] = Object.values(MODULE_LOADERS);
+            vi.resetModules();
+            await expect(loader()).rejects.toThrow('utils/permission-module.js');
+        } finally {
+            globalThis.DSSPermissionModule = saved;
+        }
     });
 });

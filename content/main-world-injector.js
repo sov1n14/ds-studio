@@ -5,8 +5,8 @@
  * 腳本一次注入完畢。這些腳本無法用 content script 載入，因為它們必須改寫頁面自身的
  * XMLHttpRequest / history / React fiber。
  *
- * 注入順序即 MAIN_WORLD_SCRIPTS 的陣列順序：sse-parser.js 是 censor-xhr-hook.js 的
- * 相依，必須在其之前執行。
+ * 注入順序即 MAIN_WORLD_SCRIPTS 的陣列順序：sse-parser.js 與 utils/temporary-chat-message-types.js
+ * 是各 hook 的相依，必須在其之前執行。
  *
  * 每個腳本皆須列入 manifest.json 的 web_accessible_resources 才能取得 URL。
  */
@@ -16,6 +16,7 @@
     /** 依序注入的 MAIN world 腳本（前者為後者的相依） */
     const MAIN_WORLD_SCRIPTS = [
         'content/sse-parser.js',
+        'utils/temporary-chat-message-types.js',
         'content/censor-xhr-hook.js',
         'content/temporary-chat-history-hook.js',
         'content/temporary-chat-fiber-delete.js',

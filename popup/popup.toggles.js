@@ -1,4 +1,4 @@
-// 278 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
+// 275 lines: single popup feature-toggle binder — every toggle shares the same save, refreshSyncStatus, showSaveStatus closure; the permission-gated toggles and the open-time cleanup of refused intents share one closure-held set of intents recorded since open, which the cleanup checks synchronously right before each removal, so splitting would open an async gap between that check and the removal
 /**
  * DS studio — Popup Feature Toggles 模組
  * 封裝功能開關（全域提示詞、主開關、思考過程、參考來源、側邊欄自動隱藏、隱藏思考過程、顯示系統時間、防止自動捲動、自動展開訊息、自動重試、自動繼續生成、自動複製回覆與程式碼區塊、聯網搜尋單選、回覆完成通知單選）的 change 事件綁定。
@@ -54,15 +54,12 @@ function createToggleManager(ctx) {
      * 移除前同步檢查本次開啟後記下的意圖並跳過；storage 操作依發出順序套用，故不會刪掉使用者在清理期間建立的意圖。
      */
     async function clearRefusedPermissionIntents() {
-        const { AUTO_COPY_REPLY, AUTO_COPY_CODE, REPLY_NOTIFICATION } = StorageManager.PERMISSION_INTENTS;
-        const hasClipboard = () => hasModulePermission(clipboardPermission, 'hasClipboardPermission');
-        const hasPermissionOf = {
-            [AUTO_COPY_REPLY]: hasClipboard,
-            [AUTO_COPY_CODE]: hasClipboard,
-            [REPLY_NOTIFICATION]: () => hasModulePermission(notificationPermission, 'hasNotificationPermission'),
+        const hasPermissionOfKind = {
+            clipboard: () => hasModulePermission(clipboardPermission, 'hasClipboardPermission'),
+            notification: () => hasModulePermission(notificationPermission, 'hasNotificationPermission'),
         };
         for (const intentName of await StorageManager.getPendingPermissionIntents()) {
-            const hasPermission = hasPermissionOf[intentName];
+            const hasPermission = hasPermissionOfKind[StorageManager.PERMISSION_INTENT_PERMISSIONS[intentName]];
             if (hasPermission && (await hasPermission())) continue;
             if (intentNamesRecordedSinceOpen.has(intentName)) continue;
             await StorageManager.clearPermissionIntent(intentName);

@@ -18,8 +18,8 @@ import { evalPopupScript } from '../helpers/popup-script-loader.js';
 const WORKER_URL = 'chrome-extension://test-extension-id/background/service-worker.js';
 const WINDOW_UNAVAILABLE = 'Could not find an active window.';
 // The scripts the fake runs for real when the worker requests them, as repo-relative paths.
-const REAL_SCRIPTS = new Set(['utils/permission-request-errors.js', 'utils/clipboard-permission.js', 'utils/notification-permission.js']);
-const PERMISSION_GLOBALS = ['DSSPermissionRequestErrors', 'DSSClipboardPermission', 'DSSNotificationPermission'];
+const REAL_SCRIPTS = new Set(['utils/permission-request-errors.js', 'utils/permission-module.js', 'utils/clipboard-permission.js', 'utils/notification-permission.js']);
+const PERMISSION_GLOBALS = ['DSSPermissionRequestErrors', 'DSSPermissionModule', 'DSSClipboardPermission', 'DSSNotificationPermission'];
 const STUBBED_GLOBALS = ['StorageManager', 'DSSSettingsRoutes', 'DSSPendingStoreRoutes', 'DSSEditorWindowRoutes', 'DSSChatMapRoutes', 'DSSNotificationRoutes', 'DSSClipboardRoutes', 'DSSPermissionIntentRoutes', 'DSSUnloadGrace'];
 const SAVED_GLOBALS = ['importScripts', 'fetch', ...STUBBED_GLOBALS, ...PERMISSION_GLOBALS];
 

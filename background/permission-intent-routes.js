@@ -13,7 +13,7 @@
         const storageManager = typeof StorageManager !== 'undefined' ? StorageManager : undefined;
         const clipboardPermission = globalThis.DSSClipboardPermission;
         const notificationPermission = globalThis.DSSNotificationPermission;
-        if (!storageManager?.PERMISSION_INTENTS) throw new Error('[DSS] permission-intent-routes 需要 utils/storage-manager*.js 先行載入');
+        if (!storageManager?.PERMISSION_INTENTS || !storageManager.PERMISSION_INTENT_PERMISSIONS) throw new Error('[DSS] permission-intent-routes 需要 utils/storage-manager*.js 先行載入');
         if (!clipboardPermission || !notificationPermission) throw new Error('[DSS] permission-intent-routes 需要 utils/clipboard-permission.js 與 utils/notification-permission.js 先行載入');
         return { storageManager, clipboardPermission, notificationPermission };
     }
@@ -24,12 +24,19 @@
      */
     function buildIntentTable({ storageManager, clipboardPermission, notificationPermission }) {
         const { AUTO_COPY_REPLY, AUTO_COPY_CODE, REPLY_NOTIFICATION } = storageManager.PERMISSION_INTENTS;
-        const hasClipboard = () => clipboardPermission.hasClipboardPermission();
-        return {
-            [AUTO_COPY_REPLY]: { hasPermission: hasClipboard, enable: () => storageManager.saveAutoCopyReply(true) },
-            [AUTO_COPY_CODE]: { hasPermission: hasClipboard, enable: () => storageManager.saveAutoCopyCode(true) },
-            [REPLY_NOTIFICATION]: { hasPermission: () => notificationPermission.hasNotificationPermission(), enable: () => storageManager.saveReplyNotification(true) },
+        const hasPermissionOfKind = {
+            clipboard: () => clipboardPermission.hasClipboardPermission(),
+            notification: () => notificationPermission.hasNotificationPermission(),
         };
+        const enableOf = {
+            [AUTO_COPY_REPLY]: () => storageManager.saveAutoCopyReply(true),
+            [AUTO_COPY_CODE]: () => storageManager.saveAutoCopyCode(true),
+            [REPLY_NOTIFICATION]: () => storageManager.saveReplyNotification(true),
+        };
+        return Object.fromEntries(Object.entries(enableOf).map(([intentName, enable]) => [
+            intentName,
+            { hasPermission: hasPermissionOfKind[storageManager.PERMISSION_INTENT_PERMISSIONS[intentName]], enable },
+        ]));
     }
 
     /** 完成所有權限已全數取得的待完成意圖：先開啟設定再清除意圖，中途失敗時意圖保留，下次授予可重試。 */

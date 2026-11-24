@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 | Version | Summary |
 |-|-|
+| [4.39.42](changelog/v4.md#43942---2026-11-24) | Merges code that was written twice into one shared definition without changing behavior: the background message dispatcher, the permission wrapper factory, the DeepSeek tab query, the "no receiver" error classifier, the auto copy bridge constants shared by both worlds, the completed-reply rule and guarded send, the temporary chat postMessage types, and the GoTop clone class |
 | [4.39.41](changelog/v4.md#43941---2026-11-24) | Fixes a temporary chat staying undeleted on the server when it was queued for deletion while a cleanup sweep was running, and a delete request being sent for a chat already removed from the deletion queue: the worker re-arms the retry alarm for chats queued during a sweep and checks that each chat is still queued before deleting it |
 | [4.39.40](changelog/v4.md#43940---2026-11-24) | Fixes prompt groups and chat bindings being lost when an older extension version writes the legacy prompt group list again on a synced device: the legacy list is merged into the current groups, adding only the groups the device lacks, and a group the user deleted stays deleted |
 | [4.39.39](changelog/v4.md#43939---2026-11-24) | Fixes Markdown export writing a code block of a restored reply as a bare fence without its language: the exporter takes the language from the block header label when the block has no banner |

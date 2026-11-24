@@ -1,4 +1,4 @@
-// 314 lines: service-worker entry — the pending-delete sweep, its exclusive queue-job chain (in-flight guard, nested grace jobs, closing broadcast, additions seen in flight) and the top-level listeners share module-scope state that both test harnesses load as this one classic script; splitting it out would need a new importScripts file the stubbed harness does not load
+// 313 lines: service-worker entry — the pending-delete sweep, its exclusive queue-job chain (in-flight guard, nested grace jobs, closing broadcast, additions seen in flight) and the top-level listeners share module-scope state that both test harnesses load as this one classic script; splitting it out would need a new importScripts file the stubbed harness does not load
 'use strict';
 
 // 載入 StorageManager（classic service worker，依相依順序載入各儲存分包）
@@ -24,14 +24,20 @@ importScripts(
     '../utils/storage-manager.settings-read.js',
     '../utils/storage-manager.js',
     '../utils/deepseek-api.js',
+    '../utils/temporary-chat-message-types.js',
     '../utils/temporary-chat-constants.js',
     '../utils/permission-request-errors.js',
+    '../utils/permission-module.js',
     '../utils/clipboard-permission.js',
     '../utils/notification-permission.js',
     'pending-store.js',
     '../utils/message-constants.js',
+    '../utils/runtime-message-errors.js',
+    '../utils/chat-session-id.js',
     '../utils/editor-flush-channel.js',
     'service-worker-constants.js',
+    'deepseek-tabs.js',
+    'route-dispatch.js',
     'settings-routes.js',
     'pending-store-routes.js',
     'editor-window-routes.js',
@@ -112,15 +118,8 @@ async function remediatePendingDeletes() {
     const token = await TemporaryChatPendingStore.getLastAuthToken();
     if (!token) return; // 本機無 token → 保留佇列，交由具備 token 的裝置補救
 
-    // 查詢本機所有 DeepSeek 分頁，建立正在檢視中的 uuid 集合（fail-open：查詢失敗時不阻擋刪除）
-    let localTabUuids = new Set();
-    try {
-        const tabs = await chrome.tabs.query({ url: '*://chat.deepseek.com/*' });
-        for (const tab of tabs) {
-            const uuid = tab.url?.match(/\/a\/chat\/s\/([a-f0-9-]+)/)?.[1] ?? null;
-            if (uuid) localTabUuids.add(uuid);
-        }
-    } catch { /* fail-open：tabs.query 失敗時以空集合繼續 */ }
+    // 本機所有 DeepSeek 分頁正在檢視中的 uuid 集合（fail-open：查詢失敗時為空集合，不阻擋刪除）
+    const localTabUuids = await DSSDeepSeekTabs.listShownChatUuids();
 
     // 每輪掃描自 storage.local 重讀本機裝置 ID，用以區分本機與外來項目
     const localDeviceId = await TemporaryChatPendingStore.getLocalDeviceId();

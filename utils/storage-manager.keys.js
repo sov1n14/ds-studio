@@ -146,6 +146,16 @@ function _buildNextMeta(prevMeta, { chunkCount, chunkSizes }) {
     },
 
     /**
+     * 每個待完成意圖需要的選用權限包裝：'clipboard' 對應 utils/clipboard-permission.js，'notification' 對應 utils/notification-permission.js。
+     * popup 開啟時的遭拒意圖清理與 service worker 的權限授予完成流程皆以此表決定查詢哪個包裝，意圖與權限的對應僅此一處定義。
+     */
+    PERMISSION_INTENT_PERMISSIONS: {
+        autoCopyReply: 'clipboard',
+        autoCopyCode: 'clipboard',
+        replyNotification: 'notification',
+    },
+
+    /**
      * 已還原訊息「清除全部」的世代值，存於 chrome.storage.local，每次 clearRestoredMessages() 遞增。分頁存檔以此判斷讀取記錄之後是否有其他情境清除過，避免把清除前的記錄寫回。
      * 不列入 KEYS，同步合併因此不會把它寫進 sync。
      */

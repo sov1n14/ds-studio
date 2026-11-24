@@ -7,7 +7,7 @@
  * 否則以本機 token 刪除，成功移出佇列與本機開啟集合，失敗保留於佇列、釋放 lease 並排程既有的重試 alarm。
  * 計時器只存在記憶體：worker 於寬限期內被終止時項目仍留在佇列，由 onStartup 補救流程刪除。
  *
- * 相依：utils/temporary-chat-constants.js、utils/deepseek-api.js、background/pending-store.js 需先載入；
+ * 相依：utils/temporary-chat-constants.js、utils/deepseek-api.js、background/pending-store.js、background/deepseek-tabs.js（DeepSeek 分頁停在哪些對話的共用查詢）需先載入；
  * install() 由 service worker 於頂層呼叫並注入補救重入防護與重試 alarm 排程。
  */
 (function () {
@@ -15,9 +15,6 @@
 
     // 寬限期（毫秒）：使用者裁示 10 秒
     const GRACE_MS = 10000;
-    // 判定「仍有分頁停在該對話」只計 DeepSeek 分頁
-    const DEEPSEEK_TAB_URL_PATTERN = '*://chat.deepseek.com/*';
-    const CHAT_UUID_IN_URL = /\/a\/chat\/s\/([a-f0-9-]+)/;
 
     /** 於呼叫時解析相依全域，缺失即拋出並指名修法。 */
     function resolveDependency(globalName, file) {
@@ -27,6 +24,7 @@
     }
     const pendingStore = () => resolveDependency('TemporaryChatPendingStore', 'background/pending-store.js');
     const deepSeekApi = () => resolveDependency('DSSDeepSeekApi', 'utils/deepseek-api.js');
+    const deepSeekTabs = () => resolveDependency('DSSDeepSeekTabs', 'background/deepseek-tabs.js');
 
     /** 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。 */
     function resolveMessageTypes() {
@@ -40,23 +38,6 @@
         return types;
     }
 
-    /** 純查詢：是否有 DeepSeek 分頁的網址停在 uuid；查詢失敗時視為沒有（與補救掃描的 fail-open 一致）。 */
-    async function hasDeepSeekTabShowing(uuid) {
-        try {
-            const tabs = await chrome.tabs.query({ url: DEEPSEEK_TAB_URL_PATTERN });
-            // Stryker disable next-line ArrayDeclaration: 等效突變——非分頁的陣列元素沒有 url，分頁比對結果仍是「沒有分頁」
-            return (tabs || []).some((tab) => {
-                // Stryker disable next-line OptionalChaining: 等效突變——依 url 查詢只回傳網址相符的分頁；url 缺失時拋出並落入 catch，同樣代表「沒有分頁」
-                const urlMatch = tab.url?.match(CHAT_UUID_IN_URL);
-                return urlMatch?.[1] === uuid;
-            });
-        }
-        // Stryker disable next-line BlockStatement: 等效突變——空 catch 回傳 undefined 而非 false，呼叫端兩者皆視為「沒有分頁」
-        catch {
-            return false;
-        }
-    }
-
     /**
      * 寬限期到期後決定卸載對話的去留（須在補救重入防護下執行，避免補救掃描同時刪除同一項目）。
      * @param {string} uuid
@@ -67,7 +48,7 @@
         const pending = await store.getPendingDeletes();
         if (!pending.some((item) => item.chatUuid === uuid)) return;
 
-        if (await hasDeepSeekTabShowing(uuid)) {
+        if ((await deepSeekTabs().listShownChatUuids()).has(uuid)) {
             await store.refreshLease(uuid);
             return;
         }

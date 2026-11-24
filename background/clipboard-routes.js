@@ -5,7 +5,7 @@
  *
  * 不使用 chrome.runtime.getContexts／chrome.offscreen.hasDocument（Chrome 最低版本 111 不支援），改以「建立中 promise + 已建立旗標」追蹤文件，並把單一文件錯誤視為文件已存在。
  *
- * 相依：utils/message-constants.js 需先載入。
+ * 相依：utils/message-constants.js、utils/runtime-message-errors.js（無接收端錯誤分類）與 background/route-dispatch.js（共用的訊息分派與回應格式）需先載入。
  */
 (function () {
     'use strict';
@@ -14,8 +14,6 @@
     const OFFSCREEN_JUSTIFICATION = 'Write chat reply text to the clipboard on behalf of the DeepSeek content script.';
     // Chrome 於文件已存在時 createDocument 拒絕的訊息片段
     const SINGLE_DOCUMENT_ERROR_FRAGMENT = 'Only a single offscreen document may be created';
-    // offscreen 文件已關閉時 sendMessage 拒絕的訊息片段
-    const NO_RECEIVER_ERROR_FRAGMENT = 'Receiving end does not exist';
 
     /**
      * 於呼叫時解析訊息型別常數，缺失即拋出並指名修法。
@@ -53,12 +51,20 @@
         }
     }
 
+    /** 於呼叫時解析無接收端錯誤分類器，缺失即拋出並指名修法。 */
+    function resolveIsNoReceiverError() {
+        const errors = globalThis.DSSRuntimeMessageErrors;
+        if (!errors) throw new Error('[DSS] clipboard-routes 需要 utils/runtime-message-errors.js 先行載入');
+        return errors.isNoReceiverError;
+    }
+
     /**
      * 建立剪貼簿寫入器；文件狀態與寫入佇列封裝於閉包，由 install() 持有。
      * @param {string} offscreenWriteType - 送往 offscreen 文件的訊息型別
+     * @param {(err: unknown) => boolean} isNoReceiverError - 判斷 offscreen 文件已關閉（無接收端）的分類器
      * @returns {{ copy: (message: { text?: unknown }) => Promise<void> }}
      */
-    function createClipboardWriter(offscreenWriteType) {
+    function createClipboardWriter(offscreenWriteType, isNoReceiverError) {
         let isDocumentCreated = false;
         let pendingCreation = null;
         let writeQueue = Promise.resolve();
@@ -86,7 +92,7 @@
             try {
                 response = await sendToOffscreen(text);
             } catch (err) {
-                if (!hasErrorFragment(err, NO_RECEIVER_ERROR_FRAGMENT)) throw err;
+                if (!isNoReceiverError(err)) throw err;
                 isDocumentCreated = false;
                 response = await sendToOffscreen(text);
             }
@@ -113,26 +119,10 @@
      * @returns {Object<string, (message: object) => Promise<void>>}
      */
     function buildRouteTable() {
-        const writer = createClipboardWriter(resolveMessageType('DSS_OFFSCREEN_WRITE_CLIPBOARD'));
+        const writer = createClipboardWriter(resolveMessageType('DSS_OFFSCREEN_WRITE_CLIPBOARD'), resolveIsNoReceiverError());
         return {
             [resolveMessageType('DSS_COPY_TO_CLIPBOARD')]: writer.copy,
         };
-    }
-
-    /**
-     * 執行單一路由並回應結果；失敗於此邊界攔截（onMessage 之外無人可攔）。
-     * @param {(message: object) => Promise<void>} route
-     * @param {object} message
-     * @param {(response: object) => void} sendResponse
-     */
-    async function runRoute(route, message, sendResponse) {
-        try {
-            await route(message);
-            sendResponse({ ok: true });
-        } catch (err) {
-            console.error(`[DSS] clipboard-routes ${message?.type}:`, err);
-            sendResponse({ ok: false, error: String(err) });
-        }
     }
 
     /**
@@ -141,13 +131,9 @@
      */
     function install() {
         const routes = buildRouteTable();
-
-        chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-            const route = routes[message?.type];
-            if (!route) return false; // 交由其他監聽器處理
-            runRoute(route, message, sendResponse);
-            return true; // 非同步回應
-        });
+        const dispatch = globalThis.DSSRouteDispatch;
+        if (!dispatch) throw new Error('[DSS] clipboard-routes 需要 background/route-dispatch.js 先行載入');
+        dispatch.install(routes, 'clipboard-routes');
     }
 
     globalThis.DSSClipboardRoutes = { install };

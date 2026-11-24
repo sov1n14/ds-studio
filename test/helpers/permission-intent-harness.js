@@ -21,8 +21,8 @@ export const NOTIFICATIONS = ['notifications'];
 
 // Snapshot of the scripts the loaders declared before the fix; anything else they declare later is evaluated by the loaders below.
 const KNOWN_POPUP_SCRIPTS = new Set([
-    'utils/logger.js', 'utils/debounce.js', 'utils/message-constants.js', 'utils/tab-control.js', 'utils/window-control.js',
-    'utils/notification-permission.js', 'utils/clipboard-permission.js', 'utils/i18n.locales.zhTW.js', 'utils/i18n.locales.en.js',
+    'utils/logger.js', 'utils/debounce.js', 'utils/message-constants.js', 'utils/runtime-message-errors.js', 'utils/tab-control.js', 'utils/window-control.js',
+    'utils/permission-module.js', 'utils/notification-permission.js', 'utils/clipboard-permission.js', 'utils/i18n.locales.zhTW.js', 'utils/i18n.locales.en.js',
     'utils/i18n.locales.js', 'utils/i18n.js', 'popup/popup.i18n-apply.js', 'popup/preset-item-renderer.js', 'popup/custom-select.drag.js',
     'popup/custom-select.js', 'popup/popup.modal.js', 'popup/popup.toast.js', 'popup/popup.preset-domain.js', 'utils/chat-session-id.js',
     'popup/popup.preset-manager.js', 'popup/popup.pin-manager.js', 'popup/popup.backup-manager.js', 'popup/popup.settings-view.js',
@@ -30,7 +30,8 @@ const KNOWN_POPUP_SCRIPTS = new Set([
     'popup/popup.toggles.js', 'popup/popup.locale.js', 'popup/popup.js',
 ]);
 const KNOWN_WORKER_SCRIPTS = new Set([
-    'utils/logger.js', 'utils/deepseek-api.js', 'utils/temporary-chat-constants.js', 'background/pending-store.js', 'utils/message-constants.js',
+    'utils/logger.js', 'utils/deepseek-api.js', 'utils/temporary-chat-message-types.js', 'utils/temporary-chat-constants.js', 'background/pending-store.js', 'utils/message-constants.js',
+    'utils/runtime-message-errors.js', 'utils/permission-module.js', 'background/route-dispatch.js',
     'background/service-worker-constants.js', 'background/settings-routes.js', 'background/pending-store-routes.js',
     'background/editor-window-routes.js', 'background/notification-routes.js', 'background/clipboard-routes.js', 'background/chat-map-routes.js',
     ROUTES_REL,
@@ -67,6 +68,7 @@ const isNewScript = (known) => (rel) => !known.has(rel) && !isStorageManagerPart
 
 /** Loads the popup side: the permission wrappers, any script popup.html gained, then the settings view and the toggle manager. */
 export function loadPopupModules() {
+    evalPopupScript('utils/permission-module.js');
     evalPopupScript('utils/clipboard-permission.js');
     evalPopupScript('utils/notification-permission.js');
     popupHtmlScripts().filter(isNewScript(KNOWN_POPUP_SCRIPTS)).forEach((rel) => evalPopupScript(rel));

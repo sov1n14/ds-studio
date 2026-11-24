@@ -27,6 +27,7 @@ const otherOf = (key) => TOGGLES.find(([k]) => k !== key);
 const CLIPBOARD_PERMISSIONS = ['clipboardWrite', 'offscreen'];
 
 beforeAll(() => {
+    evalPopupScript('utils/permission-module.js');
     evalPopupScript('utils/clipboard-permission.js');
     evalPopupScript('popup/popup.settings-view.js');
     evalPopupScript('popup/popup.toggles.js');

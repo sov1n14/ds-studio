@@ -60,7 +60,7 @@
     // 內容腳本請 background 寫入剪貼簿的訊息型別
     globalThis.DSS_COPY_TO_CLIPBOARD = 'DSS_COPY_TO_CLIPBOARD';
 
-    // background 請 offscreen 文件寫入剪貼簿的訊息型別（offscreen/clipboard-offscreen.js 不載入本檔，另以同值常數宣告）
+    // background 請 offscreen 文件寫入剪貼簿的訊息型別（offscreen/clipboard-offscreen.html 載入本檔，由 offscreen/clipboard-offscreen.js 讀取）
     globalThis.DSS_OFFSCREEN_WRITE_CLIPBOARD = 'DSS_OFFSCREEN_WRITE_CLIPBOARD';
 
     // === 測試匯出（瀏覽器情境為 no-op） ===

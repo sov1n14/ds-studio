@@ -22,6 +22,7 @@
  * "was some internal helper called".
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 
 let listener;
 

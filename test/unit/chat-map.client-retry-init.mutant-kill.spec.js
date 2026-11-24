@@ -10,6 +10,7 @@ import { importFreshStorageManager, NO_RECEIVER } from '../helpers/chat-map-writ
 
 const MSG = globalThis.DSS_CHAT_MAP_MSG;
 const LOGGER = globalThis.__DS_Logger;
+const NO_RECEIVER_CLASSIFIER = globalThis.DSSRuntimeMessageErrors;
 const META = 'chatPresetMapMeta';
 const LEGACY = 'chatPresetMap';
 const AUTH = 'dsLocalAuth';
@@ -36,6 +37,7 @@ beforeEach(async () => {
 afterEach(() => {
     vi.useRealTimers();
     globalThis.DSS_CHAT_MAP_MSG = MSG;
+    globalThis.DSSRuntimeMessageErrors = NO_RECEIVER_CLASSIFIER;
     globalThis.__DS_Logger = LOGGER;
     vi.restoreAllMocks();
 });
@@ -121,6 +123,17 @@ describe('client dispatch: timeout and response handling', () => {
         expect(result.reason, `got ${result.reason?.name}: ${result.reason?.message}`).not.toBeInstanceOf(TypeError);
         expect(result.reason.message).toMatch(/DSS_CHAT_MAP_MSG|message-constants\.js/);
         expect(send).not.toHaveBeenCalled();
+    });
+
+    it('with DSSRuntimeMessageErrors missing, a failed send fails loudly naming the missing global, not with a TypeError', async () => {
+        delete globalThis.DSSRuntimeMessageErrors;
+        send.mockRejectedValueOnce(new Error(NO_RECEIVER));
+        const result = await settle(SM.bindChatToPreset('u1', 'p1'));
+        expect(result.status).toBe('rejected');
+        expect(result.reason).toBeInstanceOf(Error);
+        expect(result.reason, `got ${result.reason?.name}: ${result.reason?.message}`).not.toBeInstanceOf(TypeError);
+        expect(result.reason.message).toContain('utils/runtime-message-errors.js');
+        expect(send).toHaveBeenCalledTimes(1);
     });
 });
 

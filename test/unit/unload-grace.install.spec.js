@@ -7,6 +7,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/deepseek-api.js';
+import '../../utils/chat-session-id.js';
+import '../../background/deepseek-tabs.js';
 import TemporaryChatPendingStore from '../../background/pending-store.js';
 
 const GRACE_MS = 10000;
@@ -46,7 +48,7 @@ beforeEach(async () => {
     vi.resetModules();
     UnloadGrace = (await import('../../background/unload-grace.js')).default;
     installedListeners = [];
-    ['TemporaryChatPendingStore', 'DSSDeepSeekApi', 'DSS_TEMP_CHAT'].forEach(saveGlobal);
+    ['TemporaryChatPendingStore', 'DSSDeepSeekApi', 'DSSDeepSeekTabs', 'DSS_TEMP_CHAT'].forEach(saveGlobal);
     globalThis.TemporaryChatPendingStore = TemporaryChatPendingStore;
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     chrome.tabs.query = vi.fn(async () => []);
@@ -106,6 +108,22 @@ describe('grace expiry reports a missing load-order dependency as a [DSS] consol
         expect(errorSpy, 'the expiry failure must be logged as console.error("[DSS] <context>:", err) whose message names background/pending-store.js')
             .toHaveBeenCalledWith(expect.stringMatching(/^\[DSS\] \S.*:$/), expect.objectContaining({ message: expect.stringContaining('background/pending-store.js') }));
         expect(globalThis.fetch, 'no delete may be sent').not.toHaveBeenCalled();
+    });
+
+    it('names background/deepseek-tabs.js when DSSDeepSeekTabs is not loaded, and keeps S queued', async () => {
+        await TemporaryChatPendingStore.setLastAuthToken('Bearer install-spec');
+        await TemporaryChatPendingStore.addPendingDelete(S);
+        vi.useFakeTimers();
+        const listener = installAndCapture(deps());
+        globalThis.DSSDeepSeekTabs = undefined;
+
+        await unloadAndExpire(listener);
+
+        expect(errorSpy, 'the expiry failure must be logged as console.error("[DSS] <context>:", err) whose message names background/deepseek-tabs.js')
+            .toHaveBeenCalledWith(expect.stringMatching(/^\[DSS\] \S.*:$/), expect.objectContaining({ message: expect.stringContaining('background/deepseek-tabs.js') }));
+        expect(globalThis.fetch, 'no delete may be sent').not.toHaveBeenCalled();
+        vi.useRealTimers();
+        expect((await TemporaryChatPendingStore.getPendingDeletes()).map((e) => e.chatUuid), 'S must stay queued').toContain(S);
     });
 
     it('names utils/deepseek-api.js when DSSDeepSeekApi is not loaded, and keeps S queued', async () => {

@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../utils/storage-manager.js';
+import '../../background/route-dispatch.js';
 import '../../background/settings-routes.js';
 import { setPathname } from '../helpers/set-pathname.js';
 import { silenceUnchangedWrites } from '../helpers/chrome-storage-change-events.js';

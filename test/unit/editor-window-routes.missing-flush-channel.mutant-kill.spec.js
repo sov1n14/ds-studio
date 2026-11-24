@@ -6,6 +6,7 @@
  * Trust boundary only: the channel module is made absent by removing globalThis.DSSEditorFlushChannel and by planting an empty module for utils/editor-flush-channel.js in the Node require cache, the two places the route looks it up. chrome.runtime.onMessage.addListener is observed so the test can assert that no listener was registered.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 import '../../utils/message-constants.js';
 import '../../background/editor-window-routes.js';
 

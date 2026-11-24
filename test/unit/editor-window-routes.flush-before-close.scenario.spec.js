@@ -14,6 +14,7 @@
  * Real modules: background/editor-window-routes.js, the editor page (popup/editor/editor.js and its parts, through test/helpers/editor-window-harness.js), StorageManager, the in-memory chrome.storage. Doubles: chrome.storage.session, chrome.windows and chrome.runtime.sendMessage (test/helpers/editor-window-flush-doubles.js). The DSS_CLOSE_EDITOR_WINDOWS message of the content script reaches the route by calling the listener the route registered on chrome.runtime.onMessage.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import '../../background/route-dispatch.js';
 import { createEditorWindowHarness } from '../helpers/editor-window-harness.js';
 import { createEditorWindowFlushDoubles, NON_BLOCKING_FLUSH_OUTCOMES } from '../helpers/editor-window-flush-doubles.js';
 

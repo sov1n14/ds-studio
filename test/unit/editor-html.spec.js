@@ -25,6 +25,7 @@ const EXPECTED = [
     ...SM_PARTS.map((f) => `../../utils/${f}`),
     '../../utils/storage-manager.js',
     '../../utils/message-constants.js',
+    '../../utils/runtime-message-errors.js',
     '../../utils/i18n.locales.zhTW.js',
     '../../utils/i18n.locales.en.js',
     '../../utils/i18n.locales.js',

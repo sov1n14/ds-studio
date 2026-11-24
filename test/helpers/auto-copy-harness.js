@@ -10,6 +10,9 @@
 import fs from 'fs';
 import path from 'path';
 import { vi } from 'vitest';
+// Shared bridge definitions and the guarded send helper that the manifest loads before auto-copy.js and the relay.
+import '../../content/react-click-bridge.shared.js';
+import '../../content/runtime-send.js';
 import { installChromeRuntime, respondWith, requestedKeys, settle, loadBridge, MASTER_KEY } from './auto-click-harness.js';
 import { loadVisibleItems, loadAssistantItem, loadCodeBlock, loadContinueContainer } from './reply-completion-fixtures.js';
 

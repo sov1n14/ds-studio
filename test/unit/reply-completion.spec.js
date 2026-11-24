@@ -372,3 +372,39 @@ describe('isStoppedReply — stopped replies are recognised by their own toolbar
         expect(await isStoppedReply(detached), 'never-attached toolbar').toBe(false);
     });
 });
+
+describe('completedToolbarsFromRecords — new toolbars of replies that were not stopped', () => {
+    async function completedToolbars(records) {
+        const { published } = await loadApi();
+        if (typeof published.completedToolbarsFromRecords !== 'function') throw new Error(`${MODULE_REL} does not publish globalThis.DSstudio.ReplyCompletion.completedToolbarsFromRecords`);
+        return published.completedToolbarsFromRecords(records);
+    }
+
+    it('returns the toolbar of a normally completed new reply', async () => {
+        const fx = listAwaitingToolbar();
+        const { flush } = observe(fx.list);
+        fx.item.appendChild(fx.row);
+
+        expectSameElements(await completedToolbars(flush()), [fx.toolbar], 'completed reply');
+    });
+
+    it('returns nothing for the toolbar of a stopped reply, which the new-toolbar rule still counts as new', async () => {
+        const fx = listAwaitingToolbar();
+        const { flush } = observe(fx.list);
+        fx.row.appendChild(loadContinueContainer());
+        fx.item.appendChild(fx.row);
+        const records = flush();
+
+        expectSameElements(await newToolbars(records), [fx.toolbar], 'fixture check: the stopped reply toolbar is new');
+        expectSameElements(await completedToolbars(records), [], 'stopped reply');
+    });
+
+    it('returns nothing for a toolbar that a scroll re-mounted together with its item', async () => {
+        const fx = loadVisibleItems();
+        fx.item.remove();
+        const { flush } = observe(fx.list);
+        fx.list.appendChild(fx.item);
+
+        expectSameElements(await completedToolbars(flush()), [], 're-mounted item');
+    });
+});

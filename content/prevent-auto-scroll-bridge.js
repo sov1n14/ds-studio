@@ -37,13 +37,12 @@
     /** 視為使用者按壓的事件類型：pointerdown 與 click 任一皆可開啟放行窗口 */
     const USER_PRESS_EVENT_TYPES = ['pointerdown', 'click'];
 
-    /** 本擴充自行注入的 GoTop 按鈕識別 class（複製自原生按鈕，必須排除） */
-    const EXTENSION_GO_TOP_CLASS = 'dsw-gotop';
-
     // 瀏覽器：由 content/ds-selectors.js 於前載入選擇器全域；Node.js 測試：直接 require
     const __DSSelectorsBridge = globalThis.DSstudio?.Selectors ||
         (typeof require !== 'undefined' ? require('./ds-selectors.js') : {});
     const GO_TOP_NATIVE_BUTTON_CLASS = __DSSelectorsBridge.GO_TOP_NATIVE_BUTTON_CLASS;
+    // 本擴充自行注入的 GoTop 按鈕識別 class（複製自原生按鈕，必須排除）
+    const EXTENSION_GO_TOP_CLASS = __DSSelectorsBridge.GO_TOP_CLONE_CLASS;
 
     // ── 私有函式 ──────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
  * 職責：background 層的訊息路由。install() 於呼叫時（非載入時）註冊單一 chrome.runtime.onMessage 監聽器；收到 DSS_EDITOR_WINDOW.CLOSE_MESSAGE_TYPE 時，讀取 chrome.storage.session 中的全域／提示詞組編輯器視窗 id，並行處理每個視窗：先以 FLUSH_MESSAGE_TYPE 請該視窗存檔並等待回報（最多約 1 秒），名稱重複時保留視窗，其餘情況關閉視窗並移除對應的 storage key（單一 id 關閉失敗不阻擋另一個 id 的處理）。
  * 未知型別回傳 false 且不回應，讓既有的其他 onMessage 監聽器仍能處理。
  *
- * 相依：utils/message-constants.js 與 utils/editor-flush-channel.js（存檔請求的共用請求端）需先載入。
+ * 相依：utils/message-constants.js、utils/editor-flush-channel.js（存檔請求的共用請求端）與 background/route-dispatch.js（共用的訊息分派與回應格式）需先載入。
  */
 (function () {
     'use strict';
@@ -71,34 +71,14 @@
     }
 
     /**
-     * 執行單一路由並回應結果；失敗於此邊界攔截（onMessage 之外無人可攔）。
-     * @param {(message: object) => Promise<void>} route
-     * @param {object} message
-     * @param {(response: object) => void} sendResponse
-     */
-    async function runRoute(route, message, sendResponse) {
-        try {
-            const result = await route(message);
-            sendResponse(result && typeof result === 'object' ? { ok: true, ...result } : { ok: true });
-        } catch (err) {
-            console.error(`[DSS] editor-window-routes ${message?.type}:`, err);
-            sendResponse({ ok: false, error: String(err) });
-        }
-    }
-
-    /**
-     * 註冊編輯器視窗關閉訊息路由監聯器。
+     * 註冊編輯器視窗關閉訊息路由監聽器。
      * 必須由 service worker 於頂層呼叫，確保 worker 重啟後仍能存活。
      */
     function install() {
         const routes = buildRouteTable();
-
-        chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-            const route = routes[message?.type];
-            if (!route) return false; // 交由其他監聽器處理
-            runRoute(route, message, sendResponse);
-            return true; // 非同步回應
-        });
+        const dispatch = globalThis.DSSRouteDispatch;
+        if (!dispatch) throw new Error('[DSS] editor-window-routes 需要 background/route-dispatch.js 先行載入');
+        dispatch.install(routes, 'editor-window-routes');
     }
 
     globalThis.DSSEditorWindowRoutes = { install };

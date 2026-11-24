@@ -152,6 +152,17 @@ describe('D. a failure while processing a mutation batch', () => {
     });
 });
 
+describe('F. a missing guarded send helper', () => {
+    it('DSSRuntimeSend absent from the globals: loading fails with an Error naming content/runtime-send.js', async () => {
+        mountPage();
+        await loadDependencies(settings());
+        const globals = dependencyGlobals();
+        globals.DSSRuntimeSend = undefined;
+
+        expect(() => loadModuleSource({ globals })).toThrow('content/reply-notification.js 需要 content/runtime-send.js 先行載入');
+    });
+});
+
 describe('E. Node require fallback', () => {
     const require = createRequire(MODULE_FILE);
     let savedFeatureToggle;

@@ -9,6 +9,9 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// The relay reads its shared definitions and its guarded send helper from globalThis (the manifest loads both files first).
+import '../../content/react-click-bridge.shared.js';
+import '../../content/runtime-send.js';
 
 const RELAY_FILE = path.resolve(__dirname, '../../content/auto-copy.relay.js');
 const COPY_TYPE = 'DSS_COPY_TO_CLIPBOARD';
@@ -39,8 +42,12 @@ function evalRelay(options = {}) {
     const src = fs.readFileSync(RELAY_FILE, 'utf8');
     const sandboxGlobal = Object.create(globalThis);
     sandboxGlobal.DSS_COPY_TO_CLIPBOARD = constant;
+    if ('shared' in options) sandboxGlobal.DSSReactClickBridgeShared = options.shared;
+    if ('send' in options) sandboxGlobal.DSSRuntimeSend = options.send;
     const doc = document.implementation.createHTMLDocument('relay sandbox');
     const { chrome, sent } = makeChrome(modes);
+    // The guarded send helper reads the page-level chrome global; the relay itself never touches chrome.
+    vi.stubGlobal('chrome', chrome);
     new Function('globalThis', 'document', 'chrome', 'module', src)(sandboxGlobal, doc, chrome, module);
     return { relay: sandboxGlobal.DSSAutoCopyRelay, sandboxGlobal, doc, sent, module };
 }
@@ -66,6 +73,7 @@ afterEach(() => {
     process.off('unhandledRejection', onUnhandled);
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 });
 
 describe('pending entries (fresh relay per test)', () => {
@@ -172,6 +180,16 @@ describe('failures are logged with the module prefix and never escape', () => {
         capture(doc, 'after the failure');
         await flush();
         expect(sent, 'the pending entry survives the failed handling and the listener stays registered').toEqual([copyMessage('after the failure')]);
+    });
+});
+
+describe('load-order dependencies', () => {
+    it('a missing shared bridge definition makes loading throw an Error naming content/react-click-bridge.shared.js', () => {
+        expect(() => evalRelay({ shared: undefined })).toThrow(/react-click-bridge.shared.js/);
+    });
+
+    it('a missing guarded send helper makes loading throw an Error naming content/runtime-send.js', () => {
+        expect(() => evalRelay({ send: undefined })).toThrow(/runtime-send.js/);
     });
 });
 

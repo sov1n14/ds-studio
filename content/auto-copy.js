@@ -5,7 +5,7 @@
  * 行為：
  *   - 閘控：由 content/feature-toggle.js 以「總開關 isEnabled 且自身鍵」決定；回覆為 isAutoCopyReplyEnabled，程式碼區塊為 isAutoCopyCodeEnabled。本層不直讀儲存區。
  *   - 觀察：任一閘門開啟時以單一 MutationObserver（childList、subtree）觀察 document.body；全關時中斷。以 body 為根是因為新對話頁尚無訊息列表、切換對話時列表可能整個重新掛載，而「新出現」的判斷已由 ReplyCompletion 限定於虛擬列表項目內。
- *   - 判斷：每批次交由 DSstudio.ReplyCompletion.newToolbarsFromRecords 找出新出現的工具列（捲動重新掛載的舊工具列不計）；isStoppedReply 為真的工具列（被停止的回覆）整個略過。
+ *   - 判斷：每批次交由 DSstudio.ReplyCompletion.completedToolbarsFromRecords 找出新完成的回覆工具列（捲動重新掛載的舊工具列與被停止的回覆不計）。
  *   - 觸發：DeepSeek 的 React onClick 只接受受信任事件，故不呼叫 button.click()，改在按鈕上派送冒泡的 dss:react-click 事件，由 MAIN world 的 content/react-click-bridge.main.js 呼叫 React onClick。
  *   - 順序：每個工具列先依文件順序複製該工具列所屬項目內每個程式碼區塊的複製按鈕（banner 的第一個按鈕，非下載），最後複製回覆（工具列第一個按鈕），使兩個開關皆開啟時剪貼簿最終保留完整回覆；任一按鈕派送失敗只記錄錯誤，不影響其後目標。
  *   - 失焦補寫：派送的事件帶字串 detail 'auto-copy'，讓 MAIN world 橋接器只擷取本模組觸發的寫入；每次派送前呼叫 DSSAutoCopyRelay.notePending() 登記待轉交項目（content/auto-copy.relay.js 未載入時略過，聚焦時的複製不受影響）。
@@ -22,10 +22,6 @@
     // 程式碼區塊複製按鈕：banner 內的第一個 role="button" div（第二個為下載），由既有常數組合
     const CODE_COPY_BUTTON_SELECTOR = '.' + _Selectors.CODE_BLOCK_CLASS + '-banner '
         + _Selectors.ROLE_BUTTON_DIV_SELECTOR + ':first-of-type';
-
-    // 事件名稱與 detail 標記與 content/react-click-bridge.main.js 一致（跨 world 無共用載入器）
-    const REACT_CLICK_EVENT = 'dss:react-click';
-    const AUTO_COPY_DETAIL = 'auto-copy';
 
     const AutoCopy = {
         // === 狀態 ===
@@ -84,12 +80,9 @@
          */
         _handleRecords(records) {
             if (!this._isReplyOn && !this._isCodeOn) return;
-            const toolbars = this._replyCompletion.newToolbarsFromRecords(records);
-            toolbars
-                .filter((toolbar) => !this._replyCompletion.isStoppedReply(toolbar))
-                .forEach((toolbar) => {
-                    this._collectTargets(toolbar).forEach((button) => this._dispatchCopyClickSafely(button));
-                });
+            this._replyCompletion.completedToolbarsFromRecords(records).forEach((toolbar) => {
+                this._collectTargets(toolbar).forEach((button) => this._dispatchCopyClickSafely(button));
+            });
         },
 
         /**
@@ -110,6 +103,7 @@
          */
         _dispatchCopyClick(button) {
             globalThis.DSSAutoCopyRelay?.notePending();
+            const { REACT_CLICK_EVENT, AUTO_COPY_DETAIL } = globalThis.DSSReactClickBridgeShared;
             button.dispatchEvent(new CustomEvent(REACT_CLICK_EVENT, { bubbles: true, detail: AUTO_COPY_DETAIL }));
         },
 
@@ -164,6 +158,9 @@
             }
             if (!_Keys) {
                 throw new Error('content/auto-copy.js 需要 utils/storage-manager.keys.js 先行載入');
+            }
+            if (!globalThis.DSSReactClickBridgeShared) {
+                throw new Error('content/auto-copy.js 需要 content/react-click-bridge.shared.js 先行載入');
             }
             this._replyCompletion = replyCompletion;
 

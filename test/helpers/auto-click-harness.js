@@ -12,6 +12,8 @@ import path from 'path';
 import { vi } from 'vitest';
 import '../../utils/message-constants.js';
 import '../../content/ds-selectors.js';
+// Shared bridge definitions (event names, pending queue) that the manifest loads before auto-retry.js and the MAIN-world bridge; set once on globalThis, so vi.resetModules does not reload them.
+import '../../content/react-click-bridge.shared.js';
 
 export const MASTER_KEY = 'isEnabled';
 export const RETRY_KEY = 'isAutoRetryEnabled';

@@ -6,6 +6,8 @@
  * Call installServiceWorkerHarness() once at spec top level; it registers the beforeAll/beforeEach/afterEach hooks. Date.now reads `clock`, reset to NOW before each test; move it with setClock.
  */
 import '../../utils/deepseek-api.js';
+import '../../utils/chat-session-id.js';
+import '../../background/deepseek-tabs.js';
 import '../../utils/temporary-chat-constants.js';
 import '../../background/service-worker-constants.js';
 import TemporaryChatPendingStore from '../../background/pending-store.js';

@@ -9,6 +9,8 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// The bridge reads its shared definitions from globalThis (the MAIN-world manifest entry loads this file first).
+import '../../content/react-click-bridge.shared.js';
 
 const BRIDGE_FILE = path.resolve(__dirname, '../../content/react-click-bridge.main.js');
 const CAPTURED_EVENT = 'dss:auto-copy-captured';

@@ -32,6 +32,7 @@ const MISSING = {
     featureToggle: 'content/auto-copy.js 需要 content/feature-toggle.js 先行載入',
     replyCompletion: 'content/auto-copy.js 需要 content/reply-completion.js 先行載入',
     keys: 'content/auto-copy.js 需要 utils/storage-manager.keys.js 先行載入',
+    bridgeShared: 'content/auto-copy.js 需要 content/react-click-bridge.shared.js 先行載入',
 };
 
 const settings = ({ master = true, reply = false, code = false } = {}) => ({ [MASTER_KEY]: master, [REPLY_KEY]: reply, [CODE_KEY]: code });
@@ -51,6 +52,7 @@ function dependencyGlobals() {
         DSstudio: { Selectors: globalThis.DSstudio.Selectors, ReplyCompletion: globalThis.DSstudio.ReplyCompletion },
         DSSFeatureToggle: globalThis.DSSFeatureToggle,
         __DS_StorageManager_keys: globalThis.__DS_StorageManager_keys,
+        DSSReactClickBridgeShared: globalThis.DSSReactClickBridgeShared,
     };
 }
 
@@ -217,6 +219,7 @@ describe('a missing dependency fails loading with an Error naming it', () => {
         ['DSstudio.ReplyCompletion absent', (g) => { delete g.DSstudio.ReplyCompletion; }, MISSING.replyCompletion],
         ['globalThis.DSstudio absent entirely, no require', (g) => { delete g.DSstudio; }, MISSING.replyCompletion],
         ['__DS_StorageManager_keys absent', (g) => { delete g.__DS_StorageManager_keys; }, MISSING.keys],
+        ['DSSReactClickBridgeShared absent', (g) => { delete g.DSSReactClickBridgeShared; }, MISSING.bridgeShared],
     ])('F. %s', (_name, remove, message) => {
         const globals = dependencyGlobals();
         remove(globals);

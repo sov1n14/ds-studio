@@ -10,6 +10,8 @@
 import fs from 'fs';
 import path from 'path';
 import { vi } from 'vitest';
+// Guarded send helper that the manifest loads before reply-notification.js.
+import '../../content/runtime-send.js';
 import { installChromeRuntime, requestedKeys, MASTER_KEY } from './auto-click-harness.js';
 import { mountPage, awaitingItem, completeItem, makeStopped, flush, completeNewReply } from './auto-copy-harness.js';
 

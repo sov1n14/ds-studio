@@ -67,8 +67,7 @@ const AutoRetry = {
             // 每顆按鈕各自隔離：一顆觸發拋錯不影響同輪其他按鈕，記錄後仍繼續下一輪
             try {
                 const button = this._findButton(this.BUTTONS[name].selectors);
-                // 事件名稱與 content/react-click-bridge.main.js 一致（跨 world 無共用載入器）
-                if (button) button.dispatchEvent(new CustomEvent('dss:react-click', { bubbles: true }));
+                if (button) button.dispatchEvent(new CustomEvent(globalThis.DSSReactClickBridgeShared.REACT_CLICK_EVENT, { bubbles: true }));
             } catch (error) {
                 console.error(`[DSS] auto-retry:${name} 按鈕點擊失敗:`, error);
             }

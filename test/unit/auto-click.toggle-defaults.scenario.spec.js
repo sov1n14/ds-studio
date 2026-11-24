@@ -25,6 +25,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vite
 import StorageManager from "../../utils/storage-manager.js";
 import { resetStorageOnChangedListeners } from "../setup/vitest.setup.js";
 import "../../utils/message-constants.js";
+import "../../background/route-dispatch.js";
 import "../../background/settings-routes.js";
 
 const MASTER_KEY = "isEnabled";
